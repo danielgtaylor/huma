@@ -213,8 +213,7 @@ func (r *Router) Register(op *Operation) {
 		method := reflect.ValueOf(op.Handler)
 		in := make([]reflect.Value, 0, method.Type().NumIn())
 
-		if method.Type().In(0).String() == "*gin.Context" {
-			fmt.Println("Found context")
+		if method.Type().NumIn() > 0 && method.Type().In(0).String() == "*gin.Context" {
 			in = append(in, reflect.ValueOf(c).Elem())
 		}
 
