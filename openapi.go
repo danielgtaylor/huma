@@ -75,11 +75,29 @@ func ResponseEmpty(status uint16, description string) *Response {
 	}
 }
 
+// ResponseText creates a new string response model.
+func ResponseText(status uint16, description string) *Response {
+	return &Response{
+		Description: description,
+		ContentType: "text/plain",
+		HTTPStatus:  status,
+	}
+}
+
 // ResponseJSON creates a new JSON response model.
 func ResponseJSON(status uint16, description string) *Response {
 	return &Response{
 		Description: description,
 		ContentType: "application/json",
+		HTTPStatus:  status,
+	}
+}
+
+// ResponseBinary creates a new binary response model.
+func ResponseBinary(status uint16, contentType string, description string) *Response {
+	return &Response{
+		Description: description,
+		ContentType: contentType,
 		HTTPStatus:  status,
 	}
 }

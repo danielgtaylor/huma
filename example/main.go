@@ -18,7 +18,6 @@ func main() {
 	})
 
 	r.Register(&huma.Operation{
-		ID:          "echo",
 		Method:      http.MethodPut,
 		Path:        "/echo/:word",
 		Description: "Echo back an input word.",

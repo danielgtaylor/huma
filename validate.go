@@ -3,6 +3,9 @@ package huma
 import (
 	"errors"
 	"reflect"
+	"regexp"
+
+	"github.com/gosimple/slug"
 )
 
 // ErrContextNotFirst is returned when a registered operation has a handler
@@ -17,10 +20,29 @@ var ErrParamsMustMatch = errors.New("handler function args must match registered
 // function that returns the wrong number of arguments.
 var ErrResponsesMustMatch = errors.New("handler function return values must match registered responses")
 
+var paramRe = regexp.MustCompile(`(:[^/]+)|{[^}]+}`)
+
 // validate checks that the operation is well-formed (e.g. handler signature
 // matches the given params) and generates schemas if needed.
 func (o *Operation) validate() error {
 	method := reflect.ValueOf(o.Handler)
+
+	if o.ID == "" {
+		verb := o.Method
+
+		// Try to detect calls returning lists of things.
+		if method.Type().NumOut() > 1 {
+			k := method.Type().Out(1).Kind()
+			if k == reflect.Array || k == reflect.Slice {
+				verb = "list"
+			}
+		}
+
+		// Remove variables from path so they aren't in the generated name.
+		path := paramRe.ReplaceAllString(o.Path, "")
+
+		o.ID = slug.Make(verb + path)
+	}
 
 	types := []reflect.Type{}
 	for i := 0; i < method.Type().NumIn(); i++ {

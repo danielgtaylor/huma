@@ -125,9 +125,15 @@ type Router struct {
 // NewRouter creates a new Huma router for handling API requests with
 // default middleware and routes attached.
 func NewRouter(api *OpenAPI) *Router {
+	return NewRouterWithGin(gin.Default(), api)
+}
+
+// NewRouterWithGin creates a new Huma router with the given Gin instance
+// which may be preconfigured with custom options and middleware.
+func NewRouterWithGin(engine *gin.Engine, api *OpenAPI) *Router {
 	r := &Router{
 		api:    api,
-		engine: gin.Default(),
+		engine: engine,
 	}
 
 	if r.api.Paths == nil {
@@ -245,7 +251,8 @@ func (r *Router) Register(op *Operation) {
 		out := method.Call(in)
 
 		// Find and return the first non-zero response.
-		// TODO: This breaks down with scalar types... hmmm.
+		// This breaks down with scalar types... so they need to be passed
+		// as a pointer and we'll dereference it automatically.
 		status := out[0].Interface().(int)
 		var body interface{}
 		for i, o := range out[1:] {
@@ -258,8 +265,13 @@ func (r *Router) Register(op *Operation) {
 				} else if strings.HasPrefix(r.ContentType, "application/yaml") {
 					c.YAML(status, body)
 				} else {
-					// TODO: type check that body is actually bytes
-					c.Data(status, r.ContentType, body.([]byte))
+					if o.Kind() == reflect.Ptr {
+						// This is a pointer to something, so we derefernce it and get
+						// its value before converting to a string because Printf will
+						// by default print pointer addresses instead of their value.
+						body = o.Elem().Interface()
+					}
+					c.Data(status, r.ContentType, []byte(fmt.Sprintf("%v", body)))
 				}
 				break
 			}
