@@ -93,14 +93,22 @@ Content-Length: 5
 Content-Type: text/plain
 Date: Mon, 09 Mar 2020 04:28:13 GMT
 
-hello
+Hello, world
 ```
 
 The server works and responds as expected. Nothing too interesting here, so let's change that.
 
 ### Parameters
 
-Make the hello operation take an optional `name` parameter. Optional parameters are passed via query string arguments in the URL. Add a new `huma.QueryParam` to the operation and then update the handler function to take a `name` parameter.
+Huma supports three types of parameters:
+
+- Required path parameters, e.g. `/things/{thingId}`
+- Optional query string parameters, e.g. `/things?q=filter`
+- Optional header parameters, e.g. `X-MyHeader: my-value`
+
+Optional parameters require a default value.
+
+Make the hello operation take an optional `name` query parameter with a default of `world`. Add a new `huma.QueryParam` to the operation and then update the handler function to take a `name` argument.
 
 ```go
 r.Register(&huma.Operation{
@@ -141,7 +149,9 @@ Date: Mon, 09 Mar 2020 04:35:42 GMT
 Hello, Daniel
 ```
 
-Nice work! Operating on strings is fun but let's throw some JSON into the mix next.
+Nice work! Notice that `name` was a Go `string`, but it could also have been another type like `int` and it will get parsed and validated appropriately before your handler function is called.
+
+Operating on strings is fun but let's throw some JSON into the mix next.
 
 ### Request & Response Models
 
@@ -181,7 +191,7 @@ r.Register(&huma.Operation{
 Try saving the file and making another request:
 
 ```sh
-# Make the request with a name
+# Make the request and get a JSON response
 $ http :8888/hello
 HTTP/1.1 200 OK
 Content-Length: 27
