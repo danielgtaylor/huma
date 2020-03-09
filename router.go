@@ -25,8 +25,14 @@ func getParamValue(c *gin.Context, param *Param) (interface{}, error) {
 		pstr = c.Param(param.Name)
 	case "query":
 		pstr = c.Query(param.Name)
+		if pstr == "" {
+			return param.def, nil
+		}
 	case "header":
 		pstr = c.GetHeader(param.Name)
+		if pstr == "" {
+			return param.def, nil
+		}
 	default:
 		return nil, fmt.Errorf("%s: %w", param.In, ErrInvalidParamLocation)
 	}

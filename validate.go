@@ -21,6 +21,10 @@ var ErrContextNotFirst = errors.New("context should be first parameter")
 // function that takes the wrong number of arguments.
 var ErrParamsMustMatch = errors.New("handler function args must match registered params")
 
+// ErrParamTypeMustMatch is returned when the parameter and its
+// default value's type don't match.
+var ErrParamTypeMustMatch = errors.New("param and default types must match")
+
 // ErrResponsesMustMatch is returned when the registered operation has a handler
 // function that returns the wrong number of arguments.
 var ErrResponsesMustMatch = errors.New("handler function return values must match registered responses")
@@ -114,6 +118,13 @@ func (o *Operation) validate() error {
 				return err
 			}
 			p.Schema = s
+
+			if p.def != nil {
+				if reflect.ValueOf(p.def).Type() != paramType {
+
+				}
+				p.Schema.Default = p.def
+			}
 		}
 	}
 

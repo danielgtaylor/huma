@@ -15,6 +15,7 @@ type Schema struct {
 	Required    []string           `json:"required,omitempty"`
 	Format      string             `json:"format,omitempty"`
 	Enum        []interface{}      `json:"enum,omitempty"`
+	Default     interface{}        `json:"default,omitempty"`
 }
 
 // GenerateSchema creates a JSON schema for a Go type. Struct field tags

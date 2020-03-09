@@ -23,7 +23,7 @@ func main() {
 		Description: "Echo back an input word.",
 		Params: []*huma.Param{
 			huma.PathParam("word", "The word to echo back"),
-			huma.QueryParam("greet", "Return a greeting"),
+			huma.QueryParam("greet", "Return a greeting", false),
 		},
 		Responses: []*huma.Response{
 			huma.ResponseJSON(http.StatusOK, "Successful echo response"),

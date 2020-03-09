@@ -23,7 +23,7 @@ func TestRouter(t *testing.T) {
 		Description: "Echo back an input word.",
 		Params: []*Param{
 			PathParam("word", "The word to echo back"),
-			QueryParam("greet", "Return a greeting"),
+			QueryParam("greet", "Return a greeting", false),
 		},
 		Responses: []*Response{
 			ResponseJSON(http.StatusOK, "Successful echo response"),

@@ -16,6 +16,7 @@ type Param struct {
 	In          string  `json:"in"`
 	Required    bool    `json:"required,omitempty"`
 	Schema      *Schema `json:"schema,omitempty"`
+	def         interface{}
 	typ         reflect.Type
 }
 
@@ -30,21 +31,23 @@ func PathParam(name string, description string) *Param {
 }
 
 // QueryParam returns a new optional query string parameter
-func QueryParam(name string, description string) *Param {
+func QueryParam(name string, description string, defaultValue interface{}) *Param {
 	// TODO: support setting default value
 	return &Param{
 		Name:        name,
 		Description: description,
 		In:          "query",
+		def:         defaultValue,
 	}
 }
 
 // HeaderParam returns a new optional header parameter
-func HeaderParam(name string, description string) *Param {
+func HeaderParam(name string, description string, defaultValue interface{}) *Param {
 	return &Param{
 		Name:        name,
 		Description: description,
 		In:          "header",
+		def:         defaultValue,
 	}
 }
 
