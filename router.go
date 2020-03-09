@@ -226,7 +226,7 @@ func (r *Router) Register(op *Operation) {
 		in := make([]reflect.Value, 0, method.Type().NumIn())
 
 		if method.Type().NumIn() > 0 && method.Type().In(0).String() == "*gin.Context" {
-			in = append(in, reflect.ValueOf(c).Elem())
+			in = append(in, reflect.ValueOf(c))
 		}
 
 		for _, param := range op.Params {
