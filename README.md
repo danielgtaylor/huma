@@ -2,7 +2,9 @@
 
 A modern, simple, fast & opinionated REST API framework for Go. The goals of this project are to provide:
 
-- A modern REST API backend framework for Go developers - Described by [OpenAPI 3](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md) & [JSON Schema](https://json-schema.org/) - First class support for middleware, JSON, and other features
+- A modern REST API backend framework for Go developers
+  - Described by [OpenAPI 3](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md) & [JSON Schema](https://json-schema.org/)
+  - First class support for middleware, JSON, and other features
 - Documentation that can't get out of date
 - High-quality developer tooling
 
