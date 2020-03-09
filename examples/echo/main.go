@@ -19,7 +19,7 @@ func main() {
 
 	r.Register(&huma.Operation{
 		Method:      http.MethodPut,
-		Path:        "/echo/:word",
+		Path:        "/echo/{word}",
 		Description: "Echo back an input word.",
 		Params: []*huma.Param{
 			huma.PathParam("word", "The word to echo back"),

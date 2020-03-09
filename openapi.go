@@ -133,6 +133,11 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 		// spew.Dump(m.paths)
 
 		for path, operations := range api.Paths {
+			if strings.Contains(path, ":") {
+				// Convert from gin-style params to OpenAPI-style params
+				path = paramRe.ReplaceAllString(path, "{$1$2}")
+			}
+
 			for _, op := range operations {
 				method := strings.ToLower(op.Method)
 				openapi.Set(op.ID, "paths", path, method, "operationId")

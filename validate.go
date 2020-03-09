@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strings"
 
 	"github.com/gosimple/slug"
 )
@@ -24,7 +25,7 @@ var ErrParamsMustMatch = errors.New("handler function args must match registered
 // function that returns the wrong number of arguments.
 var ErrResponsesMustMatch = errors.New("handler function return values must match registered responses")
 
-var paramRe = regexp.MustCompile(`(:[^/]+)|{[^}]+}`)
+var paramRe = regexp.MustCompile(`:([^/]+)|{([^}]+)}`)
 
 // validate checks that the operation is well-formed (e.g. handler signature
 // matches the given params) and generates schemas if needed.
@@ -58,6 +59,11 @@ func (o *Operation) validate() error {
 		path := paramRe.ReplaceAllString(o.Path, "")
 
 		o.ID = slug.Make(verb + path)
+	}
+
+	if strings.Contains(o.Path, "{") {
+		// Convert from OpenAPI-style parameters to gin-style params
+		o.Path = paramRe.ReplaceAllString(o.Path, ":$1$2")
 	}
 
 	types := []reflect.Type{}
