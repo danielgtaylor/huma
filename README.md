@@ -13,7 +13,7 @@ Features include:
   - Automatic input model validation
 - Documentation generation using [Redoc](https://github.com/Redocly/redoc)
 - Generates OpenAPI JSON for access to a rich ecosystem of tools
-  - Mocks [API Sprout](https://github.com/danielgtaylor/apisprout)
+  - Mocks with [API Sprout](https://github.com/danielgtaylor/apisprout)
   - SDKs with [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator)
   - CLIs with [OpenAPI CLI Generator](https://github.com/danielgtaylor/openapi-cli-generator)
   - And [plenty](https://openapi.tools/) [more](https://apis.guru/awesome-openapi3/category.html)
@@ -196,6 +196,6 @@ For the docs, you should see something like this:
 
 <img width="1367" alt="Documentation  screenshot" src="https://user-images.githubusercontent.com/106826/76184508-746dfb00-6189-11ea-9e7d-f21ac58a2d19.png">
 
-Request models are essentially the same. Just define and extra input argument to the handler funtion and you get automatic loading and validation.
+Request models are essentially the same. Just define an extra input argument to the handler funtion and you get automatic loading and validation.
 
 More docs coming soon.
