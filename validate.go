@@ -2,11 +2,15 @@ package huma
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"regexp"
 
 	"github.com/gosimple/slug"
 )
+
+// ErrFieldRequired is returned when a field is blank but has been required.
+var ErrFieldRequired = errors.New("field is required")
 
 // ErrContextNotFirst is returned when a registered operation has a handler
 // that takes a context but it is not the first parameter of the function.
@@ -25,6 +29,18 @@ var paramRe = regexp.MustCompile(`(:[^/]+)|{[^}]+}`)
 // validate checks that the operation is well-formed (e.g. handler signature
 // matches the given params) and generates schemas if needed.
 func (o *Operation) validate() error {
+	if o.Method == "" {
+		return fmt.Errorf("Method: %w", ErrFieldRequired)
+	}
+
+	if o.Path == "" {
+		return fmt.Errorf("Path: %w", ErrFieldRequired)
+	}
+
+	if o.Description == "" {
+		return fmt.Errorf("Description: %w", ErrFieldRequired)
+	}
+
 	method := reflect.ValueOf(o.Handler)
 
 	if o.ID == "" {
@@ -96,13 +112,14 @@ func (o *Operation) validate() error {
 	}
 
 	// Check that outputs match registered responses and add their type info
-	if method.Type().NumOut() != len(o.Responses)+1 {
+	if method.Type().NumOut() != len(o.Responses) {
 		return ErrResponsesMustMatch
 	}
 
 	for i, resp := range o.Responses {
-		respType := method.Type().Out(i + 1)
-		if resp.HTTPStatus != 204 && resp.Schema == nil {
+		respType := method.Type().Out(i)
+		// HTTP 204 explicitly forbids a response body.
+		if resp.StatusCode != 204 && resp.Schema == nil {
 			s, err := GenerateSchema(respType)
 			if err != nil {
 				return err

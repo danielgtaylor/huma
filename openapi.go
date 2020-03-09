@@ -52,51 +52,51 @@ func HeaderParam(name string, description string) *Param {
 type Response struct {
 	Description string
 	ContentType string
-	HTTPStatus  uint16
+	StatusCode  int
 	Schema      *Schema
 }
 
 // ResponseEmpty creates a new response with an empty body.
-func ResponseEmpty(status uint16, description string) *Response {
+func ResponseEmpty(statusCode int, description string) *Response {
 	return &Response{
 		Description: description,
-		HTTPStatus:  status,
+		StatusCode:  statusCode,
 	}
 }
 
 // ResponseText creates a new string response model.
-func ResponseText(status uint16, description string) *Response {
+func ResponseText(statusCode int, description string) *Response {
 	return &Response{
 		Description: description,
 		ContentType: "text/plain",
-		HTTPStatus:  status,
+		StatusCode:  statusCode,
 	}
 }
 
 // ResponseJSON creates a new JSON response model.
-func ResponseJSON(status uint16, description string) *Response {
+func ResponseJSON(statusCode int, description string) *Response {
 	return &Response{
 		Description: description,
 		ContentType: "application/json",
-		HTTPStatus:  status,
+		StatusCode:  statusCode,
 	}
 }
 
 // ResponseBinary creates a new binary response model.
-func ResponseBinary(status uint16, contentType string, description string) *Response {
+func ResponseBinary(statusCode int, contentType string, description string) *Response {
 	return &Response{
 		Description: description,
 		ContentType: contentType,
-		HTTPStatus:  status,
+		StatusCode:  statusCode,
 	}
 }
 
 // ResponseError creates a new error response model.
-func ResponseError(status uint16, description string) *Response {
+func ResponseError(status int, description string) *Response {
 	return &Response{
 		Description: description,
 		ContentType: "application/json",
-		HTTPStatus:  status,
+		StatusCode:  status,
 	}
 }
 
@@ -154,7 +154,7 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 				found400 := false
 				for _, resp := range op.Responses {
 					responses = append(responses, resp)
-					if resp.HTTPStatus == 400 {
+					if resp.StatusCode == 400 {
 						found400 = true
 					}
 				}
@@ -165,13 +165,13 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 					responses = append(responses, &Response{
 						Description: "Invalid input",
 						ContentType: "application/json",
-						HTTPStatus:  400,
+						StatusCode:  400,
 						Schema:      s,
 					})
 				}
 
 				for _, resp := range op.Responses {
-					status := fmt.Sprintf("%v", resp.HTTPStatus)
+					status := fmt.Sprintf("%v", resp.StatusCode)
 					openapi.Set(resp.Description, "paths", path, method, "responses", status, "description")
 
 					if resp.Schema != nil {

@@ -29,9 +29,9 @@ func main() {
 			huma.ResponseJSON(http.StatusOK, "Successful echo response"),
 			huma.ResponseError(http.StatusBadRequest, "Invalid input"),
 		},
-		Handler: func(word string, greet bool) (int, *EchoResponse, *huma.ErrorModel) {
+		Handler: func(word string, greet bool) (*EchoResponse, *huma.ErrorModel) {
 			if word == "test" {
-				return http.StatusBadRequest, nil, &huma.ErrorModel{Message: "Value not allowed: test"}
+				return nil, &huma.ErrorModel{Message: "Value not allowed: test"}
 			}
 
 			v := word
@@ -39,7 +39,7 @@ func main() {
 				v = "Hello, " + word
 			}
 
-			return http.StatusOK, &EchoResponse{Value: v}, nil
+			return &EchoResponse{Value: v}, nil
 		},
 	})
 

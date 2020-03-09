@@ -29,9 +29,9 @@ func TestRouter(t *testing.T) {
 			ResponseJSON(http.StatusOK, "Successful echo response"),
 			ResponseError(http.StatusBadRequest, "Invalid input"),
 		},
-		Handler: func(word string, greet bool) (int, *EchoResponse, *ErrorModel) {
+		Handler: func(word string, greet bool) (*EchoResponse, *ErrorModel) {
 			if word == "test" {
-				return http.StatusBadRequest, nil, &ErrorModel{Message: "Value not allowed: test"}
+				return nil, &ErrorModel{Message: "Value not allowed: test"}
 			}
 
 			v := word
@@ -39,7 +39,7 @@ func TestRouter(t *testing.T) {
 				v = "Hello, " + word
 			}
 
-			return http.StatusOK, &EchoResponse{Value: v}, nil
+			return &EchoResponse{Value: v}, nil
 		},
 	})
 
@@ -90,9 +90,9 @@ func TestRouterRequestBody(t *testing.T) {
 		Responses: []*Response{
 			ResponseJSON(http.StatusOK, "Successful echo response"),
 		},
-		Handler: func(in *EchoRequest) (int, *EchoResponse) {
+		Handler: func(in *EchoRequest) *EchoResponse {
 			spew.Dump(in)
-			return http.StatusOK, &EchoResponse{Value: in.Value}
+			return &EchoResponse{Value: in.Value}
 		},
 	})
 
@@ -119,8 +119,8 @@ func TestRouterScalarResponse(t *testing.T) {
 		Responses: []*Response{
 			ResponseText(http.StatusOK, "Successful hello response"),
 		},
-		Handler: func() (int, string) {
-			return http.StatusOK, "hello"
+		Handler: func() string {
+			return "hello"
 		},
 	})
 
@@ -142,9 +142,9 @@ func TestRouterZeroScalarResponse(t *testing.T) {
 		Responses: []*Response{
 			ResponseText(http.StatusOK, "Successful zero bool response"),
 		},
-		Handler: func() (int, *bool) {
+		Handler: func() *bool {
 			resp := false
-			return http.StatusOK, &resp
+			return &resp
 		},
 	})
 

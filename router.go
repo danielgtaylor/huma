@@ -250,20 +250,25 @@ func (r *Router) Register(op *Operation) {
 
 		out := method.Call(in)
 
-		// Find and return the first non-zero response.
+		// Find and return the first non-zero response. The status code comes
+		// from the registered `huma.Response` struct.
 		// This breaks down with scalar types... so they need to be passed
 		// as a pointer and we'll dereference it automatically.
-		status := out[0].Interface().(int)
-		var body interface{}
-		for i, o := range out[1:] {
+		for i, o := range out {
 			if !o.IsZero() {
-				body = o.Interface()
+				body := o.Interface()
 
 				r := op.Responses[i]
+
+				if r.StatusCode == 204 {
+					// No body allowed.
+					break
+				}
+
 				if strings.HasPrefix(r.ContentType, "application/json") {
-					c.JSON(status, body)
+					c.JSON(r.StatusCode, body)
 				} else if strings.HasPrefix(r.ContentType, "application/yaml") {
-					c.YAML(status, body)
+					c.YAML(r.StatusCode, body)
 				} else {
 					if o.Kind() == reflect.Ptr {
 						// This is a pointer to something, so we derefernce it and get
@@ -271,7 +276,7 @@ func (r *Router) Register(op *Operation) {
 						// by default print pointer addresses instead of their value.
 						body = o.Elem().Interface()
 					}
-					c.Data(status, r.ContentType, []byte(fmt.Sprintf("%v", body)))
+					c.Data(r.StatusCode, r.ContentType, []byte(fmt.Sprintf("%v", body)))
 				}
 				break
 			}
