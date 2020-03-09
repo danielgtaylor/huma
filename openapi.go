@@ -16,8 +16,12 @@ type Param struct {
 	In          string  `json:"in"`
 	Required    bool    `json:"required,omitempty"`
 	Schema      *Schema `json:"schema,omitempty"`
-	def         interface{}
-	typ         reflect.Type
+
+	// Internal params are excluded from the OpenAPI document and can set up
+	// params sent between a load balander / proxy and the service internally.
+	internal bool
+	def      interface{}
+	typ      reflect.Type
 }
 
 // PathParam returns a new required path parameter
@@ -32,11 +36,21 @@ func PathParam(name string, description string) *Param {
 
 // QueryParam returns a new optional query string parameter
 func QueryParam(name string, description string, defaultValue interface{}) *Param {
-	// TODO: support setting default value
 	return &Param{
 		Name:        name,
 		Description: description,
 		In:          "query",
+		def:         defaultValue,
+	}
+}
+
+// QueryParamInternal returns a new optional internal query string parameter
+func QueryParamInternal(name string, description string, defaultValue interface{}) *Param {
+	return &Param{
+		Name:        name,
+		Description: description,
+		In:          "query",
+		internal:    true,
 		def:         defaultValue,
 	}
 }
@@ -47,6 +61,17 @@ func HeaderParam(name string, description string, defaultValue interface{}) *Par
 		Name:        name,
 		Description: description,
 		In:          "header",
+		def:         defaultValue,
+	}
+}
+
+// HeaderParamInternal returns a new optional internal header parameter
+func HeaderParamInternal(name string, description string, defaultValue interface{}) *Param {
+	return &Param{
+		Name:        name,
+		Description: description,
+		In:          "header",
+		internal:    true,
 		def:         defaultValue,
 	}
 }
@@ -147,6 +172,10 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 				openapi.Set(op.Description, "paths", path, method, "description")
 
 				for _, param := range op.Params {
+					if param.internal {
+						// Skip internal-only parameters.
+						continue
+					}
 					openapi.ArrayAppend(param, "paths", path, method, "parameters")
 				}
 
