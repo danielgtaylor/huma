@@ -7,8 +7,67 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
+
+type helloResponse struct {
+	Message string `json:"message"`
+}
+
+func BenchmarkGin(b *testing.B) {
+
+	gin.SetMode(gin.ReleaseMode)
+	g := gin.New()
+	g.GET("/hello", func(c *gin.Context) {
+		c.JSON(200, &helloResponse{
+			Message: "Hello, world",
+		})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/hello", nil)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		g.ServeHTTP(w, req)
+	}
+
+	gin.SetMode(gin.DebugMode)
+}
+
+func BenchmarkHuma(b *testing.B) {
+	gin.SetMode(gin.ReleaseMode)
+	r := NewRouterWithGin(gin.New(), &OpenAPI{
+		Title:   "Benchmark test",
+		Version: "1.0.0",
+	})
+	r.Register(&Operation{
+		Method:      http.MethodGet,
+		Path:        "/hello",
+		Description: "Greet the world",
+		Responses: []*Response{
+			ResponseJSON(200, "Return a greeting"),
+		},
+		Handler: func() *helloResponse {
+			return &helloResponse{
+				Message: "Hello, world",
+			}
+		},
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/hello", nil)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		r.ServeHTTP(w, req)
+	}
+
+	gin.SetMode(gin.DebugMode)
+}
 
 func TestRouter(t *testing.T) {
 	type EchoResponse struct {
