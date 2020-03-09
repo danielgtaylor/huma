@@ -10,7 +10,10 @@ A modern, simple, fast & opinionated REST API framework for Go. The goals of thi
 
 Features include:
 
-- Declarative interface on top of [Gin](https://github.com/gin-gonic/gin) - Operation & model documentation - Request params (path, query, or header) - Request body - Responses (including errors)
+- Declarative interface on top of [Gin](https://github.com/gin-gonic/gin)
+  - Operation & model documentation
+  - Request params (path, query, or header)
+  - Request body - Responses (including errors)
 - Annotated Go types for input and output models
   - Automatic input model validation
 - Documentation generation using [Redoc](https://github.com/Redocly/redoc)
