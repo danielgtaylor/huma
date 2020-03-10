@@ -3,6 +3,7 @@ package huma
 import (
 	"errors"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -16,6 +17,8 @@ type Schema struct {
 	Format      string             `json:"format,omitempty"`
 	Enum        []interface{}      `json:"enum,omitempty"`
 	Default     interface{}        `json:"default,omitempty"`
+	Minimum     *int               `json:"minimum,omitempty"`
+	Maximum     *int               `json:"maximum,omitempty"`
 }
 
 // GenerateSchema creates a JSON schema for a Go type. Struct field tags
@@ -59,6 +62,22 @@ func GenerateSchema(t reflect.Type) (*Schema, error) {
 				}
 			}
 
+			if d, ok := f.Tag.Lookup("minimum"); ok {
+				min, err := strconv.Atoi(d)
+				if err != nil {
+					return nil, err
+				}
+				s.Minimum = &min
+			}
+
+			if d, ok := f.Tag.Lookup("maximum"); ok {
+				max, err := strconv.Atoi(d)
+				if err != nil {
+					return nil, err
+				}
+				s.Maximum = &max
+			}
+
 			optional := false
 			for _, tag := range jsonTags[1:] {
 				if tag == "omitempty" {
@@ -87,22 +106,23 @@ func GenerateSchema(t reflect.Type) (*Schema, error) {
 			return nil, err
 		}
 		schema.Items = s
-	case reflect.Interface:
-		// pass
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return &Schema{
 			Type: "integer",
 		}, nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		// Unsigned integers can't be negative.
+		min := 0
+		return &Schema{
+			Type:    "integer",
+			Minimum: &min,
+		}, nil
 	case reflect.Float32, reflect.Float64:
 		return &Schema{Type: "number"}, nil
-
 	case reflect.Bool:
 		return &Schema{Type: "boolean"}, nil
-
 	case reflect.String:
 		return &Schema{Type: "string"}, nil
-
 	case reflect.Ptr:
 		return GenerateSchema(t.Elem())
 	default:
