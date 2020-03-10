@@ -132,9 +132,9 @@ func ResponseError(status int, description string, headers ...string) *Response 
 
 // Header describes a response header
 type Header struct {
-	Name        string
+	Name        string  `json:"-"`
 	Description string  `json:"description,omitempty"`
-	Schema      *Schema `json:"schema"`
+	Schema      *Schema `json:"schema,omitempty"`
 }
 
 // ResponseHeader returns a new header
