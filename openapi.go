@@ -150,7 +150,9 @@ type Operation struct {
 	ID                 string
 	Method             string
 	Path               string
+	Summary            string
 	Description        string
+	Tags               []string
 	Params             []*Param
 	RequestContentType string
 	RequestSchema      *Schema
@@ -159,12 +161,34 @@ type Operation struct {
 	Handler            interface{}
 }
 
+// Server describes an OpenAPI 3 API server location
+type Server struct {
+	URL         string `json:"url"`
+	Description string `json:"description,omitempty"`
+}
+
+// ProdServer returns a new production server
+func ProdServer(url string) *Server {
+	return &Server{
+		URL:         url,
+		Description: "Production server",
+	}
+}
+
+// DevServer returns a new production server
+func DevServer(url string) *Server {
+	return &Server{
+		URL:         url,
+		Description: "Development server",
+	}
+}
+
 // OpenAPI describes the OpenAPI 3 API
 type OpenAPI struct {
 	Title   string
 	Version string
-	// Servers TODO
-	Paths map[string][]*Operation
+	Servers []*Server
+	Paths   map[string][]*Operation
 }
 
 // OpenAPIHandler returns a new handler function to generate an OpenAPI spec.
@@ -177,6 +201,10 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 		openapi.Set(api.Title, "info", "title")
 		openapi.Set(api.Version, "info", "version")
 
+		if len(api.Servers) > 0 {
+			openapi.Set(api.Servers, "servers")
+		}
+
 		// spew.Dump(m.paths)
 
 		for path, operations := range api.Paths {
@@ -188,7 +216,13 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 			for _, op := range operations {
 				method := strings.ToLower(op.Method)
 				openapi.Set(op.ID, "paths", path, method, "operationId")
+				if op.Summary != "" {
+					openapi.Set(op.Summary, "paths", path, method, "summary")
+				}
 				openapi.Set(op.Description, "paths", path, method, "description")
+				if len(op.Tags) > 0 {
+					openapi.Set(op.Tags, "paths", path, method, "tags")
+				}
 
 				for _, param := range op.Params {
 					if param.internal {
