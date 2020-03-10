@@ -214,3 +214,36 @@ func TestRouterZeroScalarResponse(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "false", w.Body.String())
 }
+
+func TestRouterResponseHeaders(t *testing.T) {
+	r := NewRouter(&OpenAPI{Title: "My API", Version: "1.0.0"})
+
+	r.Register(&Operation{
+		Method:      http.MethodGet,
+		Path:        "/test",
+		Description: "Test operation",
+		ResponseHeaders: []*Header{
+			ResponseHeader("Etag", "Identifies a specific version of this resource"),
+			ResponseHeader("X-Test", "Custom test header"),
+			ResponseHeader("X-Missing", "Won't get sent"),
+		},
+		Responses: []*Response{
+			ResponseText(http.StatusOK, "Successful test", "Etag", "X-Test", "X-Missing"),
+			ResponseError(http.StatusBadRequest, "Error example", "X-Test"),
+		},
+		Handler: func() (success string, fail string, etag string, xTest *string, xMissing string) {
+			test := "test"
+			return "hello", "", "\"abc123\"", &test, ""
+		},
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "hello", w.Body.String())
+	assert.Equal(t, "\"abc123\"", w.Header().Get("Etag"))
+	assert.Equal(t, "test", w.Header().Get("X-Test"))
+	assert.Equal(t, "", w.Header().Get("X-Missing"))
+}

@@ -260,11 +260,40 @@ func (r *Router) Register(op *Operation) {
 		// from the registered `huma.Response` struct.
 		// This breaks down with scalar types... so they need to be passed
 		// as a pointer and we'll dereference it automatically.
-		for i, o := range out {
+		for i, o := range out[:len(op.Responses)] {
 			if !o.IsZero() {
 				body := o.Interface()
 
 				r := op.Responses[i]
+
+				// Set response headers
+				for i, header := range op.ResponseHeaders {
+					value := out[len(op.Responses)+i]
+
+					found := false
+					for _, name := range r.Headers {
+						if name == header.Name {
+							found = true
+							break
+						}
+					}
+
+					if !found {
+						if !value.IsZero() {
+							// TODO: log warning? This shouldn't be set if it won't get sent.
+						}
+						// Skip this header as the response doesn't list it.
+						continue
+					}
+
+					if !value.IsZero() {
+						v := value.Interface()
+						if value.Kind() == reflect.Ptr {
+							v = value.Elem().Interface()
+						}
+						c.Header(header.Name, fmt.Sprintf("%v", v))
+					}
+				}
 
 				if r.StatusCode == http.StatusNoContent {
 					// No body allowed.

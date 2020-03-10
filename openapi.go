@@ -2,6 +2,7 @@ package huma
 
 import (
 	"fmt"
+	"net/http"
 	"reflect"
 	"strings"
 
@@ -82,49 +83,65 @@ type Response struct {
 	ContentType string
 	StatusCode  int
 	Schema      *Schema
+	Headers     []string
 }
 
 // ResponseEmpty creates a new response with an empty body.
-func ResponseEmpty(statusCode int, description string) *Response {
+func ResponseEmpty(statusCode int, description string, headers ...string) *Response {
 	return &Response{
 		Description: description,
 		StatusCode:  statusCode,
+		Headers:     headers,
 	}
 }
 
 // ResponseText creates a new string response model.
-func ResponseText(statusCode int, description string) *Response {
+func ResponseText(statusCode int, description string, headers ...string) *Response {
 	return &Response{
 		Description: description,
 		ContentType: "text/plain",
 		StatusCode:  statusCode,
+		Headers:     headers,
 	}
 }
 
 // ResponseJSON creates a new JSON response model.
-func ResponseJSON(statusCode int, description string) *Response {
+func ResponseJSON(statusCode int, description string, headers ...string) *Response {
 	return &Response{
 		Description: description,
 		ContentType: "application/json",
 		StatusCode:  statusCode,
+		Headers:     headers,
 	}
 }
 
 // ResponseBinary creates a new binary response model.
-func ResponseBinary(statusCode int, contentType string, description string) *Response {
+func ResponseBinary(statusCode int, contentType string, description string, headers ...string) *Response {
 	return &Response{
 		Description: description,
 		ContentType: contentType,
 		StatusCode:  statusCode,
+		Headers:     headers,
 	}
 }
 
-// ResponseError creates a new error response model.
-func ResponseError(status int, description string) *Response {
-	return &Response{
+// ResponseError creates a new error response model. Alias for ResponseJSON.
+func ResponseError(status int, description string, headers ...string) *Response {
+	return ResponseJSON(status, description, headers...)
+}
+
+// Header describes a response header
+type Header struct {
+	Name        string
+	Description string  `json:"description,omitempty"`
+	Schema      *Schema `json:"schema"`
+}
+
+// ResponseHeader returns a new header
+func ResponseHeader(name, description string) *Header {
+	return &Header{
+		Name:        name,
 		Description: description,
-		ContentType: "application/json",
-		StatusCode:  status,
 	}
 }
 
@@ -136,8 +153,8 @@ type Operation struct {
 	Description        string
 	Params             []*Param
 	RequestContentType string
-	RequestModel       interface{}
 	RequestSchema      *Schema
+	ResponseHeaders    []*Header
 	Responses          []*Response
 	Handler            interface{}
 }
@@ -152,6 +169,8 @@ type OpenAPI struct {
 
 // OpenAPIHandler returns a new handler function to generate an OpenAPI spec.
 func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
+	respSchema400, _ := GenerateSchema(reflect.ValueOf(ErrorInvalidModel{}).Type())
+
 	return func(c *gin.Context) {
 		openapi := gabs.New()
 		openapi.Set("3.0.1", "openapi")
@@ -191,25 +210,34 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 				found400 := false
 				for _, resp := range op.Responses {
 					responses = append(responses, resp)
-					if resp.StatusCode == 400 {
+					if resp.StatusCode == http.StatusBadRequest {
 						found400 = true
 					}
 				}
 
 				if op.RequestSchema != nil && !found400 {
 					// Add a 400-level response in case parsing the request fails.
-					s, _ := GenerateSchema(reflect.ValueOf(ErrorInvalidModel{}).Type())
 					responses = append(responses, &Response{
 						Description: "Invalid input",
 						ContentType: "application/json",
-						StatusCode:  400,
-						Schema:      s,
+						StatusCode:  http.StatusBadRequest,
+						Schema:      respSchema400,
 					})
+				}
+
+				headerMap := map[string]*Header{}
+				for _, header := range op.ResponseHeaders {
+					headerMap[header.Name] = header
 				}
 
 				for _, resp := range op.Responses {
 					status := fmt.Sprintf("%v", resp.StatusCode)
 					openapi.Set(resp.Description, "paths", path, method, "responses", status, "description")
+
+					for _, name := range resp.Headers {
+						header := headerMap[name]
+						openapi.Set(header, "paths", path, method, "responses", status, "headers", header.Name)
+					}
 
 					if resp.Schema != nil {
 						openapi.Set(resp.Schema, "paths", path, method, "responses", status, "content", resp.ContentType, "schema")

@@ -27,7 +27,7 @@ var ErrParamTypeMustMatch = errors.New("param and default types must match")
 
 // ErrResponsesMustMatch is returned when the registered operation has a handler
 // function that returns the wrong number of arguments.
-var ErrResponsesMustMatch = errors.New("handler function return values must match registered responses")
+var ErrResponsesMustMatch = errors.New("handler function return values must match registered responses & headers")
 
 var paramRe = regexp.MustCompile(`:([^/]+)|{([^}]+)}`)
 
@@ -129,14 +129,28 @@ func (o *Operation) validate() error {
 	}
 
 	// Check that outputs match registered responses and add their type info
-	if method.Type().NumOut() != len(o.Responses) {
+	numOut := method.Type().NumOut()
+	if numOut != len(o.Responses)+len(o.ResponseHeaders) {
 		return ErrResponsesMustMatch
+	}
+
+	for i, header := range o.ResponseHeaders {
+		if header.Schema == nil {
+			// Generate the schema from the handler function types.
+			headerType := method.Type().Out(len(o.Responses) + i)
+			s, err := GenerateSchema(headerType)
+			if err != nil {
+				return err
+			}
+			header.Schema = s
+		}
 	}
 
 	for i, resp := range o.Responses {
 		respType := method.Type().Out(i)
 		// HTTP 204 explicitly forbids a response body.
 		if resp.StatusCode != 204 && resp.Schema == nil {
+			// Generate the schema from the handler function types.
 			s, err := GenerateSchema(respType)
 			if err != nil {
 				return err
