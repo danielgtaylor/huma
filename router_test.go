@@ -231,9 +231,9 @@ func TestRouterResponseHeaders(t *testing.T) {
 			ResponseText(http.StatusOK, "Successful test", "Etag", "X-Test", "X-Missing"),
 			ResponseError(http.StatusBadRequest, "Error example", "X-Test"),
 		},
-		Handler: func() (success string, fail string, etag string, xTest *string, xMissing string) {
+		Handler: func() (etag string, xTest *string, xMissing string, success string, fail string) {
 			test := "test"
-			return "hello", "", "\"abc123\"", &test, ""
+			return "\"abc123\"", &test, "", "hello", ""
 		},
 	})
 

@@ -137,7 +137,7 @@ func (o *Operation) validate() error {
 	for i, header := range o.ResponseHeaders {
 		if header.Schema == nil {
 			// Generate the schema from the handler function types.
-			headerType := method.Type().Out(len(o.Responses) + i)
+			headerType := method.Type().Out(i)
 			s, err := GenerateSchema(headerType)
 			if err != nil {
 				return err
@@ -147,7 +147,7 @@ func (o *Operation) validate() error {
 	}
 
 	for i, resp := range o.Responses {
-		respType := method.Type().Out(i)
+		respType := method.Type().Out(len(o.ResponseHeaders) + i)
 		// HTTP 204 explicitly forbids a response body.
 		if resp.StatusCode != 204 && resp.Schema == nil {
 			// Generate the schema from the handler function types.

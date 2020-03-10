@@ -260,15 +260,15 @@ func (r *Router) Register(op *Operation) {
 		// from the registered `huma.Response` struct.
 		// This breaks down with scalar types... so they need to be passed
 		// as a pointer and we'll dereference it automatically.
-		for i, o := range out[:len(op.Responses)] {
+		for i, o := range out[len(op.ResponseHeaders):] {
 			if !o.IsZero() {
 				body := o.Interface()
 
 				r := op.Responses[i]
 
 				// Set response headers
-				for i, header := range op.ResponseHeaders {
-					value := out[len(op.Responses)+i]
+				for j, header := range op.ResponseHeaders {
+					value := out[j]
 
 					found := false
 					for _, name := range r.Headers {
