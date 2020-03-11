@@ -1,4 +1,4 @@
-# Huma REST API Framework
+![Huma Rest API Framework](https://user-images.githubusercontent.com/106826/76379557-9e502a80-630d-11ea-9c7d-f6426076a47c.png)
 
 [![CI](https://github.com/danielgtaylor/huma/workflows/CI/badge.svg?branch=master)](https://github.com/danielgtaylor/huma/actions?query=workflow%3ACI+branch%3Amaster++) [![codecov](https://codecov.io/gh/danielgtaylor/huma/branch/master/graph/badge.svg)](https://codecov.io/gh/danielgtaylor/huma) [![Docs](https://godoc.org/github.com/danielgtaylor/huma?status.svg)](https://pkg.go.dev/github.com/danielgtaylor/huma?tab=doc) [![Go Report Card](https://goreportcard.com/badge/github.com/danielgtaylor/huma)](https://goreportcard.com/report/github.com/danielgtaylor/huma)
 
@@ -17,8 +17,10 @@ Features include:
   - Request params (path, query, or header)
   - Request body
   - Responses (including errors)
+  - Response headers
 - Annotated Go types for input and output models
   - Automatic input model validation
+- Dependency injection for loggers, datastores, etc
 - Documentation generation using [Redoc](https://github.com/Redocly/redoc)
 - Generates OpenAPI JSON for access to a rich ecosystem of tools
   - Mocks with [API Sprout](https://github.com/danielgtaylor/apisprout)
@@ -30,7 +32,7 @@ This project was inspired by [FastAPI](https://fastapi.tiangolo.com/), [Gin](htt
 
 ## Concepts & Example
 
-REST APIs are composed of operations against resources and can include descriptions of various inputs and possible outputs. Huma uses standard Go types and a declarative API to capture those descriptions in order to provide a combination of a simple interface and idiomatic code leveraging Go's strong typing.
+REST APIs are composed of operations against resources and can include descriptions of various inputs and possible outputs. Huma uses standard Go types and a declarative API to capture those descriptions in order to provide a combination of a simple interface and idiomatic code leveraging Go's speed and strong typing.
 
 Let's start by building Huma's equivalent of a "Hello, world" program. First, you'll need to know a few basic things:
 
@@ -52,7 +54,7 @@ import (
 func main() {
 	// Create a new router and give our API a title and version.
 	r := huma.NewRouter(&huma.OpenAPI{
-		Title:   "My API",
+		Title:   "Hello API",
 		Version: "1.0.0",
 	})
 
@@ -215,5 +217,65 @@ For the docs, you should see something like this:
 <img width="1367" alt="Documentation  screenshot" src="https://user-images.githubusercontent.com/106826/76184508-746dfb00-6189-11ea-9e7d-f21ac58a2d19.png">
 
 Request models are essentially the same. Just define an extra input argument to the handler funtion and you get automatic loading and validation.
+
+TODO: Request model example
+
+#### Model Tags
+
+The standard `json` tag is supported and can be used to rename a field and mark fields as optional using `omitempty`. The following additional tags are supported on model fields:
+
+| Tag           | Description                               | Example                      |
+| ------------- | ----------------------------------------- | ---------------------------- |
+| `description` | Describe the field                        | `description:"Who to greet"` |
+| `enum`        | A comma-separated list of possible values | `enum:"one,two,three"`       |
+| `minimum`     | Minimum (inclusive)                       | `minimum:"1"`                |
+| `maximum`     | Maximum (inclusive)                       | `maximum:"255"`              |
+
+### Dependencies
+
+Huma includes a dependency injection system that can be used to pass additional arguments to operation handler functions. You can register global dependencies (ones that do not change from request to request) or contextual dependencies (ones that change with each request).
+
+Global dependencies are created by just setting some value, while contextual dependencies are implemented using a function that returns the value of the form `func (c *gin.Context, o *huma.Operation) (*YourType, error)` where the value you want injected is of `*YourType`.
+
+```go
+// Register a new database connection dependency
+r.Dependency(db.NewConnection())
+
+// Register a new request logger dependency. This is contextual because we
+// will print out the requester's IP address with each log message.
+type MyLogger struct {
+	Info: func(msg string),
+}
+
+r.Dependency(func(c *gin.Context, o *huma.Operation) (*MyLogger, error) {
+	return &MyLogger{
+		Info: func(msg string) {
+			fmt.Printf("%s [ip:%s]\n", msg, c.Request.RemoteAddr)
+		},
+	}, nil
+})
+
+// Use them in any handler just by adding them as arguments!
+r.Register(&huma.Operation{
+	// ...
+	Handler: func(db *db.Connection, log *MyLogger) string {
+		log.Info("test")
+		item := db.Fetch("query")
+		return item.ID
+	}
+})
+```
+
+Note that dependencies cannot be scalar types. Typically you would use a struct or interface like above. Global dependencies cannot be functions.
+
+## How it Works
+
+Huma's philosophy is to make it harder to make mistakes by providing tools that reduce duplication and encourage practices which make it hard to forget to update some code.
+
+An example of this is how handler functions **must** declare all headers that they return and which responses may send those headers. You simply **cannot** return from the function without considering the values of each of those headers. If you set one that isn't appropriate for the response you return, Huma will let you know.
+
+How does it work? Huma asks that you give up one compile-time static type check for handler function signatures and instead let it be a runtime startup check. Using a small amount of reflection, Huma can then verify the function signatures, inject depdencies and parameters, and handle responses and headers as well as making sure that all matches the declared operation.
+
+By strictly enforcing this runtime interface you get several advantages. No more out of date API description. No more out of date documenatation. No more out of date SDKs or CLIs. Your entire ecosystem of tooling is driven off of one simple backend implementation. Stuff just works.
 
 More docs coming soon.

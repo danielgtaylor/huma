@@ -2,6 +2,7 @@ package huma
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,13 +12,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func init() {
+	gin.SetMode(gin.TestMode)
+}
+
 type helloResponse struct {
 	Message string `json:"message"`
 }
 
 func BenchmarkGin(b *testing.B) {
-
-	gin.SetMode(gin.ReleaseMode)
 	g := gin.New()
 	g.GET("/hello", func(c *gin.Context) {
 		c.JSON(200, &helloResponse{
@@ -33,12 +36,9 @@ func BenchmarkGin(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		g.ServeHTTP(w, req)
 	}
-
-	gin.SetMode(gin.DebugMode)
 }
 
 func BenchmarkHuma(b *testing.B) {
-	gin.SetMode(gin.ReleaseMode)
 	r := NewRouterWithGin(gin.New(), &OpenAPI{
 		Title:   "Benchmark test",
 		Version: "1.0.0",
@@ -65,8 +65,6 @@ func BenchmarkHuma(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		r.ServeHTTP(w, req)
 	}
-
-	gin.SetMode(gin.DebugMode)
 }
 
 func TestRouter(t *testing.T) {
@@ -246,4 +244,57 @@ func TestRouterResponseHeaders(t *testing.T) {
 	assert.Equal(t, "\"abc123\"", w.Header().Get("Etag"))
 	assert.Equal(t, "test", w.Header().Get("X-Test"))
 	assert.Equal(t, "", w.Header().Get("X-Missing"))
+}
+
+func TestRouterDependencies(t *testing.T) {
+	r := NewRouter(&OpenAPI{Title: "My API", Version: "1.0.0"})
+
+	type DB struct {
+		Get func() string
+	}
+
+	// Inject datastore as a global instance.
+	r.Dependency(&DB{
+		Get: func() string {
+			return "Hello, "
+		},
+	})
+
+	type Logger struct {
+		Log func(msg string)
+	}
+
+	// Inject logger as a contextual instance from the Gin context.
+	r.Dependency(func(c *gin.Context, o *Operation) (*Logger, error) {
+		return &Logger{
+			Log: func(msg string) {
+				fmt.Println(fmt.Sprintf("%s [uri:%s]", msg, c.FullPath()))
+			},
+		}, nil
+	})
+
+	r.Register(&Operation{
+		Method:      http.MethodGet,
+		Path:        "/hello",
+		Description: "Basic hello world",
+		Params: []*Param{
+			QueryParam("name", "Your name", ""),
+		},
+		Responses: []*Response{
+			ResponseText(http.StatusOK, "Successful hello response"),
+		},
+		Handler: func(c *gin.Context, db *DB, l *Logger, name string) string {
+			if name == "" {
+				name = c.Request.RemoteAddr
+			}
+			l.Log("Hello logger!")
+			return db.Get() + name
+		},
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/hello?name=foo", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
 }

@@ -33,7 +33,7 @@ var paramRe = regexp.MustCompile(`:([^/]+)|{([^}]+)}`)
 
 // validate checks that the operation is well-formed (e.g. handler signature
 // matches the given params) and generates schemas if needed.
-func (o *Operation) validate() error {
+func (o *Operation) validate(deps map[reflect.Type]interface{}) error {
 	if o.Method == "" {
 		return fmt.Errorf("Method: %w", ErrFieldRequired)
 	}
@@ -52,8 +52,8 @@ func (o *Operation) validate() error {
 		verb := o.Method
 
 		// Try to detect calls returning lists of things.
-		if method.Type().NumOut() > 1 {
-			k := method.Type().Out(1).Kind()
+		if method.Type().NumOut() > 0 {
+			k := method.Type().Out(0).Kind()
 			if k == reflect.Array || k == reflect.Slice {
 				verb = "list"
 			}
@@ -74,11 +74,9 @@ func (o *Operation) validate() error {
 	for i := 0; i < method.Type().NumIn(); i++ {
 		paramType := method.Type().In(i)
 
-		if paramType.String() == "*gin.Context" {
-			// Skip context parameter
-			if i != 0 {
-				return ErrContextNotFirst
-			}
+		if _, ok := deps[paramType]; ok {
+			// This matches a registered dependency type, so it's not a normal
+			// param. Skip it.
 			continue
 		}
 
