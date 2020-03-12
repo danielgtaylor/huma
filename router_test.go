@@ -265,7 +265,7 @@ func TestRouterDependencies(t *testing.T) {
 	}
 
 	// Inject logger as a contextual instance from the Gin context.
-	r.Dependency(func(c *gin.Context, o *Operation) (*Logger, error) {
+	r.Dependency(func(c *gin.Context) (*Logger, error) {
 		return &Logger{
 			Log: func(msg string) {
 				fmt.Println(fmt.Sprintf("%s [uri:%s]", msg, c.FullPath()))

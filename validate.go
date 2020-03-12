@@ -74,6 +74,19 @@ func (o *Operation) validate(deps map[reflect.Type]interface{}) error {
 	for i := 0; i < method.Type().NumIn(); i++ {
 		paramType := method.Type().In(i)
 
+		if paramType.String() == "*gin.Context" || paramType.String() == "*huma.Operation" {
+			// Known hard-coded dependencies. Skip them.
+			continue
+		}
+
+		if paramType.String() == "gin.Context" {
+			return fmt.Errorf("gin context should be pointer *gin.Context: %w", ErrDependencyInvalid)
+		}
+
+		if paramType.String() == "huma.Operation" {
+			return fmt.Errorf("operation should be pointer *huma.Operation: %w", ErrDependencyInvalid)
+		}
+
 		if _, ok := deps[paramType]; ok {
 			// This matches a registered dependency type, so it's not a normal
 			// param. Skip it.
@@ -98,12 +111,14 @@ func (o *Operation) validate(deps map[reflect.Type]interface{}) error {
 
 	for i, paramType := range types {
 		if i == len(types)-1 && requestBody {
-			// The last item has no associated param.
-			s, err := GenerateSchema(paramType)
-			if err != nil {
-				return err
+			// The last item has no associated param. It is a request body.
+			if o.RequestSchema == nil {
+				s, err := GenerateSchema(paramType)
+				if err != nil {
+					return err
+				}
+				o.RequestSchema = s
 			}
-			o.RequestSchema = s
 			continue
 		}
 

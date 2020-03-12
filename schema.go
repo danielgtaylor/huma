@@ -1,7 +1,7 @@
 package huma
 
 import (
-	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -126,7 +126,7 @@ func GenerateSchema(t reflect.Type) (*Schema, error) {
 	case reflect.Ptr:
 		return GenerateSchema(t.Elem())
 	default:
-		return nil, errors.New("unsupported type")
+		return nil, fmt.Errorf("unsupported type %s from %s", t.Kind(), t)
 	}
 
 	return schema, nil

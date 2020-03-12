@@ -18,9 +18,6 @@ import (
 // is not a valid value.
 var ErrInvalidParamLocation = errors.New("invalid parameter location")
 
-// ErrDependencyInvalid is returned when registering a dependency fails.
-var ErrDependencyInvalid = errors.New("dependency invalid")
-
 func getParamValue(c *gin.Context, param *Param) (interface{}, error) {
 	var pstr string
 	switch param.In {
@@ -81,7 +78,6 @@ func getParamValue(c *gin.Context, param *Param) (interface{}, error) {
 
 func getRequestBody(c *gin.Context, t reflect.Type, op *Operation) (interface{}, bool) {
 	val := reflect.New(t).Interface()
-
 	if op.RequestSchema != nil {
 		body, err := ioutil.ReadAll(c.Request.Body)
 		if err != nil {
@@ -129,7 +125,7 @@ func getRequestBody(c *gin.Context, t reflect.Type, op *Operation) (interface{},
 type Router struct {
 	api    *OpenAPI
 	engine *gin.Engine
-	deps   map[reflect.Type]interface{}
+	deps   *DependencyRegistry
 }
 
 // NewRouter creates a new Huma router for handling API requests with
@@ -144,17 +140,12 @@ func NewRouterWithGin(engine *gin.Engine, api *OpenAPI) *Router {
 	r := &Router{
 		api:    api,
 		engine: engine,
+		deps:   NewDependencyRegistry(),
 	}
 
 	if r.api.Paths == nil {
 		r.api.Paths = make(map[string][]*Operation)
 	}
-
-	// Add the default context dependency.
-	r.deps = make(map[reflect.Type]interface{})
-	r.Dependency(func(c *gin.Context, o *Operation) (*gin.Context, error) {
-		return c, nil
-	})
 
 	// Set up handlers for the auto-generated spec and docs.
 	r.engine.GET("/openapi.json", OpenAPIHandler(r.api))
@@ -195,13 +186,19 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 // Dependency registers a new dependency type to be injected into handler
 // functions, e.g. for loggers, metrics, datastores, etc. Provide a value
-// or a function to return a contextual value/error.
+// or a function to return a contextual value/error. Dependency functions
+// can take their own dependencies. To prevent circular dependency loops,
+// a function can only depend on previously defined dependencies.
+//
+// Some dependency types are built in:
+// - `*gin.Context` the current Gin request execution context
+// - `*huma.Operation` the current Huma operation
 //
 //  // Register a global dependency like a datastore
 //  router.Dependency(&MyDB{...})
 //
 //  // Register a contextual dependency like a logger
-//  router.Dependency(func (c *gin.Context, o *huma.Operation) (*MyLogger, error) {
+//  router.Dependency(func (c *gin.Context) (*MyLogger, error) {
 //    return &MyLogger{Tags: []string{c.Request.RemoteAddr}}, nil
 //  })
 //
@@ -215,46 +212,19 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 //      return item
 //    }
 //  })
+//
+// Panics on invalid input to force stop execution on service startup.
 func (r *Router) Dependency(f interface{}) {
-	fVal := reflect.ValueOf(f)
-	outType := fVal.Type()
-
-	if fVal.Kind() == reflect.Func {
-		fType := fVal.Type()
-		if fType.NumIn() != 2 {
-			panic(fmt.Errorf("function should take 2 arguments (*gin.Context, *huma.Operation) but got %s: %w", fType.String(), ErrDependencyInvalid))
-		}
-
-		if fType.In(0).String() != "*gin.Context" || fType.In(1).String() != "*huma.Operation" {
-			panic(fmt.Errorf("function should take (*gin.Context, *huma.Operation) but got (%s, %s): %w", fType.In(0).String(), fType.In(1).String(), ErrDependencyInvalid))
-		}
-
-		if fVal.Type().NumOut() != 2 || fVal.Type().Out(1).Name() != "error" {
-			panic(fmt.Errorf("function should return (your-type, error): %w", ErrDependencyInvalid))
-		}
-
-		outType = fVal.Type().Out(0)
-
-		if _, ok := r.deps[outType]; ok {
-			panic(fmt.Errorf("duplicate type %s: %w", outType.String(), ErrDependencyInvalid))
-		}
+	if err := r.deps.Add(f); err != nil {
+		panic(err)
 	}
-
-	// To prevent mistakes we limit dependencies to non-scalar types, since
-	// scalars like strings/numbers are typically used for params like headers.
-	switch outType.Kind() {
-	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64, reflect.String:
-		panic(fmt.Errorf("dependeny cannot be scalar type %s: %w", outType.Kind(), ErrDependencyInvalid))
-	}
-
-	r.deps[outType] = f
 }
 
 // Register a new operation.
 func (r *Router) Register(op *Operation) {
 	// First, make sure the operation and handler make sense, as well as pre-
 	// generating any schemas for use later during request handling.
-	if err := op.validate(r.deps); err != nil {
+	if err := op.validate(r.deps.registry); err != nil {
 		panic(err)
 	}
 
@@ -295,28 +265,20 @@ func (r *Router) Register(op *Operation) {
 		// Process any dependencies first.
 		for i := 0; i < method.Type().NumIn(); i++ {
 			argType := method.Type().In(i)
-			if f, ok := r.deps[argType]; ok {
-				// This handler argument matches a known registered dependency. If it's
-				// a function, then call it, otherwise just use the value.
-				var v reflect.Value
-				vf := reflect.ValueOf(f)
-				if vf.Kind() == reflect.Func {
-					args := []reflect.Value{reflect.ValueOf(c), reflect.ValueOf(op)}
-					out := vf.Call(args)
-					if !out[1].IsNil() {
-						c.AbortWithError(500, out[1].Interface().(error))
-						return
-					}
-					v = out[0]
-				} else {
-					v = reflect.ValueOf(f)
+			v, err := r.deps.Get(op, c, argType)
+			if err != nil {
+				if errors.Is(err, ErrDependencyNotFound) {
+					// No match, so we're done with dependencies. Keep going below
+					// processing params.
+					break
 				}
-				in = append(in, v)
-			} else {
-				// No match, so we're done with dependencies. Keep going below
-				// processing params.
-				break
+
+				// Getting the dependency value failed.
+				// TODO: better error code/messaging?
+				c.AbortWithError(500, err)
+				return
 			}
+			in = append(in, reflect.ValueOf(v))
 		}
 
 		for _, param := range op.Params {

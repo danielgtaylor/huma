@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/danielgtaylor/huma/workflows/CI/badge.svg?branch=master)](https://github.com/danielgtaylor/huma/actions?query=workflow%3ACI+branch%3Amaster++) [![codecov](https://codecov.io/gh/danielgtaylor/huma/branch/master/graph/badge.svg)](https://codecov.io/gh/danielgtaylor/huma) [![Docs](https://godoc.org/github.com/danielgtaylor/huma?status.svg)](https://pkg.go.dev/github.com/danielgtaylor/huma?tab=doc) [![Go Report Card](https://goreportcard.com/badge/github.com/danielgtaylor/huma)](https://goreportcard.com/report/github.com/danielgtaylor/huma)
 
-A modern, simple, fast & opinionated REST API framework for Go. The goals of this project are to provide:
+A modern, simple, fast & opinionated REST API framework for Go. Pronounced IPA: [/'hjuːmɑ/](https://en.wiktionary.org/wiki/Wiktionary:International_Phonetic_Alphabet). The goals of this project are to provide:
 
 - A modern REST API backend framework for Go developers
   - Described by [OpenAPI 3](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md) & [JSON Schema](https://json-schema.org/)
@@ -235,7 +235,10 @@ The standard `json` tag is supported and can be used to rename a field and mark 
 
 Huma includes a dependency injection system that can be used to pass additional arguments to operation handler functions. You can register global dependencies (ones that do not change from request to request) or contextual dependencies (ones that change with each request).
 
-Global dependencies are created by just setting some value, while contextual dependencies are implemented using a function that returns the value of the form `func (c *gin.Context, o *huma.Operation) (*YourType, error)` where the value you want injected is of `*YourType`.
+Global dependencies are created by just setting some value, while contextual dependencies are implemented using a function that returns the value of the form `func (dep *DependencyType...) (*YourType, error)` where the value you want injected is of `*YourType` and the function arguments can be any previously registered dependency types or one of the hard-coded types:
+
+- `*gin.Context` the current context
+- `*huma.Operation` the current operation
 
 ```go
 // Register a new database connection dependency
@@ -247,7 +250,7 @@ type MyLogger struct {
 	Info: func(msg string),
 }
 
-r.Dependency(func(c *gin.Context, o *huma.Operation) (*MyLogger, error) {
+r.Dependency(func(c *gin.Context) (*MyLogger, error) {
 	return &MyLogger{
 		Info: func(msg string) {
 			fmt.Printf("%s [ip:%s]\n", msg, c.Request.RemoteAddr)
