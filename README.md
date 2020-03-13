@@ -235,14 +235,16 @@ The standard `json` tag is supported and can be used to rename a field and mark 
 
 Huma includes a dependency injection system that can be used to pass additional arguments to operation handler functions. You can register global dependencies (ones that do not change from request to request) or contextual dependencies (ones that change with each request).
 
-Global dependencies are created by just setting some value, while contextual dependencies are implemented using a function that returns the value of the form `func (dep *DependencyType...) (*YourType, error)` where the value you want injected is of `*YourType` and the function arguments can be any previously registered dependency types or one of the hard-coded types:
+Global dependencies are created by just setting some value, while contextual dependencies are implemented using a function that returns the value of the form `func (deps..., params...) (headers..., *YourType, error)` where the value you want injected is of `*YourType` and the function arguments can be any previously registered dependency types or one of the hard-coded types:
 
-- `*gin.Context` the current context
-- `*huma.Operation` the current operation
+- `huma.ContextDependency()` the current context (returns `*gin.Context`)
+- `huma.OperationDependency()` the current operation (returns `*huma.Operation`)
 
 ```go
 // Register a new database connection dependency
-r.Dependency(db.NewConnection())
+db := &huma.Dependency{
+	Value: db.NewConnection(),
+}
 
 // Register a new request logger dependency. This is contextual because we
 // will print out the requester's IP address with each log message.
@@ -250,17 +252,22 @@ type MyLogger struct {
 	Info: func(msg string),
 }
 
-r.Dependency(func(c *gin.Context) (*MyLogger, error) {
-	return &MyLogger{
-		Info: func(msg string) {
-			fmt.Printf("%s [ip:%s]\n", msg, c.Request.RemoteAddr)
-		},
-	}, nil
-})
+logger := &huma.Dependency{
+	Depends: []*huma.Dependency{huma.ContextDependency()},
+	Value: func(c *gin.Context) (*MyLogger, error) {
+		return &MyLogger{
+			Info: func(msg string) {
+				fmt.Printf("%s [ip:%s]\n", msg, c.Request.RemoteAddr)
+			},
+		}, nil
+	},
+}
 
-// Use them in any handler just by adding them as arguments!
+// Use them in any handler by adding them to both `Depends` and the list of
+// handler function arguments.
 r.Register(&huma.Operation{
 	// ...
+	Depends: []*huma.Dependency{db, logger},
 	Handler: func(db *db.Connection, log *MyLogger) string {
 		log.Info("test")
 		item := db.Fetch("query")
@@ -269,7 +276,7 @@ r.Register(&huma.Operation{
 })
 ```
 
-Note that dependencies cannot be scalar types. Typically you would use a struct or interface like above. Global dependencies cannot be functions.
+Note that global dependencies cannot be functions. You can wrap them in a struct as a workaround.
 
 ## How it Works
 

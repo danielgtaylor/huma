@@ -125,7 +125,6 @@ func getRequestBody(c *gin.Context, t reflect.Type, op *Operation) (interface{},
 type Router struct {
 	api    *OpenAPI
 	engine *gin.Engine
-	deps   *DependencyRegistry
 }
 
 // NewRouter creates a new Huma router for handling API requests with
@@ -140,7 +139,6 @@ func NewRouterWithGin(engine *gin.Engine, api *OpenAPI) *Router {
 	r := &Router{
 		api:    api,
 		engine: engine,
-		deps:   NewDependencyRegistry(),
 	}
 
 	if r.api.Paths == nil {
@@ -214,17 +212,17 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 //  })
 //
 // Panics on invalid input to force stop execution on service startup.
-func (r *Router) Dependency(f interface{}) {
-	if err := r.deps.Add(f); err != nil {
-		panic(err)
-	}
-}
+// func (r *Router) Dependency(f interface{}) {
+// 	if err := r.deps.Add(f); err != nil {
+// 		panic(err)
+// 	}
+// }
 
 // Register a new operation.
 func (r *Router) Register(op *Operation) {
 	// First, make sure the operation and handler make sense, as well as pre-
 	// generating any schemas for use later during request handling.
-	if err := op.validate(r.deps.registry); err != nil {
+	if err := op.validate(); err != nil {
 		panic(err)
 	}
 
@@ -263,22 +261,21 @@ func (r *Router) Register(op *Operation) {
 		in := make([]reflect.Value, 0, method.Type().NumIn())
 
 		// Process any dependencies first.
-		for i := 0; i < method.Type().NumIn(); i++ {
-			argType := method.Type().In(i)
-			v, err := r.deps.Get(op, c, argType)
+		for _, dep := range op.Depends {
+			headers, value, err := dep.Resolve(c, op)
 			if err != nil {
-				if errors.Is(err, ErrDependencyNotFound) {
-					// No match, so we're done with dependencies. Keep going below
-					// processing params.
-					break
-				}
-
-				// Getting the dependency value failed.
-				// TODO: better error code/messaging?
-				c.AbortWithError(500, err)
-				return
+				// TODO: better error handling
+				c.AbortWithStatusJSON(500, ErrorModel{
+					Message: "Couldn't get dependency",
+					//Errors:  []error{err},
+				})
 			}
-			in = append(in, reflect.ValueOf(v))
+
+			for k, v := range headers {
+				c.Header(k, v)
+			}
+
+			in = append(in, reflect.ValueOf(value))
 		}
 
 		for _, param := range op.Params {

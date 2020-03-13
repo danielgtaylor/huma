@@ -13,10 +13,6 @@ import (
 // ErrFieldRequired is returned when a field is blank but has been required.
 var ErrFieldRequired = errors.New("field is required")
 
-// ErrContextNotFirst is returned when a registered operation has a handler
-// that takes a context but it is not the first parameter of the function.
-var ErrContextNotFirst = errors.New("context should be first parameter")
-
 // ErrParamsMustMatch is returned when a registered operation has a handler
 // function that takes the wrong number of arguments.
 var ErrParamsMustMatch = errors.New("handler function args must match registered params")
@@ -31,9 +27,40 @@ var ErrResponsesMustMatch = errors.New("handler function return values must matc
 
 var paramRe = regexp.MustCompile(`:([^/]+)|{([^}]+)}`)
 
+func validateParam(p *Param, t reflect.Type) error {
+	p.typ = t
+
+	if p.Schema == nil {
+		s, err := GenerateSchema(p.typ)
+		if err != nil {
+			return err
+		}
+		p.Schema = s
+
+		if p.def != nil {
+			p.Schema.Default = p.def
+		}
+	}
+
+	return nil
+}
+
+func validateHeader(h *Header, t reflect.Type) error {
+	if h.Schema == nil {
+		// Generate the schema from the handler function types.
+		s, err := GenerateSchema(t)
+		if err != nil {
+			return err
+		}
+		h.Schema = s
+	}
+
+	return nil
+}
+
 // validate checks that the operation is well-formed (e.g. handler signature
 // matches the given params) and generates schemas if needed.
-func (o *Operation) validate(deps map[reflect.Type]interface{}) error {
+func (o *Operation) validate() error {
 	if o.Method == "" {
 		return fmt.Errorf("Method: %w", ErrFieldRequired)
 	}
@@ -70,27 +97,32 @@ func (o *Operation) validate(deps map[reflect.Type]interface{}) error {
 		o.Path = paramRe.ReplaceAllString(o.Path, ":$1$2")
 	}
 
-	types := []reflect.Type{}
-	for i := 0; i < method.Type().NumIn(); i++ {
+	for i, dep := range o.Depends {
 		paramType := method.Type().In(i)
 
-		if paramType.String() == "*gin.Context" || paramType.String() == "*huma.Operation" {
-			// Known hard-coded dependencies. Skip them.
-			continue
-		}
-
 		if paramType.String() == "gin.Context" {
-			return fmt.Errorf("gin context should be pointer *gin.Context: %w", ErrDependencyInvalid)
+			return fmt.Errorf("gin.Context should be pointer *gin.Context: %w", ErrDependencyInvalid)
 		}
 
 		if paramType.String() == "huma.Operation" {
-			return fmt.Errorf("operation should be pointer *huma.Operation: %w", ErrDependencyInvalid)
+			return fmt.Errorf("huma.Operation should be pointer *huma.Operation: %w", ErrDependencyInvalid)
 		}
 
-		if _, ok := deps[paramType]; ok {
-			// This matches a registered dependency type, so it's not a normal
-			// param. Skip it.
-			continue
+		if err := dep.validate(paramType); err != nil {
+			return err
+		}
+	}
+
+	types := []reflect.Type{}
+	for i := len(o.Depends); i < method.Type().NumIn(); i++ {
+		paramType := method.Type().In(i)
+
+		if paramType.String() == "gin.Context" {
+			return fmt.Errorf("gin.Context should be pointer *gin.Context: %w", ErrDependencyInvalid)
+		}
+
+		if paramType.String() == "huma.Operation" {
+			return fmt.Errorf("huma.Operation should be pointer *huma.Operation: %w", ErrDependencyInvalid)
 		}
 
 		types = append(types, paramType)
@@ -123,21 +155,8 @@ func (o *Operation) validate(deps map[reflect.Type]interface{}) error {
 		}
 
 		p := o.Params[i]
-		p.typ = paramType
-		if p.Schema == nil {
-			// Auto-generate a schema for this parameter
-			s, err := GenerateSchema(paramType)
-			if err != nil {
-				return err
-			}
-			p.Schema = s
-
-			if p.def != nil {
-				if reflect.ValueOf(p.def).Type() != paramType {
-
-				}
-				p.Schema.Default = p.def
-			}
+		if err := validateParam(p, paramType); err != nil {
+			return err
 		}
 	}
 
@@ -148,14 +167,8 @@ func (o *Operation) validate(deps map[reflect.Type]interface{}) error {
 	}
 
 	for i, header := range o.ResponseHeaders {
-		if header.Schema == nil {
-			// Generate the schema from the handler function types.
-			headerType := method.Type().Out(i)
-			s, err := GenerateSchema(headerType)
-			if err != nil {
-				return err
-			}
-			header.Schema = s
+		if err := validateHeader(header, method.Type().Out(i)); err != nil {
+			return err
 		}
 	}
 

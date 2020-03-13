@@ -1,58 +1,128 @@
 package huma
 
 import (
+	"net/http"
+	"reflect"
 	"testing"
 
-	"github.com/alecthomas/assert"
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestDependencyNested(t *testing.T) {
-	type Dep1 struct{}
-	type Dep2 struct{}
-	type Dep3 struct{}
+func TestGlobalDepEmpty(t *testing.T) {
+	d := Dependency{}
 
-	registry := NewDependencyRegistry()
-	assert.NoError(t, registry.Add(&Dep1{}))
+	typ := reflect.TypeOf(123)
 
-	assert.NoError(t, registry.Add(func(d1 *Dep1) (*Dep2, error) {
-		return &Dep2{}, nil
-	}))
-
-	assert.NoError(t, registry.Add(func(d1 *Dep1, d2 *Dep2) (*Dep3, error) {
-		return &Dep3{}, nil
-	}))
+	assert.Error(t, d.validate(typ))
 }
 
-func TestDependencyOrder(t *testing.T) {
-	type Dep1 struct{}
-	type Dep2 struct{}
+func TestGlobalDepWrongType(t *testing.T) {
+	d := Dependency{
+		Value: "test",
+	}
 
-	registry := NewDependencyRegistry()
+	typ := reflect.TypeOf(123)
 
-	assert.Error(t, registry.Add(func(d2 *Dep2) (*Dep1, error) {
-		return &Dep1{}, nil
-	}))
+	assert.Error(t, d.validate(typ))
 }
 
-func TestDependencyNotPointer(t *testing.T) {
-	type Dep1 struct{}
+func TestGlobalDepParams(t *testing.T) {
+	d := Dependency{
+		Params: []*Param{
+			HeaderParam("foo", "description", "hello"),
+		},
+		Value: "test",
+	}
 
-	registry := NewDependencyRegistry()
+	typ := reflect.TypeOf("test")
 
-	assert.Error(t, registry.Add(Dep1{}))
-	assert.Error(t, registry.Add(func() (Dep1, error) {
-		return Dep1{}, nil
-	}))
+	assert.Error(t, d.validate(typ))
 }
 
-func TestDependencyDupe(t *testing.T) {
-	type Dep1 struct{}
+func TestGlobalDepHeaders(t *testing.T) {
+	d := Dependency{
+		ResponseHeaders: []*Header{ResponseHeader("foo", "description")},
+		Value:           "test",
+	}
 
-	registry := NewDependencyRegistry()
+	typ := reflect.TypeOf("test")
 
-	assert.NoError(t, registry.Add(&Dep1{}))
-	assert.Error(t, registry.Add(&Dep1{}))
-	assert.Error(t, registry.Add(func() (*Dep1, error) {
-		return nil, nil
-	}))
+	assert.Error(t, d.validate(typ))
+}
+
+func TestDepContext(t *testing.T) {
+	d := Dependency{
+		Depends: []*Dependency{
+			ContextDependency(),
+		},
+		Value: func(c *gin.Context) (*gin.Context, error) { return c, nil },
+	}
+
+	mock := &gin.Context{}
+
+	typ := reflect.TypeOf(mock)
+	assert.NoError(t, d.validate(typ))
+
+	_, v, err := d.Resolve(mock, &Operation{})
+	assert.NoError(t, err)
+	assert.Equal(t, v, mock)
+}
+
+func TestDepOperation(t *testing.T) {
+	d := Dependency{
+		Depends: []*Dependency{
+			OperationDependency(),
+		},
+		Value: func(o *Operation) (*Operation, error) { return o, nil },
+	}
+
+	mock := &Operation{}
+
+	typ := reflect.TypeOf(mock)
+	assert.NoError(t, d.validate(typ))
+
+	_, v, err := d.Resolve(&gin.Context{}, mock)
+	assert.NoError(t, err)
+	assert.Equal(t, v, mock)
+}
+func TestDepFuncWrongArgs(t *testing.T) {
+	d := Dependency{
+		Params: []*Param{
+			HeaderParam("foo", "desc", ""),
+		},
+		Value: func() (string, error) {
+			return "", nil
+		},
+	}
+
+	assert.Error(t, d.validate(reflect.TypeOf("")))
+}
+
+func TestDepFunc(t *testing.T) {
+	d := Dependency{
+		Params: []*Param{
+			HeaderParam("x-in", "desc", ""),
+		},
+		ResponseHeaders: []*Header{
+			ResponseHeader("x-out", "desc"),
+		},
+		Value: func(xin string) (string, string, error) {
+			return "xout", "value", nil
+		},
+	}
+
+	c := &gin.Context{
+		Request: &http.Request{
+			Header: http.Header{
+				"x-in": []string{"xin"},
+			},
+		},
+	}
+
+	assert.NoError(t, d.validate(reflect.TypeOf("")))
+	h, v, err := d.Resolve(c, &Operation{})
+	assert.NoError(t, err)
+	assert.Equal(t, "xout", h["x-out"])
+	assert.Equal(t, "value", v)
 }

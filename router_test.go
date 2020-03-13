@@ -67,6 +67,120 @@ func BenchmarkHuma(b *testing.B) {
 	}
 }
 
+func BenchmarkGinComplex(b *testing.B) {
+	dep1 := "dep1"
+	dep2 := func(c *gin.Context) string {
+		_ = c.GetHeader("x-foo")
+		return "dep2"
+	}
+	dep3 := func(c *gin.Context) (string, string) {
+		return "xbar", "dep3"
+	}
+
+	g := gin.New()
+	g.GET("/hello", func(c *gin.Context) {
+		_ = dep1
+		_ = dep2(c)
+		h, _ := dep3(c)
+
+		c.Header("x-bar", h)
+
+		name := c.Query("name")
+		if name == "test" {
+			c.JSON(400, &ErrorModel{
+				Message: "Name cannot be test",
+			})
+		}
+		if name == "" {
+			name = "world"
+		}
+
+		c.Header("x-baz", "xbaz")
+		c.JSON(200, &helloResponse{
+			Message: "Hello, " + name,
+		})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/hello", nil)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		g.ServeHTTP(w, req)
+	}
+}
+
+func BenchmarkHumaComplex(b *testing.B) {
+	r := NewRouterWithGin(gin.New(), &OpenAPI{
+		Title:   "Benchmark test",
+		Version: "1.0.0",
+	})
+
+	dep1 := &Dependency{
+		Value: "dep1",
+	}
+
+	dep2 := &Dependency{
+		Depends: []*Dependency{ContextDependency(), dep1},
+		Params: []*Param{
+			HeaderParam("x-foo", "desc", ""),
+		},
+		Value: func(c *gin.Context, d1 string, xfoo string) (string, error) {
+			return "dep2", nil
+		},
+	}
+
+	dep3 := &Dependency{
+		Depends: []*Dependency{dep1},
+		ResponseHeaders: []*Header{
+			ResponseHeader("x-bar", "desc"),
+		},
+		Value: func(d1 string) (string, string, error) {
+			return "xbar", "dep3", nil
+		},
+	}
+
+	r.Register(&Operation{
+		Method:      http.MethodGet,
+		Path:        "/hello",
+		Description: "Greet the world",
+		Depends: []*Dependency{
+			ContextDependency(), dep2, dep3,
+		},
+		Params: []*Param{
+			QueryParam("name", "desc", "world"),
+		},
+		ResponseHeaders: []*Header{
+			ResponseHeader("x-baz", "desc"),
+		},
+		Responses: []*Response{
+			ResponseJSON(200, "Return a greeting", "x-baz"),
+			ResponseError(500, "desc"),
+		},
+		Handler: func(c *gin.Context, d2, d3, name string) (string, *helloResponse, *ErrorModel) {
+			if name == "test" {
+				return "", nil, &ErrorModel{
+					Message: "Name cannot be test",
+				}
+			}
+
+			return "xbaz", &helloResponse{
+				Message: "Hello, " + name,
+			}, nil
+		},
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/hello?name=Daniel", nil)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		r.ServeHTTP(w, req)
+	}
+}
+
 func TestRouter(t *testing.T) {
 	type EchoResponse struct {
 		Value string `json:"value" description:"The echoed back word"`
@@ -253,30 +367,38 @@ func TestRouterDependencies(t *testing.T) {
 		Get func() string
 	}
 
-	// Inject datastore as a global instance.
-	r.Dependency(&DB{
-		Get: func() string {
-			return "Hello, "
+	// Datastore is a global dependency, set by value.
+	db := &Dependency{
+		Value: &DB{
+			Get: func() string {
+				return "Hello, "
+			},
 		},
-	})
+	}
 
 	type Logger struct {
 		Log func(msg string)
 	}
 
-	// Inject logger as a contextual instance from the Gin context.
-	r.Dependency(func(c *gin.Context) (*Logger, error) {
-		return &Logger{
-			Log: func(msg string) {
-				fmt.Println(fmt.Sprintf("%s [uri:%s]", msg, c.FullPath()))
-			},
-		}, nil
-	})
+	// Logger is a contextual instance from the gin request context.
+	log := &Dependency{
+		Depends: []*Dependency{
+			ContextDependency(),
+		},
+		Value: func(c *gin.Context) (*Logger, error) {
+			return &Logger{
+				Log: func(msg string) {
+					fmt.Println(fmt.Sprintf("%s [uri:%s]", msg, c.FullPath()))
+				},
+			}, nil
+		},
+	}
 
 	r.Register(&Operation{
 		Method:      http.MethodGet,
 		Path:        "/hello",
 		Description: "Basic hello world",
+		Depends:     []*Dependency{ContextDependency(), db, log},
 		Params: []*Param{
 			QueryParam("name", "Your name", ""),
 		},

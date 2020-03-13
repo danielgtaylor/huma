@@ -153,12 +153,61 @@ type Operation struct {
 	Summary            string
 	Description        string
 	Tags               []string
+	Depends            []*Dependency
 	Params             []*Param
 	RequestContentType string
 	RequestSchema      *Schema
 	ResponseHeaders    []*Header
 	Responses          []*Response
 	Handler            interface{}
+}
+
+// AllParams returns a list of all the parameters for this operation, including
+// those for dependencies.
+func (o *Operation) AllParams() []*Param {
+	params := []*Param{}
+	seen := map[*Param]bool{}
+
+	for _, p := range o.Params {
+		seen[p] = true
+		params = append(params, p)
+	}
+
+	for _, d := range o.Depends {
+		for _, p := range d.AllParams() {
+			if _, ok := seen[p]; !ok {
+				seen[p] = true
+
+				params = append(params, p)
+			}
+		}
+	}
+
+	return params
+}
+
+// AllResponseHeaders returns a list of all the parameters for this operation,
+// including those for dependencies.
+func (o *Operation) AllResponseHeaders() []*Header {
+	headers := []*Header{}
+	seen := map[*Header]bool{}
+
+	for _, h := range o.ResponseHeaders {
+		seen[h] = true
+		headers = append(headers, h)
+	}
+
+	for _, d := range o.Depends {
+		for _, h := range d.AllResponseHeaders() {
+			if _, ok := seen[h]; !ok {
+				seen[h] = true
+
+				headers = append(headers, h)
+			}
+		}
+	}
+
+	return headers
 }
 
 // Server describes an OpenAPI 3 API server location
@@ -189,6 +238,7 @@ type OpenAPI struct {
 	Version string
 	Servers []*Server
 	Paths   map[string][]*Operation
+	// TODO: Depends []*Dependency
 }
 
 // OpenAPIHandler returns a new handler function to generate an OpenAPI spec.
@@ -224,7 +274,7 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 					openapi.Set(op.Tags, "paths", path, method, "tags")
 				}
 
-				for _, param := range op.Params {
+				for _, param := range op.AllParams() {
 					if param.internal {
 						// Skip internal-only parameters.
 						continue
@@ -260,7 +310,7 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 				}
 
 				headerMap := map[string]*Header{}
-				for _, header := range op.ResponseHeaders {
+				for _, header := range op.AllResponseHeaders() {
 					headerMap[header.Name] = header
 				}
 
@@ -268,7 +318,22 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 					status := fmt.Sprintf("%v", resp.StatusCode)
 					openapi.Set(resp.Description, "paths", path, method, "responses", status, "description")
 
+					headers := make([]string, 0, len(resp.Headers))
+					seen := map[string]bool{}
 					for _, name := range resp.Headers {
+						headers = append(headers, name)
+						seen[name] = true
+					}
+					for _, dep := range op.Depends {
+						for _, header := range dep.AllResponseHeaders() {
+							if _, ok := seen[header.Name]; !ok {
+								headers = append(headers, header.Name)
+								seen[header.Name] = true
+							}
+						}
+					}
+
+					for _, name := range headers {
 						header := headerMap[name]
 						openapi.Set(header, "paths", path, method, "responses", status, "headers", header.Name)
 					}
