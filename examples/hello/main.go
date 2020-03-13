@@ -32,5 +32,5 @@ func main() {
 	})
 
 	// Start the server on http://localhost:8888/
-	r.Run("0.0.0.0:8888")
+	r.Run()
 }

@@ -369,7 +369,7 @@ func (r *Router) Register(op *Operation) {
 	})
 }
 
-// Run the server.
-func (r *Router) Run(addr string) {
-	r.engine.Run(addr)
+// Listen for new connections.
+func (r *Router) Listen(addr string) error {
+	return r.engine.Run(addr)
 }
