@@ -11,10 +11,12 @@ require (
 	github.com/gin-contrib/cors v1.3.1
 	github.com/gin-gonic/gin v1.5.0
 	github.com/gosimple/slug v1.9.0
-	github.com/rs/zerolog v1.18.0 // indirect
+	github.com/mattn/go-isatty v0.0.9
+	github.com/rs/zerolog v1.18.0
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/spf13/cobra v0.0.6
 	github.com/spf13/viper v1.4.0
 	github.com/stretchr/testify v1.5.1
 	github.com/xeipuuv/gojsonschema v1.2.0
+	go.uber.org/zap v1.10.0
 )

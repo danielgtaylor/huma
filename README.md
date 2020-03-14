@@ -21,6 +21,7 @@ Features include:
 - Default middleware
   - Automatic recovery from panics
   - Automatically handle CORS headers
+  - Structured logging middleware using [Zap](https://github.com/uber-go/zap)
 - Annotated Go types for input and output models
   - Automatic input model validation
 - Dependency injection for loggers, datastores, etc

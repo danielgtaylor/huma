@@ -132,12 +132,13 @@ type Router struct {
 
 // NewRouter creates a new Huma router for handling API requests with
 // default middleware and routes attached. This is equivalent to calling
-// `NewRouterWithGin` with a new Gin instance with just the recovery and
-// CORS (allowing all origins) middlewares.
+// `NewRouterWithGin` with a new Gin instance with just the recovery,
+// CORS (allowing all origins), and log middlewares.
 func NewRouter(api *OpenAPI) *Router {
 	g := gin.New()
 	g.Use(gin.Recovery())
 	g.Use(cors.Default())
+	g.Use(LogMiddleware())
 	return NewRouterWithGin(g, api)
 }
 
@@ -191,42 +192,6 @@ func (r *Router) Use(middleware ...gin.HandlerFunc) {
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.engine.ServeHTTP(w, req)
 }
-
-// Dependency registers a new dependency type to be injected into handler
-// functions, e.g. for loggers, metrics, datastores, etc. Provide a value
-// or a function to return a contextual value/error. Dependency functions
-// can take their own dependencies. To prevent circular dependency loops,
-// a function can only depend on previously defined dependencies.
-//
-// Some dependency types are built in:
-// - `*gin.Context` the current Gin request execution context
-// - `*huma.Operation` the current Huma operation
-//
-//  // Register a global dependency like a datastore
-//  router.Dependency(&MyDB{...})
-//
-//  // Register a contextual dependency like a logger
-//  router.Dependency(func (c *gin.Context) (*MyLogger, error) {
-//    return &MyLogger{Tags: []string{c.Request.RemoteAddr}}, nil
-//  })
-//
-// Then use the dependency in a handler function:
-//
-//  router.Register(&huma.Operation{
-//    ...
-//    Handler: func(db *MyDB, log *MyLogger) *MyItem {
-//      item := db.GetItem("some-id")
-//      log.Info("Got item!")
-//      return item
-//    }
-//  })
-//
-// Panics on invalid input to force stop execution on service startup.
-// func (r *Router) Dependency(f interface{}) {
-// 	if err := r.deps.Add(f); err != nil {
-// 		panic(err)
-// 	}
-// }
 
 // Register a new operation.
 func (r *Router) Register(op *Operation) {
