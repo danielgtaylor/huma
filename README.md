@@ -18,6 +18,9 @@ Features include:
   - Request body
   - Responses (including errors)
   - Response headers
+- Default middleware
+  - Automatic recovery from panics
+  - Automatically handle CORS headers
 - Annotated Go types for input and output models
   - Automatic input model validation
 - Dependency injection for loggers, datastores, etc

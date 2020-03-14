@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 	"github.com/xeipuuv/gojsonschema"
@@ -131,10 +132,12 @@ type Router struct {
 
 // NewRouter creates a new Huma router for handling API requests with
 // default middleware and routes attached. This is equivalent to calling
-// `NewRouterWithGin` with a new Gin instance with just the recovery middleware.
+// `NewRouterWithGin` with a new Gin instance with just the recovery and
+// CORS (allowing all origins) middlewares.
 func NewRouter(api *OpenAPI) *Router {
 	g := gin.New()
 	g.Use(gin.Recovery())
+	g.Use(cors.Default())
 	return NewRouterWithGin(g, api)
 }
 

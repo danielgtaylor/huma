@@ -8,6 +8,7 @@ require (
 	github.com/alecthomas/colour v0.1.0 // indirect
 	github.com/alecthomas/repr v0.0.0-20181024024818-d37bc2a10ba1 // indirect
 	github.com/davecgh/go-spew v1.1.1
+	github.com/gin-contrib/cors v1.3.1
 	github.com/gin-gonic/gin v1.5.0
 	github.com/gosimple/slug v1.9.0
 	github.com/rs/zerolog v1.18.0 // indirect
