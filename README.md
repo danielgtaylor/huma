@@ -81,8 +81,8 @@ func main() {
 		},
 	})
 
-	// Start the server on http://localhost:8888/
-	r.Run("0.0.0.0:8888")
+	// Start the server.
+	r.Run()
 }
 ```
 
@@ -92,7 +92,7 @@ Save this file as `hello/main.go`. Run it and then try to access the API with [H
 # Grab reflex to enable reloading the server on code changes:
 $ go get github.com/cespare/reflex
 
-# Run the server
+# Run the server (default host/port is 0.0.0.0:8888, see --help for options)
 $ reflex -s go run hello/main.go
 
 # Make the request (in another tab)
