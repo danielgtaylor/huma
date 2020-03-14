@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
@@ -262,7 +261,6 @@ func TestRouterRequestBody(t *testing.T) {
 			ResponseJSON(http.StatusOK, "Successful echo response"),
 		},
 		Handler: func(in *EchoRequest) *EchoResponse {
-			spew.Dump(in)
 			return &EchoResponse{Value: in.Value}
 		},
 	})
@@ -381,6 +379,7 @@ func TestRouterDependencies(t *testing.T) {
 	}
 
 	// Logger is a contextual instance from the gin request context.
+	captured := ""
 	log := &Dependency{
 		Depends: []*Dependency{
 			ContextDependency(),
@@ -388,7 +387,7 @@ func TestRouterDependencies(t *testing.T) {
 		Value: func(c *gin.Context) (*Logger, error) {
 			return &Logger{
 				Log: func(msg string) {
-					fmt.Println(fmt.Sprintf("%s [uri:%s]", msg, c.FullPath()))
+					captured = fmt.Sprintf("%s [uri:%s]", msg, c.FullPath())
 				},
 			}, nil
 		},
@@ -419,4 +418,5 @@ func TestRouterDependencies(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "Hello logger! [uri:/hello]", captured)
 }

@@ -13,11 +13,11 @@ import (
 	"github.com/spf13/viper"
 )
 
-// addGlobalFlag will make a new global flag on the root command.
-func addGlobalFlag(root *cobra.Command, name, short, description string, defaultValue interface{}) {
+// AddGlobalFlag will make a new global flag on the root command.
+func (r *Router) AddGlobalFlag(name, short, description string, defaultValue interface{}) {
 	viper.SetDefault(name, defaultValue)
 
-	flags := root.PersistentFlags()
+	flags := r.root.PersistentFlags()
 	switch v := defaultValue.(type) {
 	case bool:
 		flags.BoolP(name, short, viper.GetBool(name), description)
@@ -31,23 +31,32 @@ func addGlobalFlag(root *cobra.Command, name, short, description string, default
 	viper.BindPFlag(name, flags.Lookup(name))
 }
 
-// Run the router's main command.
-func (r *Router) Run() {
+// Root returns the router's root command.
+func (r *Router) Root() *cobra.Command {
+	return r.root
+}
+
+// setupCLI sets up the CLI commands.
+func (r *Router) setupCLI() {
 	viper.SetEnvPrefix("SERVICE")
 	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	viper.AutomaticEnv()
 
-	root := &cobra.Command{
+	r.root = &cobra.Command{
 		Use:     filepath.Base(os.Args[0]),
 		Version: r.api.Version,
 		Run: func(cmd *cobra.Command, args []string) {
+			if viper.GetBool("debug") {
+
+			}
+
 			if err := r.Listen(fmt.Sprintf("%s:%v", viper.Get("host"), viper.Get("port"))); err != nil {
 				panic(err)
 			}
 		},
 	}
 
-	root.AddCommand(&cobra.Command{
+	r.root.AddCommand(&cobra.Command{
 		Use:   "openapi FILENAME.json",
 		Short: "Get OpenAPI spec",
 		Args:  cobra.ExactArgs(1),
@@ -68,11 +77,7 @@ func (r *Router) Run() {
 		},
 	})
 
-	addGlobalFlag(root, "host", "", "Hostname", "0.0.0.0")
-	addGlobalFlag(root, "port", "p", "Port", 8888)
-	addGlobalFlag(root, "debug", "d", "Enable debug logs", false)
-
-	if err := root.Execute(); err != nil {
-		panic(err)
-	}
+	r.AddGlobalFlag("host", "", "Hostname", "0.0.0.0")
+	r.AddGlobalFlag("port", "p", "Port", 8888)
+	r.AddGlobalFlag("debug", "d", "Enable debug logs", false)
 }

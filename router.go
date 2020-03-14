@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/spf13/cobra"
 	"github.com/xeipuuv/gojsonschema"
 )
 
@@ -125,12 +126,16 @@ func getRequestBody(c *gin.Context, t reflect.Type, op *Operation) (interface{},
 type Router struct {
 	api    *OpenAPI
 	engine *gin.Engine
+	root   *cobra.Command
 }
 
 // NewRouter creates a new Huma router for handling API requests with
-// default middleware and routes attached.
+// default middleware and routes attached. This is equivalent to calling
+// `NewRouterWithGin` with a new Gin instance with just the recovery middleware.
 func NewRouter(api *OpenAPI) *Router {
-	return NewRouterWithGin(gin.Default(), api)
+	g := gin.New()
+	g.Use(gin.Recovery())
+	return NewRouterWithGin(g, api)
 }
 
 // NewRouterWithGin creates a new Huma router with the given Gin instance
@@ -140,6 +145,8 @@ func NewRouterWithGin(engine *gin.Engine, api *OpenAPI) *Router {
 		api:    api,
 		engine: engine,
 	}
+
+	r.setupCLI()
 
 	if r.api.Paths == nil {
 		r.api.Paths = make(map[string][]*Operation)
@@ -372,4 +379,11 @@ func (r *Router) Register(op *Operation) {
 // Listen for new connections.
 func (r *Router) Listen(addr string) error {
 	return r.engine.Run(addr)
+}
+
+// Run executes the router command.
+func (r *Router) Run() {
+	if err := r.root.Execute(); err != nil {
+		panic(err)
+	}
 }
