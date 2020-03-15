@@ -229,12 +229,25 @@ TODO: Request model example
 
 The standard `json` tag is supported and can be used to rename a field and mark fields as optional using `omitempty`. The following additional tags are supported on model fields:
 
-| Tag           | Description                               | Example                      |
-| ------------- | ----------------------------------------- | ---------------------------- |
-| `description` | Describe the field                        | `description:"Who to greet"` |
-| `enum`        | A comma-separated list of possible values | `enum:"one,two,three"`       |
-| `minimum`     | Minimum (inclusive)                       | `minimum:"1"`                |
-| `maximum`     | Maximum (inclusive)                       | `maximum:"255"`              |
+| Tag                | Description                               | Example                      |
+| ------------------ | ----------------------------------------- | ---------------------------- |
+| `description`      | Describe the field                        | `description:"Who to greet"` |
+| `format`           | Format hint for the field                 | `format:"date-time"`         |
+| `enum`             | A comma-separated list of possible values | `enum:"one,two,three"`       |
+| `default`          | Default value                             | `default:"123"`              |
+| `minimum`          | Minimum (inclusive)                       | `minimum:"1"`                |
+| `exclusiveMinimum` | Minimum (exclusive)                       | `exclusiveMinimum:"0"`       |
+| `maximum`          | Maximum (inclusive)                       | `maximum:"255"`              |
+| `exclusiveMaximum` | Maximum (exclusive)                       | `exclusiveMaximum:"100"`     |
+| `multipleOf`       | Value must be a multiple of this value    | `multipleOf:"2"`             |
+| `minLength`        | Minimum string length                     | `minLength:"1"`              |
+| `maxLength`        | Maximum string length                     | `maxLength:"80"`             |
+| `pattern`          | Regular expression pattern                | `pattern:"[a-z]+"`           |
+| `minItems`         | Minimum number of array items             | `minItems:"1"`               |
+| `maxItems`         | Maximum number of array items             | `maxItems:"20"`              |
+| `uniqueItems`      | Array items must be unique                | `uniqueItems:"true"`         |
+| `minProperties`    | Minimum number of object properties       | `minProperties:"1"`          |
+| `maxProperties`    | Maximum number of object properties       | `maxProperties:"20"`         |
 
 ### Dependencies
 
