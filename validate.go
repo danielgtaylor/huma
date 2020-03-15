@@ -11,10 +11,26 @@ import (
 	"github.com/gosimple/slug"
 )
 
+// ErrAPIInvalid is returned when validating the OpenAPI top-level fields
+// has failed.
+var ErrAPIInvalid = errors.New("invalid API")
+
 // ErrOperationInvalid is returned when validating an operation has failed.
 var ErrOperationInvalid = errors.New("invalid operation")
 
 var paramRe = regexp.MustCompile(`:([^/]+)|{([^}]+)}`)
+
+func (a *OpenAPI) validate() error {
+	if a.Title == "" {
+		return fmt.Errorf("title is required: %w", ErrAPIInvalid)
+	}
+
+	if a.Version == "" {
+		return fmt.Errorf("version is required: %w", ErrAPIInvalid)
+	}
+
+	return nil
+}
 
 func validateParam(p *Param, t reflect.Type) error {
 	p.typ = t

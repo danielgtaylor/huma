@@ -145,6 +145,10 @@ func NewRouter(api *OpenAPI) *Router {
 // NewRouterWithGin creates a new Huma router with the given Gin instance
 // which may be preconfigured with custom options and middleware.
 func NewRouterWithGin(engine *gin.Engine, api *OpenAPI) *Router {
+	if err := api.validate(); err != nil {
+		panic(err)
+	}
+
 	r := &Router{
 		api:    api,
 		engine: engine,

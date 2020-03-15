@@ -178,7 +178,7 @@ func BenchmarkHumaComplex(b *testing.B) {
 
 func TestRouterDefault(t *testing.T) {
 	// Just test we can create it without panic.
-	_ = NewRouter(&OpenAPI{})
+	_ = NewRouter(&OpenAPI{Title: "Default", Version: "1.0.0"})
 }
 
 func TestRouter(t *testing.T) {
