@@ -16,9 +16,9 @@ var ErrDependencyInvalid = errors.New("dependency invalid")
 // or a `func(dependencies, params) (headers, struct pointer, error)` style
 // function.
 type Dependency struct {
-	Depends         []*Dependency
+	Dependencies    []*Dependency
 	Params          []*Param
-	ResponseHeaders []*Header
+	ResponseHeaders []*ResponseHeader
 	Value           interface{}
 }
 
@@ -68,20 +68,20 @@ func (d *Dependency) validate(returnType reflect.Type) error {
 	}
 
 	fn := v.Type()
-	lenArgs := len(d.Depends) + len(d.Params)
+	lenArgs := len(d.Dependencies) + len(d.Params)
 	if fn.NumIn() != lenArgs {
 		// TODO: generate suggested func signature
 		return fmt.Errorf("function signature should have %d args but got %s: %w", lenArgs, fn, ErrDependencyInvalid)
 	}
 
-	for _, dep := range d.Depends {
+	for _, dep := range d.Dependencies {
 		if err := dep.validate(nil); err != nil {
 			return err
 		}
 	}
 
 	for i, p := range d.Params {
-		if err := validateParam(p, fn.In(len(d.Depends)+i)); err != nil {
+		if err := validateParam(p, fn.In(len(d.Dependencies)+i)); err != nil {
 			return err
 		}
 	}
@@ -111,7 +111,7 @@ func (d *Dependency) AllParams() []*Param {
 		params = append(params, p)
 	}
 
-	for _, d := range d.Depends {
+	for _, d := range d.Dependencies {
 		for _, p := range d.AllParams() {
 			if _, ok := seen[p]; !ok {
 				seen[p] = true
@@ -126,16 +126,16 @@ func (d *Dependency) AllParams() []*Param {
 
 // AllResponseHeaders returns all response headers for all dependencies in
 // the graph of this dependency in depth-first order without duplicates.
-func (d *Dependency) AllResponseHeaders() []*Header {
-	headers := []*Header{}
-	seen := map[*Header]bool{}
+func (d *Dependency) AllResponseHeaders() []*ResponseHeader {
+	headers := []*ResponseHeader{}
+	seen := map[*ResponseHeader]bool{}
 
 	for _, h := range d.ResponseHeaders {
 		seen[h] = true
 		headers = append(headers, h)
 	}
 
-	for _, d := range d.Depends {
+	for _, d := range d.Dependencies {
 		for _, h := range d.AllResponseHeaders() {
 			if _, ok := seen[h]; !ok {
 				seen[h] = true
@@ -170,7 +170,7 @@ func (d *Dependency) Resolve(c *gin.Context, op *Operation) (map[string]string, 
 	headers := map[string]string{}
 
 	// Resolve each sub-dependency
-	for _, dep := range d.Depends {
+	for _, dep := range d.Dependencies {
 		dHeaders, dVal, err := dep.Resolve(c, op)
 		if err != nil {
 			return nil, nil, err

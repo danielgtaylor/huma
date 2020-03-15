@@ -258,7 +258,7 @@ type MyLogger struct {
 }
 
 logger := &huma.Dependency{
-	Depends: []*huma.Dependency{huma.ContextDependency()},
+	Dependencies: []*huma.Dependency{huma.ContextDependency()},
 	Value: func(c *gin.Context) (*MyLogger, error) {
 		return &MyLogger{
 			Info: func(msg string) {
@@ -272,7 +272,7 @@ logger := &huma.Dependency{
 // handler function arguments.
 r.Register(&huma.Operation{
 	// ...
-	Depends: []*huma.Dependency{db, logger},
+	Dependencies: []*huma.Dependency{db, logger},
 	Handler: func(db *db.Connection, log *MyLogger) string {
 		log.Info("test")
 		item := db.Fetch("query")

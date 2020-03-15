@@ -118,7 +118,7 @@ func BenchmarkHumaComplex(b *testing.B) {
 	}
 
 	dep2 := &Dependency{
-		Depends: []*Dependency{ContextDependency(), dep1},
+		Dependencies: []*Dependency{ContextDependency(), dep1},
 		Params: []*Param{
 			HeaderParam("x-foo", "desc", ""),
 		},
@@ -128,9 +128,9 @@ func BenchmarkHumaComplex(b *testing.B) {
 	}
 
 	dep3 := &Dependency{
-		Depends: []*Dependency{dep1},
-		ResponseHeaders: []*Header{
-			ResponseHeader("x-bar", "desc"),
+		Dependencies: []*Dependency{dep1},
+		ResponseHeaders: []*ResponseHeader{
+			Header("x-bar", "desc"),
 		},
 		Value: func(d1 string) (string, string, error) {
 			return "xbar", "dep3", nil
@@ -141,14 +141,14 @@ func BenchmarkHumaComplex(b *testing.B) {
 		Method:      http.MethodGet,
 		Path:        "/hello",
 		Description: "Greet the world",
-		Depends: []*Dependency{
+		Dependencies: []*Dependency{
 			ContextDependency(), dep2, dep3,
 		},
 		Params: []*Param{
 			QueryParam("name", "desc", "world"),
 		},
-		ResponseHeaders: []*Header{
-			ResponseHeader("x-baz", "desc"),
+		ResponseHeaders: []*ResponseHeader{
+			Header("x-baz", "desc"),
 		},
 		Responses: []*Response{
 			ResponseJSON(200, "Return a greeting", "x-baz"),
@@ -333,10 +333,10 @@ func TestRouterResponseHeaders(t *testing.T) {
 		Method:      http.MethodGet,
 		Path:        "/test",
 		Description: "Test operation",
-		ResponseHeaders: []*Header{
-			ResponseHeader("Etag", "Identifies a specific version of this resource"),
-			ResponseHeader("X-Test", "Custom test header"),
-			ResponseHeader("X-Missing", "Won't get sent"),
+		ResponseHeaders: []*ResponseHeader{
+			Header("Etag", "Identifies a specific version of this resource"),
+			Header("X-Test", "Custom test header"),
+			Header("X-Missing", "Won't get sent"),
 		},
 		Responses: []*Response{
 			ResponseText(http.StatusOK, "Successful test", "Etag", "X-Test", "X-Missing"),
@@ -382,7 +382,7 @@ func TestRouterDependencies(t *testing.T) {
 	// Logger is a contextual instance from the gin request context.
 	captured := ""
 	log := &Dependency{
-		Depends: []*Dependency{
+		Dependencies: []*Dependency{
 			ContextDependency(),
 		},
 		Value: func(c *gin.Context) (*Logger, error) {
@@ -395,10 +395,10 @@ func TestRouterDependencies(t *testing.T) {
 	}
 
 	r.Register(&Operation{
-		Method:      http.MethodGet,
-		Path:        "/hello",
-		Description: "Basic hello world",
-		Depends:     []*Dependency{ContextDependency(), db, log},
+		Method:       http.MethodGet,
+		Path:         "/hello",
+		Description:  "Basic hello world",
+		Dependencies: []*Dependency{ContextDependency(), db, log},
 		Params: []*Param{
 			QueryParam("name", "Your name", ""),
 		},

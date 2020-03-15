@@ -236,7 +236,7 @@ func (r *Router) Register(op *Operation) {
 		in := make([]reflect.Value, 0, method.Type().NumIn())
 
 		// Process any dependencies first.
-		for _, dep := range op.Depends {
+		for _, dep := range op.Dependencies {
 			headers, value, err := dep.Resolve(c, op)
 			if err != nil {
 				// TODO: better error handling

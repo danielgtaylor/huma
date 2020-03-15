@@ -86,7 +86,7 @@ type Response struct {
 	Headers     []string
 }
 
-// ResponseEmpty creates a new response with an empty body.
+// ResponseEmpty creates a new response with no content type.
 func ResponseEmpty(statusCode int, description string, headers ...string) *Response {
 	return &Response{
 		Description: description,
@@ -115,31 +115,21 @@ func ResponseJSON(statusCode int, description string, headers ...string) *Respon
 	}
 }
 
-// ResponseBinary creates a new binary response model.
-func ResponseBinary(statusCode int, contentType string, description string, headers ...string) *Response {
-	return &Response{
-		Description: description,
-		ContentType: contentType,
-		StatusCode:  statusCode,
-		Headers:     headers,
-	}
-}
-
 // ResponseError creates a new error response model. Alias for ResponseJSON.
 func ResponseError(status int, description string, headers ...string) *Response {
 	return ResponseJSON(status, description, headers...)
 }
 
-// Header describes a response header
-type Header struct {
+// ResponseHeader describes a response header
+type ResponseHeader struct {
 	Name        string  `json:"-"`
 	Description string  `json:"description,omitempty"`
 	Schema      *Schema `json:"schema,omitempty"`
 }
 
-// ResponseHeader returns a new header
-func ResponseHeader(name, description string) *Header {
-	return &Header{
+// Header returns a new header
+func Header(name, description string) *ResponseHeader {
+	return &ResponseHeader{
 		Name:        name,
 		Description: description,
 	}
@@ -153,11 +143,11 @@ type Operation struct {
 	Summary            string
 	Description        string
 	Tags               []string
-	Depends            []*Dependency
+	Dependencies       []*Dependency
 	Params             []*Param
 	RequestContentType string
 	RequestSchema      *Schema
-	ResponseHeaders    []*Header
+	ResponseHeaders    []*ResponseHeader
 	Responses          []*Response
 	Handler            interface{}
 }
@@ -173,7 +163,7 @@ func (o *Operation) AllParams() []*Param {
 		params = append(params, p)
 	}
 
-	for _, d := range o.Depends {
+	for _, d := range o.Dependencies {
 		for _, p := range d.AllParams() {
 			if _, ok := seen[p]; !ok {
 				seen[p] = true
@@ -188,16 +178,16 @@ func (o *Operation) AllParams() []*Param {
 
 // AllResponseHeaders returns a list of all the parameters for this operation,
 // including those for dependencies.
-func (o *Operation) AllResponseHeaders() []*Header {
-	headers := []*Header{}
-	seen := map[*Header]bool{}
+func (o *Operation) AllResponseHeaders() []*ResponseHeader {
+	headers := []*ResponseHeader{}
+	seen := map[*ResponseHeader]bool{}
 
 	for _, h := range o.ResponseHeaders {
 		seen[h] = true
 		headers = append(headers, h)
 	}
 
-	for _, d := range o.Depends {
+	for _, d := range o.Dependencies {
 		for _, h := range d.AllResponseHeaders() {
 			if _, ok := seen[h]; !ok {
 				seen[h] = true
@@ -309,7 +299,7 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 					})
 				}
 
-				headerMap := map[string]*Header{}
+				headerMap := map[string]*ResponseHeader{}
 				for _, header := range op.AllResponseHeaders() {
 					headerMap[header.Name] = header
 				}
@@ -324,7 +314,7 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 						headers = append(headers, name)
 						seen[name] = true
 					}
-					for _, dep := range op.Depends {
+					for _, dep := range op.Dependencies {
 						for _, header := range dep.AllResponseHeaders() {
 							if _, ok := seen[header.Name]; !ok {
 								headers = append(headers, header.Name)

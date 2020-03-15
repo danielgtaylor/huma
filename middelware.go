@@ -52,7 +52,7 @@ func LogMiddleware() func(*gin.Context) {
 // `LogMiddleware` and will error if the logger is not in the request context.
 func LogDependency() *Dependency {
 	return &Dependency{
-		Depends: []*Dependency{ContextDependency(), OperationDependency()},
+		Dependencies: []*Dependency{ContextDependency(), OperationDependency()},
 		Value: func(c *gin.Context, op *Operation) (*zap.SugaredLogger, error) {
 			l, ok := c.Get("log")
 			if !ok {

@@ -34,7 +34,7 @@ func validateParam(p *Param, t reflect.Type) error {
 	return nil
 }
 
-func validateHeader(h *Header, t reflect.Type) error {
+func validateHeader(h *ResponseHeader, t reflect.Type) error {
 	if h.Schema == nil {
 		// Generate the schema from the handler function types.
 		s, err := GenerateSchema(t)
@@ -68,11 +68,11 @@ func (o *Operation) validate() error {
 
 	method := reflect.ValueOf(o.Handler).Type()
 
-	totalIn := len(o.Depends) + len(o.Params)
+	totalIn := len(o.Dependencies) + len(o.Params)
 	totalOut := len(o.ResponseHeaders) + len(o.Responses)
 	if !(method.NumIn() == totalIn || (o.Method != http.MethodGet && method.NumIn() == totalIn+1) || method.NumOut() != totalOut) {
 		expected := "func("
-		for _, dep := range o.Depends {
+		for _, dep := range o.Dependencies {
 			expected += "? " + reflect.ValueOf(dep.Value).Type().String() + ", "
 		}
 		for _, param := range o.Params {
@@ -116,7 +116,7 @@ func (o *Operation) validate() error {
 		o.Path = paramRe.ReplaceAllString(o.Path, ":$1$2")
 	}
 
-	for i, dep := range o.Depends {
+	for i, dep := range o.Dependencies {
 		paramType := method.In(i)
 
 		// Catch common errors.
@@ -134,7 +134,7 @@ func (o *Operation) validate() error {
 	}
 
 	types := []reflect.Type{}
-	for i := len(o.Depends); i < method.NumIn(); i++ {
+	for i := len(o.Dependencies); i < method.NumIn(); i++ {
 		paramType := method.In(i)
 
 		switch paramType.String() {

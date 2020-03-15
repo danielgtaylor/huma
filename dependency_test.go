@@ -42,7 +42,7 @@ func TestGlobalDepParams(t *testing.T) {
 
 func TestGlobalDepHeaders(t *testing.T) {
 	d := Dependency{
-		ResponseHeaders: []*Header{ResponseHeader("foo", "description")},
+		ResponseHeaders: []*ResponseHeader{Header("foo", "description")},
 		Value:           "test",
 	}
 
@@ -53,7 +53,7 @@ func TestGlobalDepHeaders(t *testing.T) {
 
 func TestDepContext(t *testing.T) {
 	d := Dependency{
-		Depends: []*Dependency{
+		Dependencies: []*Dependency{
 			ContextDependency(),
 		},
 		Value: func(c *gin.Context) (*gin.Context, error) { return c, nil },
@@ -71,7 +71,7 @@ func TestDepContext(t *testing.T) {
 
 func TestDepOperation(t *testing.T) {
 	d := Dependency{
-		Depends: []*Dependency{
+		Dependencies: []*Dependency{
 			OperationDependency(),
 		},
 		Value: func(o *Operation) (*Operation, error) { return o, nil },
@@ -104,8 +104,8 @@ func TestDepFunc(t *testing.T) {
 		Params: []*Param{
 			HeaderParam("x-in", "desc", ""),
 		},
-		ResponseHeaders: []*Header{
-			ResponseHeader("x-out", "desc"),
+		ResponseHeaders: []*ResponseHeader{
+			Header("x-out", "desc"),
 		},
 		Value: func(xin string) (string, string, error) {
 			return "xout", "value", nil

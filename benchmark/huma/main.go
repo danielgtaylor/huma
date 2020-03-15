@@ -36,15 +36,15 @@ func main() {
 	}
 
 	r.Register(&huma.Operation{
-		Method:      http.MethodGet,
-		Path:        "/items/{id}",
-		Description: "FastAPI benchmark test",
-		Depends:     []*huma.Dependency{d},
+		Method:       http.MethodGet,
+		Path:         "/items/{id}",
+		Description:  "FastAPI benchmark test",
+		Dependencies: []*huma.Dependency{d},
 		Params: []*huma.Param{
 			huma.PathParam("id", "The item's unique ID"),
 		},
-		ResponseHeaders: []*huma.Header{
-			huma.ResponseHeader("x-authinfo", "..."),
+		ResponseHeaders: []*huma.ResponseHeader{
+			huma.Header("x-authinfo", "..."),
 		},
 		Responses: []*huma.Response{
 			huma.ResponseJSON(http.StatusOK, "Successful hello response", "x-authinfo"),
