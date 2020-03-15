@@ -214,7 +214,7 @@ Date: Mon, 09 Mar 2020 05:00:14 GMT
 
 Great! But that's not all! Take a look at two more automatically-generated routes. The first shows you documentation about your API, while the second is the OpenAPI 3 spec file you can use to integrate with other tooling to generate client SDKs, CLI applications, and more.
 
-- Documenation: http://localhost:8888/docs
+- Documentation: http://localhost:8888/docs
 - OpenAPI 3 spec: http://localhost:8888/openapi.json
 
 For the docs, you should see something like this:
@@ -302,7 +302,7 @@ Huma's philosophy is to make it harder to make mistakes by providing tools that 
 
 An example of this is how handler functions **must** declare all headers that they return and which responses may send those headers. You simply **cannot** return from the function without considering the values of each of those headers. If you set one that isn't appropriate for the response you return, Huma will let you know.
 
-How does it work? Huma asks that you give up one compile-time static type check for handler function signatures and instead let it be a runtime startup check. Using a small amount of reflection, Huma can then verify the function signatures, inject depdencies and parameters, and handle responses and headers as well as making sure that all matches the declared operation.
+How does it work? Huma asks that you give up one compile-time static type check for handler function signatures and instead let it be a runtime startup check. Using a small amount of reflection, Huma can then verify the function signatures, inject dependencies and parameters, and handle responses and headers as well as making sure that they all match the declared operation.
 
 By strictly enforcing this runtime interface you get several advantages. No more out of date API description. No more out of date documenatation. No more out of date SDKs or CLIs. Your entire ecosystem of tooling is driven off of one simple backend implementation. Stuff just works.
 
