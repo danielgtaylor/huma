@@ -1,6 +1,7 @@
 package huma
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -17,6 +18,7 @@ type Schema struct {
 	Format      string             `json:"format,omitempty"`
 	Enum        []interface{}      `json:"enum,omitempty"`
 	Default     interface{}        `json:"default,omitempty"`
+	Example     interface{}        `json:"example,omitempty"`
 	Minimum     *int               `json:"minimum,omitempty"`
 	Maximum     *int               `json:"maximum,omitempty"`
 }
@@ -76,6 +78,18 @@ func GenerateSchema(t reflect.Type) (*Schema, error) {
 					return nil, err
 				}
 				s.Maximum = &max
+			}
+
+			if e, ok := f.Tag.Lookup("example"); ok {
+				if s.Type == "string" {
+					s.Example = e
+				} else {
+					var v interface{}
+					if err := json.Unmarshal([]byte(e), &v); err != nil {
+						return nil, err
+					}
+					s.Example = v
+				}
 			}
 
 			optional := false

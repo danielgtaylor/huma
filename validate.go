@@ -18,8 +18,12 @@ var ErrAPIInvalid = errors.New("invalid API")
 // ErrOperationInvalid is returned when validating an operation has failed.
 var ErrOperationInvalid = errors.New("invalid operation")
 
+// ErrParamInvalid is returned when validating the parameter has failed.
+var ErrParamInvalid = errors.New("invalid parameter")
+
 var paramRe = regexp.MustCompile(`:([^/]+)|{([^}]+)}`)
 
+// validate the top-level API
 func (a *OpenAPI) validate() error {
 	if a.Title == "" {
 		return fmt.Errorf("title is required: %w", ErrAPIInvalid)
@@ -32,7 +36,19 @@ func (a *OpenAPI) validate() error {
 	return nil
 }
 
-func validateParam(p *Param, t reflect.Type) error {
+// validate the parameter and generate schemas
+func (p *Param) validate(t reflect.Type) error {
+	if p.typ != nil && p.typ != t {
+		return fmt.Errorf("parameter declared as %s was previously declared as %s: %w", t, p.typ, ErrParamInvalid)
+	}
+
+	if p.Example != nil {
+		et := reflect.ValueOf(p.Example).Type()
+		if t != et {
+			return fmt.Errorf("parameter declared as %s has example of type %s: %w", t, et, ErrParamInvalid)
+		}
+	}
+
 	p.typ = t
 
 	if p.Schema == nil {
@@ -45,12 +61,19 @@ func validateParam(p *Param, t reflect.Type) error {
 		if p.def != nil {
 			p.Schema.Default = p.def
 		}
+
+		if p.Example != nil {
+			// Some tools have better support for the param example, others for the
+			// schema example, so we include it in both.
+			p.Schema.Example = p.Example
+		}
 	}
 
 	return nil
 }
 
-func validateHeader(h *ResponseHeader, t reflect.Type) error {
+// validate the header and generate schemas
+func (h *ResponseHeader) validate(t reflect.Type) error {
 	if h.Schema == nil {
 		// Generate the schema from the handler function types.
 		s, err := GenerateSchema(t)
@@ -182,13 +205,13 @@ func (o *Operation) validate() error {
 		}
 
 		p := o.Params[i]
-		if err := validateParam(p, paramType); err != nil {
+		if err := p.validate(paramType); err != nil {
 			return err
 		}
 	}
 
 	for i, header := range o.ResponseHeaders {
-		if err := validateHeader(header, method.Out(i)); err != nil {
+		if err := header.validate(method.Out(i)); err != nil {
 			return err
 		}
 	}

@@ -12,12 +12,13 @@ import (
 
 // Param describes an OpenAPI 3 parameter
 type Param struct {
-	Name        string  `json:"name"`
-	Description string  `json:"description,omitempty"`
-	In          string  `json:"in"`
-	Required    bool    `json:"required,omitempty"`
-	Schema      *Schema `json:"schema,omitempty"`
-	Deprecated  bool    `json:"deprecated,omitempty"`
+	Name        string      `json:"name"`
+	Description string      `json:"description,omitempty"`
+	In          string      `json:"in"`
+	Required    bool        `json:"required,omitempty"`
+	Schema      *Schema     `json:"schema,omitempty"`
+	Deprecated  bool        `json:"deprecated,omitempty"`
+	Example     interface{} `json:"example,omitempty"`
 
 	// Internal params are excluded from the OpenAPI document and can set up
 	// params sent between a load balander / proxy and the service internally.
@@ -36,12 +37,34 @@ func PathParam(name string, description string) *Param {
 	}
 }
 
+// PathParamExample returns a new required path parameter with example
+func PathParamExample(name string, description string, example interface{}) *Param {
+	return &Param{
+		Name:        name,
+		Description: description,
+		In:          "path",
+		Required:    true,
+		Example:     example,
+	}
+}
+
 // QueryParam returns a new optional query string parameter
 func QueryParam(name string, description string, defaultValue interface{}) *Param {
 	return &Param{
 		Name:        name,
 		Description: description,
 		In:          "query",
+		def:         defaultValue,
+	}
+}
+
+// QueryParamExample returns a new optional query string parameter with example
+func QueryParamExample(name string, description string, defaultValue interface{}, example interface{}) *Param {
+	return &Param{
+		Name:        name,
+		Description: description,
+		In:          "query",
+		Example:     example,
 		def:         defaultValue,
 	}
 }
@@ -63,6 +86,17 @@ func HeaderParam(name string, description string, defaultValue interface{}) *Par
 		Name:        name,
 		Description: description,
 		In:          "header",
+		def:         defaultValue,
+	}
+}
+
+// HeaderParamExample returns a new optional header parameter with example
+func HeaderParamExample(name string, description string, defaultValue interface{}, example interface{}) *Param {
+	return &Param{
+		Name:        name,
+		Description: description,
+		In:          "header",
+		Example:     example,
 		def:         defaultValue,
 	}
 }

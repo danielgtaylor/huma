@@ -81,7 +81,7 @@ func (d *Dependency) validate(returnType reflect.Type) error {
 	}
 
 	for i, p := range d.Params {
-		if err := validateParam(p, fn.In(len(d.Dependencies)+i)); err != nil {
+		if err := p.validate(fn.In(len(d.Dependencies) + i)); err != nil {
 			return err
 		}
 	}
@@ -92,7 +92,7 @@ func (d *Dependency) validate(returnType reflect.Type) error {
 	}
 
 	for i, h := range d.ResponseHeaders {
-		if err := validateHeader(h, fn.Out(i)); err != nil {
+		if err := h.validate(fn.Out(i)); err != nil {
 			return err
 		}
 	}
