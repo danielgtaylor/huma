@@ -223,12 +223,21 @@ func DevServer(url string) *Server {
 	}
 }
 
+// Contact information for this API.
+type Contact struct {
+	Name  string `json:"name"`
+	URL   string `json:"url"`
+	Email string `json:"email"`
+}
+
 // OpenAPI describes the OpenAPI 3 API
 type OpenAPI struct {
-	Title   string
-	Version string
-	Servers []*Server
-	Paths   map[string][]*Operation
+	Title       string
+	Version     string
+	Description string
+	Contact     *Contact
+	Servers     []*Server
+	Paths       map[string][]*Operation
 	// TODO: Depends []*Dependency
 	Extra map[string]interface{}
 }
@@ -247,6 +256,14 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 		openapi.Set("3.0.1", "openapi")
 		openapi.Set(api.Title, "info", "title")
 		openapi.Set(api.Version, "info", "version")
+
+		if api.Description != "" {
+			openapi.Set(api.Description, "info", "description")
+		}
+
+		if api.Contact != nil {
+			openapi.Set(api.Contact, "info", "contact")
+		}
 
 		if len(api.Servers) > 0 {
 			openapi.Set(api.Servers, "servers")
