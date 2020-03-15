@@ -33,7 +33,7 @@ Features include:
   - CLIs with [OpenAPI CLI Generator](https://github.com/danielgtaylor/openapi-cli-generator)
   - And [plenty](https://openapi.tools/) [more](https://apis.guru/awesome-openapi3/category.html)
 
-This project was inspired by [FastAPI](https://fastapi.tiangolo.com/), [Gin](https://github.com/gin-gonic/gin), and countless others.
+This project was inspired by [FastAPI](https://fastapi.tiangolo.com/), [Gin](https://github.com/gin-gonic/gin), and countless others. Look at the [benchmarks](https://github.com/danielgtaylor/huma/tree/master/benchmark) to see how Huma compares.
 
 ## Concepts & Example
 
