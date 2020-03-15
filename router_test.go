@@ -27,12 +27,11 @@ func BenchmarkGin(b *testing.B) {
 		})
 	})
 
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/hello", nil)
-
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, "/hello", nil)
 		g.ServeHTTP(w, req)
 	}
 }
@@ -56,12 +55,11 @@ func BenchmarkHuma(b *testing.B) {
 		},
 	})
 
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/hello", nil)
-
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, "/hello", nil)
 		r.ServeHTTP(w, req)
 	}
 }
@@ -100,12 +98,11 @@ func BenchmarkGinComplex(b *testing.B) {
 		})
 	})
 
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/hello", nil)
-
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, "/hello", nil)
 		g.ServeHTTP(w, req)
 	}
 }
@@ -170,12 +167,11 @@ func BenchmarkHumaComplex(b *testing.B) {
 		},
 	})
 
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/hello?name=Daniel", nil)
-
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, "/hello?name=Daniel", nil)
 		r.ServeHTTP(w, req)
 	}
 }
