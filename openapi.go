@@ -17,6 +17,7 @@ type Param struct {
 	In          string  `json:"in"`
 	Required    bool    `json:"required,omitempty"`
 	Schema      *Schema `json:"schema,omitempty"`
+	Deprecated  bool    `json:"deprecated,omitempty"`
 
 	// Internal params are excluded from the OpenAPI document and can set up
 	// params sent between a load balander / proxy and the service internally.
