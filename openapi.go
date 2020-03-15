@@ -150,6 +150,7 @@ type Operation struct {
 	ResponseHeaders    []*ResponseHeader
 	Responses          []*Response
 	Handler            interface{}
+	Extra              map[string]interface{}
 }
 
 // AllParams returns a list of all the parameters for this operation, including
@@ -229,6 +230,7 @@ type OpenAPI struct {
 	Servers []*Server
 	Paths   map[string][]*Operation
 	// TODO: Depends []*Dependency
+	Extra map[string]interface{}
 }
 
 // OpenAPIHandler returns a new handler function to generate an OpenAPI spec.
@@ -237,6 +239,11 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 
 	return func(c *gin.Context) {
 		openapi := gabs.New()
+
+		for k, v := range api.Extra {
+			openapi.Set(v, k)
+		}
+
 		openapi.Set("3.0.1", "openapi")
 		openapi.Set(api.Title, "info", "title")
 		openapi.Set(api.Version, "info", "version")
@@ -255,6 +262,11 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 
 			for _, op := range operations {
 				method := strings.ToLower(op.Method)
+
+				for k, v := range op.Extra {
+					openapi.Set(v, "paths", path, method, k)
+				}
+
 				openapi.Set(op.ID, "paths", path, method, "operationId")
 				if op.Summary != "" {
 					openapi.Set(op.Summary, "paths", path, method, "summary")
