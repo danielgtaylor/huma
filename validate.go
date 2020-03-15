@@ -3,6 +3,7 @@ package huma
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"regexp"
 	"strings"
@@ -10,20 +11,8 @@ import (
 	"github.com/gosimple/slug"
 )
 
-// ErrFieldRequired is returned when a field is blank but has been required.
-var ErrFieldRequired = errors.New("field is required")
-
-// ErrParamsMustMatch is returned when a registered operation has a handler
-// function that takes the wrong number of arguments.
-var ErrParamsMustMatch = errors.New("handler function args must match registered params")
-
-// ErrParamTypeMustMatch is returned when the parameter and its
-// default value's type don't match.
-var ErrParamTypeMustMatch = errors.New("param and default types must match")
-
-// ErrResponsesMustMatch is returned when the registered operation has a handler
-// function that returns the wrong number of arguments.
-var ErrResponsesMustMatch = errors.New("handler function return values must match registered responses & headers")
+// ErrOperationInvalid is returned when validating an operation has failed.
+var ErrOperationInvalid = errors.New("invalid operation")
 
 var paramRe = regexp.MustCompile(`:([^/]+)|{([^}]+)}`)
 
@@ -62,25 +51,55 @@ func validateHeader(h *Header, t reflect.Type) error {
 // matches the given params) and generates schemas if needed.
 func (o *Operation) validate() error {
 	if o.Method == "" {
-		return fmt.Errorf("Method: %w", ErrFieldRequired)
+		return fmt.Errorf("method field required: %w", ErrOperationInvalid)
 	}
 
 	if o.Path == "" {
-		return fmt.Errorf("Path: %w", ErrFieldRequired)
+		return fmt.Errorf("path field required: %w", ErrOperationInvalid)
 	}
 
 	if o.Description == "" {
-		return fmt.Errorf("Description: %w", ErrFieldRequired)
+		return fmt.Errorf("description field required: %w", ErrOperationInvalid)
 	}
 
-	method := reflect.ValueOf(o.Handler)
+	if len(o.Responses) == 0 {
+		return fmt.Errorf("at least one response is required: %w", ErrOperationInvalid)
+	}
+
+	method := reflect.ValueOf(o.Handler).Type()
+
+	totalIn := len(o.Depends) + len(o.Params)
+	totalOut := len(o.ResponseHeaders) + len(o.Responses)
+	if !(method.NumIn() == totalIn || (o.Method != http.MethodGet && method.NumIn() == totalIn+1) || method.NumOut() != totalOut) {
+		expected := "func("
+		for _, dep := range o.Depends {
+			expected += "? " + reflect.ValueOf(dep.Value).Type().String() + ", "
+		}
+		for _, param := range o.Params {
+			expected += param.Name + " ?, "
+		}
+		expected = strings.TrimRight(expected, ", ")
+		expected += ") ("
+		for _, h := range o.ResponseHeaders {
+			expected += h.Name + " ?, "
+		}
+		for _, r := range o.Responses {
+			expected += fmt.Sprintf("*Response%d, ", r.StatusCode)
+		}
+		expected = strings.TrimRight(expected, ", ")
+		expected += ")"
+
+		fmt.Printf("%d in, %d out expected, found %d, %d", totalIn, totalOut, method.NumIn(), method.NumOut())
+
+		return fmt.Errorf("expected %s but found %s: %w", expected, method, ErrOperationInvalid)
+	}
 
 	if o.ID == "" {
 		verb := o.Method
 
 		// Try to detect calls returning lists of things.
-		if method.Type().NumOut() > 0 {
-			k := method.Type().Out(0).Kind()
+		if method.NumOut() > 0 {
+			k := method.Out(0).Kind()
 			if k == reflect.Array || k == reflect.Slice {
 				verb = "list"
 			}
@@ -98,14 +117,15 @@ func (o *Operation) validate() error {
 	}
 
 	for i, dep := range o.Depends {
-		paramType := method.Type().In(i)
+		paramType := method.In(i)
 
+		// Catch common errors.
 		if paramType.String() == "gin.Context" {
-			return fmt.Errorf("gin.Context should be pointer *gin.Context: %w", ErrDependencyInvalid)
+			return fmt.Errorf("gin.Context should be pointer *gin.Context: %w", ErrOperationInvalid)
 		}
 
 		if paramType.String() == "huma.Operation" {
-			return fmt.Errorf("huma.Operation should be pointer *huma.Operation: %w", ErrDependencyInvalid)
+			return fmt.Errorf("huma.Operation should be pointer *huma.Operation: %w", ErrOperationInvalid)
 		}
 
 		if err := dep.validate(paramType); err != nil {
@@ -114,31 +134,22 @@ func (o *Operation) validate() error {
 	}
 
 	types := []reflect.Type{}
-	for i := len(o.Depends); i < method.Type().NumIn(); i++ {
-		paramType := method.Type().In(i)
+	for i := len(o.Depends); i < method.NumIn(); i++ {
+		paramType := method.In(i)
 
-		if paramType.String() == "gin.Context" {
-			return fmt.Errorf("gin.Context should be pointer *gin.Context: %w", ErrDependencyInvalid)
-		}
-
-		if paramType.String() == "huma.Operation" {
-			return fmt.Errorf("huma.Operation should be pointer *huma.Operation: %w", ErrDependencyInvalid)
+		switch paramType.String() {
+		case "gin.Context", "*gin.Context":
+			return fmt.Errorf("expected param but found gin.Context: %w", ErrOperationInvalid)
+		case "huma.Operation", "*huma.Operation":
+			return fmt.Errorf("expected param but found huma.Operation: %w", ErrOperationInvalid)
 		}
 
 		types = append(types, paramType)
 	}
 
-	if len(types) < len(o.Params) {
-		// Example: handler function takes 3 params, but 5 are described.
-		return ErrParamsMustMatch
-	}
-
 	requestBody := false
 	if len(types) == len(o.Params)+1 {
 		requestBody = true
-	} else if len(types) != len(o.Params) {
-		// Example: handler function takes 5 params, but 3 are described.
-		return ErrParamsMustMatch
 	}
 
 	for i, paramType := range types {
@@ -160,20 +171,14 @@ func (o *Operation) validate() error {
 		}
 	}
 
-	// Check that outputs match registered responses and add their type info
-	numOut := method.Type().NumOut()
-	if numOut != len(o.Responses)+len(o.ResponseHeaders) {
-		return ErrResponsesMustMatch
-	}
-
 	for i, header := range o.ResponseHeaders {
-		if err := validateHeader(header, method.Type().Out(i)); err != nil {
+		if err := validateHeader(header, method.Out(i)); err != nil {
 			return err
 		}
 	}
 
 	for i, resp := range o.Responses {
-		respType := method.Type().Out(len(o.ResponseHeaders) + i)
+		respType := method.Out(len(o.ResponseHeaders) + i)
 		// HTTP 204 explicitly forbids a response body.
 		if resp.StatusCode != 204 && resp.Schema == nil {
 			// Generate the schema from the handler function types.

@@ -176,12 +176,17 @@ func BenchmarkHumaComplex(b *testing.B) {
 	}
 }
 
+func TestRouterDefault(t *testing.T) {
+	// Just test we can create it without panic.
+	_ = NewRouter(&OpenAPI{})
+}
+
 func TestRouter(t *testing.T) {
 	type EchoResponse struct {
 		Value string `json:"value" description:"The echoed back word"`
 	}
 
-	r := NewRouter(&OpenAPI{Title: "My API", Version: "1.0.0"})
+	r := NewRouterWithGin(gin.New(), &OpenAPI{Title: "My API", Version: "1.0.0"})
 
 	r.Register(&Operation{
 		Method:      http.MethodPut,
@@ -247,7 +252,7 @@ func TestRouterRequestBody(t *testing.T) {
 		Value string `json:"value" description:"The echoed back word"`
 	}
 
-	r := NewRouter(&OpenAPI{Title: "My API", Version: "1.0.0"})
+	r := NewRouterWithGin(gin.New(), &OpenAPI{Title: "My API", Version: "1.0.0"})
 
 	r.Register(&Operation{
 		Method:      http.MethodPut,
@@ -275,7 +280,7 @@ func TestRouterRequestBody(t *testing.T) {
 }
 
 func TestRouterScalarResponse(t *testing.T) {
-	r := NewRouter(&OpenAPI{Title: "My API", Version: "1.0.0"})
+	r := NewRouterWithGin(gin.New(), &OpenAPI{Title: "My API", Version: "1.0.0"})
 
 	r.Register(&Operation{
 		Method:      http.MethodPut,
@@ -298,7 +303,7 @@ func TestRouterScalarResponse(t *testing.T) {
 }
 
 func TestRouterZeroScalarResponse(t *testing.T) {
-	r := NewRouter(&OpenAPI{Title: "My API", Version: "1.0.0"})
+	r := NewRouterWithGin(gin.New(), &OpenAPI{Title: "My API", Version: "1.0.0"})
 
 	r.Register(&Operation{
 		Method:      http.MethodPut,
@@ -322,7 +327,7 @@ func TestRouterZeroScalarResponse(t *testing.T) {
 }
 
 func TestRouterResponseHeaders(t *testing.T) {
-	r := NewRouter(&OpenAPI{Title: "My API", Version: "1.0.0"})
+	r := NewRouterWithGin(gin.New(), &OpenAPI{Title: "My API", Version: "1.0.0"})
 
 	r.Register(&Operation{
 		Method:      http.MethodGet,
@@ -355,7 +360,7 @@ func TestRouterResponseHeaders(t *testing.T) {
 }
 
 func TestRouterDependencies(t *testing.T) {
-	r := NewRouter(&OpenAPI{Title: "My API", Version: "1.0.0"})
+	r := NewRouterWithGin(gin.New(), &OpenAPI{Title: "My API", Version: "1.0.0"})
 
 	type DB struct {
 		Get func() string
