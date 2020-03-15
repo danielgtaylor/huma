@@ -5,6 +5,7 @@ go 1.13
 require (
 	github.com/Jeffail/gabs v1.4.0
 	github.com/gin-contrib/cors v1.3.1
+	github.com/gin-gonic/autotls v0.0.0-20200314141124-cc69476aef2a
 	github.com/gin-gonic/gin v1.5.0
 	github.com/gosimple/slug v1.9.0
 	github.com/mattn/go-isatty v0.0.9

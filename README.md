@@ -7,11 +7,14 @@ A modern, simple, fast & opinionated REST API framework for Go with batteries in
 - A modern REST API backend framework for Go developers
   - Described by [OpenAPI 3](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md) & [JSON Schema](https://json-schema.org/)
   - First class support for middleware, JSON, and other features
+- Guard rails to prevent common mistakes
 - Documentation that can't get out of date
 - High-quality developer tooling
 
 Features include:
 
+- HTTP, HTTPS (TLS), and [HTTP/2](https://http2.github.io/) built-in
+  - Let's Encrypt auto-updating certificates via `--autotls`
 - Declarative interface on top of [Gin](https://github.com/gin-gonic/gin)
   - Operation & model documentation
   - Request params (path, query, or header)
@@ -23,10 +26,12 @@ Features include:
   - Automatically handle CORS headers
   - Structured logging middleware using [Zap](https://github.com/uber-go/zap)
 - Annotated Go types for input and output models
-  - Automatic input model validation
+  - Generates JSON Schema from Go types
+  - Automatic input model validation & error handling
 - Dependency injection for loggers, datastores, etc
 - Documentation generation using [Redoc](https://github.com/Redocly/redoc)
 - CLI built-in, configured via arguments or environment variables
+  - Set via e.g. `-p 8000`, `--port=8000`, or `SERVICE_PORT=8000`
 - Generates OpenAPI JSON for access to a rich ecosystem of tools
   - Mocks with [API Sprout](https://github.com/danielgtaylor/apisprout)
   - SDKs with [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator)

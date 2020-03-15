@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/gin-gonic/autotls"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.uber.org/zap/zapcore"
@@ -59,7 +60,15 @@ func (r *Router) setupCLI() {
 			}
 
 			// Start either an HTTP or HTTPS server based on whether TLS cert/key
-			// paths were given.
+			// paths were given or Let's Encrypt is used.
+			autoTLS := viper.GetString("autotls")
+			if autoTLS != "" {
+				domains := strings.Split(autoTLS, ",")
+				if err := autotls.Run(r, domains...); err != nil {
+					panic(err)
+				}
+			}
+
 			cert := viper.GetString("cert")
 			key := viper.GetString("key")
 			if cert == "" && key == "" {
@@ -103,5 +112,6 @@ func (r *Router) setupCLI() {
 	r.AddGlobalFlag("port", "p", "Port", 8888)
 	r.AddGlobalFlag("cert", "", "SSL certificate file path", "")
 	r.AddGlobalFlag("key", "", "SSL key file path", "")
+	r.AddGlobalFlag("autotls", "", "Let's Encrypt automatic TLS domains (ignores port)", "")
 	r.AddGlobalFlag("debug", "d", "Enable debug logs", false)
 }
