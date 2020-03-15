@@ -11,21 +11,33 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+var logLevel *zap.AtomicLevel
+
 // LogMiddleware creates a new middleware to set a tagged `*zap.SugarLogger` in the
-// Gin context under the `log` key. It debug logs request info. If the current
-// terminal is a TTY, it will try to use colored output automatically.
-func LogMiddleware() func(*gin.Context) {
-	var l *zap.Logger
+// Gin context under the `log` key. It debug logs request info. If passed `nil`
+// for the logger, then it creates one. If the current terminal is a TTY, it
+// will try to use colored output automatically.
+func LogMiddleware(l *zap.Logger, tags map[string]string) func(*gin.Context) {
 	var err error
-	if isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd()) {
-		config := zap.NewDevelopmentConfig()
-		config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-		l, err = config.Build()
-	} else {
-		l, err = zap.NewProduction()
+	if l == nil {
+		if isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd()) {
+			config := zap.NewDevelopmentConfig()
+			logLevel = &config.Level
+			config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+			l, err = config.Build()
+		} else {
+			config := zap.NewProductionConfig()
+			logLevel = &config.Level
+			l, err = config.Build()
+		}
+		if err != nil {
+			panic(err)
+		}
 	}
-	if err != nil {
-		panic(err)
+
+	// Add any additional tags that were passed.
+	for k, v := range tags {
+		l = l.With(zap.String(k, v))
 	}
 
 	return func(c *gin.Context) {

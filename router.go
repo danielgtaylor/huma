@@ -125,9 +125,10 @@ func getRequestBody(c *gin.Context, t reflect.Type, op *Operation) (interface{},
 
 // Router handles API requests.
 type Router struct {
-	api    *OpenAPI
-	engine *gin.Engine
-	root   *cobra.Command
+	api      *OpenAPI
+	engine   *gin.Engine
+	root     *cobra.Command
+	prestart []func()
 }
 
 // NewRouter creates a new Huma router for handling API requests with
@@ -138,7 +139,7 @@ func NewRouter(api *OpenAPI) *Router {
 	g := gin.New()
 	g.Use(gin.Recovery())
 	g.Use(cors.Default())
-	g.Use(LogMiddleware())
+	g.Use(LogMiddleware(nil, nil))
 	return NewRouterWithGin(g, api)
 }
 
@@ -150,8 +151,9 @@ func NewRouterWithGin(engine *gin.Engine, api *OpenAPI) *Router {
 	}
 
 	r := &Router{
-		api:    api,
-		engine: engine,
+		api:      api,
+		engine:   engine,
+		prestart: []func(){},
 	}
 
 	r.setupCLI()
@@ -185,6 +187,11 @@ func NewRouterWithGin(engine *gin.Engine, api *OpenAPI) *Router {
 // GinEngine returns the underlying low-level Gin engine.
 func (r *Router) GinEngine() *gin.Engine {
 	return r.engine
+}
+
+// PreStart registers a function to run before server start.
+func (r *Router) PreStart(f func()) {
+	r.prestart = append(r.prestart, f)
 }
 
 // Use attaches middleware to the router.
@@ -351,6 +358,11 @@ func (r *Router) Register(op *Operation) {
 // Listen for new connections.
 func (r *Router) Listen(addr string) error {
 	return r.engine.Run(addr)
+}
+
+// ListenTLS listens for new connections using HTTPS & HTTP2
+func (r *Router) ListenTLS(addr, certFile, keyFile string) error {
+	return r.engine.RunTLS(addr, certFile, keyFile)
 }
 
 // Run executes the router command.
