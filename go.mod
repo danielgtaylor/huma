@@ -8,7 +8,8 @@ require (
 	github.com/gin-gonic/autotls v0.0.0-20200314141124-cc69476aef2a
 	github.com/gin-gonic/gin v1.5.0
 	github.com/gosimple/slug v1.9.0
-	github.com/mattn/go-isatty v0.0.9
+	github.com/labstack/echo/v4 v4.1.15
+	github.com/mattn/go-isatty v0.0.12
 	github.com/pkg/errors v0.8.1 // indirect
 	github.com/spf13/cobra v0.0.6
 	github.com/spf13/viper v1.4.0
