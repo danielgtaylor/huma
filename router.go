@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -166,6 +167,12 @@ func NewRouterWithGin(engine *gin.Engine, api *OpenAPI) *Router {
 	r.engine.GET("/openapi.json", OpenAPIHandler(r.api))
 	// TODO: make configurable.
 	r.engine.GET("/docs", r.RapiDocHandler)
+
+	// If downloads like a CLI or SDKs are available, serve them automatically
+	// so you can reference them from e.g. the docs.
+	if _, err := os.Stat("downloads"); err == nil {
+		r.engine.Static("/downloads", "downloads")
+	}
 
 	return r
 }
