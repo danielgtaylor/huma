@@ -105,11 +105,15 @@ func (o *Operation) validate() error {
 		return fmt.Errorf("at least one response is required: %w", ErrOperationInvalid)
 	}
 
+	if o.Handler == nil {
+		return fmt.Errorf("handler is required: %w", ErrOperationInvalid)
+	}
+
 	method := reflect.ValueOf(o.Handler).Type()
 
 	totalIn := len(o.Dependencies) + len(o.Params)
 	totalOut := len(o.ResponseHeaders) + len(o.Responses)
-	if !(method.NumIn() == totalIn || (o.Method != http.MethodGet && method.NumIn() == totalIn+1) || method.NumOut() != totalOut) {
+	if !(method.NumIn() == totalIn || (o.Method != http.MethodGet && method.NumIn() == totalIn+1)) || method.NumOut() != totalOut {
 		expected := "func("
 		for _, dep := range o.Dependencies {
 			expected += "? " + reflect.ValueOf(dep.Value).Type().String() + ", "
@@ -127,8 +131,6 @@ func (o *Operation) validate() error {
 		}
 		expected = strings.TrimRight(expected, ", ")
 		expected += ")"
-
-		fmt.Printf("%d in, %d out expected, found %d, %d", totalIn, totalOut, method.NumIn(), method.NumOut())
 
 		return fmt.Errorf("expected %s but found %s: %w", expected, method, ErrOperationInvalid)
 	}

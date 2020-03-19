@@ -2,26 +2,33 @@ package huma
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
 var types = []struct {
-	in  interface{}
-	out string
+	in     interface{}
+	out    string
+	format string
 }{
-	{false, "boolean"},
-	{0, "integer"},
-	{0.0, "number"},
-	{"hello", "string"},
-	{struct{}{}, "object"},
-	{[]string{"foo"}, "array"},
+	{false, "boolean", ""},
+	{0, "integer", ""},
+	{0.0, "number", ""},
+	{"hello", "string", ""},
+	{struct{}{}, "object", ""},
+	{[]string{"foo"}, "array", ""},
+	{net.IP{}, "string", "ipv4"},
+	{time.Time{}, "string", "date-time"},
+	{url.URL{}, "string", "uri"},
 	// TODO: map
 }
 
-func TestTypes(outer *testing.T) {
+func TestSchemaTypes(outer *testing.T) {
 	outer.Parallel()
 	for _, tt := range types {
 		local := tt
@@ -30,11 +37,12 @@ func TestTypes(outer *testing.T) {
 			s, err := GenerateSchema(reflect.ValueOf(local.in).Type())
 			assert.NoError(t, err)
 			assert.Equal(t, local.out, s.Type)
+			assert.Equal(t, local.format, s.Format)
 		})
 	}
 }
 
-func TestRequiredFields(t *testing.T) {
+func TestSchemaRequiredFields(t *testing.T) {
 	type Example struct {
 		Optional string `json:"optional,omitempty"`
 		Required string `json:"required"`
@@ -47,7 +55,7 @@ func TestRequiredFields(t *testing.T) {
 	assert.Contains(t, s.Required, "required")
 }
 
-func TestRenameField(t *testing.T) {
+func TestSchemaRenameField(t *testing.T) {
 	type Example struct {
 		Foo string `json:"bar"`
 	}
@@ -58,7 +66,7 @@ func TestRenameField(t *testing.T) {
 	assert.NotEmpty(t, s.Properties["bar"])
 }
 
-func TestDescription(t *testing.T) {
+func TestSchemaDescription(t *testing.T) {
 	type Example struct {
 		Foo string `json:"foo" description:"I am a test"`
 	}
@@ -66,4 +74,44 @@ func TestDescription(t *testing.T) {
 	s, err := GenerateSchema(reflect.ValueOf(Example{}).Type())
 	assert.NoError(t, err)
 	assert.Equal(t, "I am a test", s.Properties["foo"].Description)
+}
+
+func TestSchemaFormat(t *testing.T) {
+	type Example struct {
+		Foo string `json:"foo" format:"date-time"`
+	}
+
+	s, err := GenerateSchema(reflect.ValueOf(Example{}).Type())
+	assert.NoError(t, err)
+	assert.Equal(t, "date-time", s.Properties["foo"].Format)
+}
+
+func TestSchemaEnum(t *testing.T) {
+	type Example struct {
+		Foo string `json:"foo" enum:"one,two,three"`
+	}
+
+	s, err := GenerateSchema(reflect.ValueOf(Example{}).Type())
+	assert.NoError(t, err)
+	assert.Equal(t, []interface{}{"one", "two", "three"}, s.Properties["foo"].Enum)
+}
+
+func TestSchemaDefault(t *testing.T) {
+	type Example struct {
+		Foo string `json:"foo" default:"def"`
+	}
+
+	s, err := GenerateSchema(reflect.ValueOf(Example{}).Type())
+	assert.NoError(t, err)
+	assert.Equal(t, "def", s.Properties["foo"].Default)
+}
+
+func TestSchemaExample(t *testing.T) {
+	type Example struct {
+		Foo string `json:"foo" example:"ex"`
+	}
+
+	s, err := GenerateSchema(reflect.ValueOf(Example{}).Type())
+	assert.NoError(t, err)
+	assert.Equal(t, "ex", s.Properties["foo"].Example)
 }
