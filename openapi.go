@@ -178,6 +178,7 @@ type Operation struct {
 	Summary            string
 	Description        string
 	Tags               []string
+	Security           map[string][]string
 	Dependencies       []*Dependency
 	Params             []*Param
 	RequestContentType string
@@ -265,16 +266,82 @@ type Contact struct {
 	Email string `json:"email"`
 }
 
+// OAuthFlow describes the URLs and scopes to get tokens via a specific flow.
+type OAuthFlow struct {
+	AuthorizationURL string            `json:"authorizationUrl"`
+	TokenURL         string            `json:"tokenUrl"`
+	RefreshURL       string            `json:"refreshUrl,omitempty"`
+	Scopes           map[string]string `json:"scopes"`
+}
+
+// OAuthFlows describes the configuration for each flow type.
+type OAuthFlows struct {
+	Implicit          *OAuthFlow `json:"implicit,omitempty"`
+	Password          *OAuthFlow `json:"password,omitempty"`
+	ClientCredentials *OAuthFlow `json:"clientCredentials,omitempty"`
+	AuthorizationCode *OAuthFlow `json:"authorizationCode,omitempty"`
+}
+
+// SecurityScheme describes the auth mechanism(s) for this API.
+type SecurityScheme struct {
+	Type             string      `json:"type"`
+	Description      string      `json:"description,omitempty"`
+	Name             string      `json:"name,omitempty"`
+	In               string      `json:"in,omitempty"`
+	Scheme           string      `json:"scheme,omitempty"`
+	BearerFormat     string      `json:"bearerFormat,omitempty"`
+	Flows            *OAuthFlows `json:"flows,omitempty"`
+	OpenIDConnectURL string      `json:"openIdConnectUrl,omitempty"`
+}
+
+// BasicAuth creates an HTTP Basic Auth security scheme.
+func BasicAuth() *SecurityScheme {
+	return &SecurityScheme{
+		Type:   "http",
+		Scheme: "basic",
+	}
+}
+
+// APIKeyAuth creates a pre-shared API key security scheme. The location of
+// the API key parameter is defined with `in` and can be one of `query`,
+// `header`, or `cookie`.
+func APIKeyAuth(name, in string) *SecurityScheme {
+	return &SecurityScheme{
+		Type: "apiKey",
+		Name: name,
+		In:   in,
+	}
+}
+
+// JWTBearerAuth creates a JWT bearer auth scheme using the Authorization
+// header.
+func JWTBearerAuth() *SecurityScheme {
+	return &SecurityScheme{
+		Type:         "http",
+		Scheme:       "bearer",
+		BearerFormat: "JWT",
+	}
+}
+
+// SecurityRef references a previously defined `SecurityScheme` by name along
+// with any required scopes.
+func SecurityRef(name string, scopes ...string) map[string][]string {
+	return map[string][]string{
+		name: scopes,
+	}
+}
+
 // OpenAPI describes the OpenAPI 3 API
 type OpenAPI struct {
-	Title       string
-	Version     string
-	Description string
-	Contact     *Contact
-	Servers     []*Server
-	Paths       map[string][]*Operation
-	// TODO: Depends []*Dependency
-	Extra map[string]interface{}
+	Title           string
+	Version         string
+	Description     string
+	Contact         *Contact
+	Servers         []*Server
+	SecuritySchemes map[string]*SecurityScheme
+	Security        map[string][]string
+	Paths           map[string][]*Operation
+	Extra           map[string]interface{}
 }
 
 // OpenAPIHandler returns a new handler function to generate an OpenAPI spec.
@@ -304,6 +371,14 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 			openapi.Set(api.Servers, "servers")
 		}
 
+		if len(api.SecuritySchemes) > 0 {
+			openapi.Set(api.SecuritySchemes, "components", "securitySchemes")
+		}
+
+		if len(api.Security) > 0 {
+			openapi.Set(api.Security, "security")
+		}
+
 		// spew.Dump(m.paths)
 
 		for path, operations := range api.Paths {
@@ -326,6 +401,10 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 				openapi.Set(op.Description, "paths", path, method, "description")
 				if len(op.Tags) > 0 {
 					openapi.Set(op.Tags, "paths", path, method, "tags")
+				}
+
+				if len(op.Security) > 0 {
+					openapi.Set(op.Security, "paths", path, method, "security")
 				}
 
 				for _, param := range op.AllParams() {
