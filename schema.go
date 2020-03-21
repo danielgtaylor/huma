@@ -2,6 +2,7 @@ package huma
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -10,6 +11,9 @@ import (
 	"strings"
 	"time"
 )
+
+// ErrSchemaInvalid is sent when there is a problem building the schema.
+var ErrSchemaInvalid = errors.New("schema is invalid")
 
 var (
 	timeType      = reflect.TypeOf(time.Time{})
@@ -62,6 +66,10 @@ type Schema struct {
 	AnyOf                []*Schema          `json:"anyOf,omitempty"`
 	OneOf                []*Schema          `json:"oneOf,omitempty"`
 	Not                  *Schema            `json:"not,omitempty"`
+	Nullable             bool               `json:"nullable,omitempty"`
+	ReadOnly             bool               `json:"readOnly,omitempty"`
+	WriteOnly            bool               `json:"writeOnly,omitempty"`
+	Deprecated           bool               `json:"deprecated,omitempty"`
 }
 
 // GenerateSchema creates a JSON schema for a Go type. Struct field tags
@@ -237,6 +245,34 @@ func GenerateSchema(t reflect.Type) (*Schema, error) {
 					return nil, err
 				}
 				s.MaxProperties = &max
+			}
+
+			if t, ok := f.Tag.Lookup("nullable"); ok {
+				if !(t == "true" || t == "false") {
+					return nil, fmt.Errorf("%s nullable: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
+				}
+				s.Nullable = t == "true"
+			}
+
+			if t, ok := f.Tag.Lookup("readOnly"); ok {
+				if !(t == "true" || t == "false") {
+					return nil, fmt.Errorf("%s readOnly: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
+				}
+				s.ReadOnly = t == "true"
+			}
+
+			if t, ok := f.Tag.Lookup("writeOnly"); ok {
+				if !(t == "true" || t == "false") {
+					return nil, fmt.Errorf("%s writeOnly: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
+				}
+				s.WriteOnly = t == "true"
+			}
+
+			if t, ok := f.Tag.Lookup("deprecated"); ok {
+				if !(t == "true" || t == "false") {
+					return nil, fmt.Errorf("%s deprecated: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
+				}
+				s.Deprecated = t == "true"
 			}
 
 			optional := false

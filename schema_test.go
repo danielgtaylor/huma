@@ -115,3 +115,79 @@ func TestSchemaExample(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "ex", s.Properties["foo"].Example)
 }
+
+func TestSchemaNullable(t *testing.T) {
+	type Example struct {
+		Foo string `json:"foo" nullable:"true"`
+	}
+
+	s, err := GenerateSchema(reflect.ValueOf(Example{}).Type())
+	assert.NoError(t, err)
+	assert.Equal(t, true, s.Properties["foo"].Nullable)
+}
+
+func TestSchemaNullableError(t *testing.T) {
+	type Example struct {
+		Foo string `json:"foo" nullable:"bad"`
+	}
+
+	_, err := GenerateSchema(reflect.ValueOf(Example{}).Type())
+	assert.Error(t, err)
+}
+
+func TestSchemaReadOnly(t *testing.T) {
+	type Example struct {
+		Foo string `json:"foo" readOnly:"true"`
+	}
+
+	s, err := GenerateSchema(reflect.ValueOf(Example{}).Type())
+	assert.NoError(t, err)
+	assert.Equal(t, true, s.Properties["foo"].ReadOnly)
+}
+
+func TestSchemaReadOnlyError(t *testing.T) {
+	type Example struct {
+		Foo string `json:"foo" readOnly:"bad"`
+	}
+
+	_, err := GenerateSchema(reflect.ValueOf(Example{}).Type())
+	assert.Error(t, err)
+}
+
+func TestSchemaWriteOnly(t *testing.T) {
+	type Example struct {
+		Foo string `json:"foo" writeOnly:"true"`
+	}
+
+	s, err := GenerateSchema(reflect.ValueOf(Example{}).Type())
+	assert.NoError(t, err)
+	assert.Equal(t, true, s.Properties["foo"].WriteOnly)
+}
+
+func TestSchemaWriteOnlyError(t *testing.T) {
+	type Example struct {
+		Foo string `json:"foo" writeOnly:"bad"`
+	}
+
+	_, err := GenerateSchema(reflect.ValueOf(Example{}).Type())
+	assert.Error(t, err)
+}
+
+func TestSchemaDeprecated(t *testing.T) {
+	type Example struct {
+		Foo string `json:"foo" deprecated:"true"`
+	}
+
+	s, err := GenerateSchema(reflect.ValueOf(Example{}).Type())
+	assert.NoError(t, err)
+	assert.Equal(t, true, s.Properties["foo"].Deprecated)
+}
+
+func TestSchemaDeprecatedError(t *testing.T) {
+	type Example struct {
+		Foo string `json:"foo" deprecated:"bad"`
+	}
+
+	_, err := GenerateSchema(reflect.ValueOf(Example{}).Type())
+	assert.Error(t, err)
+}

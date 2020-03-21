@@ -253,6 +253,11 @@ The standard `json` tag is supported and can be used to rename a field and mark 
 | `uniqueItems`      | Array items must be unique                | `uniqueItems:"true"`         |
 | `minProperties`    | Minimum number of object properties       | `minProperties:"1"`          |
 | `maxProperties`    | Maximum number of object properties       | `maxProperties:"20"`         |
+| `example`          | Example value                             | `example:"123"`              |
+| `nullable`         | Whether `null` can be sent                | `nullable:"false"`           |
+| `readOnly`         | Sent in the response only                 | `readOnly:"true"`            |
+| `writeOnly`        | Sent in the request only                  | `writeOnly:"true"`           |
+| `deprecated`       | This field is deprecated                  | `deprecated:"true"`          |
 
 ### Dependencies
 
