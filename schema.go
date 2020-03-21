@@ -34,28 +34,34 @@ func getTagValue(s *Schema, value string) (interface{}, error) {
 
 // Schema represents a JSON Schema which can be generated from Go structs
 type Schema struct {
-	Type             string             `json:"type,omitempty"`
-	Description      string             `json:"description,omitempty"`
-	Items            *Schema            `json:"items,omitempty"`
-	Properties       map[string]*Schema `json:"properties,omitempty"`
-	Required         []string           `json:"required,omitempty"`
-	Format           string             `json:"format,omitempty"`
-	Enum             []interface{}      `json:"enum,omitempty"`
-	Default          interface{}        `json:"default,omitempty"`
-	Example          interface{}        `json:"example,omitempty"`
-	Minimum          *int               `json:"minimum,omitempty"`
-	ExclusiveMinimum *int               `json:"exclusiveMinimum,omitempty"`
-	Maximum          *int               `json:"maximum,omitempty"`
-	ExclusiveMaximum *int               `json:"exclusiveMaximum,omitempty"`
-	MultipleOf       int                `json:"multipleOf,omitempty"`
-	MinLength        *int               `json:"minLength,omitempty"`
-	MaxLength        *int               `json:"maxLength,omitempty"`
-	Pattern          string             `json:"pattern,omitempty"`
-	MinItems         *int               `json:"minItems,omitempty"`
-	MaxItems         *int               `json:"maxItems,omitempty"`
-	UniqueItems      bool               `json:"uniqueItems,omitempty"`
-	MinProperties    *int               `json:"minProperties,omitempty"`
-	MaxProperties    *int               `json:"maxProperties,omitempty"`
+	Type                 string             `json:"type,omitempty"`
+	Description          string             `json:"description,omitempty"`
+	Items                *Schema            `json:"items,omitempty"`
+	Properties           map[string]*Schema `json:"properties,omitempty"`
+	AdditionalProperties interface{}        `json:"additionalProperties,omitempty"`
+	PatternProperties    map[string]*Schema `json:"patternProperties,omitempty"`
+	Required             []string           `json:"required,omitempty"`
+	Format               string             `json:"format,omitempty"`
+	Enum                 []interface{}      `json:"enum,omitempty"`
+	Default              interface{}        `json:"default,omitempty"`
+	Example              interface{}        `json:"example,omitempty"`
+	Minimum              *int               `json:"minimum,omitempty"`
+	ExclusiveMinimum     *int               `json:"exclusiveMinimum,omitempty"`
+	Maximum              *int               `json:"maximum,omitempty"`
+	ExclusiveMaximum     *int               `json:"exclusiveMaximum,omitempty"`
+	MultipleOf           int                `json:"multipleOf,omitempty"`
+	MinLength            *int               `json:"minLength,omitempty"`
+	MaxLength            *int               `json:"maxLength,omitempty"`
+	Pattern              string             `json:"pattern,omitempty"`
+	MinItems             *int               `json:"minItems,omitempty"`
+	MaxItems             *int               `json:"maxItems,omitempty"`
+	UniqueItems          bool               `json:"uniqueItems,omitempty"`
+	MinProperties        *int               `json:"minProperties,omitempty"`
+	MaxProperties        *int               `json:"maxProperties,omitempty"`
+	AllOf                []*Schema          `json:"allOf,omitempty"`
+	AnyOf                []*Schema          `json:"anyOf,omitempty"`
+	OneOf                []*Schema          `json:"oneOf,omitempty"`
+	Not                  *Schema            `json:"not,omitempty"`
 }
 
 // GenerateSchema creates a JSON schema for a Go type. Struct field tags
@@ -82,6 +88,7 @@ func GenerateSchema(t reflect.Type) (*Schema, error) {
 		properties := make(map[string]*Schema)
 		required := make([]string, 0)
 		schema.Type = "object"
+		schema.AdditionalProperties = false
 
 		for i := 0; i < t.NumField(); i++ {
 			f := t.Field(i)
@@ -252,7 +259,12 @@ func GenerateSchema(t reflect.Type) (*Schema, error) {
 		}
 
 	case reflect.Map:
-		// pass
+		schema.Type = "object"
+		s, err := GenerateSchema(t.Elem())
+		if err != nil {
+			return nil, err
+		}
+		schema.AdditionalProperties = s
 	case reflect.Slice, reflect.Array:
 		schema.Type = "array"
 		s, err := GenerateSchema(t.Elem())
