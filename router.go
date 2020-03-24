@@ -59,7 +59,7 @@ func getParamValue(c *gin.Context, param *Param) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		pv = converted
+		pv = reflect.ValueOf(converted).Convert(param.typ).Interface()
 	case reflect.Float32:
 		converted, err := strconv.ParseFloat(pstr, 32)
 		if err != nil {
