@@ -13,6 +13,21 @@ import (
 
 var logLevel *zap.AtomicLevel
 
+// NewLogger returns a new low-level `*zap.Logger` instance. If the current
+// terminal is a TTY, it will try ot use colored output automatically.
+func NewLogger() (*zap.Logger, error) {
+	if isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd()) {
+		config := zap.NewDevelopmentConfig()
+		logLevel = &config.Level
+		config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+		return config.Build()
+	}
+
+	config := zap.NewProductionConfig()
+	logLevel = &config.Level
+	return config.Build()
+}
+
 // LogMiddleware creates a new middleware to set a tagged `*zap.SugarLogger` in the
 // Gin context under the `log` key. It debug logs request info. If passed `nil`
 // for the logger, then it creates one. If the current terminal is a TTY, it
@@ -20,17 +35,7 @@ var logLevel *zap.AtomicLevel
 func LogMiddleware(l *zap.Logger, tags map[string]string) func(*gin.Context) {
 	var err error
 	if l == nil {
-		if isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd()) {
-			config := zap.NewDevelopmentConfig()
-			logLevel = &config.Level
-			config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-			l, err = config.Build()
-		} else {
-			config := zap.NewProductionConfig()
-			logLevel = &config.Level
-			l, err = config.Build()
-		}
-		if err != nil {
+		if l, err = NewLogger(); err != nil {
 			panic(err)
 		}
 	}
