@@ -38,7 +38,6 @@ func RapiDocHandler(c *gin.Context, api *OpenAPI) {
 		spec-url="/openapi.json"
 		render-style="read"
 		show-header="false"
-		schema-style="table"
   > </rapi-doc>
 </body>
 </html>`, api.Title)))
