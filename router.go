@@ -126,10 +126,11 @@ func getRequestBody(c *gin.Context, t reflect.Type, op *Operation) (interface{},
 
 // Router handles API requests.
 type Router struct {
-	api      *OpenAPI
-	engine   *gin.Engine
-	root     *cobra.Command
-	prestart []func()
+	api         *OpenAPI
+	engine      *gin.Engine
+	root        *cobra.Command
+	prestart    []func()
+	docsHandler func(c *gin.Context, api *OpenAPI)
 }
 
 // NewRouter creates a new Huma router for handling API requests with
@@ -152,9 +153,10 @@ func NewRouterWithGin(engine *gin.Engine, api *OpenAPI) *Router {
 	}
 
 	r := &Router{
-		api:      api,
-		engine:   engine,
-		prestart: []func(){},
+		api:         api,
+		engine:      engine,
+		prestart:    []func(){},
+		docsHandler: RapiDocHandler,
 	}
 
 	r.setupCLI()
@@ -165,8 +167,10 @@ func NewRouterWithGin(engine *gin.Engine, api *OpenAPI) *Router {
 
 	// Set up handlers for the auto-generated spec and docs.
 	r.engine.GET("/openapi.json", OpenAPIHandler(r.api))
-	// TODO: make configurable.
-	r.engine.GET("/docs", r.RapiDocHandler)
+
+	r.engine.GET("/docs", func(c *gin.Context) {
+		r.docsHandler(c, api)
+	})
 
 	// If downloads like a CLI or SDKs are available, serve them automatically
 	// so you can reference them from e.g. the docs.
@@ -185,6 +189,13 @@ func (r *Router) GinEngine() *gin.Engine {
 // PreStart registers a function to run before server start.
 func (r *Router) PreStart(f func()) {
 	r.prestart = append(r.prestart, f)
+}
+
+// SetDocsHandler sets the documentation rendering handler function. You can
+// use `huma.RapiDocHandler`, `huma.ReDocHandler`, or provide your own (e.g.
+// with custom auth).
+func (r *Router) SetDocsHandler(f func(*gin.Context, *OpenAPI)) {
+	r.docsHandler = f
 }
 
 // Use attaches middleware to the router.

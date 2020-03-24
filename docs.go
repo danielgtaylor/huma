@@ -7,7 +7,7 @@ import (
 )
 
 // ReDocHandler renders documentation using ReDoc.
-func (r *Router) ReDocHandler(c *gin.Context) {
+func ReDocHandler(c *gin.Context, api *OpenAPI) {
 	c.Data(200, "text/html", []byte(fmt.Sprintf(`<!DOCTYPE html>
 <html>
   <head>
@@ -21,11 +21,11 @@ func (r *Router) ReDocHandler(c *gin.Context) {
     <redoc spec-url='/openapi.json'></redoc>
     <script src="https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js"> </script>
   </body>
-</html>`, r.api.Title)))
+</html>`, api.Title)))
 }
 
 // RapiDocHandler renders documentation using RapiDoc.
-func (r *Router) RapiDocHandler(c *gin.Context) {
+func RapiDocHandler(c *gin.Context, api *OpenAPI) {
 	c.Data(200, "text/html", []byte(fmt.Sprintf(`<!doctype html>
 <html>
 <head>
@@ -41,5 +41,5 @@ func (r *Router) RapiDocHandler(c *gin.Context) {
 		schema-style="table"
   > </rapi-doc>
 </body>
-</html>`, r.api.Title)))
+</html>`, api.Title)))
 }
