@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	github.com/Jeffail/gabs v1.4.0
+	github.com/getkin/kin-openapi v0.3.0
 	github.com/gin-contrib/cors v1.3.1
 	github.com/gin-gonic/autotls v0.0.0-20200314141124-cc69476aef2a
 	github.com/gin-gonic/gin v1.5.0
@@ -17,5 +18,4 @@ require (
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.uber.org/zap v1.10.0
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
-	gopkg.in/yaml.v2 v2.2.4 // indirect
 )

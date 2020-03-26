@@ -170,6 +170,8 @@ func Header(name, description string) *ResponseHeader {
 	}
 }
 
+type SecurityRequirement map[string][]string
+
 // Operation describes an OpenAPI 3 operation on a path
 type Operation struct {
 	ID                 string
@@ -178,7 +180,7 @@ type Operation struct {
 	Summary            string
 	Description        string
 	Tags               []string
-	Security           map[string][]string
+	Security           []SecurityRequirement
 	Dependencies       []*Dependency
 	Params             []*Param
 	RequestContentType string
@@ -325,9 +327,13 @@ func JWTBearerAuth() *SecurityScheme {
 
 // SecurityRef references a previously defined `SecurityScheme` by name along
 // with any required scopes.
-func SecurityRef(name string, scopes ...string) map[string][]string {
-	return map[string][]string{
-		name: scopes,
+func SecurityRef(name string, scopes ...string) []SecurityRequirement {
+	if scopes == nil {
+		scopes = []string{}
+	}
+
+	return []SecurityRequirement{
+		{name: scopes},
 	}
 }
 
@@ -339,7 +345,7 @@ type OpenAPI struct {
 	Contact         *Contact
 	Servers         []*Server
 	SecuritySchemes map[string]*SecurityScheme
-	Security        map[string][]string
+	Security        []SecurityRequirement
 	Paths           map[string][]*Operation
 	Extra           map[string]interface{}
 }
