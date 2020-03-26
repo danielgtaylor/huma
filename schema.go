@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/url"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -24,7 +25,7 @@ var (
 
 // getTagValue returns a value of the schema's type for the given tag string.
 // Uses JSON parsing if the schema is not a string.
-func getTagValue(s *Schema, value string) (interface{}, error) {
+func getTagValue(s *Schema, t reflect.Type, value string) (interface{}, error) {
 	if s.Type == "string" {
 		return value, nil
 	}
@@ -33,6 +34,16 @@ func getTagValue(s *Schema, value string) (interface{}, error) {
 	if err := json.Unmarshal([]byte(value), &v); err != nil {
 		return nil, err
 	}
+
+	tv := reflect.TypeOf(v)
+	if v != nil && tv != t {
+		if !tv.ConvertibleTo(t) {
+			return nil, fmt.Errorf("unable to convert %v to %v: %w", tv, t, ErrSchemaInvalid)
+		}
+
+		v = reflect.ValueOf(v).Convert(t).Interface()
+	}
+
 	return v, nil
 }
 
@@ -49,19 +60,19 @@ type Schema struct {
 	Enum                 []interface{}      `json:"enum,omitempty"`
 	Default              interface{}        `json:"default,omitempty"`
 	Example              interface{}        `json:"example,omitempty"`
-	Minimum              *int               `json:"minimum,omitempty"`
-	ExclusiveMinimum     *int               `json:"exclusiveMinimum,omitempty"`
-	Maximum              *int               `json:"maximum,omitempty"`
-	ExclusiveMaximum     *int               `json:"exclusiveMaximum,omitempty"`
-	MultipleOf           int                `json:"multipleOf,omitempty"`
-	MinLength            *int               `json:"minLength,omitempty"`
-	MaxLength            *int               `json:"maxLength,omitempty"`
+	Minimum              *float64           `json:"minimum,omitempty"`
+	ExclusiveMinimum     *float64           `json:"exclusiveMinimum,omitempty"`
+	Maximum              *float64           `json:"maximum,omitempty"`
+	ExclusiveMaximum     *float64           `json:"exclusiveMaximum,omitempty"`
+	MultipleOf           float64            `json:"multipleOf,omitempty"`
+	MinLength            *uint64            `json:"minLength,omitempty"`
+	MaxLength            *uint64            `json:"maxLength,omitempty"`
 	Pattern              string             `json:"pattern,omitempty"`
-	MinItems             *int               `json:"minItems,omitempty"`
-	MaxItems             *int               `json:"maxItems,omitempty"`
+	MinItems             *uint64            `json:"minItems,omitempty"`
+	MaxItems             *uint64            `json:"maxItems,omitempty"`
 	UniqueItems          bool               `json:"uniqueItems,omitempty"`
-	MinProperties        *int               `json:"minProperties,omitempty"`
-	MaxProperties        *int               `json:"maxProperties,omitempty"`
+	MinProperties        *uint64            `json:"minProperties,omitempty"`
+	MaxProperties        *uint64            `json:"maxProperties,omitempty"`
 	AllOf                []*Schema          `json:"allOf,omitempty"`
 	AnyOf                []*Schema          `json:"anyOf,omitempty"`
 	OneOf                []*Schema          `json:"oneOf,omitempty"`
@@ -114,18 +125,18 @@ func GenerateSchema(t reflect.Type) (*Schema, error) {
 			}
 			properties[name] = s
 
-			if t, ok := f.Tag.Lookup("description"); ok {
-				s.Description = t
+			if tag, ok := f.Tag.Lookup("description"); ok {
+				s.Description = tag
 			}
 
-			if t, ok := f.Tag.Lookup("format"); ok {
-				s.Format = t
+			if tag, ok := f.Tag.Lookup("format"); ok {
+				s.Format = tag
 			}
 
-			if t, ok := f.Tag.Lookup("enum"); ok {
+			if tag, ok := f.Tag.Lookup("enum"); ok {
 				s.Enum = []interface{}{}
-				for _, v := range strings.Split(t, ",") {
-					parsed, err := getTagValue(s, v)
+				for _, v := range strings.Split(tag, ",") {
+					parsed, err := getTagValue(s, f.Type, v)
 					if err != nil {
 						return nil, err
 					}
@@ -133,8 +144,8 @@ func GenerateSchema(t reflect.Type) (*Schema, error) {
 				}
 			}
 
-			if t, ok := f.Tag.Lookup("default"); ok {
-				v, err := getTagValue(s, t)
+			if tag, ok := f.Tag.Lookup("default"); ok {
+				v, err := getTagValue(s, f.Type, tag)
 				if err != nil {
 					return nil, err
 				}
@@ -142,8 +153,8 @@ func GenerateSchema(t reflect.Type) (*Schema, error) {
 				s.Default = v
 			}
 
-			if t, ok := f.Tag.Lookup("example"); ok {
-				v, err := getTagValue(s, t)
+			if tag, ok := f.Tag.Lookup("example"); ok {
+				v, err := getTagValue(s, f.Type, tag)
 				if err != nil {
 					return nil, err
 				}
@@ -151,128 +162,135 @@ func GenerateSchema(t reflect.Type) (*Schema, error) {
 				s.Example = v
 			}
 
-			if t, ok := f.Tag.Lookup("minimum"); ok {
-				min, err := strconv.Atoi(t)
+			if tag, ok := f.Tag.Lookup("minimum"); ok {
+				min, err := strconv.ParseFloat(tag, 64)
 				if err != nil {
 					return nil, err
 				}
 				s.Minimum = &min
 			}
 
-			if t, ok := f.Tag.Lookup("exclusiveMinimum"); ok {
-				min, err := strconv.Atoi(t)
+			if tag, ok := f.Tag.Lookup("exclusiveMinimum"); ok {
+				min, err := strconv.ParseFloat(tag, 64)
 				if err != nil {
 					return nil, err
 				}
 				s.ExclusiveMinimum = &min
 			}
 
-			if t, ok := f.Tag.Lookup("maximum"); ok {
-				max, err := strconv.Atoi(t)
+			if tag, ok := f.Tag.Lookup("maximum"); ok {
+				max, err := strconv.ParseFloat(tag, 64)
 				if err != nil {
 					return nil, err
 				}
 				s.Maximum = &max
 			}
 
-			if t, ok := f.Tag.Lookup("exclusiveMaximum"); ok {
-				max, err := strconv.Atoi(t)
+			if tag, ok := f.Tag.Lookup("exclusiveMaximum"); ok {
+				max, err := strconv.ParseFloat(tag, 64)
 				if err != nil {
 					return nil, err
 				}
 				s.ExclusiveMaximum = &max
 			}
 
-			if t, ok := f.Tag.Lookup("multipleOf"); ok {
-				mof, err := strconv.Atoi(t)
+			if tag, ok := f.Tag.Lookup("multipleOf"); ok {
+				mof, err := strconv.ParseFloat(tag, 64)
 				if err != nil {
 					return nil, err
 				}
 				s.MultipleOf = mof
 			}
 
-			if t, ok := f.Tag.Lookup("minLength"); ok {
-				min, err := strconv.Atoi(t)
+			if tag, ok := f.Tag.Lookup("minLength"); ok {
+				min, err := strconv.ParseUint(tag, 10, 64)
 				if err != nil {
 					return nil, err
 				}
 				s.MinLength = &min
 			}
 
-			if t, ok := f.Tag.Lookup("maxLength"); ok {
-				max, err := strconv.Atoi(t)
+			if tag, ok := f.Tag.Lookup("maxLength"); ok {
+				max, err := strconv.ParseUint(tag, 10, 64)
 				if err != nil {
 					return nil, err
 				}
 				s.MaxLength = &max
 			}
 
-			if t, ok := f.Tag.Lookup("pattern"); ok {
-				s.Pattern = t
+			if tag, ok := f.Tag.Lookup("pattern"); ok {
+				s.Pattern = tag
+
+				if _, err := regexp.Compile(s.Pattern); err != nil {
+					return nil, err
+				}
 			}
 
-			if t, ok := f.Tag.Lookup("minItems"); ok {
-				min, err := strconv.Atoi(t)
+			if tag, ok := f.Tag.Lookup("minItems"); ok {
+				min, err := strconv.ParseUint(tag, 10, 64)
 				if err != nil {
 					return nil, err
 				}
 				s.MinItems = &min
 			}
 
-			if t, ok := f.Tag.Lookup("maxItems"); ok {
-				max, err := strconv.Atoi(t)
+			if tag, ok := f.Tag.Lookup("maxItems"); ok {
+				max, err := strconv.ParseUint(tag, 10, 64)
 				if err != nil {
 					return nil, err
 				}
 				s.MaxItems = &max
 			}
 
-			if t, ok := f.Tag.Lookup("uniqueItems"); ok {
-				s.UniqueItems = t == "true"
+			if tag, ok := f.Tag.Lookup("uniqueItems"); ok {
+				if !(tag == "true" || tag == "false") {
+					return nil, fmt.Errorf("%s uniqueItems: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
+				}
+				s.UniqueItems = tag == "true"
 			}
 
-			if t, ok := f.Tag.Lookup("minProperties"); ok {
-				min, err := strconv.Atoi(t)
+			if tag, ok := f.Tag.Lookup("minProperties"); ok {
+				min, err := strconv.ParseUint(tag, 10, 64)
 				if err != nil {
 					return nil, err
 				}
 				s.MinProperties = &min
 			}
 
-			if t, ok := f.Tag.Lookup("maxProperties"); ok {
-				max, err := strconv.Atoi(t)
+			if tag, ok := f.Tag.Lookup("maxProperties"); ok {
+				max, err := strconv.ParseUint(tag, 10, 64)
 				if err != nil {
 					return nil, err
 				}
 				s.MaxProperties = &max
 			}
 
-			if t, ok := f.Tag.Lookup("nullable"); ok {
-				if !(t == "true" || t == "false") {
+			if tag, ok := f.Tag.Lookup("nullable"); ok {
+				if !(tag == "true" || tag == "false") {
 					return nil, fmt.Errorf("%s nullable: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
 				}
-				s.Nullable = t == "true"
+				s.Nullable = tag == "true"
 			}
 
-			if t, ok := f.Tag.Lookup("readOnly"); ok {
-				if !(t == "true" || t == "false") {
+			if tag, ok := f.Tag.Lookup("readOnly"); ok {
+				if !(tag == "true" || tag == "false") {
 					return nil, fmt.Errorf("%s readOnly: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
 				}
-				s.ReadOnly = t == "true"
+				s.ReadOnly = tag == "true"
 			}
 
-			if t, ok := f.Tag.Lookup("writeOnly"); ok {
-				if !(t == "true" || t == "false") {
+			if tag, ok := f.Tag.Lookup("writeOnly"); ok {
+				if !(tag == "true" || tag == "false") {
 					return nil, fmt.Errorf("%s writeOnly: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
 				}
-				s.WriteOnly = t == "true"
+				s.WriteOnly = tag == "true"
 			}
 
-			if t, ok := f.Tag.Lookup("deprecated"); ok {
-				if !(t == "true" || t == "false") {
+			if tag, ok := f.Tag.Lookup("deprecated"); ok {
+				if !(tag == "true" || tag == "false") {
 					return nil, fmt.Errorf("%s deprecated: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
 				}
-				s.Deprecated = t == "true"
+				s.Deprecated = tag == "true"
 			}
 
 			optional := false
@@ -314,7 +332,7 @@ func GenerateSchema(t reflect.Type) (*Schema, error) {
 		}, nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		// Unsigned integers can't be negative.
-		min := 0
+		min := 0.0
 		return &Schema{
 			Type:    "integer",
 			Minimum: &min,
