@@ -334,8 +334,8 @@ func (r *Router) Register(op *Operation) {
 					}
 				}
 
-				if r.StatusCode == http.StatusNoContent {
-					// No body allowed.
+				if r.empty {
+					// No body allowed, e.g. for HTTP 204.
 					c.Status(r.StatusCode)
 					break
 				}

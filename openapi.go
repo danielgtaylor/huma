@@ -119,6 +119,7 @@ type Response struct {
 	StatusCode  int
 	Schema      *Schema
 	Headers     []string
+	empty       bool
 }
 
 // ResponseEmpty creates a new response with no content type.
@@ -127,6 +128,7 @@ func ResponseEmpty(statusCode int, description string, headers ...string) *Respo
 		Description: description,
 		StatusCode:  statusCode,
 		Headers:     headers,
+		empty:       true,
 	}
 }
 
@@ -150,7 +152,8 @@ func ResponseJSON(statusCode int, description string, headers ...string) *Respon
 	}
 }
 
-// ResponseError creates a new error response model. Alias for ResponseJSON.
+// ResponseError creates a new error response model. Alias for ResponseJSON
+// mainly useful for documentation.
 func ResponseError(status int, description string, headers ...string) *Response {
 	return ResponseJSON(status, description, headers...)
 }
@@ -170,6 +173,8 @@ func Header(name, description string) *ResponseHeader {
 	}
 }
 
+// SecurityRequirement defines the security schemes and scopes required to use
+// an operation.
 type SecurityRequirement map[string][]string
 
 // Operation describes an OpenAPI 3 operation on a path
