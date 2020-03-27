@@ -192,8 +192,8 @@ func (r *Router) PreStart(f func()) {
 }
 
 // SetDocsHandler sets the documentation rendering handler function. You can
-// use `huma.RapiDocHandler`, `huma.ReDocHandler`, or provide your own (e.g.
-// with custom auth).
+// use `huma.RapiDocHandler`, `huma.ReDocHandler`, `huma.SwaggerUIHandler`, or
+// provide your own (e.g. with custom auth or branding).
 func (r *Router) SetDocsHandler(f func(*gin.Context, *OpenAPI)) {
 	r.docsHandler = f
 }

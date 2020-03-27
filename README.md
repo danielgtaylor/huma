@@ -29,7 +29,7 @@ Features include:
   - Generates JSON Schema from Go types
   - Automatic input model validation & error handling
 - Dependency injection for loggers, datastores, etc
-- Documentation generation using [Redoc](https://github.com/Redocly/redoc)
+- Documentation generation using [RapiDoc](https://mrin9.github.io/RapiDoc/), [ReDoc](https://github.com/Redocly/redoc), or [SwaggerUI](https://swagger.io/tools/swagger-ui/)
 - CLI built-in, configured via arguments or environment variables
   - Set via e.g. `-p 8000`, `--port=8000`, or `SERVICE_PORT=8000`
 - Generates OpenAPI JSON for access to a rich ecosystem of tools
@@ -224,7 +224,7 @@ Great! But that's not all! Take a look at two more automatically-generated route
 
 For the docs, you should see something like this:
 
-<img width="1367" alt="Documentation  screenshot" src="https://user-images.githubusercontent.com/106826/76184508-746dfb00-6189-11ea-9e7d-f21ac58a2d19.png">
+<img width="1292" alt="Screen Shot 2020-03-26 at 9 11 52 PM" src="https://user-images.githubusercontent.com/106826/77720946-9ac3d100-6fa6-11ea-981f-dfc96bb5dd6a.png">
 
 Request models are essentially the same. Just define an extra input argument to the handler funtion and you get automatic loading and validation.
 
