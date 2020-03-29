@@ -498,3 +498,11 @@ func TestSchemaNonStringExampleErrorCast(t *testing.T) {
 	_, err := GenerateSchema(reflect.ValueOf(Example{}).Type())
 	assert.Error(t, err)
 }
+
+func TestPointerHelpers(t *testing.T) {
+	// Just confirm this compiles.
+	_ = Schema{
+		Minimum:   F(98.6),
+		MinLength: I(5),
+	}
+}

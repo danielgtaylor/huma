@@ -37,6 +37,18 @@ var (
 	byteSliceType = reflect.TypeOf([]byte(nil))
 )
 
+// I returns a pointer to the given int. Useful helper function for pointer
+// schema validators like MaxLength or MinItems.
+func I(value uint64) *uint64 {
+	return &value
+}
+
+// F returns a pointer to the given float64. Useful helper function for pointer
+// schema validators like Maximum or Minimum.
+func F(value float64) *float64 {
+	return &value
+}
+
 // getTagValue returns a value of the schema's type for the given tag string.
 // Uses JSON parsing if the schema is not a string.
 func getTagValue(s *Schema, t reflect.Type, value string) (interface{}, error) {
@@ -97,20 +109,34 @@ type Schema struct {
 	Deprecated           bool               `json:"deprecated,omitempty"`
 }
 
+// HasValidation returns true if at least one validator is set on the schema.
+// This excludes the schema's type but includes most other fields and can be
+// used to trigger additional slow validation steps when needed.
+func (s *Schema) HasValidation() bool {
+	if s.Items != nil || len(s.Properties) > 0 || s.AdditionalProperties != nil || len(s.PatternProperties) > 0 || len(s.Required) > 0 || len(s.Enum) > 0 || s.Minimum != nil || s.ExclusiveMinimum != nil || s.Maximum != nil || s.ExclusiveMaximum != nil || s.MultipleOf != 0 || s.MinLength != nil || s.MaxLength != nil || s.Pattern != "" || s.MinItems != nil || s.MaxItems != nil || s.UniqueItems || s.MinProperties != nil || s.MaxProperties != nil || len(s.AllOf) > 0 || len(s.AnyOf) > 0 || len(s.OneOf) > 0 || s.Not != nil {
+		return true
+	}
+
+	return false
+}
+
 // GenerateSchema creates a JSON schema for a Go type. Struct field tags
 // can be used to provide additional metadata such as descriptions and
 // validation.
 func GenerateSchema(t reflect.Type) (*Schema, error) {
-	return GenerateSchemaWithMode(t, SchemaModeAll)
+	return GenerateSchemaWithMode(t, SchemaModeAll, nil)
 }
 
 // GenerateSchemaWithMode creates a JSON schema for a Go type. Struct field
 // tags can be used to provide additional metadata such as descriptions and
 // validation. The mode can be all, read, or write. In read or write mode
 // any field that is marked as the opposite will be excluded, e.g. a
-// write-only field would not be included in read mode.
-func GenerateSchemaWithMode(t reflect.Type, mode SchemaMode) (*Schema, error) {
-	schema := &Schema{}
+// write-only field would not be included in read mode. If a schema is given
+// as input, add to it, otherwise creates a new schema.
+func GenerateSchemaWithMode(t reflect.Type, mode SchemaMode, schema *Schema) (*Schema, error) {
+	if schema == nil {
+		schema = &Schema{}
+	}
 
 	if t == ipType {
 		// Special case: IP address.
@@ -142,7 +168,7 @@ func GenerateSchemaWithMode(t reflect.Type, mode SchemaMode) (*Schema, error) {
 				name = jsonTags[0]
 			}
 
-			s, err := GenerateSchemaWithMode(f.Type, mode)
+			s, err := GenerateSchemaWithMode(f.Type, mode, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -347,37 +373,32 @@ func GenerateSchemaWithMode(t reflect.Type, mode SchemaMode) (*Schema, error) {
 
 	case reflect.Map:
 		schema.Type = "object"
-		s, err := GenerateSchemaWithMode(t.Elem(), mode)
+		s, err := GenerateSchemaWithMode(t.Elem(), mode, nil)
 		if err != nil {
 			return nil, err
 		}
 		schema.AdditionalProperties = s
 	case reflect.Slice, reflect.Array:
 		schema.Type = "array"
-		s, err := GenerateSchemaWithMode(t.Elem(), mode)
+		s, err := GenerateSchemaWithMode(t.Elem(), mode, nil)
 		if err != nil {
 			return nil, err
 		}
 		schema.Items = s
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return &Schema{
-			Type: "integer",
-		}, nil
+		schema.Type = "integer"
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		// Unsigned integers can't be negative.
-		min := 0.0
-		return &Schema{
-			Type:    "integer",
-			Minimum: &min,
-		}, nil
+		schema.Type = "integer"
+		schema.Minimum = F(0.0)
 	case reflect.Float32, reflect.Float64:
-		return &Schema{Type: "number"}, nil
+		schema.Type = "number"
 	case reflect.Bool:
-		return &Schema{Type: "boolean"}, nil
+		schema.Type = "boolean"
 	case reflect.String:
-		return &Schema{Type: "string"}, nil
+		schema.Type = "string"
 	case reflect.Ptr:
-		return GenerateSchemaWithMode(t.Elem(), mode)
+		return GenerateSchemaWithMode(t.Elem(), mode, schema)
 	default:
 		return nil, fmt.Errorf("unsupported type %s from %s", t.Kind(), t)
 	}

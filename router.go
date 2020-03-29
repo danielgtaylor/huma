@@ -21,7 +21,35 @@ import (
 // is not a valid value.
 var ErrInvalidParamLocation = errors.New("invalid parameter location")
 
-func getParamValue(c *gin.Context, param *Param) (interface{}, error) {
+// Checks if data validates against the given schema. Returns false on failure.
+func validAgainstSchema(c *gin.Context, schema *Schema, data []byte) bool {
+	loader := gojsonschema.NewGoLoader(schema)
+	doc := gojsonschema.NewBytesLoader(data)
+	s, err := gojsonschema.NewSchema(loader)
+	if err != nil {
+		panic(err)
+	}
+	result, err := s.Validate(doc)
+	if err != nil {
+		panic(err)
+	}
+
+	if !result.Valid() {
+		errors := []string{}
+		for _, desc := range result.Errors() {
+			errors = append(errors, fmt.Sprintf("%s", desc))
+		}
+		c.AbortWithStatusJSON(400, &ErrorInvalidModel{
+			Message: "Invalid input",
+			Errors:  errors,
+		})
+		return false
+	}
+
+	return true
+}
+
+func getParamValue(c *gin.Context, param *Param) (interface{}, bool) {
 	var pstr string
 	switch param.In {
 	case "path":
@@ -29,20 +57,33 @@ func getParamValue(c *gin.Context, param *Param) (interface{}, error) {
 	case "query":
 		pstr = c.Query(param.Name)
 		if pstr == "" {
-			return param.def, nil
+			return param.def, true
 		}
 	case "header":
 		pstr = c.GetHeader(param.Name)
 		if pstr == "" {
-			return param.def, nil
+			return param.def, true
 		}
 	default:
-		return nil, fmt.Errorf("%s: %w", param.In, ErrInvalidParamLocation)
+		panic(fmt.Errorf("%s: %w", param.In, ErrInvalidParamLocation))
 	}
 
 	if pstr == "" && !param.Required {
 		// Optional and not passed, so set it to its zero value.
-		return reflect.New(param.typ).Elem().Interface(), nil
+		return reflect.New(param.typ).Elem().Interface(), true
+	}
+
+	if param.Schema.HasValidation() {
+		data := pstr
+		if param.Schema.Type == "string" {
+			// Strings are special in that we don't expect users to provide them
+			// with quotes, so wrap them here for the parser that does the
+			// validation step below.
+			data = `"` + data + `"`
+		}
+		if !validAgainstSchema(c, param.Schema, []byte(data)) {
+			return nil, false
+		}
 	}
 
 	var pv interface{}
@@ -50,33 +91,45 @@ func getParamValue(c *gin.Context, param *Param) (interface{}, error) {
 	case reflect.Bool:
 		converted, err := strconv.ParseBool(pstr)
 		if err != nil {
-			return nil, err
+			c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
+				Message: fmt.Sprintf("cannot parse boolean for param %s: %s", param.Name, pstr),
+			})
+			return nil, false
 		}
 		pv = converted
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		converted, err := strconv.Atoi(pstr)
 		if err != nil {
-			return nil, err
+			c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
+				Message: fmt.Sprintf("cannot parse integer for param %s: %s", param.Name, pstr),
+			})
+			return nil, false
 		}
 		pv = reflect.ValueOf(converted).Convert(param.typ).Interface()
 	case reflect.Float32:
 		converted, err := strconv.ParseFloat(pstr, 32)
 		if err != nil {
-			return nil, err
+			c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
+				Message: fmt.Sprintf("cannot parse float for param %s: %s", param.Name, pstr),
+			})
+			return nil, false
 		}
 		pv = converted
 	case reflect.Float64:
 		converted, err := strconv.ParseFloat(pstr, 64)
 		if err != nil {
-			return nil, err
+			c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
+				Message: fmt.Sprintf("cannot parse float for param %s: %s", param.Name, pstr),
+			})
+			return nil, false
 		}
 		pv = converted
 	default:
 		pv = pstr
 	}
 
-	return pv, nil
+	return pv, true
 }
 
 func getRequestBody(c *gin.Context, t reflect.Type, op *Operation) (interface{}, bool) {
@@ -90,28 +143,7 @@ func getRequestBody(c *gin.Context, t reflect.Type, op *Operation) (interface{},
 
 		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 
-		loader := gojsonschema.NewGoLoader(op.RequestSchema)
-		doc := gojsonschema.NewBytesLoader(body)
-		s, err := gojsonschema.NewSchema(loader)
-		if err != nil {
-			c.AbortWithError(500, err)
-			return nil, false
-		}
-		result, err := s.Validate(doc)
-		if err != nil {
-			c.AbortWithError(500, err)
-			return nil, false
-		}
-
-		if !result.Valid() {
-			errors := []string{}
-			for _, desc := range result.Errors() {
-				errors = append(errors, fmt.Sprintf("%s", desc))
-			}
-			c.AbortWithStatusJSON(400, &ErrorInvalidModel{
-				Message: "Invalid input",
-				Errors:  errors,
-			})
+		if !validAgainstSchema(c, op.RequestSchema, body) {
 			return nil, false
 		}
 	}
@@ -255,10 +287,14 @@ func (r *Router) Register(op *Operation) {
 			headers, value, err := dep.Resolve(c, op)
 			if err != nil {
 				// TODO: better error handling
-				c.AbortWithStatusJSON(500, ErrorModel{
-					Message: "Couldn't get dependency",
-					//Errors:  []error{err},
-				})
+				if !c.IsAborted() {
+					// Nothing else has handled the error, so treat it like a general
+					// internal server error.
+					c.AbortWithStatusJSON(500, &ErrorModel{
+						Message: "Couldn't get dependency",
+						//Errors:  []error{err},
+					})
+				}
 			}
 
 			for k, v := range headers {
@@ -269,10 +305,9 @@ func (r *Router) Register(op *Operation) {
 		}
 
 		for _, param := range op.Params {
-			pv, err := getParamValue(c, param)
-			if err != nil {
-				// TODO expose error to user
-				c.AbortWithError(400, err)
+			pv, ok := getParamValue(c, param)
+			if !ok {
+				// Error has already been handled.
 				return
 			}
 

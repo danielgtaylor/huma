@@ -57,10 +57,18 @@ func LogMiddleware(l *zap.Logger, tags map[string]string) func(*gin.Context) {
 
 		c.Next()
 
-		contextLog.Debug("Request",
+		contextLog = contextLog.With(
 			zap.Int("status", c.Writer.Status()),
 			zap.Duration("duration", time.Since(start)),
 		)
+
+		if len(c.Errors) > 0 {
+			for _, e := range c.Errors {
+				contextLog.Error("Error", zap.Error(e.Err))
+			}
+		}
+
+		contextLog.Debug("Request")
 	}
 }
 

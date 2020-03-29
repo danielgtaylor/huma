@@ -185,9 +185,9 @@ func (d *Dependency) Resolve(c *gin.Context, op *Operation) (map[string]string, 
 
 	// Get each input parameter
 	for _, param := range d.Params {
-		v, err := getParamValue(c, param)
-		if err != nil {
-			return nil, nil, err
+		v, ok := getParamValue(c, param)
+		if !ok {
+			return nil, nil, fmt.Errorf("could not get param value")
 		}
 
 		in = append(in, reflect.ValueOf(v))

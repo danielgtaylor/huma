@@ -28,45 +28,47 @@ type Param struct {
 }
 
 // PathParam returns a new required path parameter
-func PathParam(name string, description string) *Param {
-	return &Param{
-		Name:        name,
-		Description: description,
-		In:          "path",
-		Required:    true,
-	}
+func PathParam(name string, description string, schema ...*Schema) *Param {
+	return PathParamExample(name, description, nil, schema...)
 }
 
 // PathParamExample returns a new required path parameter with example
-func PathParamExample(name string, description string, example interface{}) *Param {
-	return &Param{
+func PathParamExample(name string, description string, example interface{}, schema ...*Schema) *Param {
+	p := &Param{
 		Name:        name,
 		Description: description,
 		In:          "path",
 		Required:    true,
 		Example:     example,
 	}
+
+	if len(schema) > 0 {
+		p.Schema = schema[0]
+	}
+
+	return p
 }
 
 // QueryParam returns a new optional query string parameter
-func QueryParam(name string, description string, defaultValue interface{}) *Param {
-	return &Param{
-		Name:        name,
-		Description: description,
-		In:          "query",
-		def:         defaultValue,
-	}
+func QueryParam(name string, description string, defaultValue interface{}, schema ...*Schema) *Param {
+	return QueryParamExample(name, description, defaultValue, nil, schema...)
 }
 
 // QueryParamExample returns a new optional query string parameter with example
-func QueryParamExample(name string, description string, defaultValue interface{}, example interface{}) *Param {
-	return &Param{
+func QueryParamExample(name string, description string, defaultValue interface{}, example interface{}, schema ...*Schema) *Param {
+	p := &Param{
 		Name:        name,
 		Description: description,
 		In:          "query",
 		Example:     example,
 		def:         defaultValue,
 	}
+
+	if len(schema) > 0 {
+		p.Schema = schema[0]
+	}
+
+	return p
 }
 
 // QueryParamInternal returns a new optional internal query string parameter
@@ -81,24 +83,25 @@ func QueryParamInternal(name string, description string, defaultValue interface{
 }
 
 // HeaderParam returns a new optional header parameter
-func HeaderParam(name string, description string, defaultValue interface{}) *Param {
-	return &Param{
-		Name:        name,
-		Description: description,
-		In:          "header",
-		def:         defaultValue,
-	}
+func HeaderParam(name string, description string, defaultValue interface{}, schema ...*Schema) *Param {
+	return HeaderParamExample(name, description, defaultValue, nil, schema...)
 }
 
 // HeaderParamExample returns a new optional header parameter with example
-func HeaderParamExample(name string, description string, defaultValue interface{}, example interface{}) *Param {
-	return &Param{
+func HeaderParamExample(name string, description string, defaultValue interface{}, example interface{}, schema ...*Schema) *Param {
+	p := &Param{
 		Name:        name,
 		Description: description,
 		In:          "header",
 		Example:     example,
 		def:         defaultValue,
 	}
+
+	if len(schema) > 0 {
+		p.Schema = schema[0]
+	}
+
+	return p
 }
 
 // HeaderParamInternal returns a new optional internal header parameter
