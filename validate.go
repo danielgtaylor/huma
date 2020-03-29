@@ -52,7 +52,7 @@ func (p *Param) validate(t reflect.Type) error {
 	p.typ = t
 
 	if p.Schema == nil {
-		s, err := GenerateSchema(p.typ)
+		s, err := GenerateSchemaWithMode(p.typ, SchemaModeWrite)
 		if err != nil {
 			return err
 		}
@@ -76,7 +76,7 @@ func (p *Param) validate(t reflect.Type) error {
 func (h *ResponseHeader) validate(t reflect.Type) error {
 	if h.Schema == nil {
 		// Generate the schema from the handler function types.
-		s, err := GenerateSchema(t)
+		s, err := GenerateSchemaWithMode(t, SchemaModeRead)
 		if err != nil {
 			return err
 		}
@@ -197,7 +197,7 @@ func (o *Operation) validate() error {
 		if i == len(types)-1 && requestBody {
 			// The last item has no associated param. It is a request body.
 			if o.RequestSchema == nil {
-				s, err := GenerateSchema(paramType)
+				s, err := GenerateSchemaWithMode(paramType, SchemaModeWrite)
 				if err != nil {
 					return err
 				}
@@ -223,7 +223,7 @@ func (o *Operation) validate() error {
 		// HTTP 204 explicitly forbids a response body.
 		if resp.StatusCode != 204 && resp.Schema == nil {
 			// Generate the schema from the handler function types.
-			s, err := GenerateSchema(respType)
+			s, err := GenerateSchemaWithMode(respType, SchemaModeRead)
 			if err != nil {
 				return err
 			}

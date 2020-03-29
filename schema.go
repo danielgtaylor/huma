@@ -16,6 +16,20 @@ import (
 // ErrSchemaInvalid is sent when there is a problem building the schema.
 var ErrSchemaInvalid = errors.New("schema is invalid")
 
+// SchemaMode defines whether the schema is being generated for read or
+// write mode. Read-only fields are dropped when in write mode, for example.
+type SchemaMode int
+
+const (
+	// SchemaModeAll is for general purpose use and includes all fields.
+	SchemaModeAll SchemaMode = iota
+	// SchemaModeRead is for HTTP HEAD & GET and will hide write-only fields.
+	SchemaModeRead
+	// SchemaModeWrite is for HTTP POST, PUT, PATCH, DELETE and will hide
+	// read-only fields.
+	SchemaModeWrite
+)
+
 var (
 	timeType      = reflect.TypeOf(time.Time{})
 	ipType        = reflect.TypeOf(net.IP{})
@@ -87,6 +101,15 @@ type Schema struct {
 // can be used to provide additional metadata such as descriptions and
 // validation.
 func GenerateSchema(t reflect.Type) (*Schema, error) {
+	return GenerateSchemaWithMode(t, SchemaModeAll)
+}
+
+// GenerateSchemaWithMode creates a JSON schema for a Go type. Struct field
+// tags can be used to provide additional metadata such as descriptions and
+// validation. The mode can be all, read, or write. In read or write mode
+// any field that is marked as the opposite will be excluded, e.g. a
+// write-only field would not be included in read mode.
+func GenerateSchemaWithMode(t reflect.Type, mode SchemaMode) (*Schema, error) {
 	schema := &Schema{}
 
 	if t == ipType {
@@ -119,7 +142,7 @@ func GenerateSchema(t reflect.Type) (*Schema, error) {
 				name = jsonTags[0]
 			}
 
-			s, err := GenerateSchema(f.Type)
+			s, err := GenerateSchemaWithMode(f.Type, mode)
 			if err != nil {
 				return nil, err
 			}
@@ -277,6 +300,11 @@ func GenerateSchema(t reflect.Type) (*Schema, error) {
 					return nil, fmt.Errorf("%s readOnly: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
 				}
 				s.ReadOnly = tag == "true"
+
+				if s.ReadOnly && mode == SchemaModeWrite {
+					delete(properties, name)
+					continue
+				}
 			}
 
 			if tag, ok := f.Tag.Lookup("writeOnly"); ok {
@@ -284,6 +312,11 @@ func GenerateSchema(t reflect.Type) (*Schema, error) {
 					return nil, fmt.Errorf("%s writeOnly: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
 				}
 				s.WriteOnly = tag == "true"
+
+				if s.WriteOnly && mode == SchemaModeRead {
+					delete(properties, name)
+					continue
+				}
 			}
 
 			if tag, ok := f.Tag.Lookup("deprecated"); ok {
@@ -314,14 +347,14 @@ func GenerateSchema(t reflect.Type) (*Schema, error) {
 
 	case reflect.Map:
 		schema.Type = "object"
-		s, err := GenerateSchema(t.Elem())
+		s, err := GenerateSchemaWithMode(t.Elem(), mode)
 		if err != nil {
 			return nil, err
 		}
 		schema.AdditionalProperties = s
 	case reflect.Slice, reflect.Array:
 		schema.Type = "array"
-		s, err := GenerateSchema(t.Elem())
+		s, err := GenerateSchemaWithMode(t.Elem(), mode)
 		if err != nil {
 			return nil, err
 		}
@@ -344,7 +377,7 @@ func GenerateSchema(t reflect.Type) (*Schema, error) {
 	case reflect.String:
 		return &Schema{Type: "string"}, nil
 	case reflect.Ptr:
-		return GenerateSchema(t.Elem())
+		return GenerateSchemaWithMode(t.Elem(), mode)
 	default:
 		return nil, fmt.Errorf("unsupported type %s from %s", t.Kind(), t)
 	}
