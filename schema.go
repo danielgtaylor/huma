@@ -162,9 +162,8 @@ func GenerateSchemaWithMode(t reflect.Type, mode SchemaMode, schema *Schema) (*S
 			f := t.Field(i)
 
 			jsonTags := strings.Split(f.Tag.Get("json"), ",")
-
-			name := f.Name
-			if len(jsonTags) > 0 {
+			name := strings.ToLower(f.Name)
+			if len(jsonTags) > 0 && jsonTags[0] != "" {
 				name = jsonTags[0]
 			}
 
