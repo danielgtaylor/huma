@@ -2,6 +2,7 @@ package huma
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -12,6 +13,26 @@ import (
 )
 
 var logLevel *zap.AtomicLevel
+
+// Recovery prints stack traces on panic when used with the logging middleware.
+func Recovery() func(*gin.Context) {
+	return func(c *gin.Context) {
+		defer func() {
+			if err := recover(); err != nil {
+				if l, ok := c.Get("log"); ok {
+					if log, ok := l.(*zap.SugaredLogger); ok {
+						log.With(zap.Error(err.(error))).Error("Caught panic")
+					}
+				}
+
+				c.AbortWithStatusJSON(http.StatusInternalServerError, &ErrorModel{
+					Message: "Internal server error",
+				})
+			}
+		}()
+		c.Next()
+	}
+}
 
 // NewLogger returns a new low-level `*zap.Logger` instance. If the current
 // terminal is a TTY, it will try ot use colored output automatically.

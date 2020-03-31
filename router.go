@@ -171,9 +171,9 @@ type Router struct {
 // CORS (allowing all origins), and log middlewares.
 func NewRouter(api *OpenAPI) *Router {
 	g := gin.New()
-	g.Use(gin.Recovery())
-	g.Use(cors.Default())
+	g.Use(Recovery())
 	g.Use(LogMiddleware(nil, nil))
+	g.Use(cors.Default())
 	return NewRouterWithGin(g, api)
 }
 
