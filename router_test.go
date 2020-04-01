@@ -9,10 +9,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap/zaptest"
 )
 
 func init() {
 	gin.SetMode(gin.TestMode)
+}
+
+func NewTestRouter(t *testing.T) *Router {
+	l := zaptest.NewLogger(t)
+	g := gin.New()
+	g.Use(Recovery())
+	g.Use(LogMiddleware(l, nil))
+	return NewRouterWithGin(g, &OpenAPI{Title: "Test API", Version: "1.0.0"})
 }
 
 type helloResponse struct {
@@ -41,9 +50,7 @@ func BenchmarkHuma(b *testing.B) {
 		Title:   "Benchmark test",
 		Version: "1.0.0",
 	})
-	r.Register(&Operation{
-		Method:      http.MethodGet,
-		Path:        "/hello",
+	r.Register(http.MethodGet, "/hello", &Operation{
 		Description: "Greet the world",
 		Responses: []*Response{
 			ResponseJSON(200, "Return a greeting"),
@@ -137,9 +144,7 @@ func BenchmarkHumaComplex(b *testing.B) {
 		},
 	}
 
-	r.Register(&Operation{
-		Method:      http.MethodGet,
-		Path:        "/hello",
+	r.Register(http.MethodGet, "/hello", &Operation{
 		Description: "Greet the world",
 		Dependencies: []*Dependency{
 			ContextDependency(), dep2, dep3,
@@ -188,9 +193,7 @@ func TestRouter(t *testing.T) {
 
 	r := NewRouterWithGin(gin.New(), &OpenAPI{Title: "My API", Version: "1.0.0"})
 
-	r.Register(&Operation{
-		Method:      http.MethodPut,
-		Path:        "/echo/:word",
+	r.Register(http.MethodPut, "/echo/{word}", &Operation{
 		Description: "Echo back an input word.",
 		Params: []*Param{
 			PathParam("word", "The word to echo back"),
@@ -254,9 +257,7 @@ func TestRouterRequestBody(t *testing.T) {
 
 	r := NewRouterWithGin(gin.New(), &OpenAPI{Title: "My API", Version: "1.0.0"})
 
-	r.Register(&Operation{
-		Method:      http.MethodPut,
-		Path:        "/echo",
+	r.Register(http.MethodPut, "/echo", &Operation{
 		Description: "Echo back an input word.",
 		Responses: []*Response{
 			ResponseJSON(http.StatusOK, "Successful echo response"),
@@ -282,9 +283,7 @@ func TestRouterRequestBody(t *testing.T) {
 func TestRouterScalarResponse(t *testing.T) {
 	r := NewRouterWithGin(gin.New(), &OpenAPI{Title: "My API", Version: "1.0.0"})
 
-	r.Register(&Operation{
-		Method:      http.MethodPut,
-		Path:        "/hello",
+	r.Register(http.MethodPut, "/hello", &Operation{
 		Description: "Say hello.",
 		Responses: []*Response{
 			ResponseText(http.StatusOK, "Successful hello response"),
@@ -305,9 +304,7 @@ func TestRouterScalarResponse(t *testing.T) {
 func TestRouterZeroScalarResponse(t *testing.T) {
 	r := NewRouterWithGin(gin.New(), &OpenAPI{Title: "My API", Version: "1.0.0"})
 
-	r.Register(&Operation{
-		Method:      http.MethodPut,
-		Path:        "/bool",
+	r.Register(http.MethodPut, "/bool", &Operation{
 		Description: "Say hello.",
 		Responses: []*Response{
 			ResponseText(http.StatusOK, "Successful zero bool response"),
@@ -329,9 +326,7 @@ func TestRouterZeroScalarResponse(t *testing.T) {
 func TestRouterResponseHeaders(t *testing.T) {
 	r := NewRouterWithGin(gin.New(), &OpenAPI{Title: "My API", Version: "1.0.0"})
 
-	r.Register(&Operation{
-		Method:      http.MethodGet,
-		Path:        "/test",
+	r.Register(http.MethodGet, "/test", &Operation{
 		Description: "Test operation",
 		ResponseHeaders: []*ResponseHeader{
 			Header("Etag", "Identifies a specific version of this resource"),
@@ -394,9 +389,7 @@ func TestRouterDependencies(t *testing.T) {
 		},
 	}
 
-	r.Register(&Operation{
-		Method:       http.MethodGet,
-		Path:         "/hello",
+	r.Register(http.MethodGet, "/hello", &Operation{
 		Description:  "Basic hello world",
 		Dependencies: []*Dependency{ContextDependency(), db, log},
 		Params: []*Param{

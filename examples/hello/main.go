@@ -14,9 +14,7 @@ func main() {
 	})
 
 	// Create the "hello" operation via `GET /hello`.
-	r.Register(&huma.Operation{
-		Method:      http.MethodGet,
-		Path:        "/hello",
+	r.Resource("/hello").Get(&huma.Operation{
 		Description: "Basic hello world",
 		// Every response definition includes the HTTP status code to return, the
 		// content type to use, and a description for documentation.

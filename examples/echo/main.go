@@ -17,9 +17,7 @@ func main() {
 		Version: "1.0.0",
 	})
 
-	r.Register(&huma.Operation{
-		Method:      http.MethodPut,
-		Path:        "/echo/{word}",
+	r.Resource("/echo").Put(&huma.Operation{
 		Description: "Echo back an input word.",
 		Params: []*huma.Param{
 			huma.PathParam("word", "The word to echo back"),

@@ -33,15 +33,9 @@ func main() {
 		Version: "1.0.0",
 	})
 
-	// Create the "list-notes" operation via `GET /notes`.
-	r.Register(&huma.Operation{
-		Method:      http.MethodGet,
-		Path:        "/notes",
-		Description: "Returns a list of all notes",
-		Responses: []*huma.Response{
-			huma.ResponseJSON(http.StatusOK, "Successful hello response"),
-		},
-		Handler: func() []*NoteSummary {
+	notes := r.Resource("/notes")
+	notes.ListJSON(http.StatusOK, "Returns a list of all notes",
+		func() []*NoteSummary {
 			dbLock.Lock()
 			defer dbLock.Unlock()
 
@@ -57,46 +51,16 @@ func main() {
 
 			return summaries
 		},
-	})
+	)
 
-	// idParam defines the note's ID as part of the URL path.
-	idParam := huma.PathParam("id", "Note ID", &huma.Schema{
+	note := notes.With(huma.PathParam("id", "Note ID", &huma.Schema{
 		Pattern: "^[a-zA-Z0-9._-]{1,32}$",
-	})
+	}))
 
-	r.Register(&huma.Operation{
-		Method:      http.MethodGet,
-		Path:        "/notes/{id}",
-		Description: "Get a single note by its ID",
-		Params:      []*huma.Param{idParam},
-		Responses: []*huma.Response{
-			huma.ResponseJSON(200, "Success"),
-			huma.ResponseError(404, "Note was not found"),
-		},
-		Handler: func(id string) (*Note, *huma.ErrorModel) {
-			dbLock.Lock()
-			defer dbLock.Unlock()
+	notFound := huma.ResponseError(http.StatusNotFound, "Note not found")
 
-			if note, ok := memoryDB[id]; ok {
-				// Note with that ID exists!
-				return note, nil
-			}
-
-			return nil, &huma.ErrorModel{
-				Message: "Note " + id + " not found",
-			}
-		},
-	})
-
-	r.Register(&huma.Operation{
-		Method:      http.MethodPut,
-		Path:        "/notes/{id}",
-		Description: "Creates or updates a note",
-		Params:      []*huma.Param{idParam},
-		Responses: []*huma.Response{
-			huma.ResponseEmpty(204, "Successfully created or updated the note"),
-		},
-		Handler: func(id string, note *Note) bool {
+	note.PutNoContent(http.StatusNoContent, "Create or update a note",
+		func(id string, note *Note) bool {
 			dbLock.Lock()
 			defer dbLock.Unlock()
 
@@ -107,32 +71,40 @@ func main() {
 			// Empty responses don't have a body, so you can just return `true`.
 			return true
 		},
-	})
+	)
 
-	r.Register(&huma.Operation{
-		Method:      http.MethodDelete,
-		Path:        "/notes/{id}",
-		Description: "Deletes a note",
-		Params:      []*huma.Param{idParam},
-		Responses: []*huma.Response{
-			huma.ResponseEmpty(204, "Successfuly deleted note"),
-			huma.ResponseError(404, "Note was not found"),
+	note.With(notFound).GetJSON(http.StatusOK, "Get a note by its ID",
+		func(id string) (*huma.ErrorModel, *Note) {
+			dbLock.Lock()
+			defer dbLock.Unlock()
+
+			if note, ok := memoryDB[id]; ok {
+				// Note with that ID exists!
+				return nil, note
+			}
+
+			return &huma.ErrorModel{
+				Message: "Note " + id + " not found",
+			}, nil
 		},
-		Handler: func(id string) (bool, *huma.ErrorModel) {
+	)
+
+	note.With(notFound).DeleteNoContent(http.StatusNoContent, "Successfully deleted note",
+		func(id string) (*huma.ErrorModel, bool) {
 			dbLock.Lock()
 			defer dbLock.Unlock()
 
 			if _, ok := memoryDB[id]; ok {
 				// Note with that ID exists!
 				delete(memoryDB, id)
-				return true, nil
+				return nil, true
 			}
 
-			return false, &huma.ErrorModel{
+			return &huma.ErrorModel{
 				Message: "Note " + id + " not found",
-			}
+			}, false
 		},
-	})
+	)
 
 	// Run the app!
 	r.Run()

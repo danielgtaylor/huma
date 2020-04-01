@@ -183,8 +183,6 @@ type SecurityRequirement map[string][]string
 // Operation describes an OpenAPI 3 operation on a path
 type Operation struct {
 	ID                 string
-	Method             string
-	Path               string
 	Summary            string
 	Description        string
 	Tags               []string
@@ -354,7 +352,7 @@ type OpenAPI struct {
 	Servers         []*Server
 	SecuritySchemes map[string]*SecurityScheme
 	Security        []SecurityRequirement
-	Paths           map[string][]*Operation
+	Paths           map[string]map[string]*Operation
 	Extra           map[string]interface{}
 }
 
@@ -393,16 +391,14 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 			openapi.Set(api.Security, "security")
 		}
 
-		// spew.Dump(m.paths)
-
-		for path, operations := range api.Paths {
+		for path, methods := range api.Paths {
 			if strings.Contains(path, ":") {
 				// Convert from gin-style params to OpenAPI-style params
 				path = paramRe.ReplaceAllString(path, "{$1$2}")
 			}
 
-			for _, op := range operations {
-				method := strings.ToLower(op.Method)
+			for method, op := range methods {
+				method := strings.ToLower(method)
 
 				for k, v := range op.Extra {
 					openapi.Set(v, "paths", path, method, k)

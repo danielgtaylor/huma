@@ -35,9 +35,7 @@ func main() {
 		},
 	}
 
-	r.Register(&huma.Operation{
-		Method:       http.MethodGet,
-		Path:         "/items/{id}",
+	r.Resource("/items").Get(&huma.Operation{
 		Description:  "FastAPI benchmark test",
 		Dependencies: []*huma.Dependency{d},
 		Params: []*huma.Param{

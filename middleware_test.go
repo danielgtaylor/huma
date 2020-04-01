@@ -20,9 +20,7 @@ func TestRecoveryMiddleware(t *testing.T) {
 
 	r := NewRouterWithGin(g, &OpenAPI{Title: "My API", Version: "1.0.0"})
 
-	r.Register(&Operation{
-		Method:      http.MethodGet,
-		Path:        "/panic",
+	r.Register(http.MethodGet, "/panic", &Operation{
 		Description: "Panic recovery test",
 		Responses: []*Response{
 			ResponseText(http.StatusOK, "Success"),

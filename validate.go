@@ -88,15 +88,7 @@ func (h *ResponseHeader) validate(t reflect.Type) error {
 
 // validate checks that the operation is well-formed (e.g. handler signature
 // matches the given params) and generates schemas if needed.
-func (o *Operation) validate() error {
-	if o.Method == "" {
-		return fmt.Errorf("method field required: %w", ErrOperationInvalid)
-	}
-
-	if o.Path == "" {
-		return fmt.Errorf("path field required: %w", ErrOperationInvalid)
-	}
-
+func (o *Operation) validate(method, path string) error {
 	if o.Description == "" {
 		return fmt.Errorf("description field required: %w", ErrOperationInvalid)
 	}
@@ -109,11 +101,11 @@ func (o *Operation) validate() error {
 		return fmt.Errorf("handler is required: %w", ErrOperationInvalid)
 	}
 
-	method := reflect.ValueOf(o.Handler).Type()
+	handler := reflect.ValueOf(o.Handler).Type()
 
 	totalIn := len(o.Dependencies) + len(o.Params)
 	totalOut := len(o.ResponseHeaders) + len(o.Responses)
-	if !(method.NumIn() == totalIn || (o.Method != http.MethodGet && method.NumIn() == totalIn+1)) || method.NumOut() != totalOut {
+	if !(handler.NumIn() == totalIn || (method != http.MethodGet && handler.NumIn() == totalIn+1)) || handler.NumOut() != totalOut {
 		expected := "func("
 		for _, dep := range o.Dependencies {
 			expected += "? " + reflect.ValueOf(dep.Value).Type().String() + ", "
@@ -132,33 +124,28 @@ func (o *Operation) validate() error {
 		expected = strings.TrimRight(expected, ", ")
 		expected += ")"
 
-		return fmt.Errorf("expected %s but found %s: %w", expected, method, ErrOperationInvalid)
+		return fmt.Errorf("expected %s but found %s: %w", expected, handler, ErrOperationInvalid)
 	}
 
 	if o.ID == "" {
-		verb := o.Method
+		verb := method
 
 		// Try to detect calls returning lists of things.
-		if method.NumOut() > 0 {
-			k := method.Out(0).Kind()
+		if handler.NumOut() > 0 {
+			k := handler.Out(0).Kind()
 			if k == reflect.Array || k == reflect.Slice {
 				verb = "list"
 			}
 		}
 
 		// Remove variables from path so they aren't in the generated name.
-		path := paramRe.ReplaceAllString(o.Path, "")
+		path := paramRe.ReplaceAllString(path, "")
 
 		o.ID = slug.Make(verb + path)
 	}
 
-	if strings.Contains(o.Path, "{") {
-		// Convert from OpenAPI-style parameters to gin-style params
-		o.Path = paramRe.ReplaceAllString(o.Path, ":$1$2")
-	}
-
 	for i, dep := range o.Dependencies {
-		paramType := method.In(i)
+		paramType := handler.In(i)
 
 		// Catch common errors.
 		if paramType.String() == "gin.Context" {
@@ -175,8 +162,8 @@ func (o *Operation) validate() error {
 	}
 
 	types := []reflect.Type{}
-	for i := len(o.Dependencies); i < method.NumIn(); i++ {
-		paramType := method.In(i)
+	for i := len(o.Dependencies); i < handler.NumIn(); i++ {
+		paramType := handler.In(i)
 
 		switch paramType.String() {
 		case "gin.Context", "*gin.Context":
@@ -213,13 +200,13 @@ func (o *Operation) validate() error {
 	}
 
 	for i, header := range o.ResponseHeaders {
-		if err := header.validate(method.Out(i)); err != nil {
+		if err := header.validate(handler.Out(i)); err != nil {
 			return err
 		}
 	}
 
 	for i, resp := range o.Responses {
-		respType := method.Out(len(o.ResponseHeaders) + i)
+		respType := handler.Out(len(o.ResponseHeaders) + i)
 		// HTTP 204 explicitly forbids a response body.
 		if resp.StatusCode != 204 && resp.Schema == nil {
 			// Generate the schema from the handler function types.

@@ -164,10 +164,8 @@ func TestOpenAPIHandler(t *testing.T) {
 		},
 	})
 
-	r.Register(&Operation{
+	r.Register(http.MethodPut, "/hello", &Operation{
 		ID:          "put-hello",
-		Method:      http.MethodPut,
-		Path:        "/hello",
 		Summary:     "Summary message",
 		Description: "Get a welcome message",
 		Tags:        []string{"Messages"},

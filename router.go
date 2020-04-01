@@ -194,7 +194,7 @@ func NewRouterWithGin(engine *gin.Engine, api *OpenAPI) *Router {
 	r.setupCLI()
 
 	if r.api.Paths == nil {
-		r.api.Paths = make(map[string][]*Operation)
+		r.api.Paths = make(map[string]map[string]*Operation)
 	}
 
 	// Set up handlers for the auto-generated spec and docs.
@@ -240,25 +240,31 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	r.engine.ServeHTTP(w, req)
 }
 
+// Resource creates a new resource at the given path with the given
+// dependencies, parameters, response headers, and responses defined.
+func (r *Router) Resource(path string, depsParamsHeadersOrResponses ...interface{}) *Resource {
+	return NewResource(r, path).With(depsParamsHeadersOrResponses...)
+}
+
 // Register a new operation.
-func (r *Router) Register(op *Operation) {
+func (r *Router) Register(method, path string, op *Operation) {
 	// First, make sure the operation and handler make sense, as well as pre-
 	// generating any schemas for use later during request handling.
-	if err := op.validate(); err != nil {
+	if err := op.validate(method, path); err != nil {
 		panic(err)
 	}
 
 	// Add the operation to the list of operations for the path entry.
-	if r.api.Paths[op.Path] == nil {
-		r.api.Paths[op.Path] = make([]*Operation, 0, 1)
+	if r.api.Paths[path] == nil {
+		r.api.Paths[path] = make(map[string]*Operation)
 	}
 
-	r.api.Paths[op.Path] = append(r.api.Paths[op.Path], op)
+	r.api.Paths[path][method] = op
 
 	// Next, figure out which Gin function to call.
 	var f func(string, ...gin.HandlerFunc) gin.IRoutes
 
-	switch op.Method {
+	switch method {
 	case "OPTIONS":
 		f = r.engine.OPTIONS
 	case "HEAD":
@@ -274,11 +280,16 @@ func (r *Router) Register(op *Operation) {
 	case "DELETE":
 		f = r.engine.DELETE
 	default:
-		panic("unsupported HTTP method")
+		panic("unsupported HTTP method " + method)
+	}
+
+	if strings.Contains(path, "{") {
+		// Convert from OpenAPI-style parameters to gin-style params
+		path = paramRe.ReplaceAllString(path, ":$1$2")
 	}
 
 	// Then call it to register our handler function.
-	f(op.Path, func(c *gin.Context) {
+	f(path, func(c *gin.Context) {
 		method := reflect.ValueOf(op.Handler)
 		in := make([]reflect.Value, 0, method.Type().NumIn())
 

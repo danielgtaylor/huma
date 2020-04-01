@@ -91,14 +91,9 @@ func main() {
 		Version: "1.0.0",
 	})
 
-	r.Register(&huma.Operation{
-		Method:      http.MethodGet,
-		Path:        "/notes",
-		Description: "Returns a list of all notes",
-		Responses: []*huma.Response{
-			huma.ResponseJSON(http.StatusOK, "Successful hello response"),
-		},
-		Handler: func() []*NoteSummary {
+	notes := r.Resource("/notes")
+	notes.ListJSON(http.StatusOK, "Returns a list of all notes",
+		func() []*NoteSummary {
 			dbLock.Lock()
 			defer dbLock.Unlock()
 
@@ -114,46 +109,16 @@ func main() {
 
 			return summaries
 		},
-	})
+	)
 
-	// idParam defines the note's ID as part of the URL path.
-	idParam := huma.PathParam("id", "Note ID", &huma.Schema{
+	note := notes.With(huma.PathParam("id", "Note ID", &huma.Schema{
 		Pattern: "^[a-zA-Z0-9._-]{1,32}$",
-	})
+	}))
 
-	r.Register(&huma.Operation{
-		Method:      http.MethodGet,
-		Path:        "/notes/{id}",
-		Description: "Get a single note by its ID",
-		Params:      []*huma.Param{idParam},
-		Responses: []*huma.Response{
-			huma.ResponseJSON(200, "Success"),
-			huma.ResponseError(404, "Note was not found"),
-		},
-		Handler: func(id string) (*Note, *huma.ErrorModel) {
-			dbLock.Lock()
-			defer dbLock.Unlock()
+	notFound := huma.ResponseError(http.StatusNotFound, "Note not found")
 
-			if note, ok := memoryDB[id]; ok {
-				// Note with that ID exists!
-				return note, nil
-			}
-
-			return nil, &huma.ErrorModel{
-				Message: "Note " + id + " not found",
-			}
-		},
-	})
-
-	r.Register(&huma.Operation{
-		Method:      http.MethodPut,
-		Path:        "/notes/{id}",
-		Description: "Creates or updates a note",
-		Params:      []*huma.Param{idParam},
-		Responses: []*huma.Response{
-			huma.ResponseEmpty(204, "Successfully created or updated the note"),
-		},
-		Handler: func(id string, note *Note) bool {
+	note.PutNoContent(http.StatusNoContent, "Create or update a note",
+		func(id string, note *Note) bool {
 			dbLock.Lock()
 			defer dbLock.Unlock()
 
@@ -164,32 +129,40 @@ func main() {
 			// Empty responses don't have a body, so you can just return `true`.
 			return true
 		},
-	})
+	)
 
-	r.Register(&huma.Operation{
-		Method:      http.MethodDelete,
-		Path:        "/notes/{id}",
-		Description: "Deletes a note",
-		Params:      []*huma.Param{idParam},
-		Responses: []*huma.Response{
-			huma.ResponseEmpty(204, "Successfuly deleted note"),
-			huma.ResponseError(404, "Note was not found"),
+	note.With(notFound).GetJSON(http.StatusOK, "Get a note by its ID",
+		func(id string) (*huma.ErrorModel, *Note) {
+			dbLock.Lock()
+			defer dbLock.Unlock()
+
+			if note, ok := memoryDB[id]; ok {
+				// Note with that ID exists!
+				return nil, note
+			}
+
+			return &huma.ErrorModel{
+				Message: "Note " + id + " not found",
+			}, nil
 		},
-		Handler: func(id string) (bool, *huma.ErrorModel) {
+	)
+
+	note.With(notFound).DeleteNoContent(http.StatusNoContent, "Successfully deleted note",
+		func(id string) (*huma.ErrorModel, bool) {
 			dbLock.Lock()
 			defer dbLock.Unlock()
 
 			if _, ok := memoryDB[id]; ok {
 				// Note with that ID exists!
 				delete(memoryDB, id)
-				return true, nil
+				return nil, true
 			}
 
-			return false, &huma.ErrorModel{
+			return &huma.ErrorModel{
 				Message: "Note " + id + " not found",
-			}
+			}, false
 		},
-	})
+	)
 
 	// Run the app!
 	r.Run()
@@ -278,7 +251,7 @@ The basic structure of a Huma handler function looks like this, with most argume
 func (deps..., params..., requestModel) (headers..., responseModels...)
 ```
 
-Dependencies, parameterss, headers, and models are covered in more detail in the following sections. For now this gives an idea of how to write handler functions based on the inputs and outputs of your operation.
+Dependencies, parameters, headers, and models are covered in more detail in the following sections. For now this gives an idea of how to write handler functions based on the inputs and outputs of your operation.
 
 For example, the most basic "Hello world" that takes no parameters and returns a greeting message might look like this:
 
@@ -305,9 +278,7 @@ Optional parameters require a default value.
 Here is an example of an `id` parameter:
 
 ```go
-r.Register(&huma.Operation{
-	Method:      http.MethodGet,
-	Path:        "/notes/{id}",
+r.Resource("/notes").Get(&huma.Operation{
 	Description: "Get a single note by its ID",
 	Params:      []*huma.Param{
 		huma.PathParam("id", "Note ID"),
@@ -320,6 +291,15 @@ r.Register(&huma.Operation{
 		// Implementation goes here
 	},
 })
+```
+
+Or using shorthand:
+
+```go
+r.Resource("/notes", huma.PathParam("id", "Note ID")).GetJSON(
+	http.StatusOK, "Get a single note by its ID", func(id string) *Note {
+		// Implementation goes here
+	})
 ```
 
 You can also declare parameters with additional validation logic:
@@ -356,9 +336,7 @@ This struct provides enough information to create JSON Schema for the OpenAPI 3 
 Request models are used by adding a new input argument that is a pointer to a struct to your handler function as the last argument. For example:
 
 ```go
-r.Register(&huma.Operation{
-	Method:      http.MethodPut,
-	Path:        "/notes/{id}",
+r.Resource("/notes").Put(&huma.Operation{
 	Description: "Create or update a note",
 	Params:      []*huma.Param{
 		huma.PathParam("id", "Note ID"),
@@ -505,7 +483,7 @@ logger := &huma.Dependency{
 
 // Use them in any handler by adding them to both `Depends` and the list of
 // handler function arguments.
-r.Register(&huma.Operation{
+r.Resource("/foo").Get(&huma.Operation{
 	// ...
 	Dependencies: []*huma.Dependency{db, logger},
 	Handler: func(db *db.Connection, log *MyLogger) string {
@@ -545,9 +523,7 @@ r := huma.NewRouterWithGin(g, &huma.OpenAPI{
 Huma provides a Zap-based contextual structured logger built-in. You can access it via the `huma.LogDependency()` which returns a `*zap.SugaredLogger`. It requires the use of the `huma.LogMiddleware(...)`, which is included by default.
 
 ```go
-r.Register(&huma.Operation{
-	Method:      http.MethodGet,
-	Path:        "/test",
+r.Resource("/test").Get(&huma.Operation{
 	Description: "Test example",
 	Dependencies: []*huma.Dependency{
 		huma.LogDependency(),
@@ -646,9 +622,7 @@ r := huma.NewRouter(&huma.OpenAPI{
 
 r.AddGlobalFlag("env", "e", "Environment", "local")
 
-r.Register(&huma.Operation{
-	Method:      http.MethodGet,
-	Path:        "/current_env",
+r.Resource("/current_env").Get(&huma.Operation{
 	Description: "Return the current environment",
 	Responses: []*huma.Response{
 		huma.ResponseText(http.StatusOK, "Success"),
