@@ -40,6 +40,8 @@ Features include:
 
 This project was inspired by [FastAPI](https://fastapi.tiangolo.com/), [Gin](https://github.com/gin-gonic/gin), and countless others. Look at the [benchmarks](https://github.com/danielgtaylor/huma/tree/master/benchmark) to see how Huma compares.
 
+Logo & branding designed by [Kari Taylor](https://www.kari.photography/).
+
 # Concepts & Example
 
 REST APIs are composed of operations against resources and can include descriptions of various inputs and possible outputs. For each operation you will typically provide info like:
