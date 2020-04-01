@@ -514,6 +514,7 @@ g := gin.New()
 g.Use(huma.Recovery())
 g.Use(huma.LogMiddleware(nil, nil))
 g.Use(cors.Default())
+g.NoRoute(huma.Handler404)
 r := huma.NewRouterWithGin(g, &huma.OpenAPI{
 	Title:   "Notes API",
 	Version: "1.0.0",
