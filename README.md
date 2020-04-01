@@ -1,4 +1,4 @@
-![Huma Rest API Framework](https://user-images.githubusercontent.com/106826/76379557-9e502a80-630d-11ea-9c7d-f6426076a47c.png)
+![Huma Rest API Framework](https://user-images.githubusercontent.com/106826/78105564-51102780-73a6-11ea-99ff-84d6c1b3e8df.png)
 
 [![CI](https://github.com/danielgtaylor/huma/workflows/CI/badge.svg?branch=master)](https://github.com/danielgtaylor/huma/actions?query=workflow%3ACI+branch%3Amaster++) [![codecov](https://codecov.io/gh/danielgtaylor/huma/branch/master/graph/badge.svg)](https://codecov.io/gh/danielgtaylor/huma) [![Docs](https://godoc.org/github.com/danielgtaylor/huma?status.svg)](https://pkg.go.dev/github.com/danielgtaylor/huma?tab=doc) [![Go Report Card](https://goreportcard.com/badge/github.com/danielgtaylor/huma)](https://goreportcard.com/report/github.com/danielgtaylor/huma)
 
@@ -225,7 +225,7 @@ Date: Sat, 07 Mar 2020 22:22:06 GMT
 
 The server works and responds as expected. There are also some neat extras built-in. If you go to http://localhost:8888/docs in a browser, you will see auto-generated interactive documentation:
 
-<img width="986" alt="Screen Shot 2020-03-28 at 11 25 53 PM" src="https://user-images.githubusercontent.com/106826/77842804-8d941700-714b-11ea-8bf6-8e6a63af4a2c.png">
+<img width="878" alt="Screen Shot 2020-03-31 at 11 22 55 PM" src="https://user-images.githubusercontent.com/106826/78105715-a9dfc000-73a6-11ea-8002-371024253daf.png">
 
 The documentation is generated from the OpenAPI 3 spec file that is available at http://localhost:8888/openapi.json. You can also access this spec without running the server:
 

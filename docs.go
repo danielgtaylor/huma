@@ -19,7 +19,9 @@ func RapiDocHandler(c *gin.Context, api *OpenAPI) {
   <rapi-doc
 		spec-url="/openapi.json"
 		render-style="read"
-		show-header="false"
+    show-header="false"
+    primary-color="#f74799"
+    nav-accent-color="#47afe8"
   > </rapi-doc>
 </body>
 </html>`, api.Title)))
