@@ -21,10 +21,9 @@ type Note struct {
 	Content string
 }
 
-// We'll use an in-memory DB (a map) and protect it with a lock. Don't do
-// this in production code!
-var memoryDB = make(map[string]*Note, 0)
-var dbLock = sync.Mutex{}
+// We'll use an in-memory DB (a goroutine-safe map). Don't do this in
+// production code!
+var memoryDB = sync.Map{}
 
 func main() {
 	// Create a new router and give our API a title and version.
@@ -36,23 +35,22 @@ func main() {
 	notes := r.Resource("/notes")
 	notes.ListJSON(http.StatusOK, "Returns a list of all notes",
 		func() []*NoteSummary {
-			dbLock.Lock()
-			defer dbLock.Unlock()
-
 			// Create a list of summaries from all the notes.
-			summaries := make([]*NoteSummary, 0, len(memoryDB))
+			summaries := make([]*NoteSummary, 0)
 
-			for k, v := range memoryDB {
+			memoryDB.Range(func(k, v interface{}) bool {
 				summaries = append(summaries, &NoteSummary{
-					ID:      k,
-					Created: v.Created,
+					ID:      k.(string),
+					Created: v.(*Note).Created,
 				})
-			}
+				return true
+			})
 
 			return summaries
 		},
 	)
 
+	// Add an `id` path parameter to create a note resource.
 	note := notes.With(huma.PathParam("id", "Note ID", &huma.Schema{
 		Pattern: "^[a-zA-Z0-9._-]{1,32}$",
 	}))
@@ -61,12 +59,9 @@ func main() {
 
 	note.PutNoContent(http.StatusNoContent, "Create or update a note",
 		func(id string, note *Note) bool {
-			dbLock.Lock()
-			defer dbLock.Unlock()
-
 			// Set the created time to now and then save the note in the DB.
 			note.Created = time.Now()
-			memoryDB[id] = note
+			memoryDB.Store(id, note)
 
 			// Empty responses don't have a body, so you can just return `true`.
 			return true
@@ -75,12 +70,9 @@ func main() {
 
 	note.With(notFound).GetJSON(http.StatusOK, "Get a note by its ID",
 		func(id string) (*huma.ErrorModel, *Note) {
-			dbLock.Lock()
-			defer dbLock.Unlock()
-
-			if note, ok := memoryDB[id]; ok {
+			if note, ok := memoryDB.Load(id); ok {
 				// Note with that ID exists!
-				return nil, note
+				return nil, note.(*Note)
 			}
 
 			return &huma.ErrorModel{
@@ -91,12 +83,9 @@ func main() {
 
 	note.With(notFound).DeleteNoContent(http.StatusNoContent, "Successfully deleted note",
 		func(id string) (*huma.ErrorModel, bool) {
-			dbLock.Lock()
-			defer dbLock.Unlock()
-
-			if _, ok := memoryDB[id]; ok {
+			if _, ok := memoryDB.Load(id); ok {
 				// Note with that ID exists!
-				delete(memoryDB, id)
+				memoryDB.Delete(id)
 				return nil, true
 			}
 
