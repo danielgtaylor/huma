@@ -36,3 +36,14 @@ func TestRecoveryMiddleware(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Equal(t, "application/json; charset=utf-8", w.Result().Header.Get("content-type"))
 }
+
+func TestHandler404(t *testing.T) {
+	g := gin.New()
+	g.NoRoute(Handler404)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/notfound", nil)
+	g.ServeHTTP(w, req)
+	assert.Equal(t, w.Result().StatusCode, http.StatusNotFound)
+	assert.Equal(t, "application/json; charset=utf-8", w.Result().Header.Get("content-type"))
+}

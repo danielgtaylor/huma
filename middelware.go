@@ -110,3 +110,10 @@ func LogDependency() *Dependency {
 		},
 	}
 }
+
+// Handler404 will return JSON responses for 404 errors.
+func Handler404(c *gin.Context) {
+	c.JSON(http.StatusNotFound, &ErrorModel{
+		Message: "Not found",
+	})
+}

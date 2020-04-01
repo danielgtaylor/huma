@@ -174,6 +174,7 @@ func NewRouter(api *OpenAPI) *Router {
 	g.Use(Recovery())
 	g.Use(LogMiddleware(nil, nil))
 	g.Use(cors.Default())
+	g.NoRoute(Handler404)
 	return NewRouterWithGin(g, api)
 }
 
