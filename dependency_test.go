@@ -1,7 +1,9 @@
 package huma
 
 import (
+	"context"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
@@ -56,10 +58,29 @@ func TestDepContext(t *testing.T) {
 		Dependencies: []*Dependency{
 			ContextDependency(),
 		},
+		Value: func(ctx context.Context) (context.Context, error) { return ctx, nil },
+	}
+
+	mock, _ := gin.CreateTestContext(nil)
+	mock.Request = httptest.NewRequest("GET", "/", nil)
+
+	typ := reflect.TypeOf(mock)
+	assert.NoError(t, d.validate(typ))
+
+	_, v, err := d.Resolve(mock, &Operation{})
+	assert.NoError(t, err)
+	assert.Equal(t, v, mock.Request.Context())
+}
+
+func TestDepGinContext(t *testing.T) {
+	d := Dependency{
+		Dependencies: []*Dependency{
+			GinContextDependency(),
+		},
 		Value: func(c *gin.Context) (*gin.Context, error) { return c, nil },
 	}
 
-	mock := &gin.Context{}
+	mock, _ := gin.CreateTestContext(nil)
 
 	typ := reflect.TypeOf(mock)
 	assert.NoError(t, d.validate(typ))

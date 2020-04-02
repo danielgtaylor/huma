@@ -446,7 +446,8 @@ Huma includes a dependency injection system that can be used to pass additional 
 
 Global dependencies are created by just setting some value, while contextual dependencies are implemented using a function that returns the value of the form `func (deps..., params...) (headers..., *YourType, error)` where the value you want injected is of `*YourType` and the function arguments can be any previously registered dependency types or one of the hard-coded types:
 
-- `huma.ContextDependency()` the current context (returns `*gin.Context`)
+- `huma.ContextDependency()` the current `http.Request` context (returns `context.Context`)
+- `huma.GinContextDependency()` the current Gin request context (returns `*gin.Context`)
 - `huma.OperationDependency()` the current operation (returns `*huma.Operation`)
 
 ```go

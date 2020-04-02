@@ -23,12 +23,19 @@ type Dependency struct {
 }
 
 var contextDependency Dependency
+var ginContextDependency Dependency
 var operationDependency Dependency
 
 // ContextDependency returns a dependency for the current request's
-// `*gin.Context`.
+// `context.Context`. This is useful for timeouts & cancellation.
 func ContextDependency() *Dependency {
 	return &contextDependency
+}
+
+// GinContextDependency returns a dependency for the current request's
+// `*gin.Context`.
+func GinContextDependency() *Dependency {
+	return &ginContextDependency
 }
 
 // OperationDependency returns a dependency  for the current `*huma.Operation`.
@@ -39,7 +46,7 @@ func OperationDependency() *Dependency {
 // validate that the dependency deps/params/headers match the function
 // signature or that the value is not a function.
 func (d *Dependency) validate(returnType reflect.Type) error {
-	if d == &contextDependency || d == &operationDependency {
+	if d == &contextDependency || d == &ginContextDependency || d == &operationDependency {
 		// Hard-coded known dependencies. These are special and have no value.
 		return nil
 	}
@@ -152,6 +159,10 @@ func (d *Dependency) AllResponseHeaders() []*ResponseHeader {
 func (d *Dependency) Resolve(c *gin.Context, op *Operation) (map[string]string, interface{}, error) {
 	// Identity dependencies are first. Just return if it's one of them.
 	if d == &contextDependency {
+		return nil, c.Request.Context(), nil
+	}
+
+	if d == &ginContextDependency {
 		return nil, c, nil
 	}
 

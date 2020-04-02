@@ -378,7 +378,7 @@ func TestRouterDependencies(t *testing.T) {
 	captured := ""
 	log := &Dependency{
 		Dependencies: []*Dependency{
-			ContextDependency(),
+			GinContextDependency(),
 		},
 		Value: func(c *gin.Context) (*Logger, error) {
 			return &Logger{
@@ -391,7 +391,7 @@ func TestRouterDependencies(t *testing.T) {
 
 	r.Register(http.MethodGet, "/hello", &Operation{
 		Description:  "Basic hello world",
-		Dependencies: []*Dependency{ContextDependency(), db, log},
+		Dependencies: []*Dependency{GinContextDependency(), db, log},
 		Params: []*Param{
 			QueryParam("name", "Your name", ""),
 		},
