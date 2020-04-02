@@ -93,7 +93,7 @@ func main() {
 	})
 
 	notes := r.Resource("/notes")
-	notes.JSON(http.StatusOK, "Success").List("Returns a list of all notes",
+	notes.List("Returns a list of all notes",
 		func() []*NoteSummary {
 			// Create a list of summaries from all the notes.
 			summaries := make([]*NoteSummary, 0)
@@ -117,7 +117,7 @@ func main() {
 
 	notFound := huma.ResponseError(http.StatusNotFound, "Note not found")
 
-	note.NoContent("Successful create/update").Put("Create or update a note",
+	note.Put("Create or update a note",
 		func(id string, n *Note) bool {
 			// Set the created time to now and then save the note in the DB.
 			n.Created = time.Now()
@@ -128,7 +128,7 @@ func main() {
 		},
 	)
 
-	note.With(notFound).JSON(http.StatusOK, "Success").Get("Get a note by its ID",
+	note.With(notFound).Get("Get a note by its ID",
 		func(id string) (*huma.ErrorModel, *Note) {
 			if n, ok := memoryDB.Load(id); ok {
 				// Note with that ID exists!
@@ -141,7 +141,7 @@ func main() {
 		},
 	)
 
-	note.With(notFound).NoContent("Success").Delete("Delete a note by its ID",
+	note.With(notFound).Delete("Delete a note by its ID",
 		func(id string) (*huma.ErrorModel, bool) {
 			if _, ok := memoryDB.Load(id); ok {
 				// Note with that ID exists!
@@ -256,9 +256,7 @@ sub := note.SubResource("/likes")
 
 ## Operations
 
-Operations perform an action on a resource using an HTTP method verb. Every
-operation must have at least one response described. The following verbs
-are available:
+Operations perform an action on a resource using an HTTP method verb. The following verbs are available:
 
 - Head
 - List (alias for Get)
@@ -268,15 +266,33 @@ are available:
 - Patch
 - Delete
 
+If you don't provide a response description, then one is generated for you based on the response type with the following rules:
+
+- Boolean: If true, returns `HTTP 204 No Content`
+- Slice, map, struct pointer: If not `nil`, marshal to JSON and return `HTTP 200 OK` with content type `application/json`
+
 ```go
 r := huma.NewRouter(&huma.OpenAPI{Title: "Test", Version: "1.0.0"})
 
 // Create a resource
 notes := r.Resource("/notes")
 
-// Create the operation
+// Create the operation with an auto-generated response.
+notes.Get("Get a list of all notes", func () []*NoteSummary {
+	// Implementation goes here
+})
+
+// Manually provide the response. This is equivalent to the above.
+notes.With(
+	huma.ResponseJSON(http.StatusOK, "Success"),
+).Get("Get a list of all notes", func () []*NoteSummary {
+	// Implementation goes here
+})
+
+// The above idiom is common enough when needing to change response codes
+// or allow certain response headers that there is a shortcut:
 notes.
-	JSON(http.StatusOK, "List of notes").
+	JSON(http.StatusCreated, "Success", "expires").
 	Get("Get a list of all notes", func () []*NoteSummary {
 		// Implementation goes here
 	})
@@ -289,7 +305,7 @@ Alternatively you can provide a `*huma.Operation` instance to the resource if yo
 notes.Operation(http.MethodGet, &huma.Operation{
 	Description: "Get a list of all notes"
 	Responses: []*huma.Response{
-		huma.ResponseJSON(http.StatusOK, "List of notes"),
+		huma.ResponseJSON(http.StatusOK, "List of notes", "expires"),
 	},
 	Handler: func () []*NoteSummary {
 		// Implementation goes here

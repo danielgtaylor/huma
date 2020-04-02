@@ -3,6 +3,7 @@ package huma
 import (
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 )
 
@@ -142,6 +143,18 @@ func (r *Resource) Operation(method string, op *Operation) {
 	allResponses := append([]*Response{}, r.responses...)
 	allResponses = append(allResponses, op.Responses...)
 	op.Responses = allResponses
+
+	if op.Handler != nil {
+		t := reflect.TypeOf(op.Handler)
+		if t.NumOut() == len(op.Responses)+1 {
+			rtype := t.Out(t.NumOut() - 1)
+			if rtype.Kind() == reflect.Bool {
+				op.Responses = append(op.Responses, ResponseEmpty(http.StatusNoContent, "Success"))
+			} else {
+				op.Responses = append(op.Responses, ResponseJSON(http.StatusOK, "Success"))
+			}
+		}
+	}
 
 	r.router.Register(method, path, op)
 }

@@ -193,3 +193,30 @@ func TestResourceShorthandFuncs(outer *testing.T) {
 		})
 	}
 }
+
+func TestResourceAutoJSON(t *testing.T) {
+	r := NewRouter(&OpenAPI{Title: "Test API", Version: "1.0.0"})
+
+	type MyResponse struct{}
+
+	// Registering the handler should not panic
+	r.Resource("/test").Get("desc", func() *MyResponse {
+		return &MyResponse{}
+	})
+
+	assert.Equal(t, http.StatusOK, r.api.Paths["/test"][http.MethodGet].Responses[0].StatusCode)
+	assert.Equal(t, "application/json", r.api.Paths["/test"][http.MethodGet].Responses[0].ContentType)
+}
+
+func TestResourceAutoNoContent(t *testing.T) {
+	r := NewRouter(&OpenAPI{Title: "Test API", Version: "1.0.0"})
+
+	// Registering the handler should not panic
+	r.Resource("/test").Get("desc", func() bool {
+		return true
+	})
+
+	assert.Equal(t, http.StatusNoContent, r.api.Paths["/test"][http.MethodGet].Responses[0].StatusCode)
+	assert.Equal(t, "", r.api.Paths["/test"][http.MethodGet].Responses[0].ContentType)
+	assert.Equal(t, true, r.api.Paths["/test"][http.MethodGet].Responses[0].empty)
+}
