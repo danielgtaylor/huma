@@ -97,18 +97,15 @@ func TestSubResource(t *testing.T) {
 func TestResourceWithAddedParam(t *testing.T) {
 	r := NewTestRouter(t)
 	res := NewResource(r, "/test")
-	res.Get(&Operation{
-		Description: "desc",
-		Params: []*Param{
+	res.
+		With(
 			PathParam("q", "desc"),
-		},
-		Responses: []*Response{
-			ResponseText(http.StatusOK, "desc"),
-		},
-		Handler: func(q string) string {
-			return q
-		},
-	})
+			ResponseText(http.StatusOK, "desc")).
+		Get("desc",
+			func(q string) string {
+				return q
+			},
+		)
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/test/hello", nil)
@@ -126,9 +123,9 @@ func TestResourceFuncs(outer *testing.T) {
 		local := tt
 		outer.Run(fmt.Sprintf("%v", tt), func(t *testing.T) {
 			r := NewRouter(&OpenAPI{Title: "Test API", Version: "1.0.0"})
-			res := NewResource(r, "/test")
+			res := NewResource(r, "/test").Text(http.StatusOK, "desc")
 
-			var f func(*Operation)
+			var f func(string, interface{})
 
 			switch local {
 			case "Head":
@@ -150,59 +147,49 @@ func TestResourceFuncs(outer *testing.T) {
 			}
 
 			// Registering it should not panic.
-			f(&Operation{
-				Description: local + " test",
-				Responses: []*Response{
-					ResponseEmpty(http.StatusOK, "desc"),
-				},
-				Handler: func() bool {
-					return true
-				},
+			f("desc", func() bool {
+				return true
 			})
 		})
 	}
 }
 
-var resourceShortcutsTest = []string{
-	"ListJSON", "GetJSON", "PostJSON", "PostNoContent", "PutJSON", "PutNoContent", "PatchJSON", "PatchNoContent", "DeleteNoContent",
+var resourceShorthandFuncs = []struct {
+	n           string
+	statusCode  int
+	contentType string
+	desc        string
+}{
+	{"Text", http.StatusOK, "text/plain", "desc"},
+	{"JSON", http.StatusOK, "application/json", "desc"},
+	{"NoContent", http.StatusNoContent, "", "desc"},
+	{"Empty", http.StatusNotModified, "", "desc"},
 }
 
-func TestResourceShortcuts(outer *testing.T) {
-	for _, tt := range resourceShortcutsTest {
+func TestResourceShorthandFuncs(outer *testing.T) {
+	for _, tt := range resourceShorthandFuncs {
 		local := tt
-		outer.Run(fmt.Sprintf("%v", tt), func(t *testing.T) {
+		outer.Run(fmt.Sprintf("%v", local.n), func(t *testing.T) {
 			r := NewRouter(&OpenAPI{Title: "Test API", Version: "1.0.0"})
 			res := NewResource(r, "/test")
 
-			var f func(int, string, interface{})
-
-			switch local {
-			case "ListJSON":
-				f = res.ListJSON
-			case "GetJSON":
-				f = res.GetJSON
-			case "PostJSON":
-				f = res.PostJSON
-			case "PostNoContent":
-				f = res.PostNoContent
-			case "PutJSON":
-				f = res.PutJSON
-			case "PutNoContent":
-				f = res.PutNoContent
-			case "PatchJSON":
-				f = res.PatchJSON
-			case "PatchNoContent":
-				f = res.PatchNoContent
-			case "DeleteNoContent":
-				f = res.DeleteNoContent
+			switch local.n {
+			case "Text":
+				res = res.Text(local.statusCode, local.desc, "header")
+			case "JSON":
+				res = res.JSON(local.statusCode, local.desc, "header")
+			case "NoContent":
+				res = res.NoContent(local.desc, "header")
+			case "Empty":
+				res = res.Empty(local.statusCode, local.desc, "header")
 			default:
-				panic("invalid case " + local)
+				panic("invalid case " + local.n)
 			}
 
-			// Registering it should not panic.
-			f(200, "desc", func() bool {
-				return true
-			})
+			resp := res.responses[0]
+			assert.Equal(t, local.statusCode, resp.StatusCode)
+			assert.Equal(t, local.contentType, resp.ContentType)
+			assert.Equal(t, local.desc, resp.Description)
 		})
 	}
 }

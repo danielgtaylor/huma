@@ -109,9 +109,9 @@ func (r *Resource) SubResource(path string, depsParamHeadersOrResponses ...inter
 	return c
 }
 
-// addOperation adds the operation to this resource's router with all the
+// Operation adds the operation to this resource's router with all the
 // combined deps, params, headers, responses, etc.
-func (r *Resource) addOperation(method string, op *Operation) {
+func (r *Resource) Operation(method string, op *Operation) {
 	// Set params, etc
 	allDeps := append([]*Dependency{}, r.deps...)
 	allDeps = append(allDeps, op.Dependencies...)
@@ -146,138 +146,75 @@ func (r *Resource) addOperation(method string, op *Operation) {
 	r.router.Register(method, path, op)
 }
 
+// Text is shorthand for `r.With(huma.ResponseText(...))`.
+func (r *Resource) Text(statusCode int, description string, headers ...string) *Resource {
+	return r.With(ResponseText(statusCode, description, headers...))
+}
+
+// JSON is shorthand for `r.With(huma.ResponseJSON(...))`.
+func (r *Resource) JSON(statusCode int, description string, headers ...string) *Resource {
+	return r.With(ResponseJSON(statusCode, description, headers...))
+}
+
+// NoContent is shorthand for `r.With(huma.ResponseEmpty(http.StatusNoContent, ...)`
+func (r *Resource) NoContent(description string, headers ...string) *Resource {
+	return r.With(ResponseEmpty(http.StatusNoContent, description, headers...))
+}
+
+// Empty is shorthand for `r.With(huma.ResponseEmpty(...))`.
+func (r *Resource) Empty(statusCode int, description string, headers ...string) *Resource {
+	return r.With(ResponseEmpty(statusCode, description, headers...))
+}
+
 // Head creates an HTTP HEAD operation on the resource.
-func (r *Resource) Head(op *Operation) {
-	r.addOperation(http.MethodHead, op)
+func (r *Resource) Head(description string, handler interface{}) {
+	r.Operation(http.MethodHead, &Operation{
+		Description: description,
+		Handler:     handler,
+	})
 }
 
 // List is an alias for `Get`.
-func (r *Resource) List(op *Operation) {
-	r.Get(op)
-}
-
-// ListJSON is an alias for `GetJSON`.
-func (r *Resource) ListJSON(statusCode int, description string, handler interface{}) {
-	r.GetJSON(statusCode, description, handler)
+func (r *Resource) List(description string, handler interface{}) {
+	r.Get(description, handler)
 }
 
 // Get creates an HTTP GET operation on the resource.
-func (r *Resource) Get(op *Operation) {
-	r.addOperation(http.MethodGet, op)
-}
-
-// GetJSON is shorthand for adding an HTTP GET operation on the resource that
-// sets a description and a JSON success response.
-func (r *Resource) GetJSON(statusCode int, description string, handler interface{}) {
-	r.addOperation(http.MethodGet, &Operation{
+func (r *Resource) Get(description string, handler interface{}) {
+	r.Operation(http.MethodGet, &Operation{
 		Description: description,
-		Responses: []*Response{
-			ResponseJSON(statusCode, "Success"),
-		},
-		Handler: handler,
+		Handler:     handler,
 	})
 }
 
 // Post creates an HTTP POST operation on the resource.
-func (r *Resource) Post(op *Operation) {
-	r.addOperation(http.MethodPost, op)
-}
-
-// PostJSON is shorthand for adding an HTTP POST operation on the resource that
-// sets a description and a JSON success response.
-func (r *Resource) PostJSON(statusCode int, description string, handler interface{}) {
-	r.addOperation(http.MethodPost, &Operation{
+func (r *Resource) Post(description string, handler interface{}) {
+	r.Operation(http.MethodPost, &Operation{
 		Description: description,
-		Responses: []*Response{
-			ResponseJSON(statusCode, "Success"),
-		},
-		Handler: handler,
-	})
-}
-
-// PostNoContent is shorthand for adding an HTTP POST operation to the resource
-// that sets a description and an empty response.
-func (r *Resource) PostNoContent(statusCode int, description string, handler interface{}) {
-	r.addOperation(http.MethodPost, &Operation{
-		Description: description,
-		Responses: []*Response{
-			ResponseEmpty(statusCode, "Success"),
-		},
-		Handler: handler,
+		Handler:     handler,
 	})
 }
 
 // Put creates an HTTP PUT operation on the resource.
-func (r *Resource) Put(op *Operation) {
-	r.addOperation(http.MethodPut, op)
-}
-
-// PutJSON is shorthand for adding an HTTP PUT operation on the resource that
-// sets a description and a JSON success response.
-func (r *Resource) PutJSON(statusCode int, description string, handler interface{}) {
-	r.addOperation(http.MethodPut, &Operation{
+func (r *Resource) Put(description string, handler interface{}) {
+	r.Operation(http.MethodPut, &Operation{
 		Description: description,
-		Responses: []*Response{
-			ResponseJSON(statusCode, "Success"),
-		},
-		Handler: handler,
-	})
-}
-
-// PutNoContent is shorthand for adding an HTTP PUT operation to the resource
-// that sets a description and an empty response.
-func (r *Resource) PutNoContent(statusCode int, description string, handler interface{}) {
-	r.addOperation(http.MethodPut, &Operation{
-		Description: description,
-		Responses: []*Response{
-			ResponseEmpty(statusCode, "Success"),
-		},
-		Handler: handler,
+		Handler:     handler,
 	})
 }
 
 // Patch creates an HTTP PATCH operation on the resource.
-func (r *Resource) Patch(op *Operation) {
-	r.addOperation(http.MethodPatch, op)
-}
-
-// PatchJSON is shorthand for adding an HTTP PATCH operation on the resource that
-// sets a description and a JSON success response.
-func (r *Resource) PatchJSON(statusCode int, description string, handler interface{}) {
-	r.addOperation(http.MethodPatch, &Operation{
+func (r *Resource) Patch(description string, handler interface{}) {
+	r.Operation(http.MethodPatch, &Operation{
 		Description: description,
-		Responses: []*Response{
-			ResponseJSON(statusCode, "Success"),
-		},
-		Handler: handler,
-	})
-}
-
-// PatchNoContent is shorthand for adding an HTTP PATCH operation to the
-// resource that sets a description and an empty response.
-func (r *Resource) PatchNoContent(statusCode int, description string, handler interface{}) {
-	r.addOperation(http.MethodPatch, &Operation{
-		Description: description,
-		Responses: []*Response{
-			ResponseEmpty(statusCode, "Success"),
-		},
-		Handler: handler,
+		Handler:     handler,
 	})
 }
 
 // Delete creates an HTTP DELETE operation on the resource.
-func (r *Resource) Delete(op *Operation) {
-	r.addOperation(http.MethodDelete, op)
-}
-
-// DeleteNoContent is shorthand for adding an HTTP DELETE operation to the
-// resource that sets a description and an empty response.
-func (r *Resource) DeleteNoContent(statusCode int, description string, handler interface{}) {
-	r.addOperation(http.MethodDelete, &Operation{
+func (r *Resource) Delete(description string, handler interface{}) {
+	r.Operation(http.MethodDelete, &Operation{
 		Description: description,
-		Responses: []*Response{
-			ResponseEmpty(statusCode, "Success"),
-		},
-		Handler: handler,
+		Handler:     handler,
 	})
 }

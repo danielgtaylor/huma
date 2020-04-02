@@ -93,7 +93,7 @@ func main() {
 	})
 
 	notes := r.Resource("/notes")
-	notes.ListJSON(http.StatusOK, "Returns a list of all notes",
+	notes.JSON(http.StatusOK, "Success").List("Returns a list of all notes",
 		func() []*NoteSummary {
 			// Create a list of summaries from all the notes.
 			summaries := make([]*NoteSummary, 0)
@@ -117,22 +117,22 @@ func main() {
 
 	notFound := huma.ResponseError(http.StatusNotFound, "Note not found")
 
-	note.PutNoContent(http.StatusNoContent, "Create or update a note",
-		func(id string, note *Note) bool {
+	note.NoContent("Successful create/update").Put("Create or update a note",
+		func(id string, n *Note) bool {
 			// Set the created time to now and then save the note in the DB.
-			note.Created = time.Now()
-			memoryDB.Store(id, note)
+			n.Created = time.Now()
+			memoryDB.Store(id, n)
 
 			// Empty responses don't have a body, so you can just return `true`.
 			return true
 		},
 	)
 
-	note.With(notFound).GetJSON(http.StatusOK, "Get a note by its ID",
+	note.With(notFound).JSON(http.StatusOK, "Success").Get("Get a note by its ID",
 		func(id string) (*huma.ErrorModel, *Note) {
-			if note, ok := memoryDB.Load(id); ok {
+			if n, ok := memoryDB.Load(id); ok {
 				// Note with that ID exists!
-				return nil, note.(*Note)
+				return nil, n.(*Note)
 			}
 
 			return &huma.ErrorModel{
@@ -141,7 +141,7 @@ func main() {
 		},
 	)
 
-	note.With(notFound).DeleteNoContent(http.StatusNoContent, "Successfully deleted note",
+	note.With(notFound).NoContent("Success").Delete("Delete a note by its ID",
 		func(id string) (*huma.ErrorModel, bool) {
 			if _, ok := memoryDB.Load(id); ok {
 				// Note with that ID exists!
@@ -234,6 +234,69 @@ Combine the above with [openapi-cli-generator](https://github.com/danielgtaylor/
 
 # Documentation
 
+## Resources
+
+Huma APIs are composed of resources and sub-resources attached to a router. A
+resource refers to a unique URI on which operations can be performed. Huma
+resources can have dependencies, parameters, response headers, and responses
+attached to them which are all applied to every operation and sub-resource.
+
+```go
+r := huma.NewRouter(&huma.OpenAPI{Title: "Test", Version: "1.0.0"})
+
+// Create a resource at a given path
+notes := r.Resource("/notes")
+
+// Create another resource that includes a path parameter: /notes/{id}
+note := notes.With(huma.PathParam("id", "Note ID"))
+
+// Create a sub-resource at /notes/{id}/likes
+sub := note.SubResource("/likes")
+```
+
+## Operations
+
+Operations perform an action on a resource using an HTTP method verb. Every
+operation must have at least one response described. The following verbs
+are available:
+
+- Head
+- List (alias for Get)
+- Get
+- Post
+- Put
+- Patch
+- Delete
+
+```go
+r := huma.NewRouter(&huma.OpenAPI{Title: "Test", Version: "1.0.0"})
+
+// Create a resource
+notes := r.Resource("/notes")
+
+// Create the operation
+notes.
+	JSON(http.StatusOK, "List of notes").
+	Get("Get a list of all notes", func () []*NoteSummary {
+		// Implementation goes here
+	})
+```
+
+Alternatively you can provide a `*huma.Operation` instance to the resource if you want more flexibility or prefer this style over chaining:
+
+```go
+// Create the operation
+notes.Operation(http.MethodGet, &huma.Operation{
+	Description: "Get a list of all notes"
+	Responses: []*huma.Response{
+		huma.ResponseJSON(http.StatusOK, "List of notes"),
+	},
+	Handler: func () []*NoteSummary {
+		// Implementation goes here
+	}
+})
+```
+
 ## Handler Functions
 
 The basic structure of a Huma handler function looks like this, with most arguments being optional and dependent on the declaritively described operation:
@@ -269,28 +332,14 @@ Optional parameters require a default value.
 Here is an example of an `id` parameter:
 
 ```go
-r.Resource("/notes").Get(&huma.Operation{
-	Description: "Get a single note by its ID",
-	Params:      []*huma.Param{
-		huma.PathParam("id", "Note ID"),
-	},
-	Responses: []*huma.Response{
-		huma.ResponseJSON(200, "Success"),
-		huma.ResponseError(404, "Note was not found"),
-	},
-	Handler: func(id string) (*Note, *huma.ErrorModel) {
-		// Implementation goes here
-	},
+r.Resource("/notes",
+	huma.PathParam("id", "Note ID"),
+	huma.ResponseJSON(200, "Success"),
+	huma.ResponseError(404, "Note was not found"),
+).
+Get("Get a note by its ID", func(id string) (*huma.ErrorModel, *Note) {
+	// Implementation goes here
 })
-```
-
-Or using shorthand:
-
-```go
-r.Resource("/notes", huma.PathParam("id", "Note ID")).GetJSON(
-	http.StatusOK, "Get a single note by its ID", func(id string) *Note {
-		// Implementation goes here
-	})
 ```
 
 You can also declare parameters with additional validation logic:
@@ -327,25 +376,19 @@ This struct provides enough information to create JSON Schema for the OpenAPI 3 
 Request models are used by adding a new input argument that is a pointer to a struct to your handler function as the last argument. For example:
 
 ```go
-r.Resource("/notes").Put(&huma.Operation{
-	Description: "Create or update a note",
-	Params:      []*huma.Param{
-		huma.PathParam("id", "Note ID"),
-	},
-	Responses: []*huma.Response{
-		huma.ResponseEmpty(204, "Success"),
-	},
+r.Resource("/notes", huma.PathParam("id", "Note ID")).
+	NoContent("Successful create/update").
+	Put("Create or update a note",
+		// Handler without an input body looks like:
+		func(id string) bool {
+			// Implementation goes here
+		},
 
-	// Handler without an input body looks like:
-	Handler: func(id string) bool {
-		// Implementation goes here
-	},
-
-	// Handler with an input body looks like:
-	Handler: func(id string, note *Note) bool {
-		// Implementation goes here
-	},
-})
+		// Handler with an input body looks like:
+		func(id string, note *Note) bool {
+			// Implementation goes here
+		},
+	)
 ```
 
 The presence of the `note *Note` argument tells Huma to parse the request body and validate it against the generated JSON Schema for the `Note` struct.
@@ -355,13 +398,13 @@ The presence of the `note *Note` argument tells Huma to parse the request body a
 Response models are used by adding a response to the list of possible responses along with a new function return value that is a pointer to your struct. You can specify multiple different response models.
 
 ```go
-Responses: []*huma.Response{
-	huma.ResponseJSON(200, "Success"),
-	huma.ResponseError(404, "Not found"),
-},
-Handler: func() (*Note, *huma.ErrorModel) {
-	// Implementation goes here
-},
+r.
+	Resource("/notes",
+		huma.ResponseJSON(http.StatusOK, "Success"),
+		huma.ResponseError(http.NotFound, "Not found")).
+	Get("Description", func() (*huma.ErrorModel, *Note) {
+		// Implementation goes here
+	})
 ```
 
 Whichever model is not `nil` will get sent back to the client.
@@ -369,12 +412,12 @@ Whichever model is not `nil` will get sent back to the client.
 Empty responses, e.g. a `204 No Content` or `304 Not Modified` are also supported. Use `huma.ResponseEmpty` paired with a simple boolean to return a response without a body. Passing `false` acts like `nil` for models and prevents that response from being sent.
 
 ```go
-Responses: []*huma.Response{
-	huma.ResponseEmpty(204, "This should have no body"),
-},
-Handler: func() bool {
-	// Implementation goes here
-	return true
+r.
+	Resource("/notes").
+		huma.ResponseEmpty(http.StatusNoContent, "This should have no body")).
+	Get("description", func() bool {
+		return true
+	})
 },
 ```
 
@@ -418,22 +461,19 @@ Response headers must be defined before they can be sent back to a client. This 
 For example:
 
 ```go
-ResponseHeaders: []*huma.ResponseHeader{
+r.Resource("/notes",
 	huma.Header("expires", "Expiration date for this content"),
-},
-Responses: []*huma.Response{
-	huma.ResponseText(200, "Success"),
-},
-Handler: func() (string, string) {
+	huma.ResponseText(200, "Success", "expires")).
+Get("description", func() (string, string) {
 	expires := time.Now().Add(7 * 24 * time.Hour).MarshalText()
 	return expires, "Hello!"
-},
+})
 ```
 
 You can make use of named return values with a naked return to disambiguate complex functions:
 
 ```go
-Handler: func() (expires string, message string) {
+func() (expires string, message string) {
 	expires = time.Now().Add(7 * 24 * time.Hour).MarshalText()
 	message = "Hello!"
 	return
@@ -475,7 +515,7 @@ logger := &huma.Dependency{
 
 // Use them in any handler by adding them to both `Depends` and the list of
 // handler function arguments.
-r.Resource("/foo").Get(&huma.Operation{
+r.Resource("/foo").Operation(http.MethodGet, &huma.Operation{
 	// ...
 	Dependencies: []*huma.Dependency{db, logger},
 	Handler: func(db *db.Connection, log *MyLogger) string {
@@ -516,18 +556,12 @@ r := huma.NewRouterWithGin(g, &huma.OpenAPI{
 Huma provides a Zap-based contextual structured logger built-in. You can access it via the `huma.LogDependency()` which returns a `*zap.SugaredLogger`. It requires the use of the `huma.LogMiddleware(...)`, which is included by default.
 
 ```go
-r.Resource("/test").Get(&huma.Operation{
-	Description: "Test example",
-	Dependencies: []*huma.Dependency{
-		huma.LogDependency(),
-	},
-	Responses: []*huma.Response{
-		huma.ResponseText(http.StatusOK, "Successful"),
-	},
-	Handler: func(log *zap.SugaredLogger) string {
-		log.Info("I'm using the logger!")
-		return "Hello, world"
-	},
+r.Resource("/test",
+	huma.LogDependency(),
+	huma.ResponseText(http.StatusOK, "Successful")).
+Get("Logger test", func(log *zap.SugaredLogger) string {
+	log.Info("I'm using the logger!")
+	return "Hello, world"
 })
 ```
 
@@ -615,15 +649,12 @@ r := huma.NewRouter(&huma.OpenAPI{
 
 r.AddGlobalFlag("env", "e", "Environment", "local")
 
-r.Resource("/current_env").Get(&huma.Operation{
-	Description: "Return the current environment",
-	Responses: []*huma.Response{
-		huma.ResponseText(http.StatusOK, "Success"),
-	},
-	Handler: func() string {
+r.Resource("/current_env").Text(http.StatusOK, "Success").Get(
+	"Return the current environment",
+	func() string {
 		return viper.GetString("env")
 	},
-})
+)
 ```
 
 Then run the service:

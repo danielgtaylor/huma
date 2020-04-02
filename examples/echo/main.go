@@ -17,17 +17,13 @@ func main() {
 		Version: "1.0.0",
 	})
 
-	r.Resource("/echo").Put(&huma.Operation{
-		Description: "Echo back an input word.",
-		Params: []*huma.Param{
-			huma.PathParam("word", "The word to echo back"),
-			huma.QueryParam("greet", "Return a greeting", false),
-		},
-		Responses: []*huma.Response{
-			huma.ResponseJSON(http.StatusOK, "Successful echo response"),
-			huma.ResponseError(http.StatusBadRequest, "Invalid input"),
-		},
-		Handler: func(word string, greet bool) (*EchoResponse, *huma.ErrorModel) {
+	r.Resource("/echo",
+		huma.PathParam("word", "The word to echo back"),
+		huma.QueryParam("greet", "Return a greeting", false),
+		huma.ResponseJSON(http.StatusOK, "Successful echo response"),
+		huma.ResponseError(http.StatusBadRequest, "Invalid input"),
+	).Put("Echo back an input word",
+		func(word string, greet bool) (*EchoResponse, *huma.ErrorModel) {
 			if word == "test" {
 				return nil, &huma.ErrorModel{Message: "Value not allowed: test"}
 			}
@@ -39,7 +35,7 @@ func main() {
 
 			return &EchoResponse{Value: v}, nil
 		},
-	})
+	)
 
 	r.Run()
 }

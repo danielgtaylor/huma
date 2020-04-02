@@ -14,20 +14,11 @@ func main() {
 	})
 
 	// Create the "hello" operation via `GET /hello`.
-	r.Resource("/hello").Get(&huma.Operation{
-		Description: "Basic hello world",
-		// Every response definition includes the HTTP status code to return, the
-		// content type to use, and a description for documentation.
-		Responses: []*huma.Response{
-			huma.ResponseText(http.StatusOK, "Successful hello response"),
-		},
-		// The Handler is the operation's implementation. In this example, we
-		// are just going to return the string "hello", but you could fetch
-		// data from your datastore or do other things here.
-		Handler: func() string {
-			return "Hello, world"
-		},
-	})
+	r.Resource("/hello").
+		Text(http.StatusOK, "Success").
+		Get("Basic hello world", func() string {
+			return "Hello, world\n"
+		})
 
 	// Start the server on http://localhost:8888/
 	r.Run()

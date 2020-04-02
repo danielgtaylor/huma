@@ -33,7 +33,7 @@ func main() {
 	})
 
 	notes := r.Resource("/notes")
-	notes.ListJSON(http.StatusOK, "Returns a list of all notes",
+	notes.JSON(http.StatusOK, "Success").List("Returns a list of all notes",
 		func() []*NoteSummary {
 			// Create a list of summaries from all the notes.
 			summaries := make([]*NoteSummary, 0)
@@ -57,22 +57,22 @@ func main() {
 
 	notFound := huma.ResponseError(http.StatusNotFound, "Note not found")
 
-	note.PutNoContent(http.StatusNoContent, "Create or update a note",
-		func(id string, note *Note) bool {
+	note.NoContent("Successful create/update").Put("Create or update a note",
+		func(id string, n *Note) bool {
 			// Set the created time to now and then save the note in the DB.
-			note.Created = time.Now()
-			memoryDB.Store(id, note)
+			n.Created = time.Now()
+			memoryDB.Store(id, n)
 
 			// Empty responses don't have a body, so you can just return `true`.
 			return true
 		},
 	)
 
-	note.With(notFound).GetJSON(http.StatusOK, "Get a note by its ID",
+	note.With(notFound).JSON(http.StatusOK, "Success").Get("Get a note by its ID",
 		func(id string) (*huma.ErrorModel, *Note) {
-			if note, ok := memoryDB.Load(id); ok {
+			if n, ok := memoryDB.Load(id); ok {
 				// Note with that ID exists!
-				return nil, note.(*Note)
+				return nil, n.(*Note)
 			}
 
 			return &huma.ErrorModel{
@@ -81,7 +81,7 @@ func main() {
 		},
 	)
 
-	note.With(notFound).DeleteNoContent(http.StatusNoContent, "Successfully deleted note",
+	note.With(notFound).NoContent("Success").Delete("Delete a note by its ID",
 		func(id string) (*huma.ErrorModel, bool) {
 			if _, ok := memoryDB.Load(id); ok {
 				// Note with that ID exists!

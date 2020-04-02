@@ -35,26 +35,17 @@ func main() {
 		},
 	}
 
-	r.Resource("/items").Get(&huma.Operation{
-		Description:  "FastAPI benchmark test",
-		Dependencies: []*huma.Dependency{d},
-		Params: []*huma.Param{
-			huma.PathParam("id", "The item's unique ID"),
-		},
-		ResponseHeaders: []*huma.ResponseHeader{
-			huma.Header("x-authinfo", "..."),
-		},
-		Responses: []*huma.Response{
-			huma.ResponseJSON(http.StatusOK, "Successful hello response", "x-authinfo"),
-		},
-		Handler: func(authInfo string, id int) (string, *Item) {
-			return authInfo, &Item{
-				ID:      id,
-				Name:    "Hello",
-				Price:   1.24,
-				IsOffer: false,
-			}
-		},
+	r.Resource("/items", d,
+		huma.PathParam("id", "The item's unique ID"),
+		huma.Header("x-authinfo", "..."),
+		huma.ResponseJSON(http.StatusOK, "Successful hello response", "x-authinfo"),
+	).Get("Huma benchmark test", func(authInfo string, id int) (string, *Item) {
+		return authInfo, &Item{
+			ID:      id,
+			Name:    "Hello",
+			Price:   1.24,
+			IsOffer: false,
+		}
 	})
 
 	r.Run()
