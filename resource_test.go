@@ -39,6 +39,20 @@ func TestResourceWithDep(t *testing.T) {
 	assert.NotContains(t, r3.deps, dep1)
 }
 
+func TestResourceWithSecurity(t *testing.T) {
+	sec1 := SecurityRef("sec1")
+	sec2 := SecurityRef("sec2")[0]
+
+	r1 := NewResource(nil, "/test")
+	r2 := r1.With(sec1)
+	r3 := r1.With(sec2)
+
+	assert.Equal(t, r2.security, sec1)
+	assert.NotContains(t, r2.security, sec2)
+	assert.Contains(t, r3.security, sec2)
+	assert.NotEqual(t, r3.security, sec1)
+}
+
 func TestResourceWithParam(t *testing.T) {
 	param1 := PathParam("p1", "desc")
 	param2 := PathParam("p2", "desc")

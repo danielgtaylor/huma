@@ -13,40 +13,44 @@ type Resource struct {
 	router          *Router
 	path            string
 	deps            []*Dependency
+	security        []SecurityRequirement
 	params          []*Param
 	responseHeaders []*ResponseHeader
 	responses       []*Response
 }
 
 // NewResource creates a new resource with the given router and path. All
-// dependencies, params, headers, and responses are empty.
+// dependencies, security requirements, params, headers, and responses are
+// empty.
 func NewResource(router *Router, path string) *Resource {
 	return &Resource{
 		router:          router,
 		path:            path,
 		deps:            make([]*Dependency, 0),
+		security:        make([]SecurityRequirement, 0),
 		params:          make([]*Param, 0),
 		responseHeaders: make([]*ResponseHeader, 0),
 		responses:       make([]*Response, 0),
 	}
 }
 
-// Copy the resource. New arrays are created for dependencies, params, response
-// headers, and responses but the underlying pointer values themselves are the
-// same.
+// Copy the resource. New arrays are created for dependencies, security
+// requirements, params, response headers, and responses but the underlying
+// pointer values themselves are the same.
 func (r *Resource) Copy() *Resource {
 	return &Resource{
 		router:          r.router,
 		path:            r.path,
 		deps:            append([]*Dependency{}, r.deps...),
+		security:        append([]SecurityRequirement{}, r.security...),
 		params:          append([]*Param{}, r.params...),
 		responseHeaders: append([]*ResponseHeader{}, r.responseHeaders...),
 		responses:       append([]*Response{}, r.responses...),
 	}
 }
 
-// With returns a copy of this resource with the given dependencies, params,
-// response headers, or responses added to it.
+// With returns a copy of this resource with the given dependencies, security
+// requirements, params, response headers, or responses added to it.
 func (r *Resource) With(depsParamHeadersOrResponses ...interface{}) *Resource {
 	c := r.Copy()
 
@@ -55,6 +59,10 @@ func (r *Resource) With(depsParamHeadersOrResponses ...interface{}) *Resource {
 		switch v := dph.(type) {
 		case *Dependency:
 			c.deps = append(r.deps, v)
+		case []SecurityRequirement:
+			c.security = v
+		case SecurityRequirement:
+			c.security = append(r.security, v)
 		case *Param:
 			c.params = append(r.params, v)
 		case *ResponseHeader:
@@ -111,7 +119,7 @@ func (r *Resource) SubResource(path string, depsParamHeadersOrResponses ...inter
 }
 
 // Operation adds the operation to this resource's router with all the
-// combined deps, params, headers, responses, etc.
+// combined deps, security requirements, params, headers, responses, etc.
 func (r *Resource) Operation(method string, op *Operation) {
 	// Set params, etc
 	allDeps := append([]*Dependency{}, r.deps...)

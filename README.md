@@ -240,10 +240,7 @@ Official Go package documentation can always be found at https://pkg.go.dev/gith
 
 ## Resources
 
-Huma APIs are composed of resources and sub-resources attached to a router. A
-resource refers to a unique URI on which operations can be performed. Huma
-resources can have dependencies, parameters, response headers, and responses
-attached to them which are all applied to every operation and sub-resource.
+Huma APIs are composed of resources and sub-resources attached to a router. A resource refers to a unique URI on which operations can be performed. Huma resources can have dependencies, security requirements, parameters, response headers, and responses attached to them which are all applied to every operation and sub-resource.
 
 ```go
 r := huma.NewRouter(&huma.OpenAPI{Title: "Test", Version: "1.0.0"})
@@ -257,6 +254,8 @@ note := notes.With(huma.PathParam("id", "Note ID"))
 // Create a sub-resource at /notes/{id}/likes
 sub := note.SubResource("/likes")
 ```
+
+The `With(...)` function is very powerful and can accept dependencies, security requirements, parameters, response headers, and response descriptions. It returns a copy of the resource with those values applied.
 
 > :whale: Resources should be nouns, and plural if they return more than one item. Good examples: `/notes`, `/likes`, `/users`, `/videos`, etc.
 
