@@ -15,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 	"github.com/xeipuuv/gojsonschema"
+	"go.uber.org/zap"
 )
 
 // ErrInvalidParamLocation is returned when the `in` field of the parameter
@@ -366,7 +367,12 @@ func (r *Router) Register(method, path string, op *Operation) {
 
 					if !found {
 						if !value.IsZero() {
-							// TODO: log warning? This shouldn't be set if it won't get sent.
+							// Log an error to be fixed later if using the logging middleware.
+							if l, ok := c.Get("log"); ok {
+								if log, ok := l.(*zap.SugaredLogger); ok {
+									log.Errorf("Header '%s' with value '%v' set on a response that did not declare it", header.Name, value)
+								}
+							}
 						}
 						// Skip this header as the response doesn't list it.
 						continue

@@ -20,12 +20,12 @@ func main() {
 	r.Resource("/echo",
 		huma.PathParam("word", "The word to echo back"),
 		huma.QueryParam("greet", "Return a greeting", false),
-		huma.ResponseJSON(http.StatusOK, "Successful echo response"),
 		huma.ResponseError(http.StatusBadRequest, "Invalid input"),
+		huma.ResponseJSON(http.StatusOK, "Successful echo response"),
 	).Put("Echo back an input word",
-		func(word string, greet bool) (*EchoResponse, *huma.ErrorModel) {
+		func(word string, greet bool) (*huma.ErrorModel, *EchoResponse) {
 			if word == "test" {
-				return nil, &huma.ErrorModel{Message: "Value not allowed: test"}
+				return &huma.ErrorModel{Message: "Value not allowed: test"}, nil
 			}
 
 			v := word
@@ -33,7 +33,7 @@ func main() {
 				v = "Hello, " + word
 			}
 
-			return &EchoResponse{Value: v}, nil
+			return nil, &EchoResponse{Value: v}
 		},
 	)
 

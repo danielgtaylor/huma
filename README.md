@@ -234,6 +234,10 @@ Combine the above with [openapi-cli-generator](https://github.com/danielgtaylor/
 
 # Documentation
 
+Official Go package documentation can always be found at https://pkg.go.dev/github.com/danielgtaylor/huma. Below is an introduction to the various features available in Huma.
+
+> :whale: Hi there! I'm the happy Huma whale here to provide help. You'll see me leave helpful tips down below.
+
 ## Resources
 
 Huma APIs are composed of resources and sub-resources attached to a router. A
@@ -254,6 +258,8 @@ note := notes.With(huma.PathParam("id", "Note ID"))
 sub := note.SubResource("/likes")
 ```
 
+> :whale: Resources should be nouns, and plural if they return more than one item. Good examples: `/notes`, `/likes`, `/users`, `/videos`, etc.
+
 ## Operations
 
 Operations perform an action on a resource using an HTTP method verb. The following verbs are available:
@@ -266,10 +272,15 @@ Operations perform an action on a resource using an HTTP method verb. The follow
 - Patch
 - Delete
 
+Operations can take dependencies, parameters, & request bodies and produce response headers and responses. These are each discussed in more detail below.
+
 If you don't provide a response description, then one is generated for you based on the response type with the following rules:
 
 - Boolean: If true, returns `HTTP 204 No Content`
+- String: If not empty, returns `HTTP 200 OK` with content type `text/plain`
 - Slice, map, struct pointer: If not `nil`, marshal to JSON and return `HTTP 200 OK` with content type `application/json`
+
+If you need any customization beyond the above then you must provide a response description.
 
 ```go
 r := huma.NewRouter(&huma.OpenAPI{Title: "Test", Version: "1.0.0"})
@@ -313,6 +324,8 @@ notes.Operation(http.MethodGet, &huma.Operation{
 })
 ```
 
+> :whale: Operations map an HTTP action verb to a resource. You might `POST` a new note or `GET` a user. Sometimes the mapping is less obvious and you can consider using a sub-resource. For example, rather than unliking a post, maybe you `DELETE` the `/posts/{id}/likes` resource.
+
 ## Handler Functions
 
 The basic structure of a Huma handler function looks like this, with most arguments being optional and dependent on the declaritively described operation:
@@ -334,6 +347,8 @@ Another example: you have an `id` parameter input and return a response model to
 ```go
 func (id string) *MyModel { return &MyModel{ID: id} }
 ```
+
+> :whale: Confused about what a handler should look like? Just run your service and it'll print out an approximate handler function when it panics.
 
 ## Parameters
 
@@ -369,7 +384,7 @@ huma.PathParam("id", "Note ID", &huma.Schema{
 
 Once a parameter is declared it will get parsed, validated, and then sent to your handler function. If parsing or validation fails, the client gets a 400-level HTTP error.
 
-If a proxy is providing e.g. authentication or rate-limiting and exposes additional internal-only information then use the internal parameters like `huma.HeaderParamInternal("UserID", "Parsed user from the auth system", "nobody")`. Internal parameters are never included in the generated OpenAPI 3 spec.
+> :whale: If a proxy is providing e.g. authentication or rate-limiting and exposes additional internal-only information then use the internal parameters like `huma.HeaderParamInternal("UserID", "Parsed user from the auth system", "nobody")`. Internal parameters are never included in the generated OpenAPI 3 spec or documentation.
 
 ## Request & Response Models
 
@@ -393,7 +408,6 @@ Request models are used by adding a new input argument that is a pointer to a st
 
 ```go
 r.Resource("/notes", huma.PathParam("id", "Note ID")).
-	NoContent("Successful create/update").
 	Put("Create or update a note",
 		// Handler without an input body looks like:
 		func(id string) bool {
@@ -428,16 +442,19 @@ Whichever model is not `nil` will get sent back to the client.
 Empty responses, e.g. a `204 No Content` or `304 Not Modified` are also supported. Use `huma.ResponseEmpty` paired with a simple boolean to return a response without a body. Passing `false` acts like `nil` for models and prevents that response from being sent.
 
 ```go
-r.
-	Resource("/notes").
-		huma.ResponseEmpty(http.StatusNoContent, "This should have no body")).
-	Get("description", func() bool {
-		return true
-	})
+r.Resource("/notes",
+	huma.ResponseEmpty(http.StatusNoContent, "This should have no body")).
+Get("description", func() bool {
+	return true
+})
 },
 ```
 
+> :whale: In some cases Huma can [auto-generate a resonse model](#operations) for you.
+
 ### Model Tags
+
+Go struct tags are used to annotate the model with information that gets turned into [JSON Schema](https://json-schema.org/) for documentation and validation.
 
 The standard `json` tag is supported and can be used to rename a field and mark fields as optional using `omitempty`. The following additional tags are supported on model fields:
 
@@ -479,7 +496,7 @@ For example:
 ```go
 r.Resource("/notes",
 	huma.Header("expires", "Expiration date for this content"),
-	huma.ResponseText(200, "Success", "expires")).
+	huma.ResponseText(http.StatusOK, "Success", "expires")).
 Get("description", func() (string, string) {
 	expires := time.Now().Add(7 * 24 * time.Hour).MarshalText()
 	return expires, "Hello!"
@@ -495,6 +512,8 @@ func() (expires string, message string) {
 	return
 },
 ```
+
+> :whale: If you forget to declare a response header for a particular response and then try to set it when returning that response it will **not** be sent to the client and an error will be logged.
 
 ## Dependencies
 
@@ -542,7 +561,7 @@ r.Resource("/foo").Operation(http.MethodGet, &huma.Operation{
 })
 ```
 
-Note that global dependencies cannot be functions. You can wrap them in a struct as a workaround.
+> :whale: Note that global dependencies cannot be functions. You can wrap them in a struct as a workaround if needed.
 
 ## Custom Gin
 
@@ -608,7 +627,7 @@ r := huma.NewRouterWithGin(g, &huma.OpenAPI{
 
 ## Lazy-loading at Server Startup
 
-You can register functions to run before the server starts, allowing for things like lazy-loading dependencies. This is especially useful for external dependencies and if any custom CLI commands are set up.
+You can register functions to run before the server starts, allowing for things like lazy-loading dependencies.
 
 ```go
 var db *mongo.Client
@@ -626,6 +645,8 @@ r.PreStart(func() {
 })
 ```
 
+> :whale: This is especially useful for external dependencies and if any custom CLI commands are set up. For example, you may not want to require a database to run `my-service openapi my-api.json`.
+
 ## Changing the Documentation Renderer
 
 You can choose between [RapiDoc](https://mrin9.github.io/RapiDoc/), [ReDoc](https://github.com/Redocly/redoc), or [SwaggerUI](https://swagger.io/tools/swagger-ui/) to auto-generate documentation. Simply set the documentation handler on the router:
@@ -638,6 +659,8 @@ r := huma.NewRouter(&huma.OpenAPI{
 
 r.SetDocsHandler(huma.ReDocHandler)
 ```
+
+> :whale: Pass a custom handler function to have even more control for branding or browser authentication.
 
 ## Custom OpenAPI Fields
 
@@ -663,6 +686,7 @@ r := huma.NewRouter(&huma.OpenAPI{
 	Version: "1.0.0",
 })
 
+// Add a long arg (--env), short (-e), description & default
 r.AddGlobalFlag("env", "e", "Environment", "local")
 
 r.Resource("/current_env").Text(http.StatusOK, "Success").Get(
@@ -679,9 +703,13 @@ Then run the service:
 $ go run yourservice.go --env=prod
 ```
 
+> :whale: Combine custom arguments with [customized logger setup](#customizing-logging) and you can easily log your cloud provider, environment, region, pod, etc with every message.
+
 ## Custom CLI Commands
 
 You can access the root `cobra.Command` via `r.Root()` and add new custom commands via `r.Root().AddCommand(...)`. The `openapi` sub-command is one such example in the default setup.
+
+> :whale: You can also overwite the `r.Root().Command` to completely customize how you run the server.
 
 ## Middleware
 
@@ -713,3 +741,5 @@ Using a small amount of reflection, Huma can verify the function signatures, inj
 By strictly enforcing this runtime interface you get several advantages. No more out of date API description. No more out of date documenatation. No more out of date SDKs or CLIs. Your entire ecosystem of tooling is driven off of one simple backend implementation. Stuff just works.
 
 More docs coming soon.
+
+> :whale: Thanks for reading!

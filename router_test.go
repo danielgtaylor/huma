@@ -9,7 +9,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func init() {
@@ -413,4 +416,22 @@ func TestRouterDependencies(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "Hello logger! [uri:/hello]", captured)
+}
+
+func TestRouterBadHeader(t *testing.T) {
+	core, logs := observer.New(zapcore.InfoLevel)
+	l := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(func(zapcore.Core) zapcore.Core { return core })))
+	g := gin.New()
+	g.Use(LogMiddleware(l, nil))
+	r := NewRouterWithGin(g, &OpenAPI{Title: "Test API", Version: "1.0.0"})
+	r.Resource("/test", Header("foo", "desc"), ResponseError(http.StatusBadRequest, "desc", "foo")).Get("desc", func() (string, *ErrorModel, string) {
+		return "header-value", nil, "response"
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotEmpty(t, logs.FilterMessageSnippet("did not declare").All())
 }

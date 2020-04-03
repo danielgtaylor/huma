@@ -208,6 +208,18 @@ func TestResourceAutoJSON(t *testing.T) {
 	assert.Equal(t, "application/json", r.api.Paths["/test"][http.MethodGet].Responses[0].ContentType)
 }
 
+func TestResourceAutoText(t *testing.T) {
+	r := NewRouter(&OpenAPI{Title: "Test API", Version: "1.0.0"})
+
+	// Registering the handler should not panic
+	r.Resource("/test").Get("desc", func() string {
+		return "Hello, world"
+	})
+
+	assert.Equal(t, http.StatusOK, r.api.Paths["/test"][http.MethodGet].Responses[0].StatusCode)
+	assert.Equal(t, "text/plain", r.api.Paths["/test"][http.MethodGet].Responses[0].ContentType)
+}
+
 func TestResourceAutoNoContent(t *testing.T) {
 	r := NewRouter(&OpenAPI{Title: "Test API", Version: "1.0.0"})
 

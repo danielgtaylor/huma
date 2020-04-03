@@ -146,11 +146,14 @@ func (r *Resource) Operation(method string, op *Operation) {
 
 	if op.Handler != nil {
 		t := reflect.TypeOf(op.Handler)
-		if t.NumOut() == len(op.Responses)+1 {
+		if t.NumOut() == len(op.ResponseHeaders)+len(op.Responses)+1 {
 			rtype := t.Out(t.NumOut() - 1)
-			if rtype.Kind() == reflect.Bool {
+			switch rtype.Kind() {
+			case reflect.Bool:
 				op.Responses = append(op.Responses, ResponseEmpty(http.StatusNoContent, "Success"))
-			} else {
+			case reflect.String:
+				op.Responses = append(op.Responses, ResponseText(http.StatusOK, "Success"))
+			default:
 				op.Responses = append(op.Responses, ResponseJSON(http.StatusOK, "Success"))
 			}
 		}
