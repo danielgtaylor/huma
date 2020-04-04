@@ -444,15 +444,16 @@ func TestRouterParams(t *testing.T) {
 		QueryParam("f32", "desc", 0.0),
 		QueryParam("f64", "desc", 0.0),
 		QueryParam("schema", "desc", "test", &Schema{Pattern: "^a-z+$"}),
-	).Get("desc", func(id string, i int16, f32 float32, f64 float64, schema string) string {
-		return fmt.Sprintf("%s %v %v %v %v", id, i, f32, f64, schema)
+		QueryParam("items", "desc", []int{}),
+	).Get("desc", func(id string, i int16, f32 float32, f64 float64, schema string, items []int) string {
+		return fmt.Sprintf("%s %v %v %v %v %v", id, i, f32, f64, schema, items)
 	})
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/test/someId?i=1&f32=1.0&f64=123.45", nil)
+	req, _ := http.NewRequest(http.MethodGet, "/test/someId?i=1&f32=1.0&f64=123.45&items=1,2,3", nil)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "someId 1 1 123.45 test", w.Body.String())
+	assert.Equal(t, "someId 1 1 123.45 test [1 2 3]", w.Body.String())
 
 	// Failure parsing tests
 	w = httptest.NewRecorder()
@@ -472,6 +473,11 @@ func TestRouterParams(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest(http.MethodGet, "/test/someId?schema=foo1", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/test/someId?items=1,2,bad", nil)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }

@@ -24,6 +24,16 @@ var ErrInvalidParamLocation = errors.New("invalid parameter location")
 
 // Checks if data validates against the given schema. Returns false on failure.
 func validAgainstSchema(c *gin.Context, schema *Schema, data []byte) bool {
+	defer func() {
+		// Catch panics from the `gojsonschema` library.
+		if err := recover(); err != nil {
+			c.AbortWithStatusJSON(400, &ErrorInvalidModel{
+				Message: "Invalid input",
+				Errors:  []string{err.(error).Error() + ": " + string(data)},
+			})
+		}
+	}()
+
 	loader := gojsonschema.NewGoLoader(schema)
 	doc := gojsonschema.NewBytesLoader(data)
 	s, err := gojsonschema.NewSchema(loader)
@@ -48,6 +58,63 @@ func validAgainstSchema(c *gin.Context, schema *Schema, data []byte) bool {
 	}
 
 	return true
+}
+
+func parseParamValue(c *gin.Context, name string, typ reflect.Type, pstr string) (interface{}, bool) {
+	var pv interface{}
+	switch typ.Kind() {
+	case reflect.Bool:
+		converted, err := strconv.ParseBool(pstr)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
+				Message: fmt.Sprintf("cannot parse boolean for param %s: %s", name, pstr),
+			})
+			return nil, false
+		}
+		pv = converted
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		converted, err := strconv.Atoi(pstr)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
+				Message: fmt.Sprintf("cannot parse integer for param %s: %s", name, pstr),
+			})
+			return nil, false
+		}
+		pv = reflect.ValueOf(converted).Convert(typ).Interface()
+	case reflect.Float32:
+		converted, err := strconv.ParseFloat(pstr, 32)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
+				Message: fmt.Sprintf("cannot parse float for param %s: %s", name, pstr),
+			})
+			return nil, false
+		}
+		pv = float32(converted)
+	case reflect.Float64:
+		converted, err := strconv.ParseFloat(pstr, 64)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
+				Message: fmt.Sprintf("cannot parse float for param %s: %s", name, pstr),
+			})
+			return nil, false
+		}
+		pv = converted
+	case reflect.Slice:
+		slice := reflect.MakeSlice(typ, 0, 0)
+		for _, item := range strings.Split(pstr, ",") {
+			if itemValue, ok := parseParamValue(c, name, typ.Elem(), item); ok {
+				slice = reflect.Append(slice, reflect.ValueOf(itemValue))
+			} else {
+				return nil, false
+			}
+		}
+		pv = slice.Interface()
+	default:
+		pv = pstr
+	}
+
+	return pv, true
 }
 
 func getParamValue(c *gin.Context, param *Param) (interface{}, bool) {
@@ -76,53 +143,22 @@ func getParamValue(c *gin.Context, param *Param) (interface{}, bool) {
 			// with quotes, so wrap them here for the parser that does the
 			// validation step below.
 			data = `"` + data + `"`
+		} else if param.Schema.Type == "array" {
+			// Array type needs to have `[` and `]` added.
+			if param.Schema.Items.Type == "string" {
+				// Same as above, quote each item.
+				data = `"` + strings.Join(strings.Split(data, ","), `","`) + `"`
+			}
+			data = "[" + data + "]"
 		}
 		if !validAgainstSchema(c, param.Schema, []byte(data)) {
 			return nil, false
 		}
 	}
 
-	var pv interface{}
-	switch param.typ.Kind() {
-	case reflect.Bool:
-		converted, err := strconv.ParseBool(pstr)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
-				Message: fmt.Sprintf("cannot parse boolean for param %s: %s", param.Name, pstr),
-			})
-			return nil, false
-		}
-		pv = converted
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		converted, err := strconv.Atoi(pstr)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
-				Message: fmt.Sprintf("cannot parse integer for param %s: %s", param.Name, pstr),
-			})
-			return nil, false
-		}
-		pv = reflect.ValueOf(converted).Convert(param.typ).Interface()
-	case reflect.Float32:
-		converted, err := strconv.ParseFloat(pstr, 32)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
-				Message: fmt.Sprintf("cannot parse float for param %s: %s", param.Name, pstr),
-			})
-			return nil, false
-		}
-		pv = float32(converted)
-	case reflect.Float64:
-		converted, err := strconv.ParseFloat(pstr, 64)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
-				Message: fmt.Sprintf("cannot parse float for param %s: %s", param.Name, pstr),
-			})
-			return nil, false
-		}
-		pv = converted
-	default:
-		pv = pstr
+	pv, ok := parseParamValue(c, param.Name, param.typ, pstr)
+	if !ok {
+		return nil, false
 	}
 
 	return pv, true
