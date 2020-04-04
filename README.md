@@ -93,22 +93,20 @@ func main() {
 	})
 
 	notes := r.Resource("/notes")
-	notes.List("Returns a list of all notes",
-		func() []*NoteSummary {
-			// Create a list of summaries from all the notes.
-			summaries := make([]*NoteSummary, 0)
+	notes.List("Returns a list of all notes", func() []*NoteSummary {
+		// Create a list of summaries from all the notes.
+		summaries := make([]*NoteSummary, 0)
 
-			memoryDB.Range(func(k, v interface{}) bool {
-				summaries = append(summaries, &NoteSummary{
-					ID:      k.(string),
-					Created: v.(*Note).Created,
-				})
-				return true
+		memoryDB.Range(func(k, v interface{}) bool {
+			summaries = append(summaries, &NoteSummary{
+				ID:      k.(string),
+				Created: v.(*Note).Created,
 			})
+			return true
+		})
 
-			return summaries
-		},
-	)
+		return summaries
+	})
 
 	// Add an `id` path parameter to create a note resource.
 	note := notes.With(huma.PathParam("id", "Note ID", &huma.Schema{
@@ -117,16 +115,14 @@ func main() {
 
 	notFound := huma.ResponseError(http.StatusNotFound, "Note not found")
 
-	note.Put("Create or update a note",
-		func(id string, n *Note) bool {
-			// Set the created time to now and then save the note in the DB.
-			n.Created = time.Now()
-			memoryDB.Store(id, n)
+	note.Put("Create or update a note", func(id string, n *Note) bool {
+		// Set the created time to now and then save the note in the DB.
+		n.Created = time.Now()
+		memoryDB.Store(id, n)
 
-			// Empty responses don't have a body, so you can just return `true`.
-			return true
-		},
-	)
+		// Empty responses don't have a body, so you can just return `true`.
+		return true
+	})
 
 	note.With(notFound).Get("Get a note by its ID",
 		func(id string) (*huma.ErrorModel, *Note) {
