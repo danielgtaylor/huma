@@ -2,6 +2,7 @@ package huma
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -10,6 +11,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -207,6 +209,10 @@ type Router struct {
 	root        *cobra.Command
 	prestart    []func()
 	docsHandler func(c *gin.Context, api *OpenAPI)
+
+	// Tracks the currently running server for graceful shutdown.
+	server     *http.Server
+	serverLock sync.Mutex
 }
 
 // NewRouter creates a new Huma router for handling API requests with
@@ -267,6 +273,12 @@ func (r *Router) GinEngine() *gin.Engine {
 // PreStart registers a function to run before server start.
 func (r *Router) PreStart(f func()) {
 	r.prestart = append(r.prestart, f)
+}
+
+// SetServer allows you to set a custom server. This can be used to set custom
+// timeouts for example.
+func (r *Router) SetServer(server *http.Server) {
+	r.server = server
 }
 
 // SetDocsHandler sets the documentation rendering handler function. You can
@@ -456,14 +468,46 @@ func (r *Router) Register(method, path string, op *Operation) {
 	})
 }
 
+func (r *Router) listen(addr, certFile, keyFile string) error {
+	r.serverLock.Lock()
+	if r.server == nil {
+		r.server = &http.Server{
+			Addr:              addr,
+			ReadHeaderTimeout: 30 * time.Second,
+			IdleTimeout:       60 * time.Second,
+			Handler:           r,
+		}
+	} else {
+		r.server.Addr = addr
+	}
+	r.serverLock.Unlock()
+
+	if certFile != "" {
+		return r.server.ListenAndServeTLS(certFile, keyFile)
+	}
+
+	return r.server.ListenAndServe()
+}
+
 // Listen for new connections.
 func (r *Router) Listen(addr string) error {
-	return r.engine.Run(addr)
+	return r.listen(addr, "", "")
 }
 
 // ListenTLS listens for new connections using HTTPS & HTTP2
 func (r *Router) ListenTLS(addr, certFile, keyFile string) error {
-	return r.engine.RunTLS(addr, certFile, keyFile)
+	return r.listen(addr, certFile, keyFile)
+}
+
+// Shutdown gracefully shuts down the server.
+func (r *Router) Shutdown(ctx context.Context) error {
+	r.serverLock.Lock()
+	defer r.serverLock.Unlock()
+
+	if r.server == nil {
+		panic("no server started")
+	}
+	return r.server.Shutdown(ctx)
 }
 
 // Run executes the router command.

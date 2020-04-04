@@ -1,13 +1,17 @@
 package huma
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/autotls"
 	"github.com/spf13/cobra"
@@ -59,31 +63,48 @@ func (r *Router) setupCLI() {
 				}
 			}
 
-			// Start either an HTTP or HTTPS server based on whether TLS cert/key
-			// paths were given or Let's Encrypt is used.
-			autoTLS := viper.GetString("autotls")
-			if autoTLS != "" {
-				domains := strings.Split(autoTLS, ",")
-				if err := autotls.Run(r, domains...); err != nil {
-					panic(err)
+			// Start the server.
+			go func() {
+				// Start either an HTTP or HTTPS server based on whether TLS cert/key
+				// paths were given or Let's Encrypt is used.
+				autoTLS := viper.GetString("autotls")
+				if autoTLS != "" {
+					domains := strings.Split(autoTLS, ",")
+					if err := autotls.Run(r, domains...); err != nil && err != http.ErrServerClosed {
+						panic(err)
+					}
+					return
 				}
-			}
 
-			cert := viper.GetString("cert")
-			key := viper.GetString("key")
-			if cert == "" && key == "" {
-				if err := r.Listen(fmt.Sprintf("%s:%v", viper.Get("host"), viper.Get("port"))); err != nil {
-					panic(err)
+				cert := viper.GetString("cert")
+				key := viper.GetString("key")
+				if cert == "" && key == "" {
+					if err := r.Listen(fmt.Sprintf("%s:%v", viper.Get("host"), viper.Get("port"))); err != nil && err != http.ErrServerClosed {
+						panic(err)
+					}
+					return
 				}
-			}
 
-			if cert != "" && key != "" {
-				if err := r.ListenTLS(fmt.Sprintf("%s:%v", viper.Get("host"), viper.Get("port")), cert, key); err != nil {
-					panic(err)
+				if cert != "" && key != "" {
+					if err := r.ListenTLS(fmt.Sprintf("%s:%v", viper.Get("host"), viper.Get("port")), cert, key); err != nil && err != http.ErrServerClosed {
+						panic(err)
+					}
+					return
 				}
-			}
 
-			panic("must pass key and cert for TLS")
+				panic("must pass key and cert for TLS")
+			}()
+
+			// Handle graceful shutdown.
+			quit := make(chan os.Signal)
+			signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+			<-quit
+
+			fmt.Println("Gracefully shutting down the server...")
+
+			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+			defer cancel()
+			r.Shutdown(ctx)
 		},
 	}
 

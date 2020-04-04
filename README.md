@@ -25,14 +25,15 @@ Features include:
   - Automatic recovery from panics
   - Automatically handle CORS headers
   - Structured logging middleware using [Zap](https://github.com/uber-go/zap)
+  - Automatic handling of `Prefer: return=minimal` from [RFC 7240](https://tools.ietf.org/html/rfc7240#section-4.2)
 - Annotated Go types for input and output models
   - Generates JSON Schema from Go types
   - Automatic input model validation & error handling
 - Dependency injection for loggers, datastores, etc
-- Automatic handling of `Prefer: return=minimal` from [RFC 7240](https://tools.ietf.org/html/rfc7240#section-4.2)
 - Documentation generation using [RapiDoc](https://mrin9.github.io/RapiDoc/), [ReDoc](https://github.com/Redocly/redoc), or [SwaggerUI](https://swagger.io/tools/swagger-ui/)
 - CLI built-in, configured via arguments or environment variables
   - Set via e.g. `-p 8000`, `--port=8000`, or `SERVICE_PORT=8000`
+  - Connection timeouts & graceful shutdown built-in
 - Generates OpenAPI JSON for access to a rich ecosystem of tools
   - Mocks with [API Sprout](https://github.com/danielgtaylor/apisprout)
   - SDKs with [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator)
@@ -582,6 +583,26 @@ r := huma.NewRouterWithGin(g, &huma.OpenAPI{
 	Version: "1.0.0",
 })
 ```
+
+## Custom HTTP Server
+
+You can have full control over the `http.Server` that is created.
+
+```go
+r := huma.NewRouter(...)
+
+// Set low timeouts to kick off slow clients.
+s := &http.Server{
+	ReadTimeout: 5 * time.Seconds,
+	WriteTimeout: 5 * time.Seconds,
+	Handler: r
+}
+
+r.SetServer(s)
+r.Run()
+```
+
+By default, only a `ReadHeaderTimeout` of 30 seconds and an `IdleTimeout` of 60 seconds are set. This allows large request and response bodies to be sent without fear of timing out in the default config, as well as the use of WebSockets.
 
 ## Logging
 
