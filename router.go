@@ -116,7 +116,7 @@ func getParamValue(c *gin.Context, param *Param) (interface{}, bool) {
 			})
 			return nil, false
 		}
-		pv = converted
+		pv = float32(converted)
 	case reflect.Float64:
 		converted, err := strconv.ParseFloat(pstr, 64)
 		if err != nil {
