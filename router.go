@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -111,7 +112,18 @@ func parseParamValue(c *gin.Context, name string, typ reflect.Type, pstr string)
 		}
 		pv = slice.Interface()
 	default:
-		pv = pstr
+		if typ == timeType {
+			dt, err := time.Parse(time.RFC3339Nano, pstr)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
+					Message: fmt.Sprintf("cannot parse time for param %s: %s", name, pstr),
+				})
+				return nil, false
+			}
+			pv = dt
+		} else {
+			pv = pstr
+		}
 	}
 
 	return pv, true

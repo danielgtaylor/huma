@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -445,15 +446,16 @@ func TestRouterParams(t *testing.T) {
 		QueryParam("f64", "desc", 0.0),
 		QueryParam("schema", "desc", "test", &Schema{Pattern: "^a-z+$"}),
 		QueryParam("items", "desc", []int{}),
-	).Get("desc", func(id string, i int16, f32 float32, f64 float64, schema string, items []int) string {
-		return fmt.Sprintf("%s %v %v %v %v %v", id, i, f32, f64, schema, items)
+		QueryParam("start", "desc", time.Time{}),
+	).Get("desc", func(id string, i int16, f32 float32, f64 float64, schema string, items []int, start time.Time) string {
+		return fmt.Sprintf("%s %v %v %v %v %v %v", id, i, f32, f64, schema, items, start)
 	})
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/test/someId?i=1&f32=1.0&f64=123.45&items=1,2,3", nil)
+	req, _ := http.NewRequest(http.MethodGet, "/test/someId?i=1&f32=1.0&f64=123.45&items=1,2,3&start=2020-01-01T12:00:00Z", nil)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "someId 1 1 123.45 test [1 2 3]", w.Body.String())
+	assert.Equal(t, "someId 1 1 123.45 test [1 2 3] 2020-01-01 12:00:00 +0000 UTC", w.Body.String())
 
 	// Failure parsing tests
 	w = httptest.NewRecorder()
@@ -478,6 +480,11 @@ func TestRouterParams(t *testing.T) {
 
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest(http.MethodGet, "/test/someId?items=1,2,bad", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/test/someId?start=bad", nil)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
