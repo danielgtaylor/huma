@@ -69,11 +69,6 @@ func getParamValue(c *gin.Context, param *Param) (interface{}, bool) {
 		panic(fmt.Errorf("%s: %w", param.In, ErrInvalidParamLocation))
 	}
 
-	if pstr == "" && !param.Required {
-		// Optional and not passed, so set it to its zero value.
-		return reflect.New(param.typ).Elem().Interface(), true
-	}
-
 	if param.Schema.HasValidation() {
 		data := pstr
 		if param.Schema.Type == "string" {
