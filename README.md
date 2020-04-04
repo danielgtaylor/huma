@@ -746,6 +746,64 @@ r.Use(gin.Logger())
 
 TODO
 
+## Testing
+
+The Go standard library provides useful testing utilities. Huma routers implement the [`http.Handler`](https://golang.org/pkg/net/http/#Handler) interface. Huma also provides a `humatest` package with utilities for creating test routers capable of e.g. capturing logs.
+
+You can see an example in the [`examples/test`](https://github.com/danielgtaylor/huma/tree/master/examples/test) directory:
+
+```go
+package main
+
+import "github.com/danielgtaylor/huma"
+
+func routes(r *huma.Router) {
+	// Register a single test route that returns a text/plain response.
+	r.Resource("/test").Get("Test route", func() string {
+		return "Hello, test!"
+	})
+}
+
+func main() {
+	// Create the router.
+	r := huma.NewRouter(&huma.OpenAPI{Title: "Test", Version: "1.0.0"})
+
+	// Register routes.
+	routes(r)
+
+	// Run the service.
+	r.Run()
+}
+```
+
+```go
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/danielgtaylor/huma/humatest"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestHandler(t *testing.T) {
+	// Set up the test router and register the routes.
+	r := humatest.NewRouter(t)
+	routes(r)
+
+	// Make a request against the service.
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+	r.ServeHTTP(w, req)
+
+	// Assert the response is as expected.
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "Hello, test!", w.Body.String())
+}
+```
+
 # How it Works
 
 Huma's philosophy is to make it harder to make mistakes by providing tools that reduce duplication and encourage practices which make it hard to forget to update some code.
