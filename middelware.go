@@ -117,3 +117,38 @@ func Handler404(c *gin.Context) {
 		Message: "Not found",
 	})
 }
+
+type minimalWriter struct {
+	gin.ResponseWriter
+	w http.ResponseWriter
+}
+
+func (w *minimalWriter) Write(data []byte) (int, error) {
+	if w.Status() == http.StatusNoContent {
+		return 0, nil
+	}
+
+	return w.ResponseWriter.Write(data)
+}
+
+func (w *minimalWriter) WriteHeader(statusCode int) {
+	if statusCode >= 200 && statusCode < 300 {
+		statusCode = http.StatusNoContent
+	}
+
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+// PreferMinimalMiddleware will remove the response body and return 204 No
+// Content for any 2xx response where the request had the Prefer: return=minimal
+// set on the request.
+func PreferMinimalMiddleware() func(*gin.Context) {
+	return func(c *gin.Context) {
+		// Wrap the response writer
+		if c.GetHeader("prefer") == "return=minimal" {
+			c.Writer = &minimalWriter{ResponseWriter: c.Writer}
+		}
+
+		c.Next()
+	}
+}

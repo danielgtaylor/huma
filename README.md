@@ -29,6 +29,7 @@ Features include:
   - Generates JSON Schema from Go types
   - Automatic input model validation & error handling
 - Dependency injection for loggers, datastores, etc
+- Automatic handling of `Prefer: return=minimal` from [RFC 7240](https://tools.ietf.org/html/rfc7240#section-4.2)
 - Documentation generation using [RapiDoc](https://mrin9.github.io/RapiDoc/), [ReDoc](https://github.com/Redocly/redoc), or [SwaggerUI](https://swagger.io/tools/swagger-ui/)
 - CLI built-in, configured via arguments or environment variables
   - Set via e.g. `-p 8000`, `--port=8000`, or `SERVICE_PORT=8000`
@@ -574,6 +575,7 @@ g := gin.New()
 g.Use(huma.Recovery())
 g.Use(huma.LogMiddleware(nil, nil))
 g.Use(cors.Default())
+g.Use(huma.PreferMinimalMiddleware())
 g.NoRoute(huma.Handler404)
 r := huma.NewRouterWithGin(g, &huma.OpenAPI{
 	Title:   "Notes API",
