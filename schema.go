@@ -384,14 +384,27 @@ func GenerateSchemaWithMode(t reflect.Type, mode SchemaMode, schema *Schema) (*S
 			return nil, err
 		}
 		schema.Items = s
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
 		schema.Type = "integer"
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		schema.Format = "int32"
+	case reflect.Int64:
+		schema.Type = "integer"
+		schema.Format = "int64"
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32:
 		// Unsigned integers can't be negative.
 		schema.Type = "integer"
+		schema.Format = "int32"
 		schema.Minimum = F(0.0)
-	case reflect.Float32, reflect.Float64:
+	case reflect.Uint64:
+		schema.Type = "integer"
+		schema.Format = "int64"
+		schema.Minimum = F(0.0)
+	case reflect.Float32:
 		schema.Type = "number"
+		schema.Format = "float"
+	case reflect.Float64:
+		schema.Type = "number"
+		schema.Format = "double"
 	case reflect.Bool:
 		schema.Type = "boolean"
 	case reflect.String:

@@ -17,8 +17,8 @@ var types = []struct {
 	format string
 }{
 	{false, "boolean", ""},
-	{0, "integer", ""},
-	{0.0, "number", ""},
+	{0, "integer", "int32"},
+	{0.0, "number", "double"},
 	{"hello", "string", ""},
 	{struct{}{}, "object", ""},
 	{[]string{"foo"}, "array", ""},
@@ -467,6 +467,7 @@ func TestSchemaUnsigned(t *testing.T) {
 	min := 0.0
 	assert.Equal(t, &Schema{
 		Type:    "integer",
+		Format:  "int32",
 		Minimum: &min,
 	}, s)
 }
