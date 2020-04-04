@@ -10,15 +10,25 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// ParamLocation describes where in the HTTP request the parameter comes from.
+type ParamLocation string
+
+// Parameter locations supported by OpenAPI 3
+const (
+	InPath   ParamLocation = "path"
+	InQuery  ParamLocation = "query"
+	InHeader ParamLocation = "header"
+)
+
 // Param describes an OpenAPI 3 parameter
 type Param struct {
-	Name        string      `json:"name"`
-	Description string      `json:"description,omitempty"`
-	In          string      `json:"in"`
-	Required    bool        `json:"required,omitempty"`
-	Schema      *Schema     `json:"schema,omitempty"`
-	Deprecated  bool        `json:"deprecated,omitempty"`
-	Example     interface{} `json:"example,omitempty"`
+	Name        string        `json:"name"`
+	Description string        `json:"description,omitempty"`
+	In          ParamLocation `json:"in"`
+	Required    bool          `json:"required,omitempty"`
+	Schema      *Schema       `json:"schema,omitempty"`
+	Deprecated  bool          `json:"deprecated,omitempty"`
+	Example     interface{}   `json:"example,omitempty"`
 
 	// Internal params are excluded from the OpenAPI document and can set up
 	// params sent between a load balander / proxy and the service internally.
@@ -37,7 +47,7 @@ func PathParamExample(name string, description string, example interface{}, sche
 	p := &Param{
 		Name:        name,
 		Description: description,
-		In:          "path",
+		In:          InPath,
 		Required:    true,
 		Example:     example,
 	}
@@ -59,7 +69,7 @@ func QueryParamExample(name string, description string, defaultValue interface{}
 	p := &Param{
 		Name:        name,
 		Description: description,
-		In:          "query",
+		In:          InQuery,
 		Example:     example,
 		def:         defaultValue,
 	}
@@ -76,7 +86,7 @@ func QueryParamInternal(name string, description string, defaultValue interface{
 	return &Param{
 		Name:        name,
 		Description: description,
-		In:          "query",
+		In:          InQuery,
 		internal:    true,
 		def:         defaultValue,
 	}
@@ -92,7 +102,7 @@ func HeaderParamExample(name string, description string, defaultValue interface{
 	p := &Param{
 		Name:        name,
 		Description: description,
-		In:          "header",
+		In:          InHeader,
 		Example:     example,
 		def:         defaultValue,
 	}
@@ -109,7 +119,7 @@ func HeaderParamInternal(name string, description string, defaultValue interface
 	return &Param{
 		Name:        name,
 		Description: description,
-		In:          "header",
+		In:          InHeader,
 		internal:    true,
 		def:         defaultValue,
 	}

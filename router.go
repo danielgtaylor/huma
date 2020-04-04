@@ -53,14 +53,14 @@ func validAgainstSchema(c *gin.Context, schema *Schema, data []byte) bool {
 func getParamValue(c *gin.Context, param *Param) (interface{}, bool) {
 	var pstr string
 	switch param.In {
-	case "path":
+	case InPath:
 		pstr = c.Param(param.Name)
-	case "query":
+	case InQuery:
 		pstr = c.Query(param.Name)
 		if pstr == "" {
 			return param.def, true
 		}
-	case "header":
+	case InHeader:
 		pstr = c.GetHeader(param.Name)
 		if pstr == "" {
 			return param.def, true

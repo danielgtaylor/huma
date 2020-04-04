@@ -16,23 +16,23 @@ var paramFuncsTable = []struct {
 	param       *Param
 	name        string
 	description string
-	in          string
+	in          ParamLocation
 	required    bool
 	internal    bool
 	def         interface{}
 	example     interface{}
 }{
-	{"PathParam", PathParam("test", "desc"), "test", "desc", "path", true, false, nil, nil},
-	{"PathParamSchema", PathParam("test", "desc", &Schema{}), "test", "desc", "path", true, false, nil, nil},
-	{"PathParamExample", PathParamExample("test", "desc", 123), "test", "desc", "path", true, false, nil, 123},
-	{"QueryParam", QueryParam("test", "desc", "def"), "test", "desc", "query", false, false, "def", nil},
-	{"QueryParamSchema", QueryParam("test", "desc", "def", &Schema{}), "test", "desc", "query", false, false, "def", nil},
-	{"QueryParamExample", QueryParamExample("test", "desc", "def", "foo"), "test", "desc", "query", false, false, "def", "foo"},
-	{"QueryParamInternal", QueryParamInternal("test", "desc", "def"), "test", "desc", "query", false, true, "def", nil},
-	{"HeaderParam", HeaderParam("test", "desc", "def"), "test", "desc", "header", false, false, "def", nil},
-	{"HeaderParamSchema", HeaderParam("test", "desc", "def", &Schema{}), "test", "desc", "header", false, false, "def", nil},
-	{"HeaderParamExample", HeaderParamExample("test", "desc", "def", "foo"), "test", "desc", "header", false, false, "def", "foo"},
-	{"HeaderParamInternal", HeaderParamInternal("test", "desc", "def"), "test", "desc", "header", false, true, "def", nil},
+	{"PathParam", PathParam("test", "desc"), "test", "desc", InPath, true, false, nil, nil},
+	{"PathParamSchema", PathParam("test", "desc", &Schema{}), "test", "desc", InPath, true, false, nil, nil},
+	{"PathParamExample", PathParamExample("test", "desc", 123), "test", "desc", InPath, true, false, nil, 123},
+	{"QueryParam", QueryParam("test", "desc", "def"), "test", "desc", InQuery, false, false, "def", nil},
+	{"QueryParamSchema", QueryParam("test", "desc", "def", &Schema{}), "test", "desc", InQuery, false, false, "def", nil},
+	{"QueryParamExample", QueryParamExample("test", "desc", "def", "foo"), "test", "desc", InQuery, false, false, "def", "foo"},
+	{"QueryParamInternal", QueryParamInternal("test", "desc", "def"), "test", "desc", InQuery, false, true, "def", nil},
+	{"HeaderParam", HeaderParam("test", "desc", "def"), "test", "desc", InHeader, false, false, "def", nil},
+	{"HeaderParamSchema", HeaderParam("test", "desc", "def", &Schema{}), "test", "desc", InHeader, false, false, "def", nil},
+	{"HeaderParamExample", HeaderParamExample("test", "desc", "def", "foo"), "test", "desc", InHeader, false, false, "def", "foo"},
+	{"HeaderParamInternal", HeaderParamInternal("test", "desc", "def"), "test", "desc", InHeader, false, true, "def", nil},
 }
 
 func TestParamFuncs(outer *testing.T) {
