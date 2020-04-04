@@ -58,17 +58,17 @@ func (r *Resource) With(depsParamHeadersOrResponses ...interface{}) *Resource {
 	for _, dph := range depsParamHeadersOrResponses {
 		switch v := dph.(type) {
 		case *Dependency:
-			c.deps = append(r.deps, v)
+			c.deps = append(c.deps, v)
 		case []SecurityRequirement:
 			c.security = v
 		case SecurityRequirement:
-			c.security = append(r.security, v)
+			c.security = append(c.security, v)
 		case *Param:
-			c.params = append(r.params, v)
+			c.params = append(c.params, v)
 		case *ResponseHeader:
-			c.responseHeaders = append(r.responseHeaders, v)
+			c.responseHeaders = append(c.responseHeaders, v)
 		case *Response:
-			c.responses = append(r.responses, v)
+			c.responses = append(c.responses, v)
 		default:
 			panic(fmt.Errorf("unsupported type %v", v))
 		}
