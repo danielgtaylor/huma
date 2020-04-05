@@ -602,7 +602,34 @@ r.SetServer(s)
 r.Run()
 ```
 
-By default, only a `ReadHeaderTimeout` of 30 seconds and an `IdleTimeout` of 60 seconds are set. This allows large request and response bodies to be sent without fear of timing out in the default config, as well as the use of WebSockets.
+### Timeouts, Deadlines, & Cancellation
+
+By default, only a `ReadHeaderTimeout` of _30 seconds_ and an `IdleTimeout` of _60 seconds_ are set. This allows large request and response bodies to be sent without fear of timing out in the default config, as well as the use of WebSockets.
+
+Set timeouts and deadlines on the request context and pass that along to libraries to prevent long-running handlers. For example:
+
+```go
+r.Resource("/timeout",
+	huma.ContextDependency(),
+).Get("timeout example", func(ctx context.Context) string {
+	// Add a timeout to the context. No request should take longer than 2 seconds
+	newCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	// Create a new request that will take 5 seconds to complete.
+	req, _ := http.NewRequestWithContext(
+		newCtx, http.MethodGet, "https://httpstat.us/418?sleep=5000", nil)
+
+	// Make the request. This will return with an error because the context
+	// deadline of 2 seconds is shorter than the request duration of 5 seconds.
+	_, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err.Error()
+	}
+
+	return "success"
+})
+```
 
 ## Logging
 
@@ -727,7 +754,7 @@ $ go run yourservice.go --env=prod
 
 You can access the root `cobra.Command` via `r.Root()` and add new custom commands via `r.Root().AddCommand(...)`. The `openapi` sub-command is one such example in the default setup.
 
-> :whale: You can also overwite the `r.Root().Command` to completely customize how you run the server.
+> :whale: You can also overwite `r.Root().Run` to completely customize how you run the server.
 
 ## Middleware
 
@@ -748,7 +775,7 @@ TODO
 
 ## Testing
 
-The Go standard library provides useful testing utilities. Huma routers implement the [`http.Handler`](https://golang.org/pkg/net/http/#Handler) interface. Huma also provides a `humatest` package with utilities for creating test routers capable of e.g. capturing logs.
+The Go standard library provides useful testing utilities and Huma routers implement the [`http.Handler`](https://golang.org/pkg/net/http/#Handler) interface they expect. Huma also provides a `humatest` package with utilities for creating test routers capable of e.g. capturing logs.
 
 You can see an example in the [`examples/test`](https://github.com/danielgtaylor/huma/tree/master/examples/test) directory:
 
