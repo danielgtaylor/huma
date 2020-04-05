@@ -102,7 +102,7 @@ func (r *Router) setupCLI() {
 
 			fmt.Println("Gracefully shutting down the server...")
 
-			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), viper.GetDuration("grace-period")*time.Second)
 			defer cancel()
 			r.Shutdown(ctx)
 		},
@@ -135,4 +135,5 @@ func (r *Router) setupCLI() {
 	r.AddGlobalFlag("key", "", "SSL key file path", "")
 	r.AddGlobalFlag("autotls", "", "Let's Encrypt automatic TLS domains (ignores port)", "")
 	r.AddGlobalFlag("debug", "d", "Enable debug logs", false)
+	r.AddGlobalFlag("grace-period", "", "Graceful shutdown wait duration in seconds", 20)
 }
