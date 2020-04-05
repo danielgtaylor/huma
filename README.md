@@ -721,6 +721,22 @@ r := huma.NewRouter(&huma.OpenAPI{
 })
 ```
 
+Use the OpenAPI hook for additional customization. It gives you a `*gab.Container` instance that represents the root of the OpenAPI document.
+
+```go
+func modify(openapi *gabs.Container) {
+	openapi.Set("value", "paths", "/test", "get", "x-foo")
+}
+
+r := huma.NewRouter(&huma.OpenAPI{
+	Title:   "Example API",
+	Version: "1.0.0",
+	Hook:    modify,
+})
+```
+
+> :whale: See the [OpenAPI 3 spec](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.2.md) for everything that can be set.
+
 ## Custom CLI Arguments
 
 You can add additional CLI arguments, e.g. for additional logging tags. Use the `AddGlobalFlag` function along with the `viper` module to get the parsed value.

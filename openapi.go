@@ -363,7 +363,13 @@ type OpenAPI struct {
 	SecuritySchemes map[string]*SecurityScheme
 	Security        []SecurityRequirement
 	Paths           map[string]map[string]*Operation
-	Extra           map[string]interface{}
+
+	// Extra allows setting extra keys in the OpenAPI root structure.
+	Extra map[string]interface{}
+
+	// Hook is a function to add to or modify the OpenAPI document before
+	// returning it when accessing `GET /openapi.json`.
+	Hook func(*gabs.Container)
 }
 
 // OpenAPIHandler returns a new handler function to generate an OpenAPI spec.
@@ -497,6 +503,10 @@ func OpenAPIHandler(api *OpenAPI) func(*gin.Context) {
 				}
 
 			}
+		}
+
+		if api.Hook != nil {
+			api.Hook(openapi)
 		}
 
 		c.Data(200, "application/json; charset=utf-8", openapi.BytesIndent("", "  "))
