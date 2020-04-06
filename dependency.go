@@ -45,66 +45,58 @@ func OperationDependency() *Dependency {
 
 // validate that the dependency deps/params/headers match the function
 // signature or that the value is not a function.
-func (d *Dependency) validate(returnType reflect.Type) error {
+func (d *Dependency) validate(returnType reflect.Type) {
 	if d == &contextDependency || d == &ginContextDependency || d == &operationDependency {
 		// Hard-coded known dependencies. These are special and have no value.
-		return nil
+		return
 	}
 
 	if d.Value == nil {
-		return fmt.Errorf("value must be set: %w", ErrDependencyInvalid)
+		panic(fmt.Errorf("value must be set: %w", ErrDependencyInvalid))
 	}
 
 	v := reflect.ValueOf(d.Value)
 
 	if v.Kind() != reflect.Func {
 		if returnType != nil && returnType != v.Type() {
-			return fmt.Errorf("return type should be %s but got %s: %w", v.Type(), returnType, ErrDependencyInvalid)
+			panic(fmt.Errorf("return type should be %s but got %s: %w", v.Type(), returnType, ErrDependencyInvalid))
 		}
 
 		// This is just a static value. It shouldn't have params/headers/etc.
 		if len(d.Params) > 0 {
-			return fmt.Errorf("global dependency should not have params: %w", ErrDependencyInvalid)
+			panic(fmt.Errorf("global dependency should not have params: %w", ErrDependencyInvalid))
 		}
 
 		if len(d.ResponseHeaders) > 0 {
-			return fmt.Errorf("global dependency should not set headers: %w", ErrDependencyInvalid)
+			panic(fmt.Errorf("global dependency should not set headers: %w", ErrDependencyInvalid))
 		}
 
-		return nil
+		return
 	}
 
 	fn := v.Type()
 	lenArgs := len(d.Dependencies) + len(d.Params)
 	if fn.NumIn() != lenArgs {
 		// TODO: generate suggested func signature
-		return fmt.Errorf("function signature should have %d args but got %s: %w", lenArgs, fn, ErrDependencyInvalid)
+		panic(fmt.Errorf("function signature should have %d args but got %s: %w", lenArgs, fn, ErrDependencyInvalid))
 	}
 
 	for _, dep := range d.Dependencies {
-		if err := dep.validate(nil); err != nil {
-			return err
-		}
+		dep.validate(nil)
 	}
 
 	for i, p := range d.Params {
-		if err := p.validate(fn.In(len(d.Dependencies) + i)); err != nil {
-			return err
-		}
+		p.validate(fn.In(len(d.Dependencies) + i))
 	}
 
 	lenReturn := len(d.ResponseHeaders) + 2
 	if fn.NumOut() != lenReturn {
-		return fmt.Errorf("function should return %d values but got %d: %w", lenReturn, fn.NumOut(), ErrDependencyInvalid)
+		panic(fmt.Errorf("function should return %d values but got %d: %w", lenReturn, fn.NumOut(), ErrDependencyInvalid))
 	}
 
 	for i, h := range d.ResponseHeaders {
-		if err := h.validate(fn.Out(i)); err != nil {
-			return err
-		}
+		h.validate(fn.Out(i))
 	}
-
-	return nil
 }
 
 // AllParams returns all parameters for all dependencies in the graph of this

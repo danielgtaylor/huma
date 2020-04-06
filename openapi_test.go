@@ -183,7 +183,7 @@ func TestOpenAPIHandler(t *testing.T) {
 		Extra: map[string]interface{}{
 			"x-foo": "bar",
 		},
-		Handler: func(greet bool, body *HelloRequest) (string, *HelloResponse) {
+		Handler: func(greet bool, user string, body *HelloRequest) (string, *HelloResponse) {
 			return "etag", &HelloResponse{
 				Message: "Hello",
 			}

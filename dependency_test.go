@@ -16,7 +16,9 @@ func TestGlobalDepEmpty(t *testing.T) {
 
 	typ := reflect.TypeOf(123)
 
-	assert.Error(t, d.validate(typ))
+	assert.Panics(t, func() {
+		d.validate(typ)
+	})
 }
 
 func TestGlobalDepWrongType(t *testing.T) {
@@ -26,7 +28,9 @@ func TestGlobalDepWrongType(t *testing.T) {
 
 	typ := reflect.TypeOf(123)
 
-	assert.Error(t, d.validate(typ))
+	assert.Panics(t, func() {
+		d.validate(typ)
+	})
 }
 
 func TestGlobalDepParams(t *testing.T) {
@@ -39,7 +43,9 @@ func TestGlobalDepParams(t *testing.T) {
 
 	typ := reflect.TypeOf("test")
 
-	assert.Error(t, d.validate(typ))
+	assert.Panics(t, func() {
+		d.validate(typ)
+	})
 }
 
 func TestGlobalDepHeaders(t *testing.T) {
@@ -50,7 +56,9 @@ func TestGlobalDepHeaders(t *testing.T) {
 
 	typ := reflect.TypeOf("test")
 
-	assert.Error(t, d.validate(typ))
+	assert.Panics(t, func() {
+		d.validate(typ)
+	})
 }
 
 func TestDepContext(t *testing.T) {
@@ -65,7 +73,7 @@ func TestDepContext(t *testing.T) {
 	mock.Request = httptest.NewRequest("GET", "/", nil)
 
 	typ := reflect.TypeOf(mock)
-	assert.NoError(t, d.validate(typ))
+	d.validate(typ)
 
 	_, v, err := d.Resolve(mock, &Operation{})
 	assert.NoError(t, err)
@@ -83,7 +91,7 @@ func TestDepGinContext(t *testing.T) {
 	mock, _ := gin.CreateTestContext(nil)
 
 	typ := reflect.TypeOf(mock)
-	assert.NoError(t, d.validate(typ))
+	d.validate(typ)
 
 	_, v, err := d.Resolve(mock, &Operation{})
 	assert.NoError(t, err)
@@ -101,7 +109,7 @@ func TestDepOperation(t *testing.T) {
 	mock := &Operation{}
 
 	typ := reflect.TypeOf(mock)
-	assert.NoError(t, d.validate(typ))
+	d.validate(typ)
 
 	_, v, err := d.Resolve(&gin.Context{}, mock)
 	assert.NoError(t, err)
@@ -117,7 +125,9 @@ func TestDepFuncWrongArgs(t *testing.T) {
 		},
 	}
 
-	assert.Error(t, d.validate(reflect.TypeOf("")))
+	assert.Panics(t, func() {
+		d.validate(reflect.TypeOf(""))
+	})
 }
 
 func TestDepFunc(t *testing.T) {
@@ -141,7 +151,7 @@ func TestDepFunc(t *testing.T) {
 		},
 	}
 
-	assert.NoError(t, d.validate(reflect.TypeOf("")))
+	d.validate(reflect.TypeOf(""))
 	h, v, err := d.Resolve(c, &Operation{})
 	assert.NoError(t, err)
 	assert.Equal(t, "xout", h["x-out"])

@@ -2,6 +2,7 @@ package huma
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -441,8 +442,8 @@ func TestRouterParams(t *testing.T) {
 
 	r.Resource("/test",
 		PathParam("id", "desc"),
-		QueryParam("i", "desc", 0),
-		QueryParam("f32", "desc", 0.0),
+		QueryParam("i", "desc", int16(0)),
+		QueryParam("f32", "desc", float32(0.0)),
 		QueryParam("f64", "desc", 0.0),
 		QueryParam("schema", "desc", "test", &Schema{Pattern: "^a-z+$"}),
 		QueryParam("items", "desc", []int{}),
@@ -456,6 +457,12 @@ func TestRouterParams(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "someId 1 1 123.45 test [1 2 3] 2020-01-01 12:00:00 +0000 UTC", w.Body.String())
+
+	// Arrays can be sent as JSON arrays
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/test/someId?items=[1,2,3]", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
 
 	// Failure parsing tests
 	w = httptest.NewRecorder()
@@ -487,4 +494,28 @@ func TestRouterParams(t *testing.T) {
 	req, _ = http.NewRequest(http.MethodGet, "/test/someId?start=bad", nil)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// Invalid Go number should return an error, may support these in the future.
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/test/someId?items=1e10", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestInvalidParamLocation(t *testing.T) {
+	r := NewTestRouter(t)
+
+	assert.Panics(t, func() {
+		r.Resource("/test", &Param{Name: "test", In: "bad"}).Get("desc", func(test string) string {
+			return "Hello, test!"
+		})
+	})
+}
+
+func TestEmptyShutdownPanics(t *testing.T) {
+	r := NewTestRouter(t)
+
+	assert.Panics(t, func() {
+		r.Shutdown(context.TODO())
+	})
 }

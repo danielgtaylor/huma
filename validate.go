@@ -37,15 +37,28 @@ func (a *OpenAPI) validate() error {
 }
 
 // validate the parameter and generate schemas
-func (p *Param) validate(t reflect.Type) error {
+func (p *Param) validate(t reflect.Type) {
+	switch p.In {
+	case InPath, InQuery, InHeader:
+	default:
+		panic(fmt.Errorf("parameter %s location invalid: %s", p.Name, p.In))
+	}
+
 	if p.typ != nil && p.typ != t {
-		return fmt.Errorf("parameter declared as %s was previously declared as %s: %w", t, p.typ, ErrParamInvalid)
+		panic(fmt.Errorf("parameter %s declared as %s was previously declared as %s: %w", p.Name, t, p.typ, ErrParamInvalid))
+	}
+
+	if p.def != nil {
+		dt := reflect.ValueOf(p.def).Type()
+		if t != dt {
+			panic(fmt.Errorf("parameter %s declared as %s has default of type %s: %w", p.Name, t, dt, ErrParamInvalid))
+		}
 	}
 
 	if p.Example != nil {
 		et := reflect.ValueOf(p.Example).Type()
 		if t != et {
-			return fmt.Errorf("parameter declared as %s has example of type %s: %w", t, et, ErrParamInvalid)
+			panic(fmt.Errorf("parameter %s declared as %s has example of type %s: %w", p.Name, t, et, ErrParamInvalid))
 		}
 	}
 
@@ -54,7 +67,7 @@ func (p *Param) validate(t reflect.Type) error {
 	if p.Schema == nil || p.Schema.Type == "" {
 		s, err := GenerateSchemaWithMode(p.typ, SchemaModeWrite, p.Schema)
 		if err != nil {
-			return err
+			panic(fmt.Errorf("parameter %s schema generation error: %w", p.Name, err))
 		}
 		p.Schema = s
 
@@ -68,37 +81,35 @@ func (p *Param) validate(t reflect.Type) error {
 			p.Schema.Example = p.Example
 		}
 	}
-
-	return nil
 }
 
 // validate the header and generate schemas
-func (h *ResponseHeader) validate(t reflect.Type) error {
+func (h *ResponseHeader) validate(t reflect.Type) {
 	if h.Schema == nil {
 		// Generate the schema from the handler function types.
 		s, err := GenerateSchemaWithMode(t, SchemaModeRead, nil)
 		if err != nil {
-			return err
+			panic(fmt.Errorf("response header %s schema generation error: %w", h.Name, err))
 		}
 		h.Schema = s
 	}
-
-	return nil
 }
 
 // validate checks that the operation is well-formed (e.g. handler signature
 // matches the given params) and generates schemas if needed.
-func (o *Operation) validate(method, path string) error {
+func (o *Operation) validate(method, path string) {
+	prefix := method + " " + path + ":"
+
 	if o.Description == "" {
-		return fmt.Errorf("description field required: %w", ErrOperationInvalid)
+		panic(fmt.Errorf("%s description field required: %w", prefix, ErrOperationInvalid))
 	}
 
 	if len(o.Responses) == 0 {
-		return fmt.Errorf("at least one response is required: %w", ErrOperationInvalid)
+		panic(fmt.Errorf("%s at least one response is required: %w", prefix, ErrOperationInvalid))
 	}
 
 	if o.Handler == nil {
-		return fmt.Errorf("handler is required: %w", ErrOperationInvalid)
+		panic(fmt.Errorf("%s handler is required: %w", prefix, ErrOperationInvalid))
 	}
 
 	handler := reflect.ValueOf(o.Handler).Type()
@@ -124,7 +135,7 @@ func (o *Operation) validate(method, path string) error {
 		expected = strings.TrimRight(expected, ", ")
 		expected += ")"
 
-		return fmt.Errorf("expected %s but found %s: %w", expected, handler, ErrOperationInvalid)
+		panic(fmt.Errorf("%s expected handler %s but found %s: %w", prefix, expected, handler, ErrOperationInvalid))
 	}
 
 	if o.ID == "" {
@@ -149,16 +160,14 @@ func (o *Operation) validate(method, path string) error {
 
 		// Catch common errors.
 		if paramType.String() == "gin.Context" {
-			return fmt.Errorf("gin.Context should be pointer *gin.Context: %w", ErrOperationInvalid)
+			panic(fmt.Errorf("%s gin.Context should be pointer *gin.Context: %w", prefix, ErrOperationInvalid))
 		}
 
 		if paramType.String() == "huma.Operation" {
-			return fmt.Errorf("huma.Operation should be pointer *huma.Operation: %w", ErrOperationInvalid)
+			panic(fmt.Errorf("%s huma.Operation should be pointer *huma.Operation: %w", prefix, ErrOperationInvalid))
 		}
 
-		if err := dep.validate(paramType); err != nil {
-			return err
-		}
+		dep.validate(paramType)
 	}
 
 	types := []reflect.Type{}
@@ -167,9 +176,9 @@ func (o *Operation) validate(method, path string) error {
 
 		switch paramType.String() {
 		case "gin.Context", "*gin.Context":
-			return fmt.Errorf("expected param but found gin.Context: %w", ErrOperationInvalid)
+			panic(fmt.Errorf("%s expected param but found gin.Context: %w", prefix, ErrOperationInvalid))
 		case "huma.Operation", "*huma.Operation":
-			return fmt.Errorf("expected param but found huma.Operation: %w", ErrOperationInvalid)
+			panic(fmt.Errorf("%s expected param but found huma.Operation: %w", prefix, ErrOperationInvalid))
 		}
 
 		types = append(types, paramType)
@@ -186,7 +195,7 @@ func (o *Operation) validate(method, path string) error {
 			if o.RequestSchema == nil {
 				s, err := GenerateSchemaWithMode(paramType, SchemaModeWrite, nil)
 				if err != nil {
-					return err
+					panic(fmt.Errorf("%s request body schema generation error: %w", prefix, err))
 				}
 				o.RequestSchema = s
 			}
@@ -194,29 +203,23 @@ func (o *Operation) validate(method, path string) error {
 		}
 
 		p := o.Params[i]
-		if err := p.validate(paramType); err != nil {
-			return err
-		}
+		p.validate(paramType)
 	}
 
 	for i, header := range o.ResponseHeaders {
-		if err := header.validate(handler.Out(i)); err != nil {
-			return err
-		}
+		header.validate(handler.Out(i))
 	}
 
 	for i, resp := range o.Responses {
 		respType := handler.Out(len(o.ResponseHeaders) + i)
 		// HTTP 204 explicitly forbids a response body.
-		if resp.StatusCode != 204 && resp.Schema == nil {
+		if !resp.empty && resp.Schema == nil {
 			// Generate the schema from the handler function types.
 			s, err := GenerateSchemaWithMode(respType, SchemaModeRead, nil)
 			if err != nil {
-				return err
+				panic(fmt.Errorf("%s response %d schema generation error: %w", prefix, resp.StatusCode, err))
 			}
 			resp.Schema = s
 		}
 	}
-
-	return nil
 }

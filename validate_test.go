@@ -245,7 +245,7 @@ func TestOperationParamRedeclare(t *testing.T) {
 		Version: "1.0.0",
 	})
 
-	p := QueryParam("foo", "Test", "")
+	p := QueryParam("foo", "Test", 0)
 
 	r.Register(http.MethodGet, "/", &Operation{
 		Description: "Test",
@@ -301,7 +301,7 @@ func TestOperationParamExampleSchema(t *testing.T) {
 		Version: "1.0.0",
 	})
 
-	p := QueryParamExample("foo", "Test", "", 123)
+	p := QueryParamExample("foo", "Test", 0, 123)
 
 	r.Register(http.MethodGet, "/", &Operation{
 		Description: "Test",

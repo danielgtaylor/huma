@@ -26,12 +26,12 @@ import (
 var ErrInvalidParamLocation = errors.New("invalid parameter location")
 
 // Checks if data validates against the given schema. Returns false on failure.
-func validAgainstSchema(c *gin.Context, schema *Schema, data []byte) bool {
+func validAgainstSchema(c *gin.Context, label string, schema *Schema, data []byte) bool {
 	defer func() {
 		// Catch panics from the `gojsonschema` library.
 		if err := recover(); err != nil {
 			c.AbortWithStatusJSON(400, &ErrorInvalidModel{
-				Message: "Invalid input",
+				Message: "Invalid input: " + label,
 				Errors:  []string{err.(error).Error() + ": " + string(data)},
 			})
 		}
@@ -54,7 +54,7 @@ func validAgainstSchema(c *gin.Context, schema *Schema, data []byte) bool {
 			errors = append(errors, fmt.Sprintf("%s", desc))
 		}
 		c.AbortWithStatusJSON(400, &ErrorInvalidModel{
-			Message: "Invalid input",
+			Message: "Invalid input: " + label,
 			Errors:  errors,
 		})
 		return false
@@ -104,11 +104,15 @@ func parseParamValue(c *gin.Context, name string, typ reflect.Type, pstr string)
 		}
 		pv = converted
 	case reflect.Slice:
+		if len(pstr) > 1 && pstr[0] == '[' {
+			pstr = pstr[1 : len(pstr)-1]
+		}
 		slice := reflect.MakeSlice(typ, 0, 0)
 		for _, item := range strings.Split(pstr, ",") {
 			if itemValue, ok := parseParamValue(c, name, typ.Elem(), item); ok {
 				slice = reflect.Append(slice, reflect.ValueOf(itemValue))
 			} else {
+				// Error is already handled, just return.
 				return nil, false
 			}
 		}
@@ -163,9 +167,11 @@ func getParamValue(c *gin.Context, param *Param) (interface{}, bool) {
 				// Same as above, quote each item.
 				data = `"` + strings.Join(strings.Split(data, ","), `","`) + `"`
 			}
-			data = "[" + data + "]"
+			if len(data) > 0 && data[0] != '[' {
+				data = "[" + data + "]"
+			}
 		}
-		if !validAgainstSchema(c, param.Schema, []byte(data)) {
+		if !validAgainstSchema(c, param.Name, param.Schema, []byte(data)) {
 			return nil, false
 		}
 	}
@@ -189,7 +195,7 @@ func getRequestBody(c *gin.Context, t reflect.Type, op *Operation) (interface{},
 
 		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 
-		if !validAgainstSchema(c, op.RequestSchema, body) {
+		if !validAgainstSchema(c, "request body", op.RequestSchema, body) {
 			return nil, false
 		}
 	}
@@ -308,9 +314,7 @@ func (r *Router) Resource(path string, depsParamsHeadersOrResponses ...interface
 func (r *Router) Register(method, path string, op *Operation) {
 	// First, make sure the operation and handler make sense, as well as pre-
 	// generating any schemas for use later during request handling.
-	if err := op.validate(method, path); err != nil {
-		panic(err)
-	}
+	op.validate(method, path)
 
 	// Add the operation to the list of operations for the path entry.
 	if r.api.Paths[path] == nil {
@@ -355,13 +359,11 @@ func (r *Router) Register(method, path string, op *Operation) {
 		for _, dep := range op.Dependencies {
 			headers, value, err := dep.Resolve(c, op)
 			if err != nil {
-				// TODO: better error handling
 				if !c.IsAborted() {
 					// Nothing else has handled the error, so treat it like a general
 					// internal server error.
 					c.AbortWithStatusJSON(500, &ErrorModel{
 						Message: "Couldn't get dependency",
-						//Errors:  []error{err},
 					})
 				}
 			}
