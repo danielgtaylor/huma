@@ -164,12 +164,34 @@ func TestOpenAPIHandler(t *testing.T) {
 		},
 	})
 
+	dep1 := &Dependency{
+		Params: []*Param{
+			QueryParam("q", "Test query param", ""),
+		},
+		ResponseHeaders: []*ResponseHeader{
+			Header("dep", "description"),
+		},
+		Value: func(q string) (string, string, error) {
+			return "header", "foo", nil
+		},
+	}
+
+	dep2 := &Dependency{
+		Dependencies: []*Dependency{dep1},
+		Value: func(q string) (string, error) {
+			return q, nil
+		},
+	}
+
 	r.Register(http.MethodPut, "/hello", &Operation{
 		ID:          "put-hello",
 		Summary:     "Summary message",
 		Description: "Get a welcome message",
 		Tags:        []string{"Messages"},
 		Security:    SecurityRef("basic"),
+		Dependencies: []*Dependency{
+			dep2,
+		},
 		Params: []*Param{
 			QueryParam("greet", "Whether to greet or not", false),
 			HeaderParamInternal("user", "User from auth token", ""),
@@ -183,7 +205,7 @@ func TestOpenAPIHandler(t *testing.T) {
 		Extra: map[string]interface{}{
 			"x-foo": "bar",
 		},
-		Handler: func(greet bool, user string, body *HelloRequest) (string, *HelloResponse) {
+		Handler: func(q string, greet bool, user string, body *HelloRequest) (string, *HelloResponse) {
 			return "etag", &HelloResponse{
 				Message: "Hello",
 			}
