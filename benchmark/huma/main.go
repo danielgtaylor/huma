@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/huma"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,7 +20,9 @@ type Item struct {
 func main() {
 	gin.SetMode(gin.ReleaseMode)
 	g := gin.New()
-	g.Use(gin.Recovery())
+	g.Use(huma.Recovery())
+	g.Use(cors.Default())
+	g.Use(huma.PreferMinimalMiddleware())
 
 	r := huma.NewRouterWithGin(g, &huma.OpenAPI{
 		Title:   "My API",

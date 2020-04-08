@@ -4,21 +4,16 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap/zaptest"
 )
 
 func TestRecoveryMiddleware(t *testing.T) {
-	g := gin.New()
-
-	l := zaptest.NewLogger(t)
-	g.Use(LogMiddleware(l, nil))
-	g.Use(Recovery())
-
-	r := NewRouterWithGin(g, &OpenAPI{Title: "My API", Version: "1.0.0"})
+	r := NewTestRouter(t)
+	r.GinEngine().Use(Recovery())
 
 	r.Register(http.MethodGet, "/panic", &Operation{
 		Description: "Panic recovery test",
@@ -32,6 +27,27 @@ func TestRecoveryMiddleware(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/panic", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, "application/json; charset=utf-8", w.Result().Header.Get("content-type"))
+}
+
+func TestRecoveryMiddlewareLogBody(t *testing.T) {
+	r := NewTestRouter(t)
+	r.GinEngine().Use(Recovery())
+
+	r.Register(http.MethodPut, "/panic", &Operation{
+		Description: "Panic recovery test",
+		Responses: []*Response{
+			ResponseText(http.StatusOK, "Success"),
+		},
+		Handler: func(in map[string]string) string {
+			panic(fmt.Errorf("Some error"))
+		},
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPut, "/panic", strings.NewReader(`{"foo": "bar"}`))
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Equal(t, "application/json; charset=utf-8", w.Result().Header.Get("content-type"))

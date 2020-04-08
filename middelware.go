@@ -1,9 +1,15 @@
 package huma
 
 import (
+	"bytes"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"net/http"
+	"net/http/httputil"
 	"os"
+	"runtime/debug"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -14,14 +20,91 @@ import (
 
 var logLevel *zap.AtomicLevel
 
+// MaxLogBodyBytes logs at most this many bytes of any request body during a
+// panic when using the recovery middleware. Defaults to 10KB.
+var MaxLogBodyBytes int64 = 10 * 1024
+
+// BufferedReadCloser will read and buffer up to max bytes into buf. Additional
+// reads bypass the buffer.
+type BufferedReadCloser struct {
+	reader io.ReadCloser
+	buf    *bytes.Buffer
+	max    int64
+}
+
+// NewBufferedReadCloser returns a new BufferedReadCloser that wraps reader
+// and reads up to max bytes into the buffer.
+func NewBufferedReadCloser(reader io.ReadCloser, buffer *bytes.Buffer, max int64) *BufferedReadCloser {
+	return &BufferedReadCloser{
+		reader: reader,
+		buf:    buffer,
+		max:    max,
+	}
+}
+
+// Read data into p. Returns number of bytes read and an error, if any.
+func (r *BufferedReadCloser) Read(p []byte) (n int, err error) {
+	// Read from the underlying reader like normal.
+	n, err = r.reader.Read(p)
+
+	// If buffer isn't full, add to it.
+	length := int64(r.buf.Len())
+	if length < r.max {
+		if length+int64(n) < r.max {
+			r.buf.Write(p[:n])
+		} else {
+			r.buf.Write(p[:int64(n)-(r.max-length)])
+		}
+	}
+
+	return
+}
+
+// Close the underlying reader.
+func (r *BufferedReadCloser) Close() error {
+	return r.reader.Close()
+}
+
 // Recovery prints stack traces on panic when used with the logging middleware.
 func Recovery() func(*gin.Context) {
+	bufPool := sync.Pool{
+		New: func() interface{} {
+			return new(bytes.Buffer)
+		},
+	}
+
 	return func(c *gin.Context) {
+		var buf *bytes.Buffer
+
+		// Reset the body so other middleware/handlers can use it.
+		if c.Request.Body != nil {
+			// Get a buffer that the body will be read into.
+			buf = bufPool.Get().(*bytes.Buffer)
+			defer bufPool.Put(buf)
+
+			c.Request.Body = NewBufferedReadCloser(c.Request.Body, buf, MaxLogBodyBytes)
+		}
+
+		// Recovering comes *after* the above so the buffer is not returned to
+		// the pool until after we print out its contents.
 		defer func() {
 			if err := recover(); err != nil {
+				// The body might have been read or partially read, so replace it
+				// with a clean reader to dump out up to maxBodyBytes with the error.
+				if buf != nil && buf.Len() != 0 {
+					c.Request.Body = ioutil.NopCloser(buf)
+				} else if c.Request.Body != nil {
+					defer c.Request.Body.Close()
+					c.Request.Body = ioutil.NopCloser(io.LimitReader(c.Request.Body, MaxLogBodyBytes))
+				}
+
+				request, _ := httputil.DumpRequest(c.Request, true)
+
 				if l, ok := c.Get("log"); ok {
 					if log, ok := l.(*zap.SugaredLogger); ok {
-						log.With(zap.Error(err.(error))).Error("Caught panic")
+						log.With(zap.String("request", string(request)), zap.Error(err.(error))).Error("Caught panic")
+					} else {
+						fmt.Printf("Caught panic: %v\n%s\n\nFrom request:\n%s", err, debug.Stack(), string(request))
 					}
 				}
 
@@ -30,6 +113,7 @@ func Recovery() func(*gin.Context) {
 				})
 			}
 		}()
+
 		c.Next()
 	}
 }
