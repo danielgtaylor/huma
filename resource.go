@@ -17,6 +17,7 @@ type Resource struct {
 	params          []*Param
 	responseHeaders []*ResponseHeader
 	responses       []*Response
+	maxBodyBytes    int64
 }
 
 // NewResource creates a new resource with the given router and path. All
@@ -46,6 +47,7 @@ func (r *Resource) Copy() *Resource {
 		params:          append([]*Param{}, r.params...),
 		responseHeaders: append([]*ResponseHeader{}, r.responseHeaders...),
 		responses:       append([]*Response{}, r.responses...),
+		maxBodyBytes:    r.maxBodyBytes,
 	}
 }
 
@@ -75,6 +77,13 @@ func (r *Resource) With(depsParamHeadersOrResponses ...interface{}) *Resource {
 	}
 
 	return c
+}
+
+// MaxBodyBytes sets the max number of bytes read from a request body before
+// the handler aborts and returns an error. Applies to all sub-resources.
+func (r *Resource) MaxBodyBytes(value int64) *Resource {
+	r.maxBodyBytes = value
+	return r
 }
 
 // Path returns the generated path including any path parameters.
@@ -165,6 +174,10 @@ func (r *Resource) Operation(method string, op *Operation) {
 				op.Responses = append(op.Responses, ResponseJSON(http.StatusOK, "Success"))
 			}
 		}
+	}
+
+	if op.MaxBodyBytes == 0 {
+		op.MaxBodyBytes = r.maxBodyBytes
 	}
 
 	r.router.Register(method, path, op)

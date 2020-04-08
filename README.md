@@ -22,10 +22,11 @@ Features include:
   - Responses (including errors)
   - Response headers
 - Default (optional) middleware
-  - Automatic recovery from panics
+  - Automatic recovery from panics with traceback & request logging
   - Automatically handle CORS headers
   - Structured logging middleware using [Zap](https://github.com/uber-go/zap)
   - Automatic handling of `Prefer: return=minimal` from [RFC 7240](https://tools.ietf.org/html/rfc7240#section-4.2)
+- Per-operation request size limits with sane defaults
 - Annotated Go types for input and output models
   - Generates JSON Schema from Go types
   - Automatic input model validation & error handling
@@ -784,6 +785,29 @@ r := huma.NewRouter(&huma.OpenAPI{
 
 r.Use(gin.Logger())
 ```
+
+## Request Body Size Limits
+
+By default each operation has a 1 MiB reqeuest body size limit. You can modify this via the resource or operation:
+
+```go
+r := huma.NewRouter(&huma.OpenAPI{
+	Title:   "Example API",
+	Version: "1.0.0",
+})
+
+// Resource-level limit set to 10 MiB
+r.Resource("/foo").MaxBodyBytes(10 * 1024 * 1024)
+
+// Operation-level limit
+r.Operation(http.MethodGet, &huma.Operation{
+	// ...
+	MaxBodyBytes: 10 * 1024 * 1024,
+	// ...
+})
+```
+
+> :whale: Set to `-1` in order to disable the check, allowing for unlimited request body size for e.g. large streaming file uploads.
 
 ## HTTP/2 Setup
 

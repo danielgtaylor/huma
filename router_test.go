@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -518,4 +519,22 @@ func TestEmptyShutdownPanics(t *testing.T) {
 	assert.Panics(t, func() {
 		r.Shutdown(context.TODO())
 	})
+}
+
+func TestTooBigBody(t *testing.T) {
+	r := NewTestRouter(t)
+
+	type Input struct {
+		ID string
+	}
+
+	r.Resource("/test").MaxBodyBytes(5).Put("desc", func(input *Input) string {
+		return "hello, " + input.ID
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPut, "/test", strings.NewReader(`{"id": "foo"}`))
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Request body too large")
 }

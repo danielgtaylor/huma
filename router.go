@@ -189,20 +189,26 @@ func getRequestBody(c *gin.Context, t reflect.Type, op *Operation) (interface{},
 	if op.RequestSchema != nil {
 		body, err := ioutil.ReadAll(c.Request.Body)
 		if err != nil {
-			c.AbortWithError(500, err)
+			if strings.Contains(err.Error(), "request body too large") {
+				c.AbortWithStatusJSON(http.StatusBadRequest, ErrorModel{
+					Message: fmt.Sprintf("Request body too large, limit = %d bytes", op.MaxBodyBytes),
+				})
+			} else {
+				panic(err)
+			}
 			return nil, false
 		}
 
 		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 
 		if !validAgainstSchema(c, "request body", op.RequestSchema, body) {
+			// Error already handled, just return.
 			return nil, false
 		}
 	}
 
 	if err := c.ShouldBindJSON(val); err != nil {
-		c.AbortWithError(500, err)
-		return nil, false
+		panic(err)
 	}
 
 	return val, true
@@ -354,6 +360,20 @@ func (r *Router) Register(method, path string, op *Operation) {
 	f(path, func(c *gin.Context) {
 		method := reflect.ValueOf(op.Handler)
 		in := make([]reflect.Value, 0, method.Type().NumIn())
+
+		// Limit the body size
+		if c.Request.Body != nil {
+			maxBody := op.MaxBodyBytes
+			if maxBody == 0 {
+				// 1 MiB default
+				maxBody = 1024 * 1024
+			}
+
+			// -1 is a special value which means set no limit.
+			if maxBody != -1 {
+				c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBody)
+			}
+		}
 
 		// Process any dependencies first.
 		for _, dep := range op.Dependencies {

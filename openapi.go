@@ -205,6 +205,11 @@ type Operation struct {
 	Responses          []*Response
 	Handler            interface{}
 	Extra              map[string]interface{}
+
+	// MaxBodyBytes limits the size of the request body that will be read before
+	// an error is returned. Defaults to 1MiB if set to zero. Set to -1 for
+	// unlimited.
+	MaxBodyBytes int64
 }
 
 // AllParams returns a list of all the parameters for this operation, including
