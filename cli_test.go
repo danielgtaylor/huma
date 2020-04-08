@@ -13,7 +13,7 @@ func TestServerShutdown(t *testing.T) {
 		r.Root().Run(nil, []string{})
 	}()
 
-	time.Sleep(1 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
