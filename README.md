@@ -26,7 +26,7 @@ Features include:
   - Automatically handle CORS headers
   - Structured logging middleware using [Zap](https://github.com/uber-go/zap)
   - Automatic handling of `Prefer: return=minimal` from [RFC 7240](https://tools.ietf.org/html/rfc7240#section-4.2)
-- Per-operation request size limits with sane defaults
+- Per-operation request size limits & timeouts with sane defaults
 - Annotated Go types for input and output models
   - Generates JSON Schema from Go types
   - Automatic input model validation & error handling
