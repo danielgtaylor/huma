@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"reflect"
@@ -24,6 +25,19 @@ import (
 // ErrInvalidParamLocation is returned when the `in` field of the parameter
 // is not a valid value.
 var ErrInvalidParamLocation = errors.New("invalid parameter location")
+
+// ConnContextKey is used to get/set the underlying `net.Conn` from a request
+// context value.
+var ConnContextKey = struct{}{}
+
+// GetConn gets the underlying `net.Conn` from a request.
+func GetConn(r *http.Request) net.Conn {
+	conn := r.Context().Value(ConnContextKey)
+	if conn != nil {
+		return conn.(net.Conn)
+	}
+	return nil
+}
 
 // Checks if data validates against the given schema. Returns false on failure.
 func validAgainstSchema(c *gin.Context, label string, schema *Schema, data []byte) bool {
@@ -190,8 +204,12 @@ func getRequestBody(c *gin.Context, t reflect.Type, op *Operation) (interface{},
 		body, err := ioutil.ReadAll(c.Request.Body)
 		if err != nil {
 			if strings.Contains(err.Error(), "request body too large") {
-				c.AbortWithStatusJSON(http.StatusBadRequest, ErrorModel{
+				c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, ErrorModel{
 					Message: fmt.Sprintf("Request body too large, limit = %d bytes", op.MaxBodyBytes),
+				})
+			} else if e, ok := err.(net.Error); ok && e.Timeout() {
+				c.AbortWithStatusJSON(http.StatusRequestTimeout, ErrorModel{
+					Message: fmt.Sprintf("Request body took too long to read: timed out after %v", op.BodyReadTimeout),
 				})
 			} else {
 				panic(err)
@@ -405,7 +423,17 @@ func (r *Router) Register(method, path string, op *Operation) {
 			in = append(in, reflect.ValueOf(pv))
 		}
 
+		readTimeout := op.BodyReadTimeout
 		if len(in) != method.Type().NumIn() {
+			if readTimeout == 0 {
+				// Default to 15s when reading/parsing/validating automatically.
+				readTimeout = 15 * time.Second
+			}
+
+			if conn := GetConn(c.Request); readTimeout > 0 && conn != nil {
+				conn.SetReadDeadline(time.Now().Add(readTimeout))
+			}
+
 			// Parse body
 			i := len(in)
 			val, success := getRequestBody(c, method.Type().In(i), op)
@@ -416,6 +444,11 @@ func (r *Router) Register(method, path string, op *Operation) {
 			in = append(in, reflect.ValueOf(val))
 			if in[i].Kind() == reflect.Ptr {
 				in[i] = in[i].Elem()
+			}
+		} else if readTimeout > 0 {
+			// We aren't processing the input, but still set the timeout.
+			if conn := GetConn(c.Request); conn != nil {
+				conn.SetReadDeadline(time.Now().Add(readTimeout))
 			}
 		}
 
@@ -495,9 +528,12 @@ func (r *Router) listen(addr, certFile, keyFile string) error {
 	if r.server == nil {
 		r.server = &http.Server{
 			Addr:              addr,
-			ReadHeaderTimeout: 30 * time.Second,
-			IdleTimeout:       60 * time.Second,
+			ReadHeaderTimeout: 10 * time.Second,
+			IdleTimeout:       15 * time.Second,
 			Handler:           r,
+			ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+				return context.WithValue(ctx, ConnContextKey, c)
+			},
 		}
 	} else {
 		r.server.Addr = addr

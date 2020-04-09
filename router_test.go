@@ -535,6 +535,44 @@ func TestTooBigBody(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPut, "/test", strings.NewReader(`{"id": "foo"}`))
 	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
 	assert.Contains(t, w.Body.String(), "Request body too large")
+}
+
+type timeoutError struct{}
+
+func (e *timeoutError) Error() string {
+	return "timed out"
+}
+
+func (e *timeoutError) Timeout() bool {
+	return true
+}
+
+func (e *timeoutError) Temporary() bool {
+	return false
+}
+
+type slowReader struct{}
+
+func (r *slowReader) Read(p []byte) (int, error) {
+	return 0, &timeoutError{}
+}
+
+func TestBodySlow(t *testing.T) {
+	r := NewTestRouter(t)
+
+	type Input struct {
+		ID string
+	}
+
+	r.Resource("/test").BodyReadTimeout(1).Put("desc", func(input *Input) string {
+		return "hello, " + input.ID
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPut, "/test", &slowReader{})
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusRequestTimeout, w.Code)
+	assert.Contains(t, w.Body.String(), "timed out")
 }

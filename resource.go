@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"time"
 )
 
 // Resource describes a REST resource at a given URI path. Resources are
@@ -18,6 +19,7 @@ type Resource struct {
 	responseHeaders []*ResponseHeader
 	responses       []*Response
 	maxBodyBytes    int64
+	bodyReadTimeout time.Duration
 }
 
 // NewResource creates a new resource with the given router and path. All
@@ -48,6 +50,7 @@ func (r *Resource) Copy() *Resource {
 		responseHeaders: append([]*ResponseHeader{}, r.responseHeaders...),
 		responses:       append([]*Response{}, r.responses...),
 		maxBodyBytes:    r.maxBodyBytes,
+		bodyReadTimeout: r.bodyReadTimeout,
 	}
 }
 
@@ -83,6 +86,13 @@ func (r *Resource) With(depsParamHeadersOrResponses ...interface{}) *Resource {
 // the handler aborts and returns an error. Applies to all sub-resources.
 func (r *Resource) MaxBodyBytes(value int64) *Resource {
 	r.maxBodyBytes = value
+	return r
+}
+
+// BodyReadTimeout sets the duration after which the read is aborted and an
+// error is returned.
+func (r *Resource) BodyReadTimeout(value time.Duration) *Resource {
+	r.bodyReadTimeout = value
 	return r
 }
 
@@ -178,6 +188,10 @@ func (r *Resource) Operation(method string, op *Operation) {
 
 	if op.MaxBodyBytes == 0 {
 		op.MaxBodyBytes = r.maxBodyBytes
+	}
+
+	if op.BodyReadTimeout == 0 {
+		op.BodyReadTimeout = r.bodyReadTimeout
 	}
 
 	r.router.Register(method, path, op)

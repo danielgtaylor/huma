@@ -605,7 +605,7 @@ r.Run()
 
 ### Timeouts, Deadlines, & Cancellation
 
-By default, only a `ReadHeaderTimeout` of _30 seconds_ and an `IdleTimeout` of _60 seconds_ are set. This allows large request and response bodies to be sent without fear of timing out in the default config, as well as the use of WebSockets.
+By default, only a `ReadHeaderTimeout` of _10 seconds_ and an `IdleTimeout` of _15 seconds_ are set at the server level. This allows large request and response bodies to be sent without fear of timing out in the default config, as well as the use of WebSockets.
 
 Set timeouts and deadlines on the request context and pass that along to libraries to prevent long-running handlers. For example:
 
@@ -631,6 +631,85 @@ r.Resource("/timeout",
 	return "success"
 })
 ```
+
+### Request Body Timeouts
+
+By default any handler which takes in a request body parameter will have a read timeout of 15 seconds set on it. If set to nonzero for a handler which does **not** take a body, then the timeout will be set on the underlying connection before calling your handler. The timeout value is configurable at the resource and operation level.
+
+When triggered, the server sends a 408 Request Timeout as JSON with a message containing the time waited.
+
+```go
+type Input struct {
+	ID string
+}
+
+r := huma.NewRouter(&huma.OpenAPI{
+	Title:   "Example API",
+	Version: "1.0.0",
+})
+
+// Resource-level limit to 5 seconds
+r.Resource("/foo").BodyReadTimeout(5 * time.Second).Post(
+	"Create item", func(input *Input) string {
+		return "Hello, " + input.ID
+	})
+
+// Operation-level limit
+r.Resource("/foo").Operation(http.MethodPost, &huma.Operation{
+	// ...
+	BodyReadTimeout: 5 * time.Second,
+	Handler: func(input *Input) string {
+		return "Hello, " + input.ID
+	},
+	// ...
+})
+```
+
+You can also access the underlying TCP connection and set deadlines manually:
+
+```go
+r.Resource("/foo", huma.GinContextDependency()).Get(func (c *gin.Context) string {
+	// Get the underlying `net.Conn` and set a new deadline.
+	conn := huma.GetConn(c.Request)
+	conn.SetReadDeadline(time.Now().Add(600 * time.Second))
+
+	// Read all the data from the request.
+	data, err := ioutil.ReadAll(c.Request.Body)
+	if err != nil {
+		panic(err)
+	}
+
+	// Do something with the data...
+	return fmt.Sprintf("Read %d bytes", len(data))
+})
+```
+
+> :whale: Set to `-1` in order to disable the timeout.
+
+### Request Body Size Limits
+
+By default each operation has a 1 MiB reqeuest body size limit. This value is configurable at the resource and operation level.
+
+When triggered, the server sends a 413 Request Entity Too Large as JSON with a message containing the maximum body size for this operation.
+
+```go
+r := huma.NewRouter(&huma.OpenAPI{
+	Title:   "Example API",
+	Version: "1.0.0",
+})
+
+// Resource-level limit set to 10 MiB
+r.Resource("/foo").MaxBodyBytes(10 * 1024 * 1024).Get(...)
+
+// Operation-level limit
+r.Resource("/foo").Operation(http.MethodGet, &huma.Operation{
+	// ...
+	MaxBodyBytes: 10 * 1024 * 1024,
+	// ...
+})
+```
+
+> :whale: Set to `-1` in order to disable the check, allowing for unlimited request body size for e.g. large streaming file uploads.
 
 ## Logging
 
@@ -785,29 +864,6 @@ r := huma.NewRouter(&huma.OpenAPI{
 
 r.Use(gin.Logger())
 ```
-
-## Request Body Size Limits
-
-By default each operation has a 1 MiB reqeuest body size limit. You can modify this via the resource or operation:
-
-```go
-r := huma.NewRouter(&huma.OpenAPI{
-	Title:   "Example API",
-	Version: "1.0.0",
-})
-
-// Resource-level limit set to 10 MiB
-r.Resource("/foo").MaxBodyBytes(10 * 1024 * 1024)
-
-// Operation-level limit
-r.Operation(http.MethodGet, &huma.Operation{
-	// ...
-	MaxBodyBytes: 10 * 1024 * 1024,
-	// ...
-})
-```
-
-> :whale: Set to `-1` in order to disable the check, allowing for unlimited request body size for e.g. large streaming file uploads.
 
 ## HTTP/2 Setup
 

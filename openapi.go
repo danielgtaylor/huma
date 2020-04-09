@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/Jeffail/gabs"
 	"github.com/gin-gonic/gin"
@@ -210,6 +211,11 @@ type Operation struct {
 	// an error is returned. Defaults to 1MiB if set to zero. Set to -1 for
 	// unlimited.
 	MaxBodyBytes int64
+
+	// BodyReadTimeout sets the duration until reading the body is given up and
+	// aborted with an error. Defaults to 15 seconds if the body is automatically
+	// read and parsed into a struct, otherwise unset. Set to -1 for unlimited.
+	BodyReadTimeout time.Duration
 }
 
 // AllParams returns a list of all the parameters for this operation, including
