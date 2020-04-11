@@ -24,10 +24,7 @@ func main() {
 	g.Use(cors.Default())
 	g.Use(huma.PreferMinimalMiddleware())
 
-	r := huma.NewRouterWithGin(g, &huma.OpenAPI{
-		Title:   "My API",
-		Version: "1.0.0",
-	})
+	r := huma.NewRouter("Benchmark", "1.0.0", huma.WithGin(g))
 
 	d := &huma.Dependency{
 		Params: []*huma.Param{

@@ -272,22 +272,6 @@ type Server struct {
 	Description string `json:"description,omitempty"`
 }
 
-// ProdServer returns a new production server
-func ProdServer(url string) *Server {
-	return &Server{
-		URL:         url,
-		Description: "Production server",
-	}
-}
-
-// DevServer returns a new production server
-func DevServer(url string) *Server {
-	return &Server{
-		URL:         url,
-		Description: "Development server",
-	}
-}
-
 // Contact information for this API.
 type Contact struct {
 	Name  string `json:"name"`
@@ -321,35 +305,6 @@ type SecurityScheme struct {
 	BearerFormat     string      `json:"bearerFormat,omitempty"`
 	Flows            *OAuthFlows `json:"flows,omitempty"`
 	OpenIDConnectURL string      `json:"openIdConnectUrl,omitempty"`
-}
-
-// BasicAuth creates an HTTP Basic Auth security scheme.
-func BasicAuth() *SecurityScheme {
-	return &SecurityScheme{
-		Type:   "http",
-		Scheme: "basic",
-	}
-}
-
-// APIKeyAuth creates a pre-shared API key security scheme. The location of
-// the API key parameter is defined with `in` and can be one of `query`,
-// `header`, or `cookie`.
-func APIKeyAuth(name, in string) *SecurityScheme {
-	return &SecurityScheme{
-		Type: "apiKey",
-		Name: name,
-		In:   in,
-	}
-}
-
-// JWTBearerAuth creates a JWT bearer auth scheme using the Authorization
-// header.
-func JWTBearerAuth() *SecurityScheme {
-	return &SecurityScheme{
-		Type:         "http",
-		Scheme:       "bearer",
-		BearerFormat: "JWT",
-	}
 }
 
 // SecurityRef references a previously defined `SecurityScheme` by name along

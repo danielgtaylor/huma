@@ -90,10 +90,7 @@ var memoryDB = sync.Map{}
 
 func main() {
 	// Create a new router and give our API a title and version.
-	r := huma.NewRouter(&huma.OpenAPI{
-		Title:   "Notes API",
-		Version: "1.0.0",
-	})
+	r := huma.NewRouter("Notes API", "1.0.0")
 
 	notes := r.Resource("/notes")
 	notes.List("Returns a list of all notes", func() []*NoteSummary {
@@ -242,7 +239,7 @@ Official Go package documentation can always be found at https://pkg.go.dev/gith
 Huma APIs are composed of resources and sub-resources attached to a router. A resource refers to a unique URI on which operations can be performed. Huma resources can have dependencies, security requirements, parameters, response headers, and responses attached to them which are all applied to every operation and sub-resource.
 
 ```go
-r := huma.NewRouter(&huma.OpenAPI{Title: "Test", Version: "1.0.0"})
+r := huma.NewRouter("My API", "1.0.0")
 
 // Create a resource at a given path
 notes := r.Resource("/notes")
@@ -281,7 +278,7 @@ If you don't provide a response description, then one is generated for you based
 If you need any customization beyond the above then you must provide a response description.
 
 ```go
-r := huma.NewRouter(&huma.OpenAPI{Title: "Test", Version: "1.0.0"})
+r := huma.NewRouter("My API", "1.0.0")
 
 // Create a resource
 notes := r.Resource("/notes")
@@ -426,13 +423,12 @@ The presence of the `note *Note` argument tells Huma to parse the request body a
 Response models are used by adding a response to the list of possible responses along with a new function return value that is a pointer to your struct. You can specify multiple different response models.
 
 ```go
-r.
-	Resource("/notes",
-		huma.ResponseJSON(http.StatusOK, "Success"),
-		huma.ResponseError(http.NotFound, "Not found")).
-	Get("Description", func() (*huma.ErrorModel, *Note) {
-		// Implementation goes here
-	})
+r.Resource("/notes",
+	huma.ResponseJSON(http.StatusOK, "Success"),
+	huma.ResponseError(http.NotFound, "Not found")).
+Get("Description", func() (*huma.ErrorModel, *Note) {
+	// Implementation goes here
+})
 ```
 
 Whichever model is not `nil` will get sent back to the client.
@@ -566,23 +562,18 @@ r.Resource("/foo").Operation(http.MethodGet, &huma.Operation{
 You can create a Huma router instance with a custom Gin instance. This lets you set up custom middleware, CORS configurations, logging, etc.
 
 ```go
-// This is a shortcut:
-r := huma.NewRouter(&huma.OpenAPI{
-	Title:   "Notes API",
-	Version: "1.0.0",
-})
+// The following two are equivalent:
+// Default settings:
+r := huma.NewRouter("My API", "1.0.0")
 
-// For this:
+// And manual settings:
 g := gin.New()
 g.Use(huma.Recovery())
 g.Use(huma.LogMiddleware(nil, nil))
 g.Use(cors.Default())
 g.Use(huma.PreferMinimalMiddleware())
 g.NoRoute(huma.Handler404)
-r := huma.NewRouterWithGin(g, &huma.OpenAPI{
-	Title:   "Notes API",
-	Version: "1.0.0",
-})
+r := huma.NewRouter("My API", "1.0.0", huma.WithGin(g))
 ```
 
 ## Custom HTTP Server
@@ -590,8 +581,6 @@ r := huma.NewRouterWithGin(g, &huma.OpenAPI{
 You can have full control over the `http.Server` that is created.
 
 ```go
-r := huma.NewRouter(...)
-
 // Set low timeouts to kick off slow clients.
 s := &http.Server{
 	ReadTimeout: 5 * time.Seconds,
@@ -599,7 +588,8 @@ s := &http.Server{
 	Handler: r
 }
 
-r.SetServer(s)
+r := huma.NewRouter("My API", "1.0.0", huma.HTTPServer(s))
+
 r.Run()
 ```
 
@@ -643,10 +633,7 @@ type Input struct {
 	ID string
 }
 
-r := huma.NewRouter(&huma.OpenAPI{
-	Title:   "Example API",
-	Version: "1.0.0",
-})
+r := huma.NewRouter("My API", "1.0.0")
 
 // Resource-level limit to 5 seconds
 r.Resource("/foo").BodyReadTimeout(5 * time.Second).Post(
@@ -693,10 +680,7 @@ By default each operation has a 1 MiB reqeuest body size limit. This value is co
 When triggered, the server sends a 413 Request Entity Too Large as JSON with a message containing the maximum body size for this operation.
 
 ```go
-r := huma.NewRouter(&huma.OpenAPI{
-	Title:   "Example API",
-	Version: "1.0.0",
-})
+r := huma.NewRouter("My API", "1.0.0")
 
 // Resource-level limit set to 10 MiB
 r.Resource("/foo").MaxBodyBytes(10 * 1024 * 1024).Get(...)
@@ -744,10 +728,8 @@ g := gin.New()
 g.Use(gin.Recovery())
 g.Use(cors.Default())
 g.Use(huma.LogMiddleware(l, nil))
-r := huma.NewRouterWithGin(g, &huma.OpenAPI{
-	Title:   "Notes API",
-	Version: "1.0.0",
-})
+
+r := huma.NewRouter("My API", "1.0.0", huma.WithGin(g))
 ```
 
 ## Lazy-loading at Server Startup
@@ -757,17 +739,14 @@ You can register functions to run before the server starts, allowing for things 
 ```go
 var db *mongo.Client
 
-r := huma.NewRouter(&huma.OpenAPI{
-	Title:   "Example API",
-	Version: "1.0.0",
-})
-
-r.PreStart(func() {
-	// Connect to the datastore
-	var err error
-	db, err = mongo.Connect(context.Background(),
-		options.Client().ApplyURI("..."))
-})
+r := huma.NewRouter("My API", "1.0.0",
+	huma.PreStart(func() {
+		// Connect to the datastore
+		var err error
+		db, err = mongo.Connect(context.Background(),
+			options.Client().ApplyURI("..."))
+	})
+)
 ```
 
 > :whale: This is especially useful for external dependencies and if any custom CLI commands are set up. For example, you may not want to require a database to run `my-service openapi my-api.json`.
@@ -777,12 +756,7 @@ r.PreStart(func() {
 You can choose between [RapiDoc](https://mrin9.github.io/RapiDoc/), [ReDoc](https://github.com/Redocly/redoc), or [SwaggerUI](https://swagger.io/tools/swagger-ui/) to auto-generate documentation. Simply set the documentation handler on the router:
 
 ```go
-r := huma.NewRouter(&huma.OpenAPI{
-	Title:   "Example API",
-	Version: "1.0.0",
-})
-
-r.SetDocsHandler(huma.ReDocHandler)
+r := huma.NewRouter("My API", "1.0.0", huma.DocsHandler(huma.ReDocHandler))
 ```
 
 > :whale: Pass a custom handler function to have even more control for branding or browser authentication.
@@ -792,13 +766,9 @@ r.SetDocsHandler(huma.ReDocHandler)
 You can set custom OpenAPI fields via the `Extra` field in the `OpenAPI` and `Operation` structs.
 
 ```go
-r := huma.NewRouter(&huma.OpenAPI{
-	Title:   "Example API",
-	Version: "1.0.0",
-	Extra: map[string]interface{}{
-		"x-something": "some-value",
-	},
-})
+r := huma.NewRouter("My API", "1.0.0", huma.Extra(map[string]interface{}{
+	"x-something": "some-value",
+}))
 ```
 
 Use the OpenAPI hook for additional customization. It gives you a `*gab.Container` instance that represents the root of the OpenAPI document.
@@ -808,11 +778,7 @@ func modify(openapi *gabs.Container) {
 	openapi.Set("value", "paths", "/test", "get", "x-foo")
 }
 
-r := huma.NewRouter(&huma.OpenAPI{
-	Title:   "Example API",
-	Version: "1.0.0",
-	Hook:    modify,
-})
+r := huma.NewRouter("My API", "1.0.0", huma.OpenAPIHook(modify))
 ```
 
 > :whale: See the [OpenAPI 3 spec](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.2.md) for everything that can be set.
@@ -822,17 +788,15 @@ r := huma.NewRouter(&huma.OpenAPI{
 You can add additional CLI arguments, e.g. for additional logging tags. Use the `AddGlobalFlag` function along with the `viper` module to get the parsed value.
 
 ```go
-r := huma.NewRouter(&huma.OpenAPI{
-	Title:   "Example API",
-	Version: "1.0.0",
-})
-
-// Add a long arg (--env), short (-e), description & default
-r.AddGlobalFlag("env", "e", "Environment", "local")
+r := huma.NewRouter("My API", "1.0.0",
+	// Add a long arg (--env), short (-e), description & default
+	huma.GlobalFlag("env", "e", "Environment", "local")
+)
 
 r.Resource("/current_env").Text(http.StatusOK, "Success").Get(
 	"Return the current environment",
 	func() string {
+		// The flag is automatically bound to viper settings.
 		return viper.GetString("env")
 	},
 )
@@ -854,15 +818,10 @@ You can access the root `cobra.Command` via `r.Root()` and add new custom comman
 
 ## Middleware
 
-You can make use of any Gin-compatible middleware via the `Use()` router function.
+You can make use of any Gin-compatible middleware via the `Middleware()` router option.
 
 ```go
-r := huma.NewRouter(&huma.OpenAPI{
-	Title:   "Example API",
-	Version: "1.0.0",
-})
-
-r.Use(gin.Logger())
+r := huma.NewRouter("My API", "1.0.0", huma.Middleware(gin.Logger()))
 ```
 
 ## HTTP/2 Setup
@@ -889,7 +848,7 @@ func routes(r *huma.Router) {
 
 func main() {
 	// Create the router.
-	r := huma.NewRouter(&huma.OpenAPI{Title: "Test", Version: "1.0.0"})
+	r := huma.NewRouter("Test", "1.0.0")
 
 	// Register routes.
 	routes(r)

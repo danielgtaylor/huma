@@ -246,44 +246,62 @@ type Router struct {
 }
 
 // NewRouter creates a new Huma router for handling API requests with
-// default middleware and routes attached. This is equivalent to calling
-// `NewRouterWithGin` with a new Gin instance with just the recovery,
-// CORS (allowing all origins), and log middlewares.
-func NewRouter(api *OpenAPI) *Router {
+// default middleware and routes attached. The `docs` and `version` arguments
+// will be used to set the title/description and version of the OpenAPI spec.
+// If `docs` is multiline, the first line is used for the title and all other
+// lines are used for the description. Pass options to customize the created
+// router and OpenAPI.
+func NewRouter(docs, version string, options ...RouterOption) *Router {
+	// Setup default Gin instance with our middleware.
 	g := gin.New()
 	g.Use(Recovery())
 	g.Use(LogMiddleware(nil, nil))
 	g.Use(cors.Default())
 	g.Use(PreferMinimalMiddleware())
 	g.NoRoute(Handler404)
-	return NewRouterWithGin(g, api)
-}
 
-// NewRouterWithGin creates a new Huma router with the given Gin instance
-// which may be preconfigured with custom options and middleware.
-func NewRouterWithGin(engine *gin.Engine, api *OpenAPI) *Router {
-	if err := api.validate(); err != nil {
-		panic(err)
+	title := docs
+	desc := ""
+	if strings.Contains(docs, "\n") {
+		parts := strings.SplitN(docs, "\n", 1)
+		title = parts[0]
+		desc = parts[1]
 	}
 
+	// Create the default router.
 	r := &Router{
-		api:         api,
-		engine:      engine,
+		api: &OpenAPI{
+			Title:           title,
+			Description:     desc,
+			Version:         version,
+			Servers:         make([]*Server, 0),
+			SecuritySchemes: make(map[string]*SecurityScheme, 0),
+			Security:        make([]SecurityRequirement, 0),
+			Paths:           make(map[string]map[string]*Operation),
+			Extra:           make(map[string]interface{}),
+		},
+		engine:      g,
 		prestart:    []func(){},
 		docsHandler: RapiDocHandler,
 	}
 
 	r.setupCLI()
 
-	if r.api.Paths == nil {
-		r.api.Paths = make(map[string]map[string]*Operation)
+	// Apply any passed options.
+	for _, option := range options {
+		option.ApplyRouter(r)
+	}
+
+	// Validate the router/API setup.
+	if err := r.api.validate(); err != nil {
+		panic(err)
 	}
 
 	// Set up handlers for the auto-generated spec and docs.
 	r.engine.GET("/openapi.json", OpenAPIHandler(r.api))
 
 	r.engine.GET("/docs", func(c *gin.Context) {
-		r.docsHandler(c, api)
+		r.docsHandler(c, r.api)
 	})
 
 	// If downloads like a CLI or SDKs are available, serve them automatically
@@ -295,32 +313,14 @@ func NewRouterWithGin(engine *gin.Engine, api *OpenAPI) *Router {
 	return r
 }
 
+// OpenAPI returns the underlying OpenAPI object.
+func (r *Router) OpenAPI() *OpenAPI {
+	return r.api
+}
+
 // GinEngine returns the underlying low-level Gin engine.
 func (r *Router) GinEngine() *gin.Engine {
 	return r.engine
-}
-
-// PreStart registers a function to run before server start.
-func (r *Router) PreStart(f func()) {
-	r.prestart = append(r.prestart, f)
-}
-
-// SetServer allows you to set a custom server. This can be used to set custom
-// timeouts for example.
-func (r *Router) SetServer(server *http.Server) {
-	r.server = server
-}
-
-// SetDocsHandler sets the documentation rendering handler function. You can
-// use `huma.RapiDocHandler`, `huma.ReDocHandler`, `huma.SwaggerUIHandler`, or
-// provide your own (e.g. with custom auth or branding).
-func (r *Router) SetDocsHandler(f func(*gin.Context, *OpenAPI)) {
-	r.docsHandler = f
-}
-
-// Use attaches middleware to the router.
-func (r *Router) Use(middleware ...gin.HandlerFunc) {
-	r.engine.Use(middleware...)
 }
 
 // ServeHTTP conforms to the `http.Handler` interface.

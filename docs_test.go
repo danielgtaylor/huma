@@ -23,13 +23,7 @@ func TestDocHandlers(outer *testing.T) {
 	for _, tt := range handlers {
 		local := tt
 		outer.Run(fmt.Sprintf("%v", tt.name), func(t *testing.T) {
-			g := gin.New()
-			r := NewRouterWithGin(g, &OpenAPI{
-				Title:   "Docs Test",
-				Version: "1.0.0",
-			})
-
-			r.SetDocsHandler(local.handler)
+			r := NewTestRouter(t, DocsHandler(local.handler))
 
 			w := httptest.NewRecorder()
 			req, _ := http.NewRequest(http.MethodGet, "/docs", nil)

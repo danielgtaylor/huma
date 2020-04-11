@@ -8,25 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestTitleRequired(t *testing.T) {
-	assert.Panics(t, func() {
-		_ = NewRouter(&OpenAPI{})
-	})
-}
-
-func TestVersionRequired(t *testing.T) {
-	assert.Panics(t, func() {
-		_ = NewRouter(&OpenAPI{
-			Title: "Version Required",
-		})
-	})
-}
-
 func TestOperationDescriptionRequired(t *testing.T) {
-	r := NewRouter(&OpenAPI{
-		Title:   "Test API",
-		Version: "1.0.0",
-	})
+	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
 		r.Register(http.MethodGet, "/", &Operation{})
@@ -34,10 +17,7 @@ func TestOperationDescriptionRequired(t *testing.T) {
 }
 
 func TestOperationResponseRequired(t *testing.T) {
-	r := NewRouter(&OpenAPI{
-		Title:   "Test API",
-		Version: "1.0.0",
-	})
+	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
 		r.Register(http.MethodGet, "/", &Operation{
@@ -47,10 +27,7 @@ func TestOperationResponseRequired(t *testing.T) {
 }
 
 func TestOperationHandlerMissing(t *testing.T) {
-	r := NewRouter(&OpenAPI{
-		Title:   "Test API",
-		Version: "1.0.0",
-	})
+	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
 		r.Register(http.MethodGet, "/", &Operation{
@@ -63,10 +40,7 @@ func TestOperationHandlerMissing(t *testing.T) {
 }
 
 func TestOperationHandlerInput(t *testing.T) {
-	r := NewRouter(&OpenAPI{
-		Title:   "Test API",
-		Version: "1.0.0",
-	})
+	r := NewTestRouter(t)
 
 	d := &Dependency{
 		Value: func() (string, error) {
@@ -93,10 +67,7 @@ func TestOperationHandlerInput(t *testing.T) {
 }
 
 func TestOperationHandlerOutput(t *testing.T) {
-	r := NewRouter(&OpenAPI{
-		Title:   "Test API",
-		Version: "1.0.0",
-	})
+	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
 		r.Register(http.MethodGet, "/", &Operation{
@@ -116,10 +87,7 @@ func TestOperationHandlerOutput(t *testing.T) {
 }
 
 func TestOperationListAutoID(t *testing.T) {
-	r := NewRouter(&OpenAPI{
-		Title:   "Test API",
-		Version: "1.0.0",
-	})
+	r := NewTestRouter(t)
 
 	o := &Operation{
 		Description: "Test",
@@ -137,10 +105,7 @@ func TestOperationListAutoID(t *testing.T) {
 }
 
 func TestOperationContextPointer(t *testing.T) {
-	r := NewRouter(&OpenAPI{
-		Title:   "Test API",
-		Version: "1.0.0",
-	})
+	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
 		r.Register(http.MethodGet, "/", &Operation{
@@ -159,10 +124,7 @@ func TestOperationContextPointer(t *testing.T) {
 }
 
 func TestOperationOperationPointer(t *testing.T) {
-	r := NewRouter(&OpenAPI{
-		Title:   "Test API",
-		Version: "1.0.0",
-	})
+	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
 		r.Register(http.MethodGet, "/", &Operation{
@@ -181,10 +143,7 @@ func TestOperationOperationPointer(t *testing.T) {
 }
 
 func TestOperationInvalidDep(t *testing.T) {
-	r := NewRouter(&OpenAPI{
-		Title:   "Test API",
-		Version: "1.0.0",
-	})
+	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
 		r.Register(http.MethodGet, "/", &Operation{
@@ -203,10 +162,7 @@ func TestOperationInvalidDep(t *testing.T) {
 }
 
 func TestOperationParamDep(t *testing.T) {
-	r := NewRouter(&OpenAPI{
-		Title:   "Test API",
-		Version: "1.0.0",
-	})
+	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
 		r.Register(http.MethodGet, "/", &Operation{
@@ -240,10 +196,7 @@ func TestOperationParamDep(t *testing.T) {
 }
 
 func TestOperationParamRedeclare(t *testing.T) {
-	r := NewRouter(&OpenAPI{
-		Title:   "Test API",
-		Version: "1.0.0",
-	})
+	r := NewTestRouter(t)
 
 	p := QueryParam("foo", "Test", 0)
 
@@ -274,10 +227,7 @@ func TestOperationParamRedeclare(t *testing.T) {
 }
 
 func TestOperationParamExampleType(t *testing.T) {
-	r := NewRouter(&OpenAPI{
-		Title:   "Test API",
-		Version: "1.0.0",
-	})
+	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
 		r.Register(http.MethodGet, "/", &Operation{
@@ -296,10 +246,7 @@ func TestOperationParamExampleType(t *testing.T) {
 }
 
 func TestOperationParamExampleSchema(t *testing.T) {
-	r := NewRouter(&OpenAPI{
-		Title:   "Test API",
-		Version: "1.0.0",
-	})
+	r := NewTestRouter(t)
 
 	p := QueryParamExample("foo", "Test", 0, 123)
 

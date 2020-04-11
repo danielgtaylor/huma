@@ -22,11 +22,12 @@ func init() {
 	gin.SetMode(gin.TestMode)
 }
 
-func NewTestRouter(t *testing.T) *Router {
+func NewTestRouter(t *testing.T, options ...RouterOption) *Router {
 	l := zaptest.NewLogger(t)
 	g := gin.New()
 	g.Use(LogMiddleware(l, nil))
-	return NewRouterWithGin(g, &OpenAPI{Title: "Test API", Version: "1.0.0"})
+
+	return NewRouter("Test API", "1.0.0", append([]RouterOption{WithGin(g)}, options...)...)
 }
 
 type helloResponse struct {
@@ -51,10 +52,7 @@ func BenchmarkGin(b *testing.B) {
 }
 
 func BenchmarkHuma(b *testing.B) {
-	r := NewRouterWithGin(gin.New(), &OpenAPI{
-		Title:   "Benchmark test",
-		Version: "1.0.0",
-	})
+	r := NewRouter("Benchmark test", "1.0.0", WithGin(gin.New()))
 	r.Register(http.MethodGet, "/hello", &Operation{
 		Description: "Greet the world",
 		Responses: []*Response{
@@ -120,10 +118,7 @@ func BenchmarkGinComplex(b *testing.B) {
 }
 
 func BenchmarkHumaComplex(b *testing.B) {
-	r := NewRouterWithGin(gin.New(), &OpenAPI{
-		Title:   "Benchmark test",
-		Version: "1.0.0",
-	})
+	r := NewRouter("Benchmark test", "1.0.0", WithGin(gin.New()))
 
 	dep1 := &Dependency{
 		Value: "dep1",
@@ -188,7 +183,7 @@ func BenchmarkHumaComplex(b *testing.B) {
 
 func TestRouterDefault(t *testing.T) {
 	// Just test we can create it without panic.
-	_ = NewRouter(&OpenAPI{Title: "Default", Version: "1.0.0"})
+	_ = NewTestRouter(t)
 }
 
 func TestRouter(t *testing.T) {
@@ -196,7 +191,7 @@ func TestRouter(t *testing.T) {
 		Value string `json:"value" description:"The echoed back word"`
 	}
 
-	r := NewRouterWithGin(gin.New(), &OpenAPI{Title: "My API", Version: "1.0.0"})
+	r := NewTestRouter(t)
 
 	r.Register(http.MethodPut, "/echo/{word}", &Operation{
 		Description: "Echo back an input word.",
@@ -260,7 +255,7 @@ func TestRouterRequestBody(t *testing.T) {
 		Value string `json:"value" description:"The echoed back word"`
 	}
 
-	r := NewRouterWithGin(gin.New(), &OpenAPI{Title: "My API", Version: "1.0.0"})
+	r := NewTestRouter(t)
 
 	r.Register(http.MethodPut, "/echo", &Operation{
 		Description: "Echo back an input word.",
@@ -286,7 +281,7 @@ func TestRouterRequestBody(t *testing.T) {
 }
 
 func TestRouterScalarResponse(t *testing.T) {
-	r := NewRouterWithGin(gin.New(), &OpenAPI{Title: "My API", Version: "1.0.0"})
+	r := NewTestRouter(t)
 
 	r.Register(http.MethodPut, "/hello", &Operation{
 		Description: "Say hello.",
@@ -307,7 +302,7 @@ func TestRouterScalarResponse(t *testing.T) {
 }
 
 func TestRouterZeroScalarResponse(t *testing.T) {
-	r := NewRouterWithGin(gin.New(), &OpenAPI{Title: "My API", Version: "1.0.0"})
+	r := NewTestRouter(t)
 
 	r.Register(http.MethodPut, "/bool", &Operation{
 		Description: "Say hello.",
@@ -329,7 +324,7 @@ func TestRouterZeroScalarResponse(t *testing.T) {
 }
 
 func TestRouterResponseHeaders(t *testing.T) {
-	r := NewRouterWithGin(gin.New(), &OpenAPI{Title: "My API", Version: "1.0.0"})
+	r := NewTestRouter(t)
 
 	r.Register(http.MethodGet, "/test", &Operation{
 		Description: "Test operation",
@@ -360,7 +355,7 @@ func TestRouterResponseHeaders(t *testing.T) {
 }
 
 func TestRouterDependencies(t *testing.T) {
-	r := NewRouterWithGin(gin.New(), &OpenAPI{Title: "My API", Version: "1.0.0"})
+	r := NewTestRouter(t)
 
 	type DB struct {
 		Get func() string
@@ -425,7 +420,7 @@ func TestRouterBadHeader(t *testing.T) {
 	l := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(func(zapcore.Core) zapcore.Core { return core })))
 	g := gin.New()
 	g.Use(LogMiddleware(l, nil))
-	r := NewRouterWithGin(g, &OpenAPI{Title: "Test API", Version: "1.0.0"})
+	r := NewRouter("Test API", "1.0.0", WithGin(g))
 	r.Resource("/test", Header("foo", "desc"), ResponseError(http.StatusBadRequest, "desc", "foo")).Get("desc", func() (string, *ErrorModel, string) {
 		return "header-value", nil, "response"
 	})

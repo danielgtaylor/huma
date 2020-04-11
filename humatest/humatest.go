@@ -30,5 +30,5 @@ func NewRouterObserver(t testing.TB) (*huma.Router, *observer.ObservedLogs) {
 	g := gin.New()
 	g.Use(huma.LogMiddleware(l, nil))
 
-	return huma.NewRouterWithGin(g, &huma.OpenAPI{Title: "Test API", Version: "1.0.0"}), logs
+	return huma.NewRouter("Test API", "1.0.0", huma.WithGin(g)), logs
 }

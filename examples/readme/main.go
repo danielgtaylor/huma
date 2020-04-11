@@ -27,10 +27,7 @@ var memoryDB = sync.Map{}
 
 func main() {
 	// Create a new router and give our API a title and version.
-	r := huma.NewRouter(&huma.OpenAPI{
-		Title:   "Notes API",
-		Version: "1.0.0",
-	})
+	r := huma.NewRouter("Notes API", "1.0.0")
 
 	notes := r.Resource("/notes")
 	notes.List("Returns a list of all notes", func() []*NoteSummary {

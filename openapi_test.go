@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -36,11 +35,9 @@ var paramFuncsTable = []struct {
 }
 
 func TestParamFuncs(outer *testing.T) {
-	outer.Parallel()
 	for _, tt := range paramFuncsTable {
 		local := tt
 		outer.Run(fmt.Sprintf("%v", tt.n), func(t *testing.T) {
-			t.Parallel()
 			param := local.param
 			assert.Equal(t, local.name, param.Name)
 			assert.Equal(t, local.description, param.Description)
@@ -68,11 +65,9 @@ var responseFuncsTable = []struct {
 }
 
 func TestResponseFuncs(outer *testing.T) {
-	outer.Parallel()
 	for _, tt := range responseFuncsTable {
 		local := tt
 		outer.Run(fmt.Sprintf("%v", tt.n), func(t *testing.T) {
-			t.Parallel()
 			resp := local.resp
 			assert.Equal(t, local.statusCode, resp.StatusCode)
 			assert.Equal(t, local.description, resp.Description)
@@ -83,7 +78,7 @@ func TestResponseFuncs(outer *testing.T) {
 
 var serverFuncsTable = []struct {
 	n           string
-	server      *Server
+	option      RouterOption
 	url         string
 	description string
 }{
@@ -92,44 +87,40 @@ var serverFuncsTable = []struct {
 }
 
 func TestServerFuncs(outer *testing.T) {
-	outer.Parallel()
 	for _, tt := range serverFuncsTable {
 		local := tt
 		outer.Run(fmt.Sprintf("%v", tt.n), func(t *testing.T) {
-			t.Parallel()
-			server := local.server
-			assert.Equal(t, local.url, server.URL)
-			assert.Equal(t, local.description, server.Description)
+			r := NewTestRouter(t, local.option)
+			assert.Equal(t, local.url, r.api.Servers[0].URL)
+			assert.Equal(t, local.description, r.api.Servers[0].Description)
 		})
 	}
 }
 
 var securityFuncsTable = []struct {
 	n            string
-	sec          *SecurityScheme
+	option       RouterOption
 	typ          string
 	name         string
 	in           string
 	scheme       string
 	bearerFormat string
 }{
-	{"BasicAuth", BasicAuth(), "http", "", "", "basic", ""},
-	{"APIKeyAuth", APIKeyAuth("name", "in"), "apiKey", "name", "in", "", ""},
-	{"JWTBearerAuth", JWTBearerAuth(), "http", "", "", "bearer", "JWT"},
+	{"BasicAuth", BasicAuth("test"), "http", "", "", "basic", ""},
+	{"APIKeyAuth", APIKeyAuth("test", "name", "in"), "apiKey", "name", "in", "", ""},
+	{"JWTBearerAuth", JWTBearerAuth("test"), "http", "", "", "bearer", "JWT"},
 }
 
 func TestSecurityFuncs(outer *testing.T) {
-	outer.Parallel()
 	for _, tt := range securityFuncsTable {
 		local := tt
 		outer.Run(fmt.Sprintf("%v", tt.n), func(t *testing.T) {
-			t.Parallel()
-			sec := local.sec
-			assert.Equal(t, local.typ, sec.Type)
-			assert.Equal(t, local.name, sec.Name)
-			assert.Equal(t, local.in, sec.In)
-			assert.Equal(t, local.scheme, sec.Scheme)
-			assert.Equal(t, local.bearerFormat, sec.BearerFormat)
+			r := NewTestRouter(t, local.option)
+			assert.Equal(t, local.typ, r.api.SecuritySchemes["test"].Type)
+			assert.Equal(t, local.name, r.api.SecuritySchemes["test"].Name)
+			assert.Equal(t, local.in, r.api.SecuritySchemes["test"].In)
+			assert.Equal(t, local.scheme, r.api.SecuritySchemes["test"].Scheme)
+			assert.Equal(t, local.bearerFormat, r.api.SecuritySchemes["test"].BearerFormat)
 		})
 	}
 }
@@ -143,26 +134,12 @@ func TestOpenAPIHandler(t *testing.T) {
 		Message string `json:"message" example:"Hello, world"`
 	}
 
-	g := gin.New()
-	g.Use(gin.Recovery())
-	r := NewRouterWithGin(g, &OpenAPI{
-		Title:       "OpenAPI Test",
-		Description: "My test API...",
-		Version:     "1.0.0",
-		Contact: &Contact{
-			Name:  "Support",
-			Email: "support@example.com",
-		},
-		Servers: []*Server{
-			DevServer("http://localhost:8888"),
-		},
-		SecuritySchemes: map[string]*SecurityScheme{
-			"basic": BasicAuth(),
-		},
-		Extra: map[string]interface{}{
-			"x-foo": "bar",
-		},
-	})
+	r := NewTestRouter(t,
+		ContactEmail("Support", "support@example.com"),
+		DevServer("http://localhost:8888"),
+		BasicAuth("basic"),
+		Extra("x-foo", "bar"),
+	)
 
 	dep1 := &Dependency{
 		Params: []*Param{

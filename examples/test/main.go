@@ -11,7 +11,7 @@ func routes(r *huma.Router) {
 
 func main() {
 	// Create the router.
-	r := huma.NewRouter(&huma.OpenAPI{Title: "Test", Version: "1.0.0"})
+	r := huma.NewRouter("Test", "1.0.0")
 
 	// Register routes.
 	routes(r)

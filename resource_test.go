@@ -136,7 +136,7 @@ func TestResourceFuncs(outer *testing.T) {
 	for _, tt := range resourceFuncsTest {
 		local := tt
 		outer.Run(fmt.Sprintf("%v", tt), func(t *testing.T) {
-			r := NewRouter(&OpenAPI{Title: "Test API", Version: "1.0.0"})
+			r := NewTestRouter(t)
 			res := NewResource(r, "/test").Text(http.StatusOK, "desc")
 
 			var f func(string, interface{})
@@ -184,7 +184,7 @@ func TestResourceShorthandFuncs(outer *testing.T) {
 	for _, tt := range resourceShorthandFuncs {
 		local := tt
 		outer.Run(fmt.Sprintf("%v", local.n), func(t *testing.T) {
-			r := NewRouter(&OpenAPI{Title: "Test API", Version: "1.0.0"})
+			r := NewTestRouter(t)
 			res := NewResource(r, "/test")
 
 			switch local.n {
@@ -209,7 +209,7 @@ func TestResourceShorthandFuncs(outer *testing.T) {
 }
 
 func TestResourceAutoJSON(t *testing.T) {
-	r := NewRouter(&OpenAPI{Title: "Test API", Version: "1.0.0"})
+	r := NewTestRouter(t)
 
 	type MyResponse struct{}
 
@@ -223,7 +223,7 @@ func TestResourceAutoJSON(t *testing.T) {
 }
 
 func TestResourceAutoText(t *testing.T) {
-	r := NewRouter(&OpenAPI{Title: "Test API", Version: "1.0.0"})
+	r := NewTestRouter(t)
 
 	// Registering the handler should not panic
 	r.Resource("/test").Get("desc", func() string {
@@ -235,7 +235,7 @@ func TestResourceAutoText(t *testing.T) {
 }
 
 func TestResourceAutoNoContent(t *testing.T) {
-	r := NewRouter(&OpenAPI{Title: "Test API", Version: "1.0.0"})
+	r := NewTestRouter(t)
 
 	// Registering the handler should not panic
 	r.Resource("/test").Get("desc", func() bool {

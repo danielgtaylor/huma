@@ -11,6 +11,7 @@ require (
 	github.com/gosimple/slug v1.9.0
 	github.com/labstack/echo/v4 v4.1.15
 	github.com/mattn/go-isatty v0.0.12
+	github.com/pelletier/go-toml v1.4.0 // indirect
 	github.com/pkg/errors v0.8.1 // indirect
 	github.com/spf13/cobra v0.0.6
 	github.com/spf13/viper v1.4.0

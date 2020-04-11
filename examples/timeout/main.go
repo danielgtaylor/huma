@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	r := huma.NewRouter(&huma.OpenAPI{Title: "Timeout Example", Version: "1.0.0"})
+	r := huma.NewRouter("Timeout Example", "1.0.0")
 
 	r.Resource("/timeout",
 		huma.ContextDependency(),

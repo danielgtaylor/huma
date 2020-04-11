@@ -19,22 +19,24 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// AddGlobalFlag will make a new global flag on the root command.
-func (r *Router) AddGlobalFlag(name, short, description string, defaultValue interface{}) {
-	viper.SetDefault(name, defaultValue)
+// GlobalFlag adds a new global flag on the root command.
+func GlobalFlag(name, short, description string, defaultValue interface{}) RouterOption {
+	return &routerOption{func(r *Router) {
+		viper.SetDefault(name, defaultValue)
 
-	flags := r.root.PersistentFlags()
-	switch v := defaultValue.(type) {
-	case bool:
-		flags.BoolP(name, short, viper.GetBool(name), description)
-	case int, int16, int32, int64, uint16, uint32, uint64:
-		flags.IntP(name, short, viper.GetInt(name), description)
-	case float32, float64:
-		flags.Float64P(name, short, viper.GetFloat64(name), description)
-	default:
-		flags.StringP(name, short, fmt.Sprintf("%v", v), description)
-	}
-	viper.BindPFlag(name, flags.Lookup(name))
+		flags := r.root.PersistentFlags()
+		switch v := defaultValue.(type) {
+		case bool:
+			flags.BoolP(name, short, viper.GetBool(name), description)
+		case int, int16, int32, int64, uint16, uint32, uint64:
+			flags.IntP(name, short, viper.GetInt(name), description)
+		case float32, float64:
+			flags.Float64P(name, short, viper.GetFloat64(name), description)
+		default:
+			flags.StringP(name, short, fmt.Sprintf("%v", v), description)
+		}
+		viper.BindPFlag(name, flags.Lookup(name))
+	}}
 }
 
 // Root returns the router's root command.
@@ -129,11 +131,17 @@ func (r *Router) setupCLI() {
 		},
 	})
 
-	r.AddGlobalFlag("host", "", "Hostname", "0.0.0.0")
-	r.AddGlobalFlag("port", "p", "Port", 8888)
-	r.AddGlobalFlag("cert", "", "SSL certificate file path", "")
-	r.AddGlobalFlag("key", "", "SSL key file path", "")
-	r.AddGlobalFlag("autotls", "", "Let's Encrypt automatic TLS domains (ignores port)", "")
-	r.AddGlobalFlag("debug", "d", "Enable debug logs", false)
-	r.AddGlobalFlag("grace-period", "", "Graceful shutdown wait duration in seconds", 20)
+	flags := []RouterOption{
+		GlobalFlag("host", "", "Hostname", "0.0.0.0"),
+		GlobalFlag("port", "p", "Port", 8888),
+		GlobalFlag("cert", "", "SSL certificate file path", ""),
+		GlobalFlag("key", "", "SSL key file path", ""),
+		GlobalFlag("autotls", "", "Let's Encrypt automatic TLS domains (ignores port)", ""),
+		GlobalFlag("debug", "d", "Enable debug logs", false),
+		GlobalFlag("grace-period", "", "Graceful shutdown wait duration in seconds", 20),
+	}
+
+	for _, flag := range flags {
+		flag.ApplyRouter(r)
+	}
 }

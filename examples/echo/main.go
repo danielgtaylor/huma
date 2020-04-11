@@ -12,10 +12,7 @@ type EchoResponse struct {
 }
 
 func main() {
-	r := huma.NewRouter(&huma.OpenAPI{
-		Title:   "My API",
-		Version: "1.0.0",
-	})
+	r := huma.NewRouter("My API", "1.0.0")
 
 	r.Resource("/echo",
 		huma.PathParam("word", "The word to echo back"),
