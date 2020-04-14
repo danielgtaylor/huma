@@ -266,7 +266,7 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 	title := docs
 	desc := ""
 	if strings.Contains(docs, "\n") {
-		parts := strings.SplitN(docs, "\n", 1)
+		parts := strings.SplitN(docs, "\n", 2)
 		title = parts[0]
 		desc = parts[1]
 	}
