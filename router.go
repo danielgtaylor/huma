@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/danielgtaylor/huma/schema"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
@@ -30,6 +31,8 @@ var ErrInvalidParamLocation = errors.New("invalid parameter location")
 // context value.
 var ConnContextKey = struct{}{}
 
+var timeType = reflect.TypeOf(time.Time{})
+
 // GetConn gets the underlying `net.Conn` from a request.
 func GetConn(r *http.Request) net.Conn {
 	conn := r.Context().Value(ConnContextKey)
@@ -40,7 +43,7 @@ func GetConn(r *http.Request) net.Conn {
 }
 
 // Checks if data validates against the given schema. Returns false on failure.
-func validAgainstSchema(c *gin.Context, label string, schema *Schema, data []byte) bool {
+func validAgainstSchema(c *gin.Context, label string, schema *schema.Schema, data []byte) bool {
 	defer func() {
 		// Catch panics from the `gojsonschema` library.
 		if err := recover(); err != nil {
@@ -149,7 +152,7 @@ func parseParamValue(c *gin.Context, name string, typ reflect.Type, pstr string)
 	return pv, true
 }
 
-func getParamValue(c *gin.Context, param *Param) (interface{}, bool) {
+func getParamValue(c *gin.Context, param *OpenAPIParam) (interface{}, bool) {
 	var pstr string
 	switch param.In {
 	case InPath:
@@ -198,18 +201,18 @@ func getParamValue(c *gin.Context, param *Param) (interface{}, bool) {
 	return pv, true
 }
 
-func getRequestBody(c *gin.Context, t reflect.Type, op *Operation) (interface{}, bool) {
+func getRequestBody(c *gin.Context, t reflect.Type, op *OpenAPIOperation) (interface{}, bool) {
 	val := reflect.New(t).Interface()
-	if op.RequestSchema != nil {
+	if op.requestSchema != nil {
 		body, err := ioutil.ReadAll(c.Request.Body)
 		if err != nil {
 			if strings.Contains(err.Error(), "request body too large") {
 				c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, ErrorModel{
-					Message: fmt.Sprintf("Request body too large, limit = %d bytes", op.MaxBodyBytes),
+					Message: fmt.Sprintf("Request body too large, limit = %d bytes", op.maxBodyBytes),
 				})
 			} else if e, ok := err.(net.Error); ok && e.Timeout() {
 				c.AbortWithStatusJSON(http.StatusRequestTimeout, ErrorModel{
-					Message: fmt.Sprintf("Request body took too long to read: timed out after %v", op.BodyReadTimeout),
+					Message: fmt.Sprintf("Request body took too long to read: timed out after %v", op.bodyReadTimeout),
 				})
 			} else {
 				panic(err)
@@ -219,7 +222,7 @@ func getRequestBody(c *gin.Context, t reflect.Type, op *Operation) (interface{},
 
 		c.Request.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 
-		if !validAgainstSchema(c, "request body", op.RequestSchema, body) {
+		if !validAgainstSchema(c, "request body", op.requestSchema, body) {
 			// Error already handled, just return.
 			return nil, false
 		}
@@ -274,10 +277,10 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 			Title:           title,
 			Description:     desc,
 			Version:         version,
-			Servers:         make([]*Server, 0),
-			SecuritySchemes: make(map[string]*SecurityScheme, 0),
-			Security:        make([]SecurityRequirement, 0),
-			Paths:           make(map[string]map[string]*Operation),
+			Servers:         make([]*OpenAPIServer, 0),
+			SecuritySchemes: make(map[string]*OpenAPISecurityScheme, 0),
+			Security:        make([]OpenAPISecurityRequirement, 0),
+			Paths:           make(map[string]map[string]*OpenAPIOperation),
 			Extra:           make(map[string]interface{}),
 		},
 		engine:      g,
@@ -298,7 +301,7 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 	}
 
 	// Set up handlers for the auto-generated spec and docs.
-	r.engine.GET("/openapi.json", OpenAPIHandler(r.api))
+	r.engine.GET("/openapi.json", openAPIHandler(r.api))
 
 	r.engine.GET("/docs", func(c *gin.Context) {
 		r.docsHandler(c, r.api)
@@ -330,19 +333,19 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 // Resource creates a new resource at the given path with the given
 // dependencies, parameters, response headers, and responses defined.
-func (r *Router) Resource(path string, depsParamsHeadersOrResponses ...interface{}) *Resource {
-	return NewResource(r, path).With(depsParamsHeadersOrResponses...)
+func (r *Router) Resource(path string, options ...ResourceOption) *Resource {
+	return NewResource(r, path).With(options...)
 }
 
 // Register a new operation.
-func (r *Router) Register(method, path string, op *Operation) {
+func (r *Router) Register(method, path string, op *OpenAPIOperation) {
 	// First, make sure the operation and handler make sense, as well as pre-
 	// generating any schemas for use later during request handling.
 	op.validate(method, path)
 
 	// Add the operation to the list of operations for the path entry.
 	if r.api.Paths[path] == nil {
-		r.api.Paths[path] = make(map[string]*Operation)
+		r.api.Paths[path] = make(map[string]*OpenAPIOperation)
 	}
 
 	r.api.Paths[path][method] = op
@@ -376,12 +379,12 @@ func (r *Router) Register(method, path string, op *Operation) {
 
 	// Then call it to register our handler function.
 	f(path, func(c *gin.Context) {
-		method := reflect.ValueOf(op.Handler)
+		method := reflect.ValueOf(op.handler)
 		in := make([]reflect.Value, 0, method.Type().NumIn())
 
 		// Limit the body size
 		if c.Request.Body != nil {
-			maxBody := op.MaxBodyBytes
+			maxBody := op.maxBodyBytes
 			if maxBody == 0 {
 				// 1 MiB default
 				maxBody = 1024 * 1024
@@ -394,8 +397,8 @@ func (r *Router) Register(method, path string, op *Operation) {
 		}
 
 		// Process any dependencies first.
-		for _, dep := range op.Dependencies {
-			headers, value, err := dep.Resolve(c, op)
+		for _, dep := range op.dependencies {
+			headers, value, err := dep.resolve(c, op)
 			if err != nil {
 				if !c.IsAborted() {
 					// Nothing else has handled the error, so treat it like a general
@@ -413,7 +416,7 @@ func (r *Router) Register(method, path string, op *Operation) {
 			in = append(in, reflect.ValueOf(value))
 		}
 
-		for _, param := range op.Params {
+		for _, param := range op.params {
 			pv, ok := getParamValue(c, param)
 			if !ok {
 				// Error has already been handled.
@@ -423,7 +426,7 @@ func (r *Router) Register(method, path string, op *Operation) {
 			in = append(in, reflect.ValueOf(pv))
 		}
 
-		readTimeout := op.BodyReadTimeout
+		readTimeout := op.bodyReadTimeout
 		if len(in) != method.Type().NumIn() {
 			if readTimeout == 0 {
 				// Default to 15s when reading/parsing/validating automatically.
@@ -458,14 +461,14 @@ func (r *Router) Register(method, path string, op *Operation) {
 		// from the registered `huma.Response` struct.
 		// This breaks down with scalar types... so they need to be passed
 		// as a pointer and we'll dereference it automatically.
-		for i, o := range out[len(op.ResponseHeaders):] {
+		for i, o := range out[len(op.responseHeaders):] {
 			if !o.IsZero() {
 				body := o.Interface()
 
-				r := op.Responses[i]
+				r := op.responses[i]
 
 				// Set response headers
-				for j, header := range op.ResponseHeaders {
+				for j, header := range op.responseHeaders {
 					value := out[j]
 
 					found := false
@@ -498,7 +501,7 @@ func (r *Router) Register(method, path string, op *Operation) {
 					}
 				}
 
-				if r.empty {
+				if r.ContentType == "" {
 					// No body allowed, e.g. for HTTP 204.
 					c.Status(r.StatusCode)
 					break

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma"
+	"github.com/danielgtaylor/huma/schema"
 )
 
 // NoteSummary is used to list notes. It does not include the (potentially)
@@ -46,9 +47,11 @@ func main() {
 	})
 
 	// Add an `id` path parameter to create a note resource.
-	note := notes.With(huma.PathParam("id", "Note ID", &huma.Schema{
-		Pattern: "^[a-zA-Z0-9._-]{1,32}$",
-	}))
+	note := notes.With(huma.PathParam("id", "Note ID",
+		huma.Schema(&schema.Schema{
+			Pattern: "^[a-zA-Z0-9._-]{1,32}$",
+		}),
+	))
 
 	notFound := huma.ResponseError(http.StatusNotFound, "Note not found")
 

@@ -6,13 +6,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/danielgtaylor/huma/schema"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/stretchr/testify/assert"
 )
 
 var paramFuncsTable = []struct {
 	n           string
-	param       *Param
+	param       OperationOption
 	name        string
 	description string
 	in          ParamLocation
@@ -22,28 +23,30 @@ var paramFuncsTable = []struct {
 	example     interface{}
 }{
 	{"PathParam", PathParam("test", "desc"), "test", "desc", InPath, true, false, nil, nil},
-	{"PathParamSchema", PathParam("test", "desc", &Schema{}), "test", "desc", InPath, true, false, nil, nil},
-	{"PathParamExample", PathParamExample("test", "desc", 123), "test", "desc", InPath, true, false, nil, 123},
+	{"PathParamSchema", PathParam("test", "desc", Schema(&schema.Schema{})), "test", "desc", InPath, true, false, nil, nil},
+	{"PathParamExample", PathParam("test", "desc", Example(123)), "test", "desc", InPath, true, false, nil, 123},
 	{"QueryParam", QueryParam("test", "desc", "def"), "test", "desc", InQuery, false, false, "def", nil},
-	{"QueryParamSchema", QueryParam("test", "desc", "def", &Schema{}), "test", "desc", InQuery, false, false, "def", nil},
-	{"QueryParamExample", QueryParamExample("test", "desc", "def", "foo"), "test", "desc", InQuery, false, false, "def", "foo"},
-	{"QueryParamInternal", QueryParamInternal("test", "desc", "def"), "test", "desc", InQuery, false, true, "def", nil},
+	{"QueryParamSchema", QueryParam("test", "desc", "def", Schema(&schema.Schema{})), "test", "desc", InQuery, false, false, "def", nil},
+	{"QueryParamExample", QueryParam("test", "desc", "def", Example("foo")), "test", "desc", InQuery, false, false, "def", "foo"},
+	{"QueryParamInternal", QueryParam("test", "desc", "def", Internal()), "test", "desc", InQuery, false, true, "def", nil},
 	{"HeaderParam", HeaderParam("test", "desc", "def"), "test", "desc", InHeader, false, false, "def", nil},
-	{"HeaderParamSchema", HeaderParam("test", "desc", "def", &Schema{}), "test", "desc", InHeader, false, false, "def", nil},
-	{"HeaderParamExample", HeaderParamExample("test", "desc", "def", "foo"), "test", "desc", InHeader, false, false, "def", "foo"},
-	{"HeaderParamInternal", HeaderParamInternal("test", "desc", "def"), "test", "desc", InHeader, false, true, "def", nil},
+	{"HeaderParamSchema", HeaderParam("test", "desc", "def", Schema(&schema.Schema{})), "test", "desc", InHeader, false, false, "def", nil},
+	{"HeaderParamExample", HeaderParam("test", "desc", "def", Example("foo")), "test", "desc", InHeader, false, false, "def", "foo"},
+	{"HeaderParamInternal", HeaderParam("test", "desc", "def", Internal()), "test", "desc", InHeader, false, true, "def", nil},
 }
 
 func TestParamFuncs(outer *testing.T) {
 	for _, tt := range paramFuncsTable {
 		local := tt
 		outer.Run(fmt.Sprintf("%v", tt.n), func(t *testing.T) {
-			param := local.param
+			op := NewOperation()
+			local.param.ApplyOperation(op)
+			param := op.params[0]
 			assert.Equal(t, local.name, param.Name)
 			assert.Equal(t, local.description, param.Description)
 			assert.Equal(t, local.in, param.In)
 			assert.Equal(t, local.required, param.Required)
-			assert.Equal(t, local.internal, param.internal)
+			assert.Equal(t, local.internal, param.Internal)
 			assert.Equal(t, local.def, param.def)
 			assert.Equal(t, local.example, param.Example)
 		})
@@ -52,23 +55,25 @@ func TestParamFuncs(outer *testing.T) {
 
 var responseFuncsTable = []struct {
 	n           string
-	resp        *Response
+	resp        OperationOption
 	statusCode  int
 	description string
 	headers     []string
 	contentType string
 }{
-	{"ResponseEmpty", ResponseEmpty(204, "desc", "head1", "head2"), 204, "desc", []string{"head1", "head2"}, ""},
-	{"ResponseText", ResponseText(200, "desc", "head1", "head2"), 200, "desc", []string{"head1", "head2"}, "application/json"},
-	{"ResponseJSON", ResponseJSON(200, "desc", "head1", "head2"), 200, "desc", []string{"head1", "head2"}, "application/json"},
-	{"ResponseError", ResponseJSON(200, "desc", "head1", "head2"), 200, "desc", []string{"head1", "head2"}, "application/json"},
+	{"ResponseEmpty", Response(204, "desc", Headers("head1", "head2")), 204, "desc", []string{"head1", "head2"}, ""},
+	{"ResponseText", ResponseText(200, "desc", Headers("head1", "head2")), 200, "desc", []string{"head1", "head2"}, "application/json"},
+	{"ResponseJSON", ResponseJSON(200, "desc", Headers("head1", "head2")), 200, "desc", []string{"head1", "head2"}, "application/json"},
+	{"ResponseError", ResponseJSON(200, "desc", Headers("head1", "head2")), 200, "desc", []string{"head1", "head2"}, "application/json"},
 }
 
 func TestResponseFuncs(outer *testing.T) {
 	for _, tt := range responseFuncsTable {
 		local := tt
 		outer.Run(fmt.Sprintf("%v", tt.n), func(t *testing.T) {
-			resp := local.resp
+			op := NewOperation()
+			local.resp.ApplyOperation(op)
+			resp := op.responses[0]
 			assert.Equal(t, local.statusCode, resp.StatusCode)
 			assert.Equal(t, local.description, resp.Description)
 			assert.Equal(t, local.headers, resp.Headers)
@@ -141,52 +146,29 @@ func TestOpenAPIHandler(t *testing.T) {
 		Extra("x-foo", "bar"),
 	)
 
-	dep1 := &Dependency{
-		Params: []*Param{
-			QueryParam("q", "Test query param", ""),
-		},
-		ResponseHeaders: []*ResponseHeader{
-			Header("dep", "description"),
-		},
-		Value: func(q string) (string, string, error) {
-			return "header", "foo", nil
-		},
-	}
+	dep1 := Dependency(DependencyOptions(
+		QueryParam("q", "Test query param", ""),
+		ResponseHeader("dep", "description"),
+	), func(q string) (string, string, error) {
+		return "header", "foo", nil
+	})
 
-	dep2 := &Dependency{
-		Dependencies: []*Dependency{dep1},
-		Value: func(q string) (string, error) {
-			return q, nil
-		},
-	}
+	dep2 := Dependency(dep1, func(q string) (string, error) {
+		return q, nil
+	})
 
-	r.Register(http.MethodPut, "/hello", &Operation{
-		ID:          "put-hello",
-		Summary:     "Summary message",
-		Description: "Get a welcome message",
-		Tags:        []string{"Messages"},
-		Security:    SecurityRef("basic"),
-		Dependencies: []*Dependency{
-			dep2,
-		},
-		Params: []*Param{
-			QueryParam("greet", "Whether to greet or not", false),
-			HeaderParamInternal("user", "User from auth token", ""),
-		},
-		ResponseHeaders: []*ResponseHeader{
-			Header("etag", "Content hash for caching"),
-		},
-		Responses: []*Response{
-			ResponseJSON(200, "Successful response", "etag"),
-		},
-		Extra: map[string]interface{}{
-			"x-foo": "bar",
-		},
-		Handler: func(q string, greet bool, user string, body *HelloRequest) (string, *HelloResponse) {
-			return "etag", &HelloResponse{
-				Message: "Hello",
-			}
-		},
+	r.Resource("/hello",
+		dep2,
+		SecurityRef("basic"),
+		QueryParam("greet", "Whether to greet or not", false),
+		HeaderParam("user", "User from auth token", "", Internal()),
+		ResponseHeader("etag", "Content hash for caching"),
+		ResponseJSON(200, "Successful response", Headers("etag")),
+		Extra("x-foo", "bar"),
+	).Put("Get a welcome message", func(q string, greet bool, user string, body *HelloRequest) (string, *HelloResponse) {
+		return "etag", &HelloResponse{
+			Message: "Hello",
+		}
 	})
 
 	w := httptest.NewRecorder()

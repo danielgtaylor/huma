@@ -294,29 +294,6 @@ notes.With(
 ).Get("Get a list of all notes", func () []*NoteSummary {
 	// Implementation goes here
 })
-
-// The above idiom is common enough when needing to change response codes
-// or allow certain response headers that there is a shortcut:
-notes.
-	JSON(http.StatusCreated, "Success", "expires").
-	Get("Get a list of all notes", func () []*NoteSummary {
-		// Implementation goes here
-	})
-```
-
-Alternatively you can provide a `*huma.Operation` instance to the resource if you want more flexibility or prefer this style over chaining:
-
-```go
-// Create the operation
-notes.Operation(http.MethodGet, &huma.Operation{
-	Description: "Get a list of all notes"
-	Responses: []*huma.Response{
-		huma.ResponseJSON(http.StatusOK, "List of notes", "expires"),
-	},
-	Handler: func () []*NoteSummary {
-		// Implementation goes here
-	}
-})
 ```
 
 > :whale: Operations map an HTTP action verb to a resource. You might `POST` a new note or `GET` a user. Sometimes the mapping is less obvious and you can consider using a sub-resource. For example, rather than unliking a post, maybe you `DELETE` the `/posts/{id}/likes` resource.
@@ -371,15 +348,17 @@ Get("Get a note by its ID", func(id string) (*huma.ErrorModel, *Note) {
 You can also declare parameters with additional validation logic:
 
 ```go
-huma.PathParam("id", "Note ID", &huma.Schema{
+s := &schema.Schema{
 	MinLength: 1,
 	MaxLength: 32,
-})
+}
+
+huma.PathParam("id", "Note ID", huma.Schema(s))
 ```
 
 Once a parameter is declared it will get parsed, validated, and then sent to your handler function. If parsing or validation fails, the client gets a 400-level HTTP error.
 
-> :whale: If a proxy is providing e.g. authentication or rate-limiting and exposes additional internal-only information then use the internal parameters like `huma.HeaderParamInternal("UserID", "Parsed user from the auth system", "nobody")`. Internal parameters are never included in the generated OpenAPI 3 spec or documentation.
+> :whale: If a proxy is providing e.g. authentication or rate-limiting and exposes additional internal-only information then use the internal parameters like `huma.HeaderParam("UserID", "Parsed user from the auth system", "nobody", huma.Internal())`. Internal parameters are never included in the generated OpenAPI 3 spec or documentation.
 
 ## Request & Response Models
 
@@ -433,11 +412,11 @@ Get("Description", func() (*huma.ErrorModel, *Note) {
 
 Whichever model is not `nil` will get sent back to the client.
 
-Empty responses, e.g. a `204 No Content` or `304 Not Modified` are also supported. Use `huma.ResponseEmpty` paired with a simple boolean to return a response without a body. Passing `false` acts like `nil` for models and prevents that response from being sent.
+Empty responses, e.g. a `204 No Content` or `304 Not Modified` are also supported by setting a `ContentType` of `""`. Use `huma.Response` paired with a simple boolean to return a response without a body. Passing `false` acts like `nil` for models and prevents that response from being sent.
 
 ```go
 r.Resource("/notes",
-	huma.ResponseEmpty(http.StatusNoContent, "This should have no body")).
+	huma.Response(http.StatusNoContent, "This should have no body")).
 Get("description", func() bool {
 	return true
 })
@@ -490,8 +469,8 @@ For example:
 ```go
 r.Resource("/notes",
 	huma.Header("expires", "Expiration date for this content"),
-	huma.ResponseText(http.StatusOK, "Success", "expires")).
-Get("description", func() (string, string) {
+	huma.ResponseText(http.StatusOK, "Success", huma.Headers("expires"))
+).Get("description", func() (string, string) {
 	expires := time.Now().Add(7 * 24 * time.Hour).MarshalText()
 	return expires, "Hello!"
 })
@@ -521,9 +500,7 @@ Global dependencies are created by just setting some value, while contextual dep
 
 ```go
 // Register a new database connection dependency
-db := &huma.Dependency{
-	Value: db.NewConnection(),
-}
+db := huma.SimpleDependency(db.NewConnection())
 
 // Register a new request logger dependency. This is contextual because we
 // will print out the requester's IP address with each log message.
@@ -531,27 +508,25 @@ type MyLogger struct {
 	Info: func(msg string),
 }
 
-logger := &huma.Dependency{
-	Dependencies: []*huma.Dependency{huma.ContextDependency()},
-	Value: func(c *gin.Context) (*MyLogger, error) {
+logger := huma.Dependency(
+	huma.GinContextDependency(),
+	func(c *gin.Context) (*MyLogger, error) {
 		return &MyLogger{
 			Info: func(msg string) {
 				fmt.Printf("%s [ip:%s]\n", msg, c.Request.RemoteAddr)
 			},
 		}, nil
 	},
-}
+)
 
 // Use them in any handler by adding them to both `Depends` and the list of
 // handler function arguments.
-r.Resource("/foo").Operation(http.MethodGet, &huma.Operation{
-	// ...
-	Dependencies: []*huma.Dependency{db, logger},
-	Handler: func(db *db.Connection, log *MyLogger) string {
-		log.Info("test")
-		item := db.Fetch("query")
-		return item.ID
-	}
+r.Resource("/foo").With(
+	db, logger
+).Get("doc", func(db *db.Connection, log *MyLogger) string {
+	log.Info("test")
+	item := db.Fetch("query")
+	return item.ID
 })
 ```
 
@@ -624,7 +599,7 @@ r.Resource("/timeout",
 
 ### Request Body Timeouts
 
-By default any handler which takes in a request body parameter will have a read timeout of 15 seconds set on it. If set to nonzero for a handler which does **not** take a body, then the timeout will be set on the underlying connection before calling your handler. The timeout value is configurable at the resource and operation level.
+By default any handler which takes in a request body parameter will have a read timeout of 15 seconds set on it. If set to nonzero for a handler which does **not** take a body, then the timeout will be set on the underlying connection before calling your handler.
 
 When triggered, the server sends a 408 Request Timeout as JSON with a message containing the time waited.
 
@@ -635,21 +610,11 @@ type Input struct {
 
 r := huma.NewRouter("My API", "1.0.0")
 
-// Resource-level limit to 5 seconds
-r.Resource("/foo").BodyReadTimeout(5 * time.Second).Post(
+// Limit to 5 seconds
+r.Resource("/foo", huma.BodyReadTimeout(5 * time.Second)).Post(
 	"Create item", func(input *Input) string {
 		return "Hello, " + input.ID
 	})
-
-// Operation-level limit
-r.Resource("/foo").Operation(http.MethodPost, &huma.Operation{
-	// ...
-	BodyReadTimeout: 5 * time.Second,
-	Handler: func(input *Input) string {
-		return "Hello, " + input.ID
-	},
-	// ...
-})
 ```
 
 You can also access the underlying TCP connection and set deadlines manually:
@@ -675,22 +640,15 @@ r.Resource("/foo", huma.GinContextDependency()).Get(func (c *gin.Context) string
 
 ### Request Body Size Limits
 
-By default each operation has a 1 MiB reqeuest body size limit. This value is configurable at the resource and operation level.
+By default each operation has a 1 MiB reqeuest body size limit.
 
 When triggered, the server sends a 413 Request Entity Too Large as JSON with a message containing the maximum body size for this operation.
 
 ```go
 r := huma.NewRouter("My API", "1.0.0")
 
-// Resource-level limit set to 10 MiB
-r.Resource("/foo").MaxBodyBytes(10 * 1024 * 1024).Get(...)
-
-// Operation-level limit
-r.Resource("/foo").Operation(http.MethodGet, &huma.Operation{
-	// ...
-	MaxBodyBytes: 10 * 1024 * 1024,
-	// ...
-})
+// Limit set to 10 MiB
+r.Resource("/foo", MaxBodyBytes(10 * 1024 * 1024)).Get(...)
 ```
 
 > :whale: Set to `-1` in order to disable the check, allowing for unlimited request body size for e.g. large streaming file uploads.
@@ -702,8 +660,7 @@ Huma provides a Zap-based contextual structured logger built-in. You can access 
 ```go
 r.Resource("/test",
 	huma.LogDependency(),
-	huma.ResponseText(http.StatusOK, "Successful")).
-Get("Logger test", func(log *zap.SugaredLogger) string {
+).Get("Logger test", func(log *zap.SugaredLogger) string {
 	log.Info("I'm using the logger!")
 	return "Hello, world"
 })
@@ -818,10 +775,10 @@ You can access the root `cobra.Command` via `r.Root()` and add new custom comman
 
 ## Middleware
 
-You can make use of any Gin-compatible middleware via the `Middleware()` router option.
+You can make use of any Gin-compatible middleware via the `GinMiddleware()` router option.
 
 ```go
-r := huma.NewRouter("My API", "1.0.0", huma.Middleware(gin.Logger()))
+r := huma.NewRouter("My API", "1.0.0", huma.GinMiddleware(gin.Logger()))
 ```
 
 ## HTTP/2 Setup

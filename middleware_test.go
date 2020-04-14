@@ -15,14 +15,8 @@ func TestRecoveryMiddleware(t *testing.T) {
 	r := NewTestRouter(t)
 	r.GinEngine().Use(Recovery())
 
-	r.Register(http.MethodGet, "/panic", &Operation{
-		Description: "Panic recovery test",
-		Responses: []*Response{
-			ResponseText(http.StatusOK, "Success"),
-		},
-		Handler: func() string {
-			panic(fmt.Errorf("Some error"))
-		},
+	r.Resource("/panic").Get("Panic recovery test", func() string {
+		panic(fmt.Errorf("Some error"))
 	})
 
 	w := httptest.NewRecorder()
@@ -36,14 +30,8 @@ func TestRecoveryMiddlewareLogBody(t *testing.T) {
 	r := NewTestRouter(t)
 	r.GinEngine().Use(Recovery())
 
-	r.Register(http.MethodPut, "/panic", &Operation{
-		Description: "Panic recovery test",
-		Responses: []*Response{
-			ResponseText(http.StatusOK, "Success"),
-		},
-		Handler: func(in map[string]string) string {
-			panic(fmt.Errorf("Some error"))
-		},
+	r.Resource("/panic").Put("Panic recovery test", func(in map[string]string) string {
+		panic(fmt.Errorf("Some error"))
 	})
 
 	w := httptest.NewRecorder()

@@ -13,44 +13,38 @@ func TestResourceCopy(t *testing.T) {
 	r1 := NewResource(nil, "/test")
 	r2 := r1.Copy()
 
-	assert.NotSame(t, r1.deps, r2.deps)
+	assert.NotSame(t, r1.dependencies, r2.dependencies)
 	assert.NotSame(t, r1.params, r2.params)
 	assert.NotSame(t, r1.responseHeaders, r2.responseHeaders)
 	assert.NotSame(t, r1.responses, r2.responses)
 }
 
-func TestResourceWithBadInput(t *testing.T) {
-	assert.Panics(t, func() {
-		NewResource(nil, "/test").With("bad-value")
-	})
-}
-
 func TestResourceWithDep(t *testing.T) {
-	dep1 := &Dependency{Value: "dep1"}
-	dep2 := &Dependency{Value: "dep2"}
+	dep1 := SimpleDependency("dep1")
+	dep2 := SimpleDependency("dep2")
 
 	r1 := NewResource(nil, "/test")
 	r2 := r1.With(dep1)
 	r3 := r1.With(dep2)
 
-	assert.Contains(t, r2.deps, dep1)
-	assert.NotContains(t, r2.deps, dep2)
-	assert.Contains(t, r3.deps, dep2)
-	assert.NotContains(t, r3.deps, dep1)
+	assert.NotEmpty(t, r2.dependencies)
+	assert.NotEmpty(t, r3.dependencies)
+
+	assert.NotSame(t, r2.dependencies[0], r3.dependencies[0])
 }
 
 func TestResourceWithSecurity(t *testing.T) {
 	sec1 := SecurityRef("sec1")
-	sec2 := SecurityRef("sec2")[0]
+	sec2 := SecurityRef("sec2")
 
 	r1 := NewResource(nil, "/test")
 	r2 := r1.With(sec1)
 	r3 := r1.With(sec2)
 
-	assert.Equal(t, r2.security, sec1)
-	assert.NotContains(t, r2.security, sec2)
-	assert.Contains(t, r3.security, sec2)
-	assert.NotEqual(t, r3.security, sec1)
+	assert.NotEmpty(t, r2.security)
+	assert.NotEmpty(t, r3.security)
+
+	assert.NotSame(t, r2.security[0], r3.security[0])
 }
 
 func TestResourceWithParam(t *testing.T) {
@@ -61,27 +55,27 @@ func TestResourceWithParam(t *testing.T) {
 	r2 := r1.With(param1)
 	r3 := r1.With(param2)
 
-	assert.Contains(t, r2.params, param1)
-	assert.NotContains(t, r2.params, param2)
-	assert.Contains(t, r3.params, param2)
-	assert.NotContains(t, r3.params, param1)
+	assert.NotEmpty(t, r2.params)
+	assert.NotEmpty(t, r3.params)
+
+	assert.NotSame(t, r2.params[0], r3.params[0])
 
 	assert.Equal(t, "/test/{p1}", r2.Path())
 	assert.Equal(t, "/test/{p2}", r3.Path())
 }
 
 func TestResourceWithHeader(t *testing.T) {
-	header1 := Header("h1", "desc")
-	header2 := Header("h2", "desc")
+	header1 := ResponseHeader("h1", "desc")
+	header2 := ResponseHeader("h2", "desc")
 
 	r1 := NewResource(nil, "/test")
 	r2 := r1.With(header1)
 	r3 := r1.With(header2)
 
-	assert.Contains(t, r2.responseHeaders, header1)
-	assert.NotContains(t, r2.responseHeaders, header2)
-	assert.Contains(t, r3.responseHeaders, header2)
-	assert.NotContains(t, r3.responseHeaders, header1)
+	assert.NotEmpty(t, r2.responseHeaders)
+	assert.NotEmpty(t, r3.responseHeaders)
+
+	assert.NotSame(t, r2.responseHeaders[0], r3.responseHeaders[0])
 }
 
 func TestResourceWithResponse(t *testing.T) {
@@ -92,10 +86,10 @@ func TestResourceWithResponse(t *testing.T) {
 	r2 := r1.With(resp1)
 	r3 := r1.With(resp2)
 
-	assert.Contains(t, r2.responses, resp1)
-	assert.NotContains(t, r2.responses, resp2)
-	assert.Contains(t, r3.responses, resp2)
-	assert.NotContains(t, r3.responses, resp1)
+	assert.NotEmpty(t, r2.responses)
+	assert.NotEmpty(t, r3.responses)
+
+	assert.NotSame(t, r2.responses[0], r3.responses[0])
 }
 
 func TestSubResource(t *testing.T) {
@@ -137,7 +131,7 @@ func TestResourceFuncs(outer *testing.T) {
 		local := tt
 		outer.Run(fmt.Sprintf("%v", tt), func(t *testing.T) {
 			r := NewTestRouter(t)
-			res := NewResource(r, "/test").Text(http.StatusOK, "desc")
+			res := NewResource(r, "/test")
 
 			var f func(string, interface{})
 
@@ -180,34 +174,6 @@ var resourceShorthandFuncs = []struct {
 	{"Empty", http.StatusNotModified, "", "desc"},
 }
 
-func TestResourceShorthandFuncs(outer *testing.T) {
-	for _, tt := range resourceShorthandFuncs {
-		local := tt
-		outer.Run(fmt.Sprintf("%v", local.n), func(t *testing.T) {
-			r := NewTestRouter(t)
-			res := NewResource(r, "/test")
-
-			switch local.n {
-			case "Text":
-				res = res.Text(local.statusCode, local.desc, "header")
-			case "JSON":
-				res = res.JSON(local.statusCode, local.desc, "header")
-			case "NoContent":
-				res = res.NoContent(local.desc, "header")
-			case "Empty":
-				res = res.Empty(local.statusCode, local.desc, "header")
-			default:
-				panic("invalid case " + local.n)
-			}
-
-			resp := res.responses[0]
-			assert.Equal(t, local.statusCode, resp.StatusCode)
-			assert.Equal(t, local.contentType, resp.ContentType)
-			assert.Equal(t, local.desc, resp.Description)
-		})
-	}
-}
-
 func TestResourceAutoJSON(t *testing.T) {
 	r := NewTestRouter(t)
 
@@ -218,8 +184,8 @@ func TestResourceAutoJSON(t *testing.T) {
 		return &MyResponse{}
 	})
 
-	assert.Equal(t, http.StatusOK, r.api.Paths["/test"][http.MethodGet].Responses[0].StatusCode)
-	assert.Equal(t, "application/json", r.api.Paths["/test"][http.MethodGet].Responses[0].ContentType)
+	assert.Equal(t, http.StatusOK, r.api.Paths["/test"][http.MethodGet].responses[0].StatusCode)
+	assert.Equal(t, "application/json", r.api.Paths["/test"][http.MethodGet].responses[0].ContentType)
 }
 
 func TestResourceAutoText(t *testing.T) {
@@ -230,8 +196,8 @@ func TestResourceAutoText(t *testing.T) {
 		return "Hello, world"
 	})
 
-	assert.Equal(t, http.StatusOK, r.api.Paths["/test"][http.MethodGet].Responses[0].StatusCode)
-	assert.Equal(t, "text/plain", r.api.Paths["/test"][http.MethodGet].Responses[0].ContentType)
+	assert.Equal(t, http.StatusOK, r.api.Paths["/test"][http.MethodGet].responses[0].StatusCode)
+	assert.Equal(t, "text/plain", r.api.Paths["/test"][http.MethodGet].responses[0].ContentType)
 }
 
 func TestResourceAutoNoContent(t *testing.T) {
@@ -242,7 +208,6 @@ func TestResourceAutoNoContent(t *testing.T) {
 		return true
 	})
 
-	assert.Equal(t, http.StatusNoContent, r.api.Paths["/test"][http.MethodGet].Responses[0].StatusCode)
-	assert.Equal(t, "", r.api.Paths["/test"][http.MethodGet].Responses[0].ContentType)
-	assert.Equal(t, true, r.api.Paths["/test"][http.MethodGet].Responses[0].empty)
+	assert.Equal(t, http.StatusNoContent, r.api.Paths["/test"][http.MethodGet].responses[0].StatusCode)
+	assert.Equal(t, "", r.api.Paths["/test"][http.MethodGet].responses[0].ContentType)
 }

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/danielgtaylor/huma/schema"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -53,16 +54,10 @@ func BenchmarkGin(b *testing.B) {
 
 func BenchmarkHuma(b *testing.B) {
 	r := NewRouter("Benchmark test", "1.0.0", WithGin(gin.New()))
-	r.Register(http.MethodGet, "/hello", &Operation{
-		Description: "Greet the world",
-		Responses: []*Response{
-			ResponseJSON(200, "Return a greeting"),
-		},
-		Handler: func() *helloResponse {
-			return &helloResponse{
-				Message: "Hello, world",
-			}
-		},
+	r.Resource("/hello").Get("Greet the world", func() *helloResponse {
+		return &helloResponse{
+			Message: "Hello, world",
+		}
 	})
 
 	b.ResetTimer()
@@ -120,56 +115,35 @@ func BenchmarkGinComplex(b *testing.B) {
 func BenchmarkHumaComplex(b *testing.B) {
 	r := NewRouter("Benchmark test", "1.0.0", WithGin(gin.New()))
 
-	dep1 := &Dependency{
-		Value: "dep1",
-	}
+	dep1 := SimpleDependency("dep1")
 
-	dep2 := &Dependency{
-		Dependencies: []*Dependency{ContextDependency(), dep1},
-		Params: []*Param{
-			HeaderParam("x-foo", "desc", ""),
-		},
-		Value: func(c *gin.Context, d1 string, xfoo string) (string, error) {
-			return "dep2", nil
-		},
-	}
+	dep2 := Dependency(DependencyOptions(
+		ContextDependency(), dep1, HeaderParam("x-foo", "desc", ""),
+	), func(c *gin.Context, d1 string, xfoo string) (string, error) {
+		return "dep2", nil
+	})
 
-	dep3 := &Dependency{
-		Dependencies: []*Dependency{dep1},
-		ResponseHeaders: []*ResponseHeader{
-			Header("x-bar", "desc"),
-		},
-		Value: func(d1 string) (string, string, error) {
-			return "xbar", "dep3", nil
-		},
-	}
+	dep3 := Dependency(DependencyOptions(
+		dep1, ResponseHeader("x-bar", "desc"),
+	), func(d1 string) (string, string, error) {
+		return "xbar", "dep3", nil
+	})
 
-	r.Register(http.MethodGet, "/hello", &Operation{
-		Description: "Greet the world",
-		Dependencies: []*Dependency{
-			ContextDependency(), dep2, dep3,
-		},
-		Params: []*Param{
-			QueryParam("name", "desc", "world"),
-		},
-		ResponseHeaders: []*ResponseHeader{
-			Header("x-baz", "desc"),
-		},
-		Responses: []*Response{
-			ResponseJSON(200, "Return a greeting", "x-baz"),
-			ResponseError(500, "desc"),
-		},
-		Handler: func(c *gin.Context, d2, d3, name string) (string, *helloResponse, *ErrorModel) {
-			if name == "test" {
-				return "", nil, &ErrorModel{
-					Message: "Name cannot be test",
-				}
+	r.Resource("/hello", dep1, dep2, dep3,
+		QueryParam("name", "desc", "world"),
+		ResponseHeader("x-baz", "desc"),
+		ResponseJSON(200, "Return a greeting", Headers("x-baz")),
+		ResponseError(500, "desc"),
+	).Get("Greet the world", func(c *gin.Context, d2, d3, name string) (string, *helloResponse, *ErrorModel) {
+		if name == "test" {
+			return "", nil, &ErrorModel{
+				Message: "Name cannot be test",
 			}
+		}
 
-			return "xbaz", &helloResponse{
-				Message: "Hello, " + name,
-			}, nil
-		},
+		return "xbaz", &helloResponse{
+			Message: "Hello, " + name,
+		}, nil
 	})
 
 	b.ResetTimer()
@@ -193,28 +167,22 @@ func TestRouter(t *testing.T) {
 
 	r := NewTestRouter(t)
 
-	r.Register(http.MethodPut, "/echo/{word}", &Operation{
-		Description: "Echo back an input word.",
-		Params: []*Param{
-			PathParam("word", "The word to echo back"),
-			QueryParam("greet", "Return a greeting", false),
-		},
-		Responses: []*Response{
-			ResponseJSON(http.StatusOK, "Successful echo response"),
-			ResponseError(http.StatusBadRequest, "Invalid input"),
-		},
-		Handler: func(word string, greet bool) (*EchoResponse, *ErrorModel) {
-			if word == "test" {
-				return nil, &ErrorModel{Message: "Value not allowed: test"}
-			}
+	r.Resource("/echo",
+		PathParam("word", "The word to echo back"),
+		QueryParam("greet", "Return a greeting", false),
+		ResponseJSON(http.StatusOK, "Successful echo response"),
+		ResponseError(http.StatusBadRequest, "Invalid input"),
+	).Put("Echo back an input word.", func(word string, greet bool) (*EchoResponse, *ErrorModel) {
+		if word == "test" {
+			return nil, &ErrorModel{Message: "Value not allowed: test"}
+		}
 
-			v := word
-			if greet {
-				v = "Hello, " + word
-			}
+		v := word
+		if greet {
+			v = "Hello, " + word
+		}
 
-			return &EchoResponse{Value: v}, nil
-		},
+		return &EchoResponse{Value: v}, nil
 	})
 
 	w := httptest.NewRecorder()
@@ -257,14 +225,8 @@ func TestRouterRequestBody(t *testing.T) {
 
 	r := NewTestRouter(t)
 
-	r.Register(http.MethodPut, "/echo", &Operation{
-		Description: "Echo back an input word.",
-		Responses: []*Response{
-			ResponseJSON(http.StatusOK, "Successful echo response"),
-		},
-		Handler: func(in *EchoRequest) *EchoResponse {
-			return &EchoResponse{Value: in.Value}
-		},
+	r.Resource("/echo").Put("Echo back an input word.", func(in *EchoRequest) *EchoResponse {
+		return &EchoResponse{Value: in.Value}
 	})
 
 	w := httptest.NewRecorder()
@@ -283,14 +245,8 @@ func TestRouterRequestBody(t *testing.T) {
 func TestRouterScalarResponse(t *testing.T) {
 	r := NewTestRouter(t)
 
-	r.Register(http.MethodPut, "/hello", &Operation{
-		Description: "Say hello.",
-		Responses: []*Response{
-			ResponseText(http.StatusOK, "Successful hello response"),
-		},
-		Handler: func() string {
-			return "hello"
-		},
+	r.Resource("/hello").Put("Say hello", func() string {
+		return "hello"
 	})
 
 	w := httptest.NewRecorder()
@@ -304,15 +260,9 @@ func TestRouterScalarResponse(t *testing.T) {
 func TestRouterZeroScalarResponse(t *testing.T) {
 	r := NewTestRouter(t)
 
-	r.Register(http.MethodPut, "/bool", &Operation{
-		Description: "Say hello.",
-		Responses: []*Response{
-			ResponseText(http.StatusOK, "Successful zero bool response"),
-		},
-		Handler: func() *bool {
-			resp := false
-			return &resp
-		},
+	r.Resource("/bool").Put("Bool response", func() *bool {
+		resp := false
+		return &resp
 	})
 
 	w := httptest.NewRecorder()
@@ -320,27 +270,21 @@ func TestRouterZeroScalarResponse(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "false", w.Body.String())
+	assert.Equal(t, "false\n", w.Body.String())
 }
 
 func TestRouterResponseHeaders(t *testing.T) {
 	r := NewTestRouter(t)
 
-	r.Register(http.MethodGet, "/test", &Operation{
-		Description: "Test operation",
-		ResponseHeaders: []*ResponseHeader{
-			Header("Etag", "Identifies a specific version of this resource"),
-			Header("X-Test", "Custom test header"),
-			Header("X-Missing", "Won't get sent"),
-		},
-		Responses: []*Response{
-			ResponseText(http.StatusOK, "Successful test", "Etag", "X-Test", "X-Missing"),
-			ResponseError(http.StatusBadRequest, "Error example", "X-Test"),
-		},
-		Handler: func() (etag string, xTest *string, xMissing string, success string, fail string) {
-			test := "test"
-			return "\"abc123\"", &test, "", "hello", ""
-		},
+	r.Resource("/test",
+		ResponseHeader("Etag", "Identifies a specific version of this resource"),
+		ResponseHeader("X-Test", "Custom test header"),
+		ResponseHeader("X-Missing", "Won't get sent"),
+		ResponseText(http.StatusOK, "Successful test", Headers("Etag", "X-Test", "X-Missing")),
+		ResponseError(http.StatusBadRequest, "Error example", Headers("X-Test")),
+	).Get("Test operation", func() (etag string, xTest *string, xMissing string, success string, fail string) {
+		test := "test"
+		return "\"abc123\"", &test, "", "hello", ""
 	})
 
 	w := httptest.NewRecorder()
@@ -362,11 +306,9 @@ func TestRouterDependencies(t *testing.T) {
 	}
 
 	// Datastore is a global dependency, set by value.
-	db := &Dependency{
-		Value: &DB{
-			Get: func() string {
-				return "Hello, "
-			},
+	db := &DB{
+		Get: func() string {
+			return "Hello, "
 		},
 	}
 
@@ -376,35 +318,25 @@ func TestRouterDependencies(t *testing.T) {
 
 	// Logger is a contextual instance from the gin request context.
 	captured := ""
-	log := &Dependency{
-		Dependencies: []*Dependency{
-			GinContextDependency(),
-		},
-		Value: func(c *gin.Context) (*Logger, error) {
-			return &Logger{
-				Log: func(msg string) {
-					captured = fmt.Sprintf("%s [uri:%s]", msg, c.FullPath())
-				},
-			}, nil
-		},
-	}
+	log := Dependency(GinContextDependency(), func(c *gin.Context) (*Logger, error) {
+		return &Logger{
+			Log: func(msg string) {
+				captured = fmt.Sprintf("%s [uri:%s]", msg, c.FullPath())
+			},
+		}, nil
+	})
 
-	r.Register(http.MethodGet, "/hello", &Operation{
-		Description:  "Basic hello world",
-		Dependencies: []*Dependency{GinContextDependency(), db, log},
-		Params: []*Param{
-			QueryParam("name", "Your name", ""),
-		},
-		Responses: []*Response{
-			ResponseText(http.StatusOK, "Successful hello response"),
-		},
-		Handler: func(c *gin.Context, db *DB, l *Logger, name string) string {
-			if name == "" {
-				name = c.Request.RemoteAddr
-			}
-			l.Log("Hello logger!")
-			return db.Get() + name
-		},
+	r.Resource("/hello",
+		GinContextDependency(),
+		SimpleDependency(db),
+		log,
+		QueryParam("name", "Your name", ""),
+	).Get("Basic hello world", func(c *gin.Context, db *DB, l *Logger, name string) string {
+		if name == "" {
+			name = c.Request.RemoteAddr
+		}
+		l.Log("Hello logger!")
+		return db.Get() + name
 	})
 
 	w := httptest.NewRecorder()
@@ -421,7 +353,7 @@ func TestRouterBadHeader(t *testing.T) {
 	g := gin.New()
 	g.Use(LogMiddleware(l, nil))
 	r := NewRouter("Test API", "1.0.0", WithGin(g))
-	r.Resource("/test", Header("foo", "desc"), ResponseError(http.StatusBadRequest, "desc", "foo")).Get("desc", func() (string, *ErrorModel, string) {
+	r.Resource("/test", ResponseHeader("foo", "desc"), ResponseError(http.StatusBadRequest, "desc", Headers("foo"))).Get("desc", func() (string, *ErrorModel, string) {
 		return "header-value", nil, "response"
 	})
 
@@ -441,7 +373,7 @@ func TestRouterParams(t *testing.T) {
 		QueryParam("i", "desc", int16(0)),
 		QueryParam("f32", "desc", float32(0.0)),
 		QueryParam("f64", "desc", 0.0),
-		QueryParam("schema", "desc", "test", &Schema{Pattern: "^a-z+$"}),
+		QueryParam("schema", "desc", "test", Schema(&schema.Schema{Pattern: "^a-z+$"})),
 		QueryParam("items", "desc", []int{}),
 		QueryParam("start", "desc", time.Time{}),
 	).Get("desc", func(id string, i int16, f32 float32, f64 float64, schema string, items []int, start time.Time) string {
@@ -501,8 +433,11 @@ func TestRouterParams(t *testing.T) {
 func TestInvalidParamLocation(t *testing.T) {
 	r := NewTestRouter(t)
 
+	test := r.Resource("/test", PathParam("name", "desc"))
+	test.params[len(test.params)-1].In = "bad'"
+
 	assert.Panics(t, func() {
-		r.Resource("/test", &Param{Name: "test", In: "bad"}).Get("desc", func(test string) string {
+		test.Get("desc", func(test string) string {
 			return "Hello, test!"
 		})
 	})
@@ -523,7 +458,7 @@ func TestTooBigBody(t *testing.T) {
 		ID string
 	}
 
-	r.Resource("/test").MaxBodyBytes(5).Put("desc", func(input *Input) string {
+	r.Resource("/test", MaxBodyBytes(5)).Put("desc", func(input *Input) string {
 		return "hello, " + input.ID
 	})
 
@@ -561,7 +496,7 @@ func TestBodySlow(t *testing.T) {
 		ID string
 	}
 
-	r.Resource("/test").BodyReadTimeout(1).Put("desc", func(input *Input) string {
+	r.Resource("/test", BodyReadTimeout(1)).Put("desc", func(input *Input) string {
 		return "hello, " + input.ID
 	})
 

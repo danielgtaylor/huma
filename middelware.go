@@ -24,18 +24,21 @@ var logLevel *zap.AtomicLevel
 // panic when using the recovery middleware. Defaults to 10KB.
 var MaxLogBodyBytes int64 = 10 * 1024
 
-// BufferedReadCloser will read and buffer up to max bytes into buf. Additional
+// Middleware TODO ...
+type Middleware = gin.HandlerFunc
+
+// bufferedReadCloser will read and buffer up to max bytes into buf. Additional
 // reads bypass the buffer.
-type BufferedReadCloser struct {
+type bufferedReadCloser struct {
 	reader io.ReadCloser
 	buf    *bytes.Buffer
 	max    int64
 }
 
-// NewBufferedReadCloser returns a new BufferedReadCloser that wraps reader
+// newBufferedReadCloser returns a new BufferedReadCloser that wraps reader
 // and reads up to max bytes into the buffer.
-func NewBufferedReadCloser(reader io.ReadCloser, buffer *bytes.Buffer, max int64) *BufferedReadCloser {
-	return &BufferedReadCloser{
+func newBufferedReadCloser(reader io.ReadCloser, buffer *bytes.Buffer, max int64) *bufferedReadCloser {
+	return &bufferedReadCloser{
 		reader: reader,
 		buf:    buffer,
 		max:    max,
@@ -43,7 +46,7 @@ func NewBufferedReadCloser(reader io.ReadCloser, buffer *bytes.Buffer, max int64
 }
 
 // Read data into p. Returns number of bytes read and an error, if any.
-func (r *BufferedReadCloser) Read(p []byte) (n int, err error) {
+func (r *bufferedReadCloser) Read(p []byte) (n int, err error) {
 	// Read from the underlying reader like normal.
 	n, err = r.reader.Read(p)
 
@@ -61,12 +64,12 @@ func (r *BufferedReadCloser) Read(p []byte) (n int, err error) {
 }
 
 // Close the underlying reader.
-func (r *BufferedReadCloser) Close() error {
+func (r *bufferedReadCloser) Close() error {
 	return r.reader.Close()
 }
 
 // Recovery prints stack traces on panic when used with the logging middleware.
-func Recovery() func(*gin.Context) {
+func Recovery() Middleware {
 	bufPool := sync.Pool{
 		New: func() interface{} {
 			return new(bytes.Buffer)
@@ -82,7 +85,7 @@ func Recovery() func(*gin.Context) {
 			buf = bufPool.Get().(*bytes.Buffer)
 			defer bufPool.Put(buf)
 
-			c.Request.Body = NewBufferedReadCloser(c.Request.Body, buf, MaxLogBodyBytes)
+			c.Request.Body = newBufferedReadCloser(c.Request.Body, buf, MaxLogBodyBytes)
 		}
 
 		// Recovering comes *after* the above so the buffer is not returned to
@@ -137,7 +140,7 @@ func NewLogger() (*zap.Logger, error) {
 // Gin context under the `log` key. It debug logs request info. If passed `nil`
 // for the logger, then it creates one. If the current terminal is a TTY, it
 // will try to use colored output automatically.
-func LogMiddleware(l *zap.Logger, tags map[string]string) func(*gin.Context) {
+func LogMiddleware(l *zap.Logger, tags map[string]string) Middleware {
 	var err error
 	if l == nil {
 		if l, err = NewLogger(); err != nil {
@@ -180,19 +183,22 @@ func LogMiddleware(l *zap.Logger, tags map[string]string) func(*gin.Context) {
 // LogDependency returns a dependency that resolves to a `*zap.SugaredLogger`
 // for the current request. This dependency *requires* the use of
 // `LogMiddleware` and will error if the logger is not in the request context.
-func LogDependency() *Dependency {
-	return &Dependency{
-		Dependencies: []*Dependency{ContextDependency(), OperationDependency()},
-		Value: func(c *gin.Context, op *Operation) (*zap.SugaredLogger, error) {
-			l, ok := c.Get("log")
-			if !ok {
-				return nil, fmt.Errorf("missing logger in context")
-			}
-			sl := l.(*zap.SugaredLogger).With("operation", op.ID)
-			sl.Desugar()
-			return sl, nil
-		},
-	}
+func LogDependency() DependencyOption {
+	dep := NewDependency(DependencyOptions(
+		GinContextDependency(),
+		OperationDependency(),
+	), func(c *gin.Context, op *OpenAPIOperation) (*zap.SugaredLogger, error) {
+		l, ok := c.Get("log")
+		if !ok {
+			return nil, fmt.Errorf("missing logger in context")
+		}
+		sl := l.(*zap.SugaredLogger).With("operation", op.id)
+		return sl, nil
+	})
+
+	return &dependencyOption{func(d *OpenAPIDependency) {
+		d.dependencies = append(d.dependencies, dep)
+	}}
 }
 
 // Handler404 will return JSON responses for 404 errors.
@@ -226,7 +232,7 @@ func (w *minimalWriter) WriteHeader(statusCode int) {
 // PreferMinimalMiddleware will remove the response body and return 204 No
 // Content for any 2xx response where the request had the Prefer: return=minimal
 // set on the request.
-func PreferMinimalMiddleware() func(*gin.Context) {
+func PreferMinimalMiddleware() Middleware {
 	return func(c *gin.Context) {
 		// Wrap the response writer
 		if c.GetHeader("prefer") == "return=minimal" {

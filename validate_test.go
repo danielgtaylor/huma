@@ -12,7 +12,7 @@ func TestOperationDescriptionRequired(t *testing.T) {
 	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
-		r.Register(http.MethodGet, "/", &Operation{})
+		r.Register(http.MethodGet, "/", &OpenAPIOperation{})
 	})
 }
 
@@ -20,21 +20,8 @@ func TestOperationResponseRequired(t *testing.T) {
 	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
-		r.Register(http.MethodGet, "/", &Operation{
-			Description: "Test",
-		})
-	})
-}
-
-func TestOperationHandlerMissing(t *testing.T) {
-	r := NewTestRouter(t)
-
-	assert.Panics(t, func() {
-		r.Register(http.MethodGet, "/", &Operation{
-			Description: "Test",
-			Responses: []*Response{
-				ResponseText(200, "Test"),
-			},
+		r.Register(http.MethodGet, "/", &OpenAPIOperation{
+			description: "Test",
 		})
 	})
 }
@@ -42,26 +29,13 @@ func TestOperationHandlerMissing(t *testing.T) {
 func TestOperationHandlerInput(t *testing.T) {
 	r := NewTestRouter(t)
 
-	d := &Dependency{
-		Value: func() (string, error) {
-			return "test", nil
-		},
-	}
-
 	assert.Panics(t, func() {
-		r.Register(http.MethodGet, "/", &Operation{
-			Description:  "Test",
-			Dependencies: []*Dependency{d},
-			Params: []*Param{
-				QueryParam("foo", "Test", ""),
-			},
-			Responses: []*Response{
-				ResponseText(200, "Test"),
-			},
-			Handler: func() string {
-				// Wrong number of inputs!
-				return "fails"
-			},
+		r.Resource("/",
+			SimpleDependency("test"),
+			ResponseText(200, "Test"),
+		).Get("Test", func() string {
+			// Wrong number of inputs!
+			return "fails"
 		})
 	})
 }
@@ -70,18 +44,12 @@ func TestOperationHandlerOutput(t *testing.T) {
 	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
-		r.Register(http.MethodGet, "/", &Operation{
-			Description: "Test",
-			ResponseHeaders: []*ResponseHeader{
-				Header("x-test", "Test"),
-			},
-			Responses: []*Response{
-				ResponseText(200, "Test", "x-test"),
-			},
-			Handler: func() string {
-				// Wrong number of outputs!
-				return "fails"
-			},
+		r.Resource("/",
+			ResponseHeader("x-test", "Test"),
+			ResponseText(200, "Test", Headers("x-test")),
+		).Get("Test", func() string {
+			// Wrong number of outputs!
+			return "fails"
 		})
 	})
 }
@@ -89,36 +57,23 @@ func TestOperationHandlerOutput(t *testing.T) {
 func TestOperationListAutoID(t *testing.T) {
 	r := NewTestRouter(t)
 
-	o := &Operation{
-		Description: "Test",
-		Responses: []*Response{
-			ResponseJSON(200, "Test"),
-		},
-		Handler: func() []string {
-			return []string{"test"}
-		},
-	}
+	r.Resource("/items").Get("Test", func() []string {
+		return []string{"test"}
+	})
 
-	r.Register(http.MethodGet, "/items", o)
+	o := r.OpenAPI().Paths["/items"][http.MethodGet]
 
-	assert.Equal(t, "list-items", o.ID)
+	assert.Equal(t, "list-items", o.id)
 }
 
 func TestOperationContextPointer(t *testing.T) {
 	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
-		r.Register(http.MethodGet, "/", &Operation{
-			Description: "Test",
-			Dependencies: []*Dependency{
-				ContextDependency(),
-			},
-			Responses: []*Response{
-				ResponseText(200, "Test"),
-			},
-			Handler: func(c gin.Context) string {
-				return "test"
-			},
+		r.Resource("/",
+			GinContextDependency(),
+		).Get("Test", func(c gin.Context) string {
+			return "test"
 		})
 	})
 }
@@ -127,17 +82,10 @@ func TestOperationOperationPointer(t *testing.T) {
 	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
-		r.Register(http.MethodGet, "/", &Operation{
-			Description: "Test",
-			Dependencies: []*Dependency{
-				OperationDependency(),
-			},
-			Responses: []*Response{
-				ResponseText(200, "Test"),
-			},
-			Handler: func(o Operation) string {
-				return "test"
-			},
+		r.Resource("/",
+			OperationDependency(),
+		).Get("Test", func(o OpenAPIOperation) string {
+			return "test"
 		})
 	})
 }
@@ -146,17 +94,10 @@ func TestOperationInvalidDep(t *testing.T) {
 	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
-		r.Register(http.MethodGet, "/", &Operation{
-			Description: "Test",
-			Dependencies: []*Dependency{
-				&Dependency{},
-			},
-			Responses: []*Response{
-				ResponseText(200, "Test"),
-			},
-			Handler: func(string) string {
-				return "test"
-			},
+		r.Resource("/",
+			SimpleDependency(nil),
+		).Get("Test", func(o OpenAPIOperation) string {
+			return "test"
 		})
 	})
 }
@@ -165,32 +106,18 @@ func TestOperationParamDep(t *testing.T) {
 	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
-		r.Register(http.MethodGet, "/", &Operation{
-			Description: "Test",
-			Params: []*Param{
-				QueryParam("foo", "Test", ""),
-			},
-			Responses: []*Response{
-				ResponseText(200, "Test"),
-			},
-			Handler: func(c *gin.Context) string {
-				return "test"
-			},
+		r.Resource("/",
+			QueryParam("foo", "Test", ""),
+		).Get("Test", func(c *gin.Context) string {
+			return "test"
 		})
 	})
 
 	assert.Panics(t, func() {
-		r.Register(http.MethodGet, "/", &Operation{
-			Description: "Test",
-			Params: []*Param{
-				QueryParam("foo", "Test", ""),
-			},
-			Responses: []*Response{
-				ResponseText(200, "Test"),
-			},
-			Handler: func(o *Operation) string {
-				return "test"
-			},
+		r.Resource("/",
+			QueryParam("foo", "Test", ""),
+		).Get("Test", func(c *OpenAPIOperation) string {
+			return "test"
 		})
 	})
 }
@@ -198,31 +125,13 @@ func TestOperationParamDep(t *testing.T) {
 func TestOperationParamRedeclare(t *testing.T) {
 	r := NewTestRouter(t)
 
-	p := QueryParam("foo", "Test", 0)
+	param := QueryParam("foo", "Test", 0)
 
-	r.Register(http.MethodGet, "/", &Operation{
-		Description: "Test",
-		Params:      []*Param{p},
-		Responses: []*Response{
-			ResponseText(200, "Test"),
-		},
-		Handler: func(p int) string {
-			return "test"
-		},
-	})
+	r.Resource("/a", param).Get("Test", func(p int) string { return "a" })
 
-	// Param p was declared as `int` above but is `string` here.
+	//  Redeclare param `p` as a string while it was an int above.
 	assert.Panics(t, func() {
-		r.Register(http.MethodGet, "/", &Operation{
-			Description: "Test",
-			Params:      []*Param{p},
-			Responses: []*Response{
-				ResponseText(200, "Test"),
-			},
-			Handler: func(p string) string {
-				return "test"
-			},
-		})
+		r.Resource("/b", param).Get("Test", func(p string) string { return "b" })
 	})
 }
 
@@ -230,17 +139,10 @@ func TestOperationParamExampleType(t *testing.T) {
 	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
-		r.Register(http.MethodGet, "/", &Operation{
-			Description: "Test",
-			Params: []*Param{
-				QueryParamExample("foo", "Test", "", 123),
-			},
-			Responses: []*Response{
-				ResponseText(200, "Test"),
-			},
-			Handler: func(p string) string {
-				return "test"
-			},
+		r.Resource("/",
+			QueryParam("foo", "Test", "", Example(123)),
+		).Get("Test", func(p string) string {
+			return "test"
 		})
 	})
 }
@@ -248,20 +150,13 @@ func TestOperationParamExampleType(t *testing.T) {
 func TestOperationParamExampleSchema(t *testing.T) {
 	r := NewTestRouter(t)
 
-	p := QueryParamExample("foo", "Test", 0, 123)
+	p := QueryParam("foo", "Test", 0, Example(123))
 
-	r.Register(http.MethodGet, "/", &Operation{
-		Description: "Test",
-		Params: []*Param{
-			p,
-		},
-		Responses: []*Response{
-			ResponseText(200, "Test"),
-		},
-		Handler: func(p int) string {
-			return "test"
-		},
+	r.Resource("/", p).Get("Test", func(p int) string {
+		return "test"
 	})
 
-	assert.Equal(t, 123, p.Schema.Example)
+	param := r.OpenAPI().Paths["/"][http.MethodGet].params[0]
+
+	assert.Equal(t, 123, param.Schema.Example)
 }

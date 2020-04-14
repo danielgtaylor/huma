@@ -26,19 +26,17 @@ func main() {
 
 	r := huma.NewRouter("Benchmark", "1.0.0", huma.WithGin(g))
 
-	d := &huma.Dependency{
-		Params: []*huma.Param{
-			huma.HeaderParam("authorization", "Auth header", ""),
-		},
-		Value: func(auth string) (string, error) {
+	d := huma.Dependency(
+		huma.HeaderParam("authorization", "Auth header", ""),
+		func(auth string) (string, error) {
 			return strings.Split(auth, " ")[0], nil
 		},
-	}
+	)
 
 	r.Resource("/items", d,
 		huma.PathParam("id", "The item's unique ID"),
-		huma.Header("x-authinfo", "..."),
-		huma.ResponseJSON(http.StatusOK, "Successful hello response", "x-authinfo"),
+		huma.ResponseHeader("x-authinfo", "..."),
+		huma.ResponseJSON(http.StatusOK, "Successful hello response", huma.Headers("x-authinfo")),
 	).Get("Huma benchmark test", func(authInfo string, id int) (string, *Item) {
 		return authInfo, &Item{
 			ID:      id,

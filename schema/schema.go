@@ -1,4 +1,6 @@
-package huma
+// Package schema implements OpenAPI 3 compatible JSON Schema which can be
+// generated from structs.
+package schema
 
 import (
 	"encoding/json"
@@ -16,18 +18,18 @@ import (
 // ErrSchemaInvalid is sent when there is a problem building the schema.
 var ErrSchemaInvalid = errors.New("schema is invalid")
 
-// SchemaMode defines whether the schema is being generated for read or
+// Mode defines whether the schema is being generated for read or
 // write mode. Read-only fields are dropped when in write mode, for example.
-type SchemaMode int
+type Mode int
 
 const (
-	// SchemaModeAll is for general purpose use and includes all fields.
-	SchemaModeAll SchemaMode = iota
-	// SchemaModeRead is for HTTP HEAD & GET and will hide write-only fields.
-	SchemaModeRead
-	// SchemaModeWrite is for HTTP POST, PUT, PATCH, DELETE and will hide
+	// ModeAll is for general purpose use and includes all fields.
+	ModeAll Mode = iota
+	// ModeRead is for HTTP HEAD & GET and will hide write-only fields.
+	ModeRead
+	// ModeWrite is for HTTP POST, PUT, PATCH, DELETE and will hide
 	// read-only fields.
-	SchemaModeWrite
+	ModeWrite
 )
 
 var (
@@ -120,20 +122,20 @@ func (s *Schema) HasValidation() bool {
 	return false
 }
 
-// GenerateSchema creates a JSON schema for a Go type. Struct field tags
+// Generate creates a JSON schema for a Go type. Struct field tags
 // can be used to provide additional metadata such as descriptions and
 // validation.
-func GenerateSchema(t reflect.Type) (*Schema, error) {
-	return GenerateSchemaWithMode(t, SchemaModeAll, nil)
+func Generate(t reflect.Type) (*Schema, error) {
+	return GenerateWithMode(t, ModeAll, nil)
 }
 
-// GenerateSchemaWithMode creates a JSON schema for a Go type. Struct field
+// GenerateWithMode creates a JSON schema for a Go type. Struct field
 // tags can be used to provide additional metadata such as descriptions and
 // validation. The mode can be all, read, or write. In read or write mode
 // any field that is marked as the opposite will be excluded, e.g. a
 // write-only field would not be included in read mode. If a schema is given
 // as input, add to it, otherwise creates a new schema.
-func GenerateSchemaWithMode(t reflect.Type, mode SchemaMode, schema *Schema) (*Schema, error) {
+func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error) {
 	if schema == nil {
 		schema = &Schema{}
 	}
@@ -167,13 +169,17 @@ func GenerateSchemaWithMode(t reflect.Type, mode SchemaMode, schema *Schema) (*S
 				name = jsonTags[0]
 			}
 
-			s, err := GenerateSchemaWithMode(f.Type, mode, nil)
+			s, err := GenerateWithMode(f.Type, mode, nil)
 			if err != nil {
 				return nil, err
 			}
 			properties[name] = s
 
 			if tag, ok := f.Tag.Lookup("description"); ok {
+				s.Description = tag
+			}
+
+			if tag, ok := f.Tag.Lookup("doc"); ok {
 				s.Description = tag
 			}
 
@@ -326,7 +332,7 @@ func GenerateSchemaWithMode(t reflect.Type, mode SchemaMode, schema *Schema) (*S
 				}
 				s.ReadOnly = tag == "true"
 
-				if s.ReadOnly && mode == SchemaModeWrite {
+				if s.ReadOnly && mode == ModeWrite {
 					delete(properties, name)
 					continue
 				}
@@ -338,7 +344,7 @@ func GenerateSchemaWithMode(t reflect.Type, mode SchemaMode, schema *Schema) (*S
 				}
 				s.WriteOnly = tag == "true"
 
-				if s.WriteOnly && mode == SchemaModeRead {
+				if s.WriteOnly && mode == ModeRead {
 					delete(properties, name)
 					continue
 				}
@@ -372,14 +378,14 @@ func GenerateSchemaWithMode(t reflect.Type, mode SchemaMode, schema *Schema) (*S
 
 	case reflect.Map:
 		schema.Type = "object"
-		s, err := GenerateSchemaWithMode(t.Elem(), mode, nil)
+		s, err := GenerateWithMode(t.Elem(), mode, nil)
 		if err != nil {
 			return nil, err
 		}
 		schema.AdditionalProperties = s
 	case reflect.Slice, reflect.Array:
 		schema.Type = "array"
-		s, err := GenerateSchemaWithMode(t.Elem(), mode, nil)
+		s, err := GenerateWithMode(t.Elem(), mode, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -410,7 +416,7 @@ func GenerateSchemaWithMode(t reflect.Type, mode SchemaMode, schema *Schema) (*S
 	case reflect.String:
 		schema.Type = "string"
 	case reflect.Ptr:
-		return GenerateSchemaWithMode(t.Elem(), mode, schema)
+		return GenerateWithMode(t.Elem(), mode, schema)
 	default:
 		return nil, fmt.Errorf("unsupported type %s from %s", t.Kind(), t)
 	}
