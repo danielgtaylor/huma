@@ -24,6 +24,15 @@ func (o *routerOption) ApplyRouter(router *Router) {
 	o.handler(router)
 }
 
+// RouterOptions composes together a set of options into one.
+func RouterOptions(options ...RouterOption) RouterOption {
+	return &routerOption{func(r *Router) {
+		for _, option := range options {
+			option.ApplyRouter(r)
+		}
+	}}
+}
+
 // ResourceOption sets an option on the resource to be used in sub-resources
 // and operations.
 type ResourceOption interface {
@@ -39,90 +48,108 @@ func (o *resourceOption) ApplyResource(r *Resource) {
 	o.handler(r)
 }
 
+// ResourceOptions composes together a set of options into one.
+func ResourceOptions(options ...ResourceOption) ResourceOption {
+	return &resourceOption{func(r *Resource) {
+		for _, option := range options {
+			option.ApplyResource(r)
+		}
+	}}
+}
+
 // OperationOption sets an option on an operation or resource object.
 type OperationOption interface {
 	ResourceOption
-	ApplyOperation(o *OpenAPIOperation)
+	applyOperation(o *openAPIOperation)
 }
 
 // operationOption is a shorthand struct used to create operation options
 // easily. Options created with it can be applied to either operations or
 // resources.
 type operationOption struct {
-	handler func(*OpenAPIOperation)
+	handler func(*openAPIOperation)
 }
 
 func (o *operationOption) ApplyResource(r *Resource) {
-	o.handler(r.OpenAPIOperation)
+	o.handler(r.openAPIOperation)
 }
 
-func (o *operationOption) ApplyOperation(op *OpenAPIOperation) {
+func (o *operationOption) applyOperation(op *openAPIOperation) {
 	o.handler(op)
+}
+
+// OperationOptions composes together a set of options into one.
+func OperationOptions(options ...OperationOption) OperationOption {
+	return &operationOption{func(o *openAPIOperation) {
+		for _, option := range options {
+			option.applyOperation(o)
+		}
+	}}
 }
 
 // DependencyOption sets an option on a dependency, operation, or resource
 // object.
 type DependencyOption interface {
 	OperationOption
-	ApplyDependency(d *OpenAPIDependency)
+	applyDependency(d *openAPIDependency)
 }
 
 // dependencyOption is a shorthand struct used to create dependency options
 // easily. Options created with it can be applied to dependencies, operations,
 // and resources.
 type dependencyOption struct {
-	handler func(*OpenAPIDependency)
+	handler func(*openAPIDependency)
 }
 
 func (o *dependencyOption) ApplyResource(r *Resource) {
-	o.handler(r.OpenAPIDependency)
+	o.handler(r.openAPIDependency)
 }
 
-func (o *dependencyOption) ApplyOperation(op *OpenAPIOperation) {
-	o.handler(op.OpenAPIDependency)
+func (o *dependencyOption) applyOperation(op *openAPIOperation) {
+	o.handler(op.openAPIDependency)
 }
 
-func (o *dependencyOption) ApplyDependency(d *OpenAPIDependency) {
+func (o *dependencyOption) applyDependency(d *openAPIDependency) {
 	o.handler(d)
 }
 
 // DependencyOptions composes together a set of options into one.
 func DependencyOptions(options ...DependencyOption) DependencyOption {
-	return &dependencyOption{func(d *OpenAPIDependency) {
+	return &dependencyOption{func(d *openAPIDependency) {
 		for _, option := range options {
-			option.ApplyDependency(d)
+			option.applyDependency(d)
 		}
 	}}
 }
 
 // ParamOption sets an option on an OpenAPI parameter.
 type ParamOption interface {
-	ApplyParam(*OpenAPIParam)
+	applyParam(*openAPIParam)
 }
 
 type paramOption struct {
-	apply func(*OpenAPIParam)
+	apply func(*openAPIParam)
 }
 
-func (o *paramOption) ApplyParam(p *OpenAPIParam) {
+func (o *paramOption) applyParam(p *openAPIParam) {
 	o.apply(p)
 }
 
 // ResponseHeaderOption sets an option on an OpenAPI response header.
 type ResponseHeaderOption interface {
-	ApplyResponseHeader(*OpenAPIResponseHeader)
+	applyResponseHeader(*openAPIResponseHeader)
 }
 
 // ResponseOption sets an option on an OpenAPI response.
 type ResponseOption interface {
-	ApplyResponse(*OpenAPIResponse)
+	applyResponse(*openAPIResponse)
 }
 
 type responseOption struct {
-	apply func(*OpenAPIResponse)
+	apply func(*openAPIResponse)
 }
 
-func (o *responseOption) ApplyResponse(r *OpenAPIResponse) {
+func (o *responseOption) applyResponse(r *openAPIResponse) {
 	o.apply(r)
 }
 
@@ -139,37 +166,40 @@ func (o *sharedOption) ApplyResource(r *Resource) {
 	o.Set(r)
 }
 
-func (o *sharedOption) ApplyOperation(op *OpenAPIOperation) {
+func (o *sharedOption) applyOperation(op *openAPIOperation) {
 	o.Set(op)
 }
 
-func (o *sharedOption) ApplyParam(p *OpenAPIParam) {
+func (o *sharedOption) applyParam(p *openAPIParam) {
 	o.Set(p)
 }
 
-func (o *sharedOption) ApplyResponseHeader(r *OpenAPIResponseHeader) {
+func (o *sharedOption) applyResponseHeader(r *openAPIResponseHeader) {
 	o.Set(r)
 }
 
-func (o *sharedOption) ApplyResponse(r *OpenAPIResponse) {
+func (o *sharedOption) applyResponse(r *openAPIResponse) {
 	o.Set(r)
 }
 
 // Schema manually sets a JSON Schema on the object. If the top-level `type` is
-// blank then the type will be guessed from the handler function.
-func Schema(s *schema.Schema) interface {
+// blank then the type will be guessed from the handler function. If no schema
+// is set then one will be generated for you.
+func Schema(s schema.Schema) interface {
 	ParamOption
 	ResponseHeaderOption
 	ResponseOption
 } {
+	// Note: schema is pass by value rather than a pointer to prevent
+	// issues with modification after being passed.
 	return &sharedOption{func(v interface{}) {
 		switch cast := v.(type) {
-		case *OpenAPIParam:
-			cast.Schema = s
-		case *OpenAPIResponseHeader:
-			cast.Schema = s
-		case *OpenAPIResponse:
-			cast.Schema = s
+		case *openAPIParam:
+			cast.Schema = &s
+		case *openAPIResponseHeader:
+			cast.Schema = &s
+		case *openAPIResponse:
+			cast.Schema = &s
 		}
 	}}
 }
@@ -185,14 +215,14 @@ func SecurityRef(name string, scopes ...string) interface {
 
 	return &sharedOption{
 		Set: func(v interface{}) {
-			req := OpenAPISecurityRequirement{name: scopes}
+			req := openAPISecurityRequirement{name: scopes}
 
 			switch cast := v.(type) {
 			case *Router:
 				cast.api.Security = append(cast.api.Security, req)
 			case *Resource:
 				cast.security = append(cast.security, req)
-			case *OpenAPIOperation:
+			case *openAPIOperation:
 				cast.security = append(cast.security, req)
 			}
 		},
@@ -225,7 +255,7 @@ func Extra(pairs ...interface{}) interface {
 				x = cast.api.Extra
 			case *Resource:
 				x = cast.extra
-			case *OpenAPIOperation:
+			case *openAPIOperation:
 				x = cast.extra
 			}
 
@@ -239,42 +269,42 @@ func Extra(pairs ...interface{}) interface {
 // ProdServer sets the production server URL on the API.
 func ProdServer(url string) RouterOption {
 	return &routerOption{func(r *Router) {
-		r.api.Servers = append(r.api.Servers, &OpenAPIServer{url, "Production server"})
+		r.api.Servers = append(r.api.Servers, &openAPIServer{url, "Production server"})
 	}}
 }
 
 // DevServer sets the development server URL on the API.
 func DevServer(url string) RouterOption {
 	return &routerOption{func(r *Router) {
-		r.api.Servers = append(r.api.Servers, &OpenAPIServer{url, "Development server"})
+		r.api.Servers = append(r.api.Servers, &openAPIServer{url, "Development server"})
 	}}
 }
 
 // ContactFull sets the API contact information.
 func ContactFull(name, url, email string) RouterOption {
 	return &routerOption{func(r *Router) {
-		r.api.Contact = &OpenAPIContact{name, url, email}
+		r.api.Contact = &openAPIContact{name, url, email}
 	}}
 }
 
 // ContactURL sets the API contact name & URL information.
 func ContactURL(name, url string) RouterOption {
 	return &routerOption{func(r *Router) {
-		r.api.Contact = &OpenAPIContact{Name: name, URL: url}
+		r.api.Contact = &openAPIContact{Name: name, URL: url}
 	}}
 }
 
 // ContactEmail sets the API contact name & email information.
 func ContactEmail(name, email string) RouterOption {
 	return &routerOption{func(r *Router) {
-		r.api.Contact = &OpenAPIContact{Name: name, Email: email}
+		r.api.Contact = &openAPIContact{Name: name, Email: email}
 	}}
 }
 
 // BasicAuth adds a named HTTP Basic Auth security scheme.
 func BasicAuth(name string) RouterOption {
 	return &routerOption{func(r *Router) {
-		r.api.SecuritySchemes[name] = &OpenAPISecurityScheme{
+		r.api.SecuritySchemes[name] = &openAPISecurityScheme{
 			Type:   "http",
 			Scheme: "basic",
 		}
@@ -286,7 +316,7 @@ func BasicAuth(name string) RouterOption {
 // `header`, or `cookie`.
 func APIKeyAuth(name, keyName, in string) RouterOption {
 	return &routerOption{func(r *Router) {
-		r.api.SecuritySchemes[name] = &OpenAPISecurityScheme{
+		r.api.SecuritySchemes[name] = &openAPISecurityScheme{
 			Type: "apiKey",
 			Name: keyName,
 			In:   in,
@@ -298,7 +328,7 @@ func APIKeyAuth(name, keyName, in string) RouterOption {
 // header.
 func JWTBearerAuth(name string) RouterOption {
 	return &routerOption{func(r *Router) {
-		r.api.SecuritySchemes[name] = &OpenAPISecurityScheme{
+		r.api.SecuritySchemes[name] = &openAPISecurityScheme{
 			Type:         "http",
 			Scheme:       "bearer",
 			BearerFormat: "JWT",
@@ -306,8 +336,8 @@ func JWTBearerAuth(name string) RouterOption {
 	}}
 }
 
-// WithGin replaces the underlying Gin engine for this router.
-func WithGin(engine *gin.Engine) RouterOption {
+// Gin replaces the underlying Gin engine for this router.
+func Gin(engine *gin.Engine) RouterOption {
 	return &routerOption{func(r *Router) {
 		r.engine = engine
 	}}
@@ -320,7 +350,8 @@ func GinMiddleware(middleware ...gin.HandlerFunc) RouterOption {
 	}}
 }
 
-// PreStart registers a function to run before server start.
+// PreStart registers a function to run before server start. Multiple can be
+// passed and they will run in the order they were added.
 func PreStart(f func()) RouterOption {
 	return &routerOption{func(r *Router) {
 		r.prestart = append(r.prestart, f)
@@ -338,7 +369,7 @@ func HTTPServer(server *http.Server) RouterOption {
 // DocsHandler sets the documentation rendering handler function. You can
 // use `huma.RapiDocHandler`, `huma.ReDocHandler`, `huma.SwaggerUIHandler`, or
 // provide your own (e.g. with custom auth or branding).
-func DocsHandler(f func(*gin.Context, *OpenAPI)) RouterOption {
+func DocsHandler(f Handler) RouterOption {
 	return &routerOption{func(r *Router) {
 		r.docsHandler = f
 	}}
@@ -354,79 +385,79 @@ func OpenAPIHook(f func(*gabs.Container)) RouterOption {
 
 // SimpleDependency adds a new dependency with just a value or function.
 func SimpleDependency(handler interface{}) DependencyOption {
-	dep := &OpenAPIDependency{
+	dep := &openAPIDependency{
 		handler: handler,
 	}
 
-	return &dependencyOption{func(d *OpenAPIDependency) {
+	return &dependencyOption{func(d *openAPIDependency) {
 		d.dependencies = append(d.dependencies, dep)
 	}}
 }
 
 // Dependency adds a dependency.
 func Dependency(option DependencyOption, handler interface{}) DependencyOption {
-	dep := NewDependency(option, handler)
-	return &dependencyOption{func(d *OpenAPIDependency) {
+	dep := newDependency(option, handler)
+	return &dependencyOption{func(d *openAPIDependency) {
 		d.dependencies = append(d.dependencies, dep)
 	}}
 }
 
 // Example sets an example value, used for documentation and mocks.
 func Example(value interface{}) ParamOption {
-	return &paramOption{func(p *OpenAPIParam) {
+	return &paramOption{func(p *openAPIParam) {
 		p.Example = value
 	}}
 }
 
 // Internal marks this parameter as internal-only, meaning it will not be
 // included in the OpenAPI 3 JSON. Useful for things like auth headers set
-// by a load balancer / gateway.
+// by a load balancer / gateway that never get seen by end-users.
 func Internal() ParamOption {
-	return &paramOption{func(p *OpenAPIParam) {
+	return &paramOption{func(p *openAPIParam) {
 		p.Internal = true
 	}}
 }
 
 // Deprecated marks this parameter as deprecated.
 func Deprecated() ParamOption {
-	return &paramOption{func(p *OpenAPIParam) {
+	return &paramOption{func(p *openAPIParam) {
 		p.Deprecated = true
 	}}
 }
 
-func newParamOption(name, description string, required bool, def interface{}, in ParamLocation, options ...ParamOption) DependencyOption {
-	p := NewOpenAPIParam(name, description, in, options...)
+func newParamOption(name, description string, required bool, def interface{}, in paramLocation, options ...ParamOption) DependencyOption {
+	p := newOpenAPIParam(name, description, in, options...)
 	p.Required = required
 	p.def = def
 
-	return &dependencyOption{func(d *OpenAPIDependency) {
+	return &dependencyOption{func(d *openAPIDependency) {
 		d.params = append(d.params, p)
 	}}
 }
 
 // PathParam adds a new required path parameter
 func PathParam(name string, description string, options ...ParamOption) DependencyOption {
-	return newParamOption(name, description, true, nil, InPath, options...)
+	return newParamOption(name, description, true, nil, inPath, options...)
 }
 
 // QueryParam returns a new optional query string parameter
 func QueryParam(name string, description string, defaultValue interface{}, options ...ParamOption) DependencyOption {
-	return newParamOption(name, description, false, defaultValue, InQuery, options...)
+	return newParamOption(name, description, false, defaultValue, inQuery, options...)
 }
 
 // HeaderParam returns a new optional header parameter
 func HeaderParam(name string, description string, defaultValue interface{}, options ...ParamOption) DependencyOption {
-	return newParamOption(name, description, false, defaultValue, InHeader, options...)
+	return newParamOption(name, description, false, defaultValue, inHeader, options...)
 }
 
 // ResponseHeader returns a new response header
 func ResponseHeader(name, description string) DependencyOption {
-	r := &OpenAPIResponseHeader{
+	r := &openAPIResponseHeader{
 		Name:        name,
 		Description: description,
 	}
 
-	return &dependencyOption{func(d *OpenAPIDependency) {
+	return &dependencyOption{func(d *openAPIDependency) {
 		d.responseHeaders = append(d.responseHeaders, r)
 	}}
 }
@@ -434,28 +465,28 @@ func ResponseHeader(name, description string) DependencyOption {
 // OperationID manually sets the operation's unique ID. If not set, it will
 // be auto-generated from the resource path and operation verb.
 func OperationID(id string) OperationOption {
-	return &operationOption{func(o *OpenAPIOperation) {
+	return &operationOption{func(o *openAPIOperation) {
 		o.id = id
 	}}
 }
 
 // Tags sets one or more text tags on the operation.
 func Tags(values ...string) OperationOption {
-	return &operationOption{func(o *OpenAPIOperation) {
+	return &operationOption{func(o *openAPIOperation) {
 		o.tags = append(o.tags, values...)
 	}}
 }
 
 // RequestContentType sets the request content type on the operation.
 func RequestContentType(name string) OperationOption {
-	return &operationOption{func(o *OpenAPIOperation) {
+	return &operationOption{func(o *openAPIOperation) {
 		o.requestContentType = name
 	}}
 }
 
 // RequestSchema sets the request body schema on the operation.
 func RequestSchema(schema *schema.Schema) OperationOption {
-	return &operationOption{func(o *OpenAPIOperation) {
+	return &operationOption{func(o *openAPIOperation) {
 		o.requestSchema = schema
 	}}
 }
@@ -463,28 +494,28 @@ func RequestSchema(schema *schema.Schema) OperationOption {
 // ContentType sets the content type for this response. If blank, an empty
 // response is returned.
 func ContentType(value string) ResponseOption {
-	return &responseOption{func(r *OpenAPIResponse) {
+	return &responseOption{func(r *openAPIResponse) {
 		r.ContentType = value
 	}}
 }
 
 // Headers sets a list of allowed response headers.
 func Headers(values ...string) ResponseOption {
-	return &responseOption{func(r *OpenAPIResponse) {
+	return &responseOption{func(r *openAPIResponse) {
 		r.Headers = values
 	}}
 }
 
 // Response adds a new response to the operation.
 func Response(statusCode int, description string, options ...ResponseOption) OperationOption {
-	r := NewOpenAPIResponse(statusCode, description, options...)
+	r := newOpenAPIResponse(statusCode, description, options...)
 
-	return &operationOption{func(o *OpenAPIOperation) {
+	return &operationOption{func(o *openAPIOperation) {
 		o.responses = append(o.responses, r)
 	}}
 }
 
-// ResponseText adds a new string response to the operation.
+// ResponseText adds a new string response to the operation. Alias for
 func ResponseText(statusCode int, description string, options ...ResponseOption) OperationOption {
 	options = append(options, ContentType("text/plain"))
 	return Response(statusCode, description, options...)
@@ -505,7 +536,7 @@ func ResponseError(statusCode int, description string, options ...ResponseOption
 // MaxBodyBytes sets the max number of bytes read from a request body before
 // the handler aborts and returns an error. Applies to all sub-resources.
 func MaxBodyBytes(value int64) OperationOption {
-	return &operationOption{func(o *OpenAPIOperation) {
+	return &operationOption{func(o *openAPIOperation) {
 		o.maxBodyBytes = value
 	}}
 }
@@ -513,7 +544,7 @@ func MaxBodyBytes(value int64) OperationOption {
 // BodyReadTimeout sets the duration after which the read is aborted and an
 // error is returned.
 func BodyReadTimeout(value time.Duration) OperationOption {
-	return &operationOption{func(o *OpenAPIOperation) {
+	return &operationOption{func(o *openAPIOperation) {
 		o.bodyReadTimeout = value
 	}}
 }

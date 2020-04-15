@@ -2,13 +2,27 @@ package huma
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
+// splitDocs will split a single string out into a title/description combo.
+func splitDocs(docs string) (title, desc string) {
+	title = docs
+	desc = ""
+	if strings.Contains(docs, "\n") {
+		parts := strings.SplitN(docs, "\n", 2)
+		title = parts[0]
+		desc = parts[1]
+	}
+	return
+}
+
 // RapiDocHandler renders documentation using RapiDoc.
-func RapiDocHandler(c *gin.Context, api *OpenAPI) {
-	c.Data(200, "text/html", []byte(fmt.Sprintf(`<!doctype html>
+func RapiDocHandler(pageTitle string) Handler {
+	return func(c *gin.Context) {
+		c.Data(200, "text/html", []byte(fmt.Sprintf(`<!doctype html>
 <html>
 <head>
 	<title>%s</title>
@@ -24,12 +38,14 @@ func RapiDocHandler(c *gin.Context, api *OpenAPI) {
     nav-accent-color="#47afe8"
   > </rapi-doc>
 </body>
-</html>`, api.Title)))
+</html>`, pageTitle)))
+	}
 }
 
 // ReDocHandler renders documentation using ReDoc.
-func ReDocHandler(c *gin.Context, api *OpenAPI) {
-	c.Data(200, "text/html", []byte(fmt.Sprintf(`<!DOCTYPE html>
+func ReDocHandler(pageTitle string) Handler {
+	return func(c *gin.Context) {
+		c.Data(200, "text/html", []byte(fmt.Sprintf(`<!DOCTYPE html>
 <html>
   <head>
     <title>%s</title>
@@ -42,12 +58,14 @@ func ReDocHandler(c *gin.Context, api *OpenAPI) {
     <redoc spec-url='/openapi.json'></redoc>
     <script src="https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js"> </script>
   </body>
-</html>`, api.Title)))
+</html>`, pageTitle)))
+	}
 }
 
 // SwaggerUIHandler renders documentation using Swagger UI.
-func SwaggerUIHandler(c *gin.Context, api *OpenAPI) {
-	c.Data(200, "text/html", []byte(fmt.Sprintf(`<!-- HTML for static distribution bundle build -->
+func SwaggerUIHandler(pageTitle string) Handler {
+	return func(c *gin.Context) {
+		c.Data(200, "text/html", []byte(fmt.Sprintf(`<!-- HTML for static distribution bundle build -->
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -104,5 +122,6 @@ func SwaggerUIHandler(c *gin.Context, api *OpenAPI) {
     }
   </script>
   </body>
-</html>`, api.Title)))
+</html>`, pageTitle)))
+	}
 }

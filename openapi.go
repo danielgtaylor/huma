@@ -12,21 +12,21 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ParamLocation describes where in the HTTP request the parameter comes from.
-type ParamLocation string
+// paramLocation describes where in the HTTP request the parameter comes from.
+type paramLocation string
 
 // Parameter locations supported by OpenAPI 3
 const (
-	InPath   ParamLocation = "path"
-	InQuery  ParamLocation = "query"
-	InHeader ParamLocation = "header"
+	inPath   paramLocation = "path"
+	inQuery  paramLocation = "query"
+	inHeader paramLocation = "header"
 )
 
-// OpenAPIParam describes an OpenAPI 3 parameter
-type OpenAPIParam struct {
+// openAPIParam describes an OpenAPI 3 parameter
+type openAPIParam struct {
 	Name        string         `json:"name"`
 	Description string         `json:"description,omitempty"`
-	In          ParamLocation  `json:"in"`
+	In          paramLocation  `json:"in"`
 	Required    bool           `json:"required,omitempty"`
 	Schema      *schema.Schema `json:"schema,omitempty"`
 	Deprecated  bool           `json:"deprecated,omitempty"`
@@ -40,23 +40,23 @@ type OpenAPIParam struct {
 	typ reflect.Type
 }
 
-// NewOpenAPIParam returns a new parameter instance.
-func NewOpenAPIParam(name, description string, in ParamLocation, options ...ParamOption) *OpenAPIParam {
-	p := &OpenAPIParam{
+// newOpenAPIParam returns a new parameter instance.
+func newOpenAPIParam(name, description string, in paramLocation, options ...ParamOption) *openAPIParam {
+	p := &openAPIParam{
 		Name:        name,
 		Description: description,
 		In:          in,
 	}
 
 	for _, option := range options {
-		option.ApplyParam(p)
+		option.applyParam(p)
 	}
 
 	return p
 }
 
-// OpenAPIResponse describes an OpenAPI 3 response
-type OpenAPIResponse struct {
+// openAPIResponse describes an OpenAPI 3 response
+type openAPIResponse struct {
 	Description string
 	ContentType string
 	StatusCode  int
@@ -64,42 +64,42 @@ type OpenAPIResponse struct {
 	Headers     []string
 }
 
-// NewOpenAPIResponse returns a new response instance.
-func NewOpenAPIResponse(statusCode int, description string, options ...ResponseOption) *OpenAPIResponse {
-	r := &OpenAPIResponse{
+// newOpenAPIResponse returns a new response instance.
+func newOpenAPIResponse(statusCode int, description string, options ...ResponseOption) *openAPIResponse {
+	r := &openAPIResponse{
 		StatusCode:  statusCode,
 		Description: description,
 	}
 
 	for _, option := range options {
-		option.ApplyResponse(r)
+		option.applyResponse(r)
 	}
 
 	return r
 }
 
-// OpenAPIResponseHeader describes a response header
-type OpenAPIResponseHeader struct {
+// openAPIResponseHeader describes a response header
+type openAPIResponseHeader struct {
 	Name        string         `json:"-"`
 	Description string         `json:"description,omitempty"`
 	Schema      *schema.Schema `json:"schema,omitempty"`
 }
 
-// OpenAPISecurityRequirement defines the security schemes and scopes required to use
+// openAPISecurityRequirement defines the security schemes and scopes required to use
 // an operation.
-type OpenAPISecurityRequirement map[string][]string
+type openAPISecurityRequirement map[string][]string
 
-// OpenAPIOperation describes an OpenAPI 3 operation on a path
-type OpenAPIOperation struct {
-	*OpenAPIDependency
+// openAPIOperation describes an OpenAPI 3 operation on a path
+type openAPIOperation struct {
+	*openAPIDependency
 	id                 string
 	summary            string
 	description        string
 	tags               []string
-	security           []OpenAPISecurityRequirement
+	security           []openAPISecurityRequirement
 	requestContentType string
 	requestSchema      *schema.Schema
-	responses          []*OpenAPIResponse
+	responses          []*openAPIResponse
 	extra              map[string]interface{}
 
 	// maxBodyBytes limits the size of the request body that will be read before
@@ -113,28 +113,22 @@ type OpenAPIOperation struct {
 	bodyReadTimeout time.Duration
 }
 
-// ID returns the unique identifier for this operation. If not set manually,
-// it is generated from the path and HTTP method.
-func (o *OpenAPIOperation) ID() string {
-	return o.id
-}
-
-// NewOperation creates a new operation with the given options applied.
-func NewOperation(options ...OperationOption) *OpenAPIOperation {
-	op := &OpenAPIOperation{
-		OpenAPIDependency: &OpenAPIDependency{
-			dependencies:    make([]*OpenAPIDependency, 0),
-			params:          make([]*OpenAPIParam, 0),
-			responseHeaders: make([]*OpenAPIResponseHeader, 0),
+// newOperation creates a new operation with the given options applied.
+func newOperation(options ...OperationOption) *openAPIOperation {
+	op := &openAPIOperation{
+		openAPIDependency: &openAPIDependency{
+			dependencies:    make([]*openAPIDependency, 0),
+			params:          make([]*openAPIParam, 0),
+			responseHeaders: make([]*openAPIResponseHeader, 0),
 		},
 		tags:      make([]string, 0),
-		security:  make([]OpenAPISecurityRequirement, 0),
-		responses: make([]*OpenAPIResponse, 0),
+		security:  make([]openAPISecurityRequirement, 0),
+		responses: make([]*openAPIResponse, 0),
 		extra:     make(map[string]interface{}),
 	}
 
 	for _, option := range options {
-		option.ApplyOperation(op)
+		option.applyOperation(op)
 	}
 
 	return op
@@ -143,28 +137,28 @@ func NewOperation(options ...OperationOption) *OpenAPIOperation {
 // Copy creates a new shallow copy of the operation. New arrays are created for
 // e.g. parameters so they can be safely appended. Existing params are not
 // deeply copied and should not be modified.
-func (o *OpenAPIOperation) Copy() *OpenAPIOperation {
+func (o *openAPIOperation) Copy() *openAPIOperation {
 	extraCopy := map[string]interface{}{}
 
 	for k, v := range o.extra {
 		extraCopy[k] = v
 	}
 
-	newOp := &OpenAPIOperation{
-		OpenAPIDependency: &OpenAPIDependency{
-			dependencies:    append([]*OpenAPIDependency{}, o.dependencies...),
-			params:          append([]*OpenAPIParam{}, o.params...),
-			responseHeaders: append([]*OpenAPIResponseHeader{}, o.responseHeaders...),
+	newOp := &openAPIOperation{
+		openAPIDependency: &openAPIDependency{
+			dependencies:    append([]*openAPIDependency{}, o.dependencies...),
+			params:          append([]*openAPIParam{}, o.params...),
+			responseHeaders: append([]*openAPIResponseHeader{}, o.responseHeaders...),
 			handler:         o.handler,
 		},
 		id:                 o.id,
 		summary:            o.summary,
 		description:        o.description,
 		tags:               append([]string{}, o.tags...),
-		security:           append([]OpenAPISecurityRequirement{}, o.security...),
+		security:           append([]openAPISecurityRequirement{}, o.security...),
 		requestContentType: o.requestContentType,
 		requestSchema:      o.requestSchema,
-		responses:          append([]*OpenAPIResponse{}, o.responses...),
+		responses:          append([]*openAPIResponse{}, o.responses...),
 		extra:              extraCopy,
 		maxBodyBytes:       o.maxBodyBytes,
 		bodyReadTimeout:    o.bodyReadTimeout,
@@ -175,11 +169,11 @@ func (o *OpenAPIOperation) Copy() *OpenAPIOperation {
 
 // With applies options to the operation. It makes it easy to set up new params,
 // responese headers, responses, etc. It always creates a new copy.
-func (o *OpenAPIOperation) With(options ...OperationOption) *OpenAPIOperation {
+func (o *openAPIOperation) With(options ...OperationOption) *openAPIOperation {
 	copy := o.Copy()
 
 	for _, option := range options {
-		option.ApplyOperation(copy)
+		option.applyOperation(copy)
 	}
 
 	return copy
@@ -187,9 +181,9 @@ func (o *OpenAPIOperation) With(options ...OperationOption) *OpenAPIOperation {
 
 // allParams returns a list of all the parameters for this operation, including
 // those for dependencies.
-func (o *OpenAPIOperation) allParams() []*OpenAPIParam {
-	params := []*OpenAPIParam{}
-	seen := map[*OpenAPIParam]bool{}
+func (o *openAPIOperation) allParams() []*openAPIParam {
+	params := []*openAPIParam{}
+	seen := map[*openAPIParam]bool{}
 
 	for _, p := range o.params {
 		seen[p] = true
@@ -211,9 +205,9 @@ func (o *OpenAPIOperation) allParams() []*OpenAPIParam {
 
 // allResponseHeaders returns a list of all the parameters for this operation,
 // including those for dependencies.
-func (o *OpenAPIOperation) allResponseHeaders() []*OpenAPIResponseHeader {
-	headers := []*OpenAPIResponseHeader{}
-	seen := map[*OpenAPIResponseHeader]bool{}
+func (o *openAPIOperation) allResponseHeaders() []*openAPIResponseHeader {
+	headers := []*openAPIResponseHeader{}
+	seen := map[*openAPIResponseHeader]bool{}
 
 	for _, h := range o.responseHeaders {
 		seen[h] = true
@@ -233,57 +227,57 @@ func (o *OpenAPIOperation) allResponseHeaders() []*OpenAPIResponseHeader {
 	return headers
 }
 
-// OpenAPIServer describes an OpenAPI 3 API server location
-type OpenAPIServer struct {
+// openAPIServer describes an OpenAPI 3 API server location
+type openAPIServer struct {
 	URL         string `json:"url"`
 	Description string `json:"description,omitempty"`
 }
 
-// OpenAPIContact information for this API.
-type OpenAPIContact struct {
+// openAPIContact information for this API.
+type openAPIContact struct {
 	Name  string `json:"name"`
 	URL   string `json:"url"`
 	Email string `json:"email"`
 }
 
-// OpenAPIOAuthFlow describes the URLs and scopes to get tokens via a specific flow.
-type OpenAPIOAuthFlow struct {
+// openAPIOAuthFlow describes the URLs and scopes to get tokens via a specific flow.
+type openAPIOAuthFlow struct {
 	AuthorizationURL string            `json:"authorizationUrl"`
 	TokenURL         string            `json:"tokenUrl"`
 	RefreshURL       string            `json:"refreshUrl,omitempty"`
 	Scopes           map[string]string `json:"scopes"`
 }
 
-// OpenAPIOAuthFlows describes the configuration for each flow type.
-type OpenAPIOAuthFlows struct {
-	Implicit          *OpenAPIOAuthFlow `json:"implicit,omitempty"`
-	Password          *OpenAPIOAuthFlow `json:"password,omitempty"`
-	ClientCredentials *OpenAPIOAuthFlow `json:"clientCredentials,omitempty"`
-	AuthorizationCode *OpenAPIOAuthFlow `json:"authorizationCode,omitempty"`
+// openAPIOAuthFlows describes the configuration for each flow type.
+type openAPIOAuthFlows struct {
+	Implicit          *openAPIOAuthFlow `json:"implicit,omitempty"`
+	Password          *openAPIOAuthFlow `json:"password,omitempty"`
+	ClientCredentials *openAPIOAuthFlow `json:"clientCredentials,omitempty"`
+	AuthorizationCode *openAPIOAuthFlow `json:"authorizationCode,omitempty"`
 }
 
-// OpenAPISecurityScheme describes the auth mechanism(s) for this API.
-type OpenAPISecurityScheme struct {
+// openAPISecurityScheme describes the auth mechanism(s) for this API.
+type openAPISecurityScheme struct {
 	Type             string             `json:"type"`
 	Description      string             `json:"description,omitempty"`
 	Name             string             `json:"name,omitempty"`
 	In               string             `json:"in,omitempty"`
 	Scheme           string             `json:"scheme,omitempty"`
 	BearerFormat     string             `json:"bearerFormat,omitempty"`
-	Flows            *OpenAPIOAuthFlows `json:"flows,omitempty"`
+	Flows            *openAPIOAuthFlows `json:"flows,omitempty"`
 	OpenIDConnectURL string             `json:"openIdConnectUrl,omitempty"`
 }
 
-// OpenAPI describes the OpenAPI 3 API
-type OpenAPI struct {
+// openAPI describes the openAPI 3 API
+type openAPI struct {
 	Title           string
 	Version         string
 	Description     string
-	Contact         *OpenAPIContact
-	Servers         []*OpenAPIServer
-	SecuritySchemes map[string]*OpenAPISecurityScheme
-	Security        []OpenAPISecurityRequirement
-	Paths           map[string]map[string]*OpenAPIOperation
+	Contact         *openAPIContact
+	Servers         []*openAPIServer
+	SecuritySchemes map[string]*openAPISecurityScheme
+	Security        []openAPISecurityRequirement
+	Paths           map[string]map[string]*openAPIOperation
 
 	// Extra allows setting extra keys in the OpenAPI root structure.
 	Extra map[string]interface{}
@@ -294,7 +288,7 @@ type OpenAPI struct {
 }
 
 // openAPIHandler returns a new handler function to generate an OpenAPI spec.
-func openAPIHandler(api *OpenAPI) gin.HandlerFunc {
+func openAPIHandler(api *openAPI) gin.HandlerFunc {
 	respSchema400, _ := schema.Generate(reflect.ValueOf(ErrorInvalidModel{}).Type())
 
 	return func(c *gin.Context) {
@@ -370,7 +364,7 @@ func openAPIHandler(api *OpenAPI) gin.HandlerFunc {
 					openapi.Set(op.requestSchema, "paths", path, method, "requestBody", "content", ct, "schema")
 				}
 
-				responses := make([]*OpenAPIResponse, 0, len(op.responses))
+				responses := make([]*openAPIResponse, 0, len(op.responses))
 				found400 := false
 				for _, resp := range op.responses {
 					responses = append(responses, resp)
@@ -381,7 +375,7 @@ func openAPIHandler(api *OpenAPI) gin.HandlerFunc {
 
 				if op.requestSchema != nil && !found400 {
 					// Add a 400-level response in case parsing the request fails.
-					responses = append(responses, &OpenAPIResponse{
+					responses = append(responses, &openAPIResponse{
 						Description: "Invalid input",
 						ContentType: "application/json",
 						StatusCode:  http.StatusBadRequest,
@@ -389,7 +383,7 @@ func openAPIHandler(api *OpenAPI) gin.HandlerFunc {
 					})
 				}
 
-				headerMap := map[string]*OpenAPIResponseHeader{}
+				headerMap := map[string]*openAPIResponseHeader{}
 				for _, header := range op.allResponseHeaders() {
 					headerMap[header.Name] = header
 				}

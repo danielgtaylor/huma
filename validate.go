@@ -25,7 +25,7 @@ var ErrParamInvalid = errors.New("invalid parameter")
 var paramRe = regexp.MustCompile(`:([^/]+)|{([^}]+)}`)
 
 // validate the top-level API
-func (a *OpenAPI) validate() error {
+func (a *openAPI) validate() error {
 	if a.Title == "" {
 		return fmt.Errorf("title is required: %w", ErrAPIInvalid)
 	}
@@ -38,9 +38,9 @@ func (a *OpenAPI) validate() error {
 }
 
 // validate the parameter and generate schemas
-func (p *OpenAPIParam) validate(t reflect.Type) {
+func (p *openAPIParam) validate(t reflect.Type) {
 	switch p.In {
-	case InPath, InQuery, InHeader:
+	case inPath, inQuery, inHeader:
 	default:
 		panic(fmt.Errorf("parameter %s location invalid: %s", p.Name, p.In))
 	}
@@ -85,7 +85,7 @@ func (p *OpenAPIParam) validate(t reflect.Type) {
 }
 
 // validate the header and generate schemas
-func (h *OpenAPIResponseHeader) validate(t reflect.Type) {
+func (h *openAPIResponseHeader) validate(t reflect.Type) {
 	if h.Schema == nil {
 		// Generate the schema from the handler function types.
 		s, err := schema.GenerateWithMode(t, schema.ModeRead, nil)
@@ -98,11 +98,11 @@ func (h *OpenAPIResponseHeader) validate(t reflect.Type) {
 
 // validate checks that the operation is well-formed (e.g. handler signature
 // matches the given params) and generates schemas if needed.
-func (o *OpenAPIOperation) validate(method, path string) {
+func (o *openAPIOperation) validate(method, path string) {
 	prefix := method + " " + path + ":"
 
-	if o.description == "" {
-		panic(fmt.Errorf("%s description field required: %w", prefix, ErrOperationInvalid))
+	if o.summary == "" && o.description == "" {
+		panic(fmt.Errorf("%s summary or description field required: %w", prefix, ErrOperationInvalid))
 	}
 
 	if len(o.responses) == 0 {

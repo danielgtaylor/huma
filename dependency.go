@@ -3,6 +3,7 @@ package huma
 import (
 	"errors"
 	"fmt"
+	"net"
 	"reflect"
 
 	"github.com/gin-gonic/gin"
@@ -11,62 +12,42 @@ import (
 // ErrDependencyInvalid is returned when registering a dependency fails.
 var ErrDependencyInvalid = errors.New("dependency invalid")
 
-// OpenAPIDependency represents a handler function dependency and its associated
+// openAPIDependency represents a handler function dependency and its associated
 // inputs and outputs. Value can be either a struct pointer (global dependency)
 // or a `func(dependencies, params) (headers, struct pointer, error)` style
 // function.
-type OpenAPIDependency struct {
-	dependencies    []*OpenAPIDependency
-	params          []*OpenAPIParam
-	responseHeaders []*OpenAPIResponseHeader
+type openAPIDependency struct {
+	dependencies    []*openAPIDependency
+	params          []*openAPIParam
+	responseHeaders []*openAPIResponseHeader
 	handler         interface{}
 }
 
-// Dependencies returns the dependencies associated with this dependency.
-func (d *OpenAPIDependency) Dependencies() []*OpenAPIDependency {
-	return d.dependencies
-}
-
-// Params returns the params associated with this dependency.
-func (d *OpenAPIDependency) Params() []*OpenAPIParam {
-	return d.params
-}
-
-// ResponseHeaders returns the params associated with this dependency.
-func (d *OpenAPIDependency) ResponseHeaders() []*OpenAPIResponseHeader {
-	return d.responseHeaders
-}
-
-// NewSimpleDependency returns a dependency with a function or value.
-func NewSimpleDependency(value interface{}) *OpenAPIDependency {
-	return NewDependency(nil, value)
-}
-
-// NewDependency returns a dependency with the given option and a handler
+// newDependency returns a dependency with the given option and a handler
 // function.
-func NewDependency(option DependencyOption, handler interface{}) *OpenAPIDependency {
-	d := &OpenAPIDependency{
-		dependencies:    make([]*OpenAPIDependency, 0),
-		params:          make([]*OpenAPIParam, 0),
-		responseHeaders: make([]*OpenAPIResponseHeader, 0),
+func newDependency(option DependencyOption, handler interface{}) *openAPIDependency {
+	d := &openAPIDependency{
+		dependencies:    make([]*openAPIDependency, 0),
+		params:          make([]*openAPIParam, 0),
+		responseHeaders: make([]*openAPIResponseHeader, 0),
 		handler:         handler,
 	}
 
 	if option != nil {
-		option.ApplyDependency(d)
+		option.applyDependency(d)
 	}
 
 	return d
 }
 
-var contextDependency OpenAPIDependency
-var ginContextDependency OpenAPIDependency
-var operationDependency OpenAPIDependency
+var contextDependency openAPIDependency
+var ginContextDependency openAPIDependency
+var operationIDDependency openAPIDependency
 
 // ContextDependency returns a dependency for the current request's
 // `context.Context`. This is useful for timeouts & cancellation.
 func ContextDependency() DependencyOption {
-	return &dependencyOption{func(d *OpenAPIDependency) {
+	return &dependencyOption{func(d *openAPIDependency) {
 		d.dependencies = append(d.dependencies, &contextDependency)
 	}}
 }
@@ -74,22 +55,34 @@ func ContextDependency() DependencyOption {
 // GinContextDependency returns a dependency for the current request's
 // `*gin.Context`.
 func GinContextDependency() DependencyOption {
-	return &dependencyOption{func(d *OpenAPIDependency) {
+	return &dependencyOption{func(d *openAPIDependency) {
 		d.dependencies = append(d.dependencies, &ginContextDependency)
 	}}
 }
 
-// OperationDependency returns a dependency  for the current `*huma.Operation`.
-func OperationDependency() DependencyOption {
-	return &dependencyOption{func(d *OpenAPIDependency) {
-		d.dependencies = append(d.dependencies, &operationDependency)
+// OperationIDDependency returns a dependency  for the current `*huma.Operation`.
+func OperationIDDependency() DependencyOption {
+	return &dependencyOption{func(d *openAPIDependency) {
+		d.dependencies = append(d.dependencies, &operationIDDependency)
+	}}
+}
+
+// ConnDependency returns the underlying `net.Conn` for the current request.
+func ConnDependency() DependencyOption {
+	dep := newDependency(GinContextDependency(),
+		func(c *gin.Context) (net.Conn, error) {
+			return getConn(c.Request), nil
+		})
+
+	return &dependencyOption{func(d *openAPIDependency) {
+		d.dependencies = append(d.dependencies, dep)
 	}}
 }
 
 // validate that the dependency deps/params/headers match the function
 // signature or that the value is not a function.
-func (d *OpenAPIDependency) validate(returnType reflect.Type) {
-	if d == &contextDependency || d == &ginContextDependency || d == &operationDependency {
+func (d *openAPIDependency) validate(returnType reflect.Type) {
+	if d == &contextDependency || d == &ginContextDependency || d == &operationIDDependency {
 		// Hard-coded known dependencies. These are special and have no value.
 		return
 	}
@@ -144,9 +137,9 @@ func (d *OpenAPIDependency) validate(returnType reflect.Type) {
 
 // allParams returns all parameters for all dependencies in the graph of this
 // dependency in depth-first order without duplicates.
-func (d *OpenAPIDependency) allParams() []*OpenAPIParam {
-	params := []*OpenAPIParam{}
-	seen := map[*OpenAPIParam]bool{}
+func (d *openAPIDependency) allParams() []*openAPIParam {
+	params := []*openAPIParam{}
+	seen := map[*openAPIParam]bool{}
 
 	for _, p := range d.params {
 		seen[p] = true
@@ -168,9 +161,9 @@ func (d *OpenAPIDependency) allParams() []*OpenAPIParam {
 
 // allResponseHeaders returns all response headers for all dependencies in
 // the graph of this dependency in depth-first order without duplicates.
-func (d *OpenAPIDependency) allResponseHeaders() []*OpenAPIResponseHeader {
-	headers := []*OpenAPIResponseHeader{}
-	seen := map[*OpenAPIResponseHeader]bool{}
+func (d *openAPIDependency) allResponseHeaders() []*openAPIResponseHeader {
+	headers := []*openAPIResponseHeader{}
+	seen := map[*openAPIResponseHeader]bool{}
 
 	for _, h := range d.responseHeaders {
 		seen[h] = true
@@ -191,7 +184,7 @@ func (d *OpenAPIDependency) allResponseHeaders() []*OpenAPIResponseHeader {
 }
 
 // resolve the value of the dependency. Returns (response headers, value, error).
-func (d *OpenAPIDependency) resolve(c *gin.Context, op *OpenAPIOperation) (map[string]string, interface{}, error) {
+func (d *openAPIDependency) resolve(c *gin.Context, op *openAPIOperation) (map[string]string, interface{}, error) {
 	// Identity dependencies are first. Just return if it's one of them.
 	if d == &contextDependency {
 		return nil, c.Request.Context(), nil
@@ -201,8 +194,8 @@ func (d *OpenAPIDependency) resolve(c *gin.Context, op *OpenAPIOperation) (map[s
 		return nil, c, nil
 	}
 
-	if d == &operationDependency {
-		return nil, op, nil
+	if d == &operationIDDependency {
+		return nil, op.id, nil
 	}
 
 	v := reflect.ValueOf(d.handler)

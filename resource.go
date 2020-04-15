@@ -9,7 +9,7 @@ import (
 // Resource describes a REST resource at a given URI path. Resources are
 // typically created from a router or as a sub-resource of an existing resource.
 type Resource struct {
-	*OpenAPIOperation
+	*openAPIOperation
 	router *Router
 	path   string
 }
@@ -19,7 +19,7 @@ type Resource struct {
 // empty.
 func NewResource(router *Router, path string, options ...ResourceOption) *Resource {
 	r := &Resource{
-		OpenAPIOperation: NewOperation(),
+		openAPIOperation: newOperation(),
 		router:           router,
 		path:             path,
 	}
@@ -36,7 +36,7 @@ func NewResource(router *Router, path string, options ...ResourceOption) *Resour
 // pointer values themselves are the same.
 func (r *Resource) Copy() *Resource {
 	return &Resource{
-		OpenAPIOperation: r.OpenAPIOperation.Copy(),
+		openAPIOperation: r.openAPIOperation.Copy(),
 		router:           r.router,
 		path:             r.path,
 	}
@@ -97,38 +97,15 @@ func (r *Resource) SubResource(path string, options ...ResourceOption) *Resource
 
 // Operation adds the operation to this resource's router with all the
 // combined deps, security requirements, params, headers, responses, etc.
-func (r *Resource) operation(method string, op *OpenAPIOperation) {
-	// Set params, etc
-	allDeps := append([]*OpenAPIDependency{}, r.dependencies...)
-	allDeps = append(allDeps, op.dependencies...)
-	op.dependencies = allDeps
+func (r *Resource) operation(method string, docs string, handler interface{}) {
+	summary, desc := splitDocs(docs)
 
-	// Combine resource and operation params. Update path with any required
-	// path parameters if they are not yet present.
-	allParams := append([]*OpenAPIParam{}, r.params...)
-	allParams = append(allParams, op.params...)
-	path := r.path
-	for _, p := range allParams {
-		if p.In == "path" {
-			component := "{" + p.Name + "}"
-			if !strings.Contains(path, component) {
-				if !strings.HasSuffix(path, "/") {
-					path += "/"
-				}
-				path += component
-			}
-		}
-	}
-	op.params = allParams
+	// Copy the operation and set new fields.
+	op := r.openAPIOperation.Copy()
+	op.summary = summary
+	op.description = desc
 
-	allHeaders := append([]*OpenAPIResponseHeader{}, r.responseHeaders...)
-	allHeaders = append(allHeaders, op.responseHeaders...)
-	op.responseHeaders = allHeaders
-
-	allResponses := append([]*OpenAPIResponse{}, r.responses...)
-	allResponses = append(allResponses, op.responses...)
-	op.responses = allResponses
-
+	op.handler = handler
 	if op.handler != nil {
 		t := reflect.TypeOf(op.handler)
 		if t.NumOut() == len(op.responseHeaders)+len(op.responses)+1 {
@@ -144,66 +121,56 @@ func (r *Resource) operation(method string, op *OpenAPIOperation) {
 		}
 	}
 
-	if op.maxBodyBytes == 0 {
-		op.maxBodyBytes = r.maxBodyBytes
+	// Update path with any required path parameters if they are not yet present.
+	allParams := append([]*openAPIParam{}, r.params...)
+	allParams = append(allParams, op.params...)
+	path := r.path
+	for _, p := range allParams {
+		if p.In == "path" {
+			component := "{" + p.Name + "}"
+			if !strings.Contains(path, component) {
+				if !strings.HasSuffix(path, "/") {
+					path += "/"
+				}
+				path += component
+			}
+		}
 	}
 
-	if op.bodyReadTimeout == 0 {
-		op.bodyReadTimeout = r.bodyReadTimeout
-	}
-
-	r.router.Register(method, path, op)
+	r.router.register(method, path, op)
 }
 
 // Head creates an HTTP HEAD operation on the resource.
-func (r *Resource) Head(description string, handler interface{}) {
-	r.operation(http.MethodHead, &OpenAPIOperation{
-		description:       description,
-		OpenAPIDependency: &OpenAPIDependency{handler: handler},
-	})
+func (r *Resource) Head(docs string, handler interface{}) {
+	r.operation(http.MethodHead, docs, handler)
 }
 
 // List is an alias for `Get`.
-func (r *Resource) List(description string, handler interface{}) {
-	r.Get(description, handler)
+func (r *Resource) List(docs string, handler interface{}) {
+	r.Get(docs, handler)
 }
 
 // Get creates an HTTP GET operation on the resource.
-func (r *Resource) Get(description string, handler interface{}) {
-	r.operation(http.MethodGet, &OpenAPIOperation{
-		description:       description,
-		OpenAPIDependency: &OpenAPIDependency{handler: handler},
-	})
+func (r *Resource) Get(docs string, handler interface{}) {
+	r.operation(http.MethodGet, docs, handler)
 }
 
 // Post creates an HTTP POST operation on the resource.
-func (r *Resource) Post(description string, handler interface{}) {
-	r.operation(http.MethodPost, &OpenAPIOperation{
-		description:       description,
-		OpenAPIDependency: &OpenAPIDependency{handler: handler},
-	})
+func (r *Resource) Post(docs string, handler interface{}) {
+	r.operation(http.MethodPost, docs, handler)
 }
 
 // Put creates an HTTP PUT operation on the resource.
-func (r *Resource) Put(description string, handler interface{}) {
-	r.operation(http.MethodPut, &OpenAPIOperation{
-		description:       description,
-		OpenAPIDependency: &OpenAPIDependency{handler: handler},
-	})
+func (r *Resource) Put(docs string, handler interface{}) {
+	r.operation(http.MethodPut, docs, handler)
 }
 
 // Patch creates an HTTP PATCH operation on the resource.
-func (r *Resource) Patch(description string, handler interface{}) {
-	r.operation(http.MethodPatch, &OpenAPIOperation{
-		description:       description,
-		OpenAPIDependency: &OpenAPIDependency{handler: handler},
-	})
+func (r *Resource) Patch(docs string, handler interface{}) {
+	r.operation(http.MethodPatch, docs, handler)
 }
 
 // Delete creates an HTTP DELETE operation on the resource.
-func (r *Resource) Delete(description string, handler interface{}) {
-	r.operation(http.MethodDelete, &OpenAPIOperation{
-		description:       description,
-		OpenAPIDependency: &OpenAPIDependency{handler: handler},
-	})
+func (r *Resource) Delete(docs string, handler interface{}) {
+	r.operation(http.MethodDelete, docs, handler)
 }

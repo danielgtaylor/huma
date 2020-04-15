@@ -12,7 +12,7 @@ import (
 )
 
 func TestGlobalDepEmpty(t *testing.T) {
-	d := OpenAPIDependency{}
+	d := openAPIDependency{}
 
 	typ := reflect.TypeOf(123)
 
@@ -22,7 +22,7 @@ func TestGlobalDepEmpty(t *testing.T) {
 }
 
 func TestGlobalDepWrongType(t *testing.T) {
-	d := OpenAPIDependency{
+	d := openAPIDependency{
 		handler: "test",
 	}
 
@@ -33,37 +33,9 @@ func TestGlobalDepWrongType(t *testing.T) {
 	})
 }
 
-func TestGlobalDepParams(t *testing.T) {
-	d := OpenAPIDependency{
-		handler: "test",
-	}
-
-	HeaderParam("foo", "description", "hello").ApplyDependency(&d)
-
-	typ := reflect.TypeOf("test")
-
-	assert.Panics(t, func() {
-		d.validate(typ)
-	})
-}
-
-func TestGlobalDepHeaders(t *testing.T) {
-	d := OpenAPIDependency{
-		handler: "test",
-	}
-
-	ResponseHeader("foo", "description").ApplyDependency(&d)
-
-	typ := reflect.TypeOf("test")
-
-	assert.Panics(t, func() {
-		d.validate(typ)
-	})
-}
-
 func TestDepContext(t *testing.T) {
-	d := OpenAPIDependency{
-		dependencies: []*OpenAPIDependency{
+	d := openAPIDependency{
+		dependencies: []*openAPIDependency{
 			&contextDependency,
 		},
 		handler: func(ctx context.Context) (context.Context, error) { return ctx, nil },
@@ -75,14 +47,14 @@ func TestDepContext(t *testing.T) {
 	typ := reflect.TypeOf(mock)
 	d.validate(typ)
 
-	_, v, err := d.resolve(mock, &OpenAPIOperation{})
+	_, v, err := d.resolve(mock, &openAPIOperation{})
 	assert.NoError(t, err)
 	assert.Equal(t, v, mock.Request.Context())
 }
 
 func TestDepGinContext(t *testing.T) {
-	d := OpenAPIDependency{
-		dependencies: []*OpenAPIDependency{
+	d := openAPIDependency{
+		dependencies: []*openAPIDependency{
 			&ginContextDependency,
 		},
 		handler: func(c *gin.Context) (*gin.Context, error) { return c, nil },
@@ -93,36 +65,36 @@ func TestDepGinContext(t *testing.T) {
 	typ := reflect.TypeOf(mock)
 	d.validate(typ)
 
-	_, v, err := d.resolve(mock, &OpenAPIOperation{})
+	_, v, err := d.resolve(mock, &openAPIOperation{})
 	assert.NoError(t, err)
 	assert.Equal(t, v, mock)
 }
 
-func TestDepOperation(t *testing.T) {
-	d := OpenAPIDependency{
-		dependencies: []*OpenAPIDependency{
-			&operationDependency,
+func TestDepOperationID(t *testing.T) {
+	d := openAPIDependency{
+		dependencies: []*openAPIDependency{
+			&operationIDDependency,
 		},
-		handler: func(o *OpenAPIOperation) (*OpenAPIOperation, error) { return o, nil },
+		handler: func(id string) (string, error) { return id, nil },
 	}
 
-	mock := &OpenAPIOperation{}
+	mock := &openAPIOperation{
+		id: "test-id",
+	}
 
 	typ := reflect.TypeOf(mock)
 	d.validate(typ)
 
 	_, v, err := d.resolve(&gin.Context{}, mock)
 	assert.NoError(t, err)
-	assert.Equal(t, v, mock)
+	assert.Equal(t, v, "test-id")
 }
 func TestDepFuncWrongArgs(t *testing.T) {
-	d := OpenAPIDependency{
-		handler: func() (string, error) {
-			return "", nil
-		},
-	}
+	d := &openAPIDependency{}
 
-	HeaderParam("foo", "desc", "").ApplyDependency(&d)
+	Dependency(HeaderParam("foo", "desc", ""), func() (string, error) {
+		return "", nil
+	}).applyDependency(d)
 
 	assert.Panics(t, func() {
 		d.validate(reflect.TypeOf(""))
@@ -130,7 +102,7 @@ func TestDepFuncWrongArgs(t *testing.T) {
 }
 
 func TestDepFunc(t *testing.T) {
-	d := OpenAPIDependency{
+	d := openAPIDependency{
 		handler: func(xin string) (string, string, error) {
 			return "xout", "value", nil
 		},
@@ -139,7 +111,7 @@ func TestDepFunc(t *testing.T) {
 	DependencyOptions(
 		HeaderParam("x-in", "desc", ""),
 		ResponseHeader("x-out", "desc"),
-	).ApplyDependency(&d)
+	).applyDependency(&d)
 
 	c := &gin.Context{
 		Request: &http.Request{
@@ -150,7 +122,7 @@ func TestDepFunc(t *testing.T) {
 	}
 
 	d.validate(reflect.TypeOf(""))
-	h, v, err := d.resolve(c, &OpenAPIOperation{})
+	h, v, err := d.resolve(c, &openAPIOperation{})
 	assert.NoError(t, err)
 	assert.Equal(t, "xout", h["x-out"])
 	assert.Equal(t, "value", v)

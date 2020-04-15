@@ -21,11 +21,14 @@ import (
 var logLevel *zap.AtomicLevel
 
 // MaxLogBodyBytes logs at most this many bytes of any request body during a
-// panic when using the recovery middleware. Defaults to 10KB.
+// panic when using the recovery middleware. Defaults to 10KiB.
 var MaxLogBodyBytes int64 = 10 * 1024
 
-// Middleware TODO ...
+// Middleware is a type alias used to group Gin middleware functions.
 type Middleware = gin.HandlerFunc
+
+// Handler is a type alias used to group Gin handler functions.
+type Handler = gin.HandlerFunc
 
 // bufferedReadCloser will read and buffer up to max bytes into buf. Additional
 // reads bypass the buffer.
@@ -136,21 +139,38 @@ func NewLogger() (*zap.Logger, error) {
 	return config.Build()
 }
 
+// LogOption is used to set optional configuration for logging.
+type LogOption func(*zap.Logger) *zap.Logger
+
+// Logger sets the Zap logger to use. If not given, a default one will be
+// created instead. Use this as an override.
+func Logger(log *zap.Logger) LogOption {
+	return func(l *zap.Logger) *zap.Logger {
+		return log
+	}
+}
+
+// LogField adds a key/value pair to the logger's tag fields.
+func LogField(name, value string) LogOption {
+	return func(l *zap.Logger) *zap.Logger {
+		return l.With(zap.String(name, value))
+	}
+}
+
 // LogMiddleware creates a new middleware to set a tagged `*zap.SugarLogger` in the
 // Gin context under the `log` key. It debug logs request info. If passed `nil`
 // for the logger, then it creates one. If the current terminal is a TTY, it
 // will try to use colored output automatically.
-func LogMiddleware(l *zap.Logger, tags map[string]string) Middleware {
+func LogMiddleware(options ...LogOption) Middleware {
 	var err error
-	if l == nil {
-		if l, err = NewLogger(); err != nil {
-			panic(err)
-		}
+	var l *zap.Logger
+	if l, err = NewLogger(); err != nil {
+		panic(err)
 	}
 
 	// Add any additional tags that were passed.
-	for k, v := range tags {
-		l = l.With(zap.String(k, v))
+	for _, option := range options {
+		l = option(l)
 	}
 
 	return func(c *gin.Context) {
@@ -184,28 +204,30 @@ func LogMiddleware(l *zap.Logger, tags map[string]string) Middleware {
 // for the current request. This dependency *requires* the use of
 // `LogMiddleware` and will error if the logger is not in the request context.
 func LogDependency() DependencyOption {
-	dep := NewDependency(DependencyOptions(
+	dep := newDependency(DependencyOptions(
 		GinContextDependency(),
-		OperationDependency(),
-	), func(c *gin.Context, op *OpenAPIOperation) (*zap.SugaredLogger, error) {
+		OperationIDDependency(),
+	), func(c *gin.Context, opID string) (*zap.SugaredLogger, error) {
 		l, ok := c.Get("log")
 		if !ok {
 			return nil, fmt.Errorf("missing logger in context")
 		}
-		sl := l.(*zap.SugaredLogger).With("operation", op.id)
+		sl := l.(*zap.SugaredLogger).With("operation", opID)
 		return sl, nil
 	})
 
-	return &dependencyOption{func(d *OpenAPIDependency) {
+	return &dependencyOption{func(d *openAPIDependency) {
 		d.dependencies = append(d.dependencies, dep)
 	}}
 }
 
 // Handler404 will return JSON responses for 404 errors.
-func Handler404(c *gin.Context) {
-	c.JSON(http.StatusNotFound, &ErrorModel{
-		Message: "Not found",
-	})
+func Handler404() Handler {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusNotFound, &ErrorModel{
+			Message: "Not found",
+		})
+	}
 }
 
 type minimalWriter struct {

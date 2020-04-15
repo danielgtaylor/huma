@@ -6,17 +6,16 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
 
 var handlers = []struct {
 	name    string
-	handler func(*gin.Context, *OpenAPI)
+	handler Handler
 }{
-	{"RapiDoc", RapiDocHandler},
-	{"ReDoc", ReDocHandler},
-	{"SwaggerUI", SwaggerUIHandler},
+	{"RapiDoc", RapiDocHandler("Test API")},
+	{"ReDoc", ReDocHandler("Test API")},
+	{"SwaggerUI", SwaggerUIHandler("Test API")},
 }
 
 func TestDocHandlers(outer *testing.T) {

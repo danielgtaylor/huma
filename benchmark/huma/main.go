@@ -24,7 +24,7 @@ func main() {
 	g.Use(cors.Default())
 	g.Use(huma.PreferMinimalMiddleware())
 
-	r := huma.NewRouter("Benchmark", "1.0.0", huma.WithGin(g))
+	r := huma.NewRouter("Benchmark", "1.0.0", huma.Gin(g))
 
 	d := huma.Dependency(
 		huma.HeaderParam("authorization", "Auth header", ""),

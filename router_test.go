@@ -23,12 +23,29 @@ func init() {
 	gin.SetMode(gin.TestMode)
 }
 
+func ExampleNewRouter_customGin() {
+	g := gin.New()
+	// ...Customize your gin instance...
+
+	r := NewRouter("Example API", "1.0.0", Gin(g))
+	r.Resource("/").Get("doc", func() string { return "Custom Gin" })
+}
+
+func ExampleNewRouter() {
+	r := NewRouter("Example API", "1.0.0",
+		DevServer("http://localhost:8888"),
+		ContactEmail("Support", "support@example.com"),
+	)
+
+	r.Resource("/hello").Get("doc", func() string { return "Hello" })
+}
+
 func NewTestRouter(t *testing.T, options ...RouterOption) *Router {
 	l := zaptest.NewLogger(t)
 	g := gin.New()
-	g.Use(LogMiddleware(l, nil))
+	g.Use(LogMiddleware(Logger(l)))
 
-	return NewRouter("Test API", "1.0.0", append([]RouterOption{WithGin(g)}, options...)...)
+	return NewRouter("Test API", "1.0.0", append([]RouterOption{Gin(g)}, options...)...)
 }
 
 type helloResponse struct {
@@ -53,7 +70,7 @@ func BenchmarkGin(b *testing.B) {
 }
 
 func BenchmarkHuma(b *testing.B) {
-	r := NewRouter("Benchmark test", "1.0.0", WithGin(gin.New()))
+	r := NewRouter("Benchmark test", "1.0.0", Gin(gin.New()))
 	r.Resource("/hello").Get("Greet the world", func() *helloResponse {
 		return &helloResponse{
 			Message: "Hello, world",
@@ -113,7 +130,7 @@ func BenchmarkGinComplex(b *testing.B) {
 }
 
 func BenchmarkHumaComplex(b *testing.B) {
-	r := NewRouter("Benchmark test", "1.0.0", WithGin(gin.New()))
+	r := NewRouter("Benchmark test", "1.0.0", Gin(gin.New()))
 
 	dep1 := SimpleDependency("dep1")
 
@@ -351,8 +368,8 @@ func TestRouterBadHeader(t *testing.T) {
 	core, logs := observer.New(zapcore.InfoLevel)
 	l := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(func(zapcore.Core) zapcore.Core { return core })))
 	g := gin.New()
-	g.Use(LogMiddleware(l, nil))
-	r := NewRouter("Test API", "1.0.0", WithGin(g))
+	g.Use(LogMiddleware(Logger(l)))
+	r := NewRouter("Test API", "1.0.0", Gin(g))
 	r.Resource("/test", ResponseHeader("foo", "desc"), ResponseError(http.StatusBadRequest, "desc", Headers("foo"))).Get("desc", func() (string, *ErrorModel, string) {
 		return "header-value", nil, "response"
 	})
@@ -373,7 +390,7 @@ func TestRouterParams(t *testing.T) {
 		QueryParam("i", "desc", int16(0)),
 		QueryParam("f32", "desc", float32(0.0)),
 		QueryParam("f64", "desc", 0.0),
-		QueryParam("schema", "desc", "test", Schema(&schema.Schema{Pattern: "^a-z+$"})),
+		QueryParam("schema", "desc", "test", Schema(schema.Schema{Pattern: "^a-z+$"})),
 		QueryParam("items", "desc", []int{}),
 		QueryParam("start", "desc", time.Time{}),
 	).Get("desc", func(id string, i int16, f32 float32, f64 float64, schema string, items []int, start time.Time) string {

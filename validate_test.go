@@ -12,7 +12,7 @@ func TestOperationDescriptionRequired(t *testing.T) {
 	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
-		r.Register(http.MethodGet, "/", &OpenAPIOperation{})
+		r.register(http.MethodGet, "/", &openAPIOperation{})
 	})
 }
 
@@ -20,7 +20,7 @@ func TestOperationResponseRequired(t *testing.T) {
 	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
-		r.Register(http.MethodGet, "/", &OpenAPIOperation{
+		r.register(http.MethodGet, "/", &openAPIOperation{
 			description: "Test",
 		})
 	})
@@ -61,7 +61,7 @@ func TestOperationListAutoID(t *testing.T) {
 		return []string{"test"}
 	})
 
-	o := r.OpenAPI().Paths["/items"][http.MethodGet]
+	o := r.api.Paths["/items"][http.MethodGet]
 
 	assert.Equal(t, "list-items", o.id)
 }
@@ -78,25 +78,13 @@ func TestOperationContextPointer(t *testing.T) {
 	})
 }
 
-func TestOperationOperationPointer(t *testing.T) {
-	r := NewTestRouter(t)
-
-	assert.Panics(t, func() {
-		r.Resource("/",
-			OperationDependency(),
-		).Get("Test", func(o OpenAPIOperation) string {
-			return "test"
-		})
-	})
-}
-
 func TestOperationInvalidDep(t *testing.T) {
 	r := NewTestRouter(t)
 
 	assert.Panics(t, func() {
 		r.Resource("/",
 			SimpleDependency(nil),
-		).Get("Test", func(o OpenAPIOperation) string {
+		).Get("Test", func(o openAPIOperation) string {
 			return "test"
 		})
 	})
@@ -116,7 +104,7 @@ func TestOperationParamDep(t *testing.T) {
 	assert.Panics(t, func() {
 		r.Resource("/",
 			QueryParam("foo", "Test", ""),
-		).Get("Test", func(c *OpenAPIOperation) string {
+		).Get("Test", func(c *openAPIOperation) string {
 			return "test"
 		})
 	})
@@ -156,7 +144,7 @@ func TestOperationParamExampleSchema(t *testing.T) {
 		return "test"
 	})
 
-	param := r.OpenAPI().Paths["/"][http.MethodGet].params[0]
+	param := r.api.Paths["/"][http.MethodGet].params[0]
 
 	assert.Equal(t, 123, param.Schema.Example)
 }

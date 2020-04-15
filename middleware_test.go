@@ -79,7 +79,7 @@ func TestPreferMinimalMiddleware(t *testing.T) {
 
 func TestHandler404(t *testing.T) {
 	g := gin.New()
-	g.NoRoute(Handler404)
+	g.NoRoute(Handler404())
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/notfound", nil)

@@ -1,4 +1,4 @@
-package main
+package huma_test
 
 import (
 	"net/http"
@@ -26,7 +26,7 @@ type Note struct {
 // production code!
 var memoryDB = sync.Map{}
 
-func main() {
+func Example_readme() {
 	// Create a new router and give our API a title and version.
 	r := huma.NewRouter("Notes API", "1.0.0")
 

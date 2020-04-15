@@ -1,3 +1,51 @@
+// Package huma is a modern, simple, fast & opinionated REST API framework.
+// Based on OpenAPI 3 and JSON Schema so it can be used to automatically
+// generate an OpenAPI spec, interactive documentation, client SDKs in many
+// languages, and a CLI for scripting. Pronounced IPA: /'hjuːmɑ/.
+//
+// Start by creating a `Router` and attaching resources and operations to
+// it:
+//
+//   // Create a new router
+//   r := huma.NewRouter("Ping API", "1.0.0")
+//
+//   // Add a simple ping/pong
+//   r.Resource("/ping").Get("Ping", func() string {
+//   	return "pong"
+//   })
+//
+//   // Run it!
+//   r.Run()
+//
+// Now you can access the API, generated documentation, and API description:
+//
+//   # Access the API
+//   $ curl http://localhost:8888/hello
+//
+//   # Read the generated documentation
+//   $ open http://localhost:8888/docs
+//
+//   # See the OpenAPI 3 spec
+//   $ curl http://localhost:8888/openapi.json
+//
+// You can add tests with the help of the `humatest` module:
+//
+//   func TestPint(t *testing.T) {
+//   	r := humatest.NewRouter(t)
+//
+//   	// Add your service routes to the test router.
+//   	registerRoutes(r)
+//
+//   	// Make a test request.
+//   	w := httptest.NewRecorder()
+//   	req, _ := http.NewRequest(http.MethodGet, "/ping", nil)
+//   	r.ServeHTTP(w, req)
+//   	assert.Equal(t, http.StatusOK, w.Code)
+//   	assert.Equal(t, "pong", w.Body.String())
+//   }
+//
+// See https://github.com/danielgtaylor/huma#readme for more high-level feature
+// docs with examples.
 package huma
 
 import (
@@ -27,15 +75,15 @@ import (
 // is not a valid value.
 var ErrInvalidParamLocation = errors.New("invalid parameter location")
 
-// ConnContextKey is used to get/set the underlying `net.Conn` from a request
+// connContextKey is used to get/set the underlying `net.Conn` from a request
 // context value.
-var ConnContextKey = struct{}{}
+var connContextKey = struct{}{}
 
 var timeType = reflect.TypeOf(time.Time{})
 
-// GetConn gets the underlying `net.Conn` from a request.
-func GetConn(r *http.Request) net.Conn {
-	conn := r.Context().Value(ConnContextKey)
+// getConn gets the underlying `net.Conn` from a request.
+func getConn(r *http.Request) net.Conn {
+	conn := r.Context().Value(connContextKey)
 	if conn != nil {
 		return conn.(net.Conn)
 	}
@@ -152,17 +200,17 @@ func parseParamValue(c *gin.Context, name string, typ reflect.Type, pstr string)
 	return pv, true
 }
 
-func getParamValue(c *gin.Context, param *OpenAPIParam) (interface{}, bool) {
+func getParamValue(c *gin.Context, param *openAPIParam) (interface{}, bool) {
 	var pstr string
 	switch param.In {
-	case InPath:
+	case inPath:
 		pstr = c.Param(param.Name)
-	case InQuery:
+	case inQuery:
 		pstr = c.Query(param.Name)
 		if pstr == "" {
 			return param.def, true
 		}
-	case InHeader:
+	case inHeader:
 		pstr = c.GetHeader(param.Name)
 		if pstr == "" {
 			return param.def, true
@@ -201,7 +249,7 @@ func getParamValue(c *gin.Context, param *OpenAPIParam) (interface{}, bool) {
 	return pv, true
 }
 
-func getRequestBody(c *gin.Context, t reflect.Type, op *OpenAPIOperation) (interface{}, bool) {
+func getRequestBody(c *gin.Context, t reflect.Type, op *openAPIOperation) (interface{}, bool) {
 	val := reflect.New(t).Interface()
 	if op.requestSchema != nil {
 		body, err := ioutil.ReadAll(c.Request.Body)
@@ -237,11 +285,11 @@ func getRequestBody(c *gin.Context, t reflect.Type, op *OpenAPIOperation) (inter
 
 // Router handles API requests.
 type Router struct {
-	api         *OpenAPI
+	api         *openAPI
 	engine      *gin.Engine
 	root        *cobra.Command
 	prestart    []func()
-	docsHandler func(c *gin.Context, api *OpenAPI)
+	docsHandler Handler
 
 	// Tracks the currently running server for graceful shutdown.
 	server     *http.Server
@@ -258,34 +306,28 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 	// Setup default Gin instance with our middleware.
 	g := gin.New()
 	g.Use(Recovery())
-	g.Use(LogMiddleware(nil, nil))
+	g.Use(LogMiddleware())
 	g.Use(cors.Default())
 	g.Use(PreferMinimalMiddleware())
-	g.NoRoute(Handler404)
+	g.NoRoute(Handler404())
 
-	title := docs
-	desc := ""
-	if strings.Contains(docs, "\n") {
-		parts := strings.SplitN(docs, "\n", 2)
-		title = parts[0]
-		desc = parts[1]
-	}
+	title, desc := splitDocs(docs)
 
 	// Create the default router.
 	r := &Router{
-		api: &OpenAPI{
+		api: &openAPI{
 			Title:           title,
 			Description:     desc,
 			Version:         version,
-			Servers:         make([]*OpenAPIServer, 0),
-			SecuritySchemes: make(map[string]*OpenAPISecurityScheme, 0),
-			Security:        make([]OpenAPISecurityRequirement, 0),
-			Paths:           make(map[string]map[string]*OpenAPIOperation),
+			Servers:         make([]*openAPIServer, 0),
+			SecuritySchemes: make(map[string]*openAPISecurityScheme, 0),
+			Security:        make([]openAPISecurityRequirement, 0),
+			Paths:           make(map[string]map[string]*openAPIOperation),
 			Extra:           make(map[string]interface{}),
 		},
 		engine:      g,
 		prestart:    []func(){},
-		docsHandler: RapiDocHandler,
+		docsHandler: RapiDocHandler(title),
 	}
 
 	r.setupCLI()
@@ -304,7 +346,7 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 	r.engine.GET("/openapi.json", openAPIHandler(r.api))
 
 	r.engine.GET("/docs", func(c *gin.Context) {
-		r.docsHandler(c, r.api)
+		r.docsHandler(c)
 	})
 
 	// If downloads like a CLI or SDKs are available, serve them automatically
@@ -314,11 +356,6 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 	}
 
 	return r
-}
-
-// OpenAPI returns the underlying OpenAPI object.
-func (r *Router) OpenAPI() *OpenAPI {
-	return r.api
 }
 
 // GinEngine returns the underlying low-level Gin engine.
@@ -337,15 +374,15 @@ func (r *Router) Resource(path string, options ...ResourceOption) *Resource {
 	return NewResource(r, path).With(options...)
 }
 
-// Register a new operation.
-func (r *Router) Register(method, path string, op *OpenAPIOperation) {
+// register a new operation.
+func (r *Router) register(method, path string, op *openAPIOperation) {
 	// First, make sure the operation and handler make sense, as well as pre-
 	// generating any schemas for use later during request handling.
 	op.validate(method, path)
 
 	// Add the operation to the list of operations for the path entry.
 	if r.api.Paths[path] == nil {
-		r.api.Paths[path] = make(map[string]*OpenAPIOperation)
+		r.api.Paths[path] = make(map[string]*openAPIOperation)
 	}
 
 	r.api.Paths[path][method] = op
@@ -433,7 +470,7 @@ func (r *Router) Register(method, path string, op *OpenAPIOperation) {
 				readTimeout = 15 * time.Second
 			}
 
-			if conn := GetConn(c.Request); readTimeout > 0 && conn != nil {
+			if conn := getConn(c.Request); readTimeout > 0 && conn != nil {
 				conn.SetReadDeadline(time.Now().Add(readTimeout))
 			}
 
@@ -450,7 +487,7 @@ func (r *Router) Register(method, path string, op *OpenAPIOperation) {
 			}
 		} else if readTimeout > 0 {
 			// We aren't processing the input, but still set the timeout.
-			if conn := GetConn(c.Request); conn != nil {
+			if conn := getConn(c.Request); conn != nil {
 				conn.SetReadDeadline(time.Now().Add(readTimeout))
 			}
 		}
@@ -535,11 +572,21 @@ func (r *Router) listen(addr, certFile, keyFile string) error {
 			IdleTimeout:       15 * time.Second,
 			Handler:           r,
 			ConnContext: func(ctx context.Context, c net.Conn) context.Context {
-				return context.WithValue(ctx, ConnContextKey, c)
+				return context.WithValue(ctx, connContextKey, c)
 			},
 		}
 	} else {
 		r.server.Addr = addr
+
+		// Wrap the ConnContext method to inject the current connection into the
+		// request context. This is useful to e.g. set deadlines.
+		orig := r.server.ConnContext
+		r.server.ConnContext = func(ctx context.Context, c net.Conn) context.Context {
+			if orig != nil {
+				ctx = orig(ctx, c)
+			}
+			return context.WithValue(ctx, connContextKey, c)
+		}
 	}
 	r.serverLock.Unlock()
 

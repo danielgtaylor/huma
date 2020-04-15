@@ -69,6 +69,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma"
+	"github.com/danielgtaylor/huma/schema"
 )
 
 // NoteSummary is used to list notes. It does not include the (potentially)
@@ -108,10 +109,11 @@ func main() {
 		return summaries
 	})
 
+	// Set up a custom schema to limit identifier values.
+	idSchema := schema.Schema{Pattern: "^[a-zA-Z0-9._-]{1,32}$"}
+
 	// Add an `id` path parameter to create a note resource.
-	note := notes.With(huma.PathParam("id", "Note ID", &huma.Schema{
-		Pattern: "^[a-zA-Z0-9._-]{1,32}$",
-	}))
+	note := notes.With(huma.PathParam("id", "Note ID", huma.Schema(idSchema)))
 
 	notFound := huma.ResponseError(http.StatusNotFound, "Note not found")
 
@@ -234,6 +236,50 @@ Official Go package documentation can always be found at https://pkg.go.dev/gith
 
 > :whale: Hi there! I'm the happy Huma whale here to provide help. You'll see me leave helpful tips down below.
 
+## Constructors & Options
+
+Huma uses the [functional options](https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis) paradigm when creating a router, resource, operation, parameter, etc. Functional options were chosen due to an exponential explosion of constructor functions and the complexity of the problem space. They come with several advantages:
+
+- Friendly APIs with sane defaults
+- Extensible without breaking clients or polluting the global namespace with too many constructors
+- Options are immutable, reusable, and composable
+
+They are easy to use and look like this:
+
+```go
+// Add a parameter with an example
+huma.PathParam("id", "Resource identifier", huma.Example("abc123"))
+```
+
+Most text editors will auto-complete and show only the available options, which is an improvement over e.g. accepting `interface{}`.
+
+### Extending & Composition
+
+Functional options can be wrapped to extend the set of available options. For example:
+
+```go
+// IDParam creates a new path parameter limited to characters and a length that
+// is allowed for resource identifiers.
+func IDParam(name, description string) huma.DependencyOption {
+	s := schema.Schema{Pattern: "^[a-zA-Z0-9_-]{3,20}"}
+
+	return huma.PathParam(name, description, huma.Schema(s))
+}
+```
+
+You can also compose multiple options into one, e.g by using `huma.ResourceOptions(..)` or one of the other related functions:
+
+```go
+// CommonOptions sets up common options for every operation.
+func CommonOptions() huma.ResourceOption {
+	return huma.ResourceOptions(
+		huma.Tags("some-tag"),
+		huma.HeaderParam("customer", "Customer name", "", huma.Internal()),
+		huma.ResponseError(http.StatusInternalServerError, "Server error"),
+	)
+}
+```
+
 ## Resources
 
 Huma APIs are composed of resources and sub-resources attached to a router. A resource refers to a unique URI on which operations can be performed. Huma resources can have dependencies, security requirements, parameters, response headers, and responses attached to them which are all applied to every operation and sub-resource.
@@ -251,7 +297,7 @@ note := notes.With(huma.PathParam("id", "Note ID"))
 sub := note.SubResource("/likes")
 ```
 
-The `With(...)` function is very powerful and can accept dependencies, security requirements, parameters, response headers, and response descriptions. It returns a copy of the resource with those values applied.
+The `With(...)` function is very powerful and can accept dependencies, security requirements, parameters, response headers, and response description options. It returns a copy of the resource with those values applied.
 
 > :whale: Resources should be nouns, and plural if they return more than one item. Good examples: `/notes`, `/likes`, `/users`, `/videos`, etc.
 
@@ -288,7 +334,8 @@ notes.Get("Get a list of all notes", func () []*NoteSummary {
 	// Implementation goes here
 })
 
-// Manually provide the response. This is equivalent to the above.
+// Manually provide the response. This is equivalent to the above, but allows
+// you to add additional options like allowed response headers.
 notes.With(
 	huma.ResponseJSON(http.StatusOK, "Success"),
 ).Get("Get a list of all notes", func () []*NoteSummary {
@@ -337,18 +384,18 @@ Here is an example of an `id` parameter:
 ```go
 r.Resource("/notes",
 	huma.PathParam("id", "Note ID"),
-	huma.ResponseJSON(200, "Success"),
 	huma.ResponseError(404, "Note was not found"),
+	huma.ResponseJSON(200, "Success"),
 ).
 Get("Get a note by its ID", func(id string) (*huma.ErrorModel, *Note) {
 	// Implementation goes here
 })
 ```
 
-You can also declare parameters with additional validation logic:
+You can also declare parameters with additional validation logic by using the `schema` module:
 
 ```go
-s := &schema.Schema{
+s := schema.Schema{
 	MinLength: 1,
 	MaxLength: 32,
 }
@@ -403,8 +450,8 @@ Response models are used by adding a response to the list of possible responses 
 
 ```go
 r.Resource("/notes",
-	huma.ResponseJSON(http.StatusOK, "Success"),
-	huma.ResponseError(http.NotFound, "Not found")).
+	huma.ResponseError(http.NotFound, "Not found"),
+	huma.ResponseJSON(http.StatusOK, "Success")).
 Get("Description", func() (*huma.ErrorModel, *Note) {
 	// Implementation goes here
 })
@@ -412,7 +459,7 @@ Get("Description", func() (*huma.ErrorModel, *Note) {
 
 Whichever model is not `nil` will get sent back to the client.
 
-Empty responses, e.g. a `204 No Content` or `304 Not Modified` are also supported by setting a `ContentType` of `""`. Use `huma.Response` paired with a simple boolean to return a response without a body. Passing `false` acts like `nil` for models and prevents that response from being sent.
+Empty responses, e.g. a `204 No Content` or `304 Not Modified` are also supported by setting a `ContentType` of `""` (the default zero value). Use `huma.Response` paired with a simple boolean to return a response without a body. Passing `false` acts like `nil` for models and prevents that response from being sent.
 
 ```go
 r.Resource("/notes",
@@ -431,30 +478,30 @@ Go struct tags are used to annotate the model with information that gets turned 
 
 The standard `json` tag is supported and can be used to rename a field and mark fields as optional using `omitempty`. The following additional tags are supported on model fields:
 
-| Tag                | Description                               | Example                      |
-| ------------------ | ----------------------------------------- | ---------------------------- |
-| `description`      | Describe the field                        | `description:"Who to greet"` |
-| `format`           | Format hint for the field                 | `format:"date-time"`         |
-| `enum`             | A comma-separated list of possible values | `enum:"one,two,three"`       |
-| `default`          | Default value                             | `default:"123"`              |
-| `minimum`          | Minimum (inclusive)                       | `minimum:"1"`                |
-| `exclusiveMinimum` | Minimum (exclusive)                       | `exclusiveMinimum:"0"`       |
-| `maximum`          | Maximum (inclusive)                       | `maximum:"255"`              |
-| `exclusiveMaximum` | Maximum (exclusive)                       | `exclusiveMaximum:"100"`     |
-| `multipleOf`       | Value must be a multiple of this value    | `multipleOf:"2"`             |
-| `minLength`        | Minimum string length                     | `minLength:"1"`              |
-| `maxLength`        | Maximum string length                     | `maxLength:"80"`             |
-| `pattern`          | Regular expression pattern                | `pattern:"[a-z]+"`           |
-| `minItems`         | Minimum number of array items             | `minItems:"1"`               |
-| `maxItems`         | Maximum number of array items             | `maxItems:"20"`              |
-| `uniqueItems`      | Array items must be unique                | `uniqueItems:"true"`         |
-| `minProperties`    | Minimum number of object properties       | `minProperties:"1"`          |
-| `maxProperties`    | Maximum number of object properties       | `maxProperties:"20"`         |
-| `example`          | Example value                             | `example:"123"`              |
-| `nullable`         | Whether `null` can be sent                | `nullable:"false"`           |
-| `readOnly`         | Sent in the response only                 | `readOnly:"true"`            |
-| `writeOnly`        | Sent in the request only                  | `writeOnly:"true"`           |
-| `deprecated`       | This field is deprecated                  | `deprecated:"true"`          |
+| Tag                | Description                               | Example                  |
+| ------------------ | ----------------------------------------- | ------------------------ |
+| `doc`              | Describe the field                        | `doc:"Who to greet"`     |
+| `format`           | Format hint for the field                 | `format:"date-time"`     |
+| `enum`             | A comma-separated list of possible values | `enum:"one,two,three"`   |
+| `default`          | Default value                             | `default:"123"`          |
+| `minimum`          | Minimum (inclusive)                       | `minimum:"1"`            |
+| `exclusiveMinimum` | Minimum (exclusive)                       | `exclusiveMinimum:"0"`   |
+| `maximum`          | Maximum (inclusive)                       | `maximum:"255"`          |
+| `exclusiveMaximum` | Maximum (exclusive)                       | `exclusiveMaximum:"100"` |
+| `multipleOf`       | Value must be a multiple of this value    | `multipleOf:"2"`         |
+| `minLength`        | Minimum string length                     | `minLength:"1"`          |
+| `maxLength`        | Maximum string length                     | `maxLength:"80"`         |
+| `pattern`          | Regular expression pattern                | `pattern:"[a-z]+"`       |
+| `minItems`         | Minimum number of array items             | `minItems:"1"`           |
+| `maxItems`         | Maximum number of array items             | `maxItems:"20"`          |
+| `uniqueItems`      | Array items must be unique                | `uniqueItems:"true"`     |
+| `minProperties`    | Minimum number of object properties       | `minProperties:"1"`      |
+| `maxProperties`    | Maximum number of object properties       | `maxProperties:"20"`     |
+| `example`          | Example value                             | `example:"123"`          |
+| `nullable`         | Whether `null` can be sent                | `nullable:"false"`       |
+| `readOnly`         | Sent in the response only                 | `readOnly:"true"`        |
+| `writeOnly`        | Sent in the request only                  | `writeOnly:"true"`       |
+| `deprecated`       | This field is deprecated                  | `deprecated:"true"`      |
 
 ### Response Headers
 
@@ -468,7 +515,7 @@ For example:
 
 ```go
 r.Resource("/notes",
-	huma.Header("expires", "Expiration date for this content"),
+	huma.ResponseHeader("expires", "Expiration date for this content"),
 	huma.ResponseText(http.StatusOK, "Success", huma.Headers("expires"))
 ).Get("description", func() (string, string) {
 	expires := time.Now().Add(7 * 24 * time.Hour).MarshalText()
@@ -494,9 +541,10 @@ Huma includes a dependency injection system that can be used to pass additional 
 
 Global dependencies are created by just setting some value, while contextual dependencies are implemented using a function that returns the value of the form `func (deps..., params...) (headers..., *YourType, error)` where the value you want injected is of `*YourType` and the function arguments can be any previously registered dependency types or one of the hard-coded types:
 
+- `huma.ConnDependency()` the current `http.Request` connection (returns `net.Conn`)
 - `huma.ContextDependency()` the current `http.Request` context (returns `context.Context`)
 - `huma.GinContextDependency()` the current Gin request context (returns `*gin.Context`)
-- `huma.OperationDependency()` the current operation (returns `*huma.Operation`)
+- `huma.OperationIDDependency()` the current operation ID (returns `string`)
 
 ```go
 // Register a new database connection dependency
@@ -530,6 +578,17 @@ r.Resource("/foo").With(
 })
 ```
 
+When creating a new dependency you can use `huma.DependencyOptions` to group multiple options:
+
+```go
+logger := huma.Dependency(huma.DependencyOptions(
+	huma.GinContextDependency(),
+	huma.OperationIDDependency(),
+), func (c *gin.Context, operationID string) (*MyLogger, error) {
+	return ...
+})
+```
+
 > :whale: Note that global dependencies cannot be functions. You can wrap them in a struct as a workaround if needed.
 
 ## Custom Gin
@@ -544,10 +603,10 @@ r := huma.NewRouter("My API", "1.0.0")
 // And manual settings:
 g := gin.New()
 g.Use(huma.Recovery())
-g.Use(huma.LogMiddleware(nil, nil))
+g.Use(huma.LogMiddleware())
 g.Use(cors.Default())
 g.Use(huma.PreferMinimalMiddleware())
-g.NoRoute(huma.Handler404)
+g.NoRoute(huma.Handler404())
 r := huma.NewRouter("My API", "1.0.0", huma.WithGin(g))
 ```
 
@@ -620,9 +679,8 @@ r.Resource("/foo", huma.BodyReadTimeout(5 * time.Second)).Post(
 You can also access the underlying TCP connection and set deadlines manually:
 
 ```go
-r.Resource("/foo", huma.GinContextDependency()).Get(func (c *gin.Context) string {
-	// Get the underlying `net.Conn` and set a new deadline.
-	conn := huma.GetConn(c.Request)
+r.Resource("/foo", huma.ConnDependency()).Get(func (conn net.Conn) string {
+	// Set a new deadline on connection reads.
 	conn.SetReadDeadline(time.Now().Add(600 * time.Second))
 
 	// Read all the data from the request.
@@ -655,7 +713,7 @@ r.Resource("/foo", MaxBodyBytes(10 * 1024 * 1024)).Get(...)
 
 ## Logging
 
-Huma provides a Zap-based contextual structured logger built-in. You can access it via the `huma.LogDependency()` which returns a `*zap.SugaredLogger`. It requires the use of the `huma.LogMiddleware(...)`, which is included by default.
+Huma provides a Zap-based contextual structured logger built-in. You can access it via the `huma.LogDependency()` which returns a `*zap.SugaredLogger`. It requires the use of the `huma.LogMiddleware(...)`, which is included by default. If you provide a custom Gin instance you should include the middleware.
 
 ```go
 r.Resource("/test",
@@ -684,7 +742,7 @@ l = l.With(zap.String("some", "value"))
 g := gin.New()
 g.Use(gin.Recovery())
 g.Use(cors.Default())
-g.Use(huma.LogMiddleware(l, nil))
+g.Use(huma.LogMiddleware(l))
 
 r := huma.NewRouter("My API", "1.0.0", huma.WithGin(g))
 ```
@@ -713,7 +771,7 @@ r := huma.NewRouter("My API", "1.0.0",
 You can choose between [RapiDoc](https://mrin9.github.io/RapiDoc/), [ReDoc](https://github.com/Redocly/redoc), or [SwaggerUI](https://swagger.io/tools/swagger-ui/) to auto-generate documentation. Simply set the documentation handler on the router:
 
 ```go
-r := huma.NewRouter("My API", "1.0.0", huma.DocsHandler(huma.ReDocHandler))
+r := huma.NewRouter("My API", "1.0.0", huma.DocsHandler(huma.ReDocHandler("My API")))
 ```
 
 > :whale: Pass a custom handler function to have even more control for branding or browser authentication.

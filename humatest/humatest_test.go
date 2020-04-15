@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/danielgtaylor/huma"
 	"github.com/danielgtaylor/huma/humatest"
 	"github.com/stretchr/testify/assert"
 )
@@ -31,5 +32,5 @@ func Example() {
 
 func TestNewRouter(t *testing.T) {
 	// Should not panic
-	humatest.NewRouter(t)
+	humatest.NewRouter(t, huma.DevServer("http://localhost:8888"))
 }

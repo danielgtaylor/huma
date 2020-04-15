@@ -16,31 +16,31 @@ var paramFuncsTable = []struct {
 	param       OperationOption
 	name        string
 	description string
-	in          ParamLocation
+	in          paramLocation
 	required    bool
 	internal    bool
 	def         interface{}
 	example     interface{}
 }{
-	{"PathParam", PathParam("test", "desc"), "test", "desc", InPath, true, false, nil, nil},
-	{"PathParamSchema", PathParam("test", "desc", Schema(&schema.Schema{})), "test", "desc", InPath, true, false, nil, nil},
-	{"PathParamExample", PathParam("test", "desc", Example(123)), "test", "desc", InPath, true, false, nil, 123},
-	{"QueryParam", QueryParam("test", "desc", "def"), "test", "desc", InQuery, false, false, "def", nil},
-	{"QueryParamSchema", QueryParam("test", "desc", "def", Schema(&schema.Schema{})), "test", "desc", InQuery, false, false, "def", nil},
-	{"QueryParamExample", QueryParam("test", "desc", "def", Example("foo")), "test", "desc", InQuery, false, false, "def", "foo"},
-	{"QueryParamInternal", QueryParam("test", "desc", "def", Internal()), "test", "desc", InQuery, false, true, "def", nil},
-	{"HeaderParam", HeaderParam("test", "desc", "def"), "test", "desc", InHeader, false, false, "def", nil},
-	{"HeaderParamSchema", HeaderParam("test", "desc", "def", Schema(&schema.Schema{})), "test", "desc", InHeader, false, false, "def", nil},
-	{"HeaderParamExample", HeaderParam("test", "desc", "def", Example("foo")), "test", "desc", InHeader, false, false, "def", "foo"},
-	{"HeaderParamInternal", HeaderParam("test", "desc", "def", Internal()), "test", "desc", InHeader, false, true, "def", nil},
+	{"PathParam", PathParam("test", "desc"), "test", "desc", inPath, true, false, nil, nil},
+	{"PathParamSchema", PathParam("test", "desc", Schema(schema.Schema{})), "test", "desc", inPath, true, false, nil, nil},
+	{"PathParamExample", PathParam("test", "desc", Example(123)), "test", "desc", inPath, true, false, nil, 123},
+	{"QueryParam", QueryParam("test", "desc", "def"), "test", "desc", inQuery, false, false, "def", nil},
+	{"QueryParamSchema", QueryParam("test", "desc", "def", Schema(schema.Schema{})), "test", "desc", inQuery, false, false, "def", nil},
+	{"QueryParamExample", QueryParam("test", "desc", "def", Example("foo")), "test", "desc", inQuery, false, false, "def", "foo"},
+	{"QueryParamInternal", QueryParam("test", "desc", "def", Internal()), "test", "desc", inQuery, false, true, "def", nil},
+	{"HeaderParam", HeaderParam("test", "desc", "def"), "test", "desc", inHeader, false, false, "def", nil},
+	{"HeaderParamSchema", HeaderParam("test", "desc", "def", Schema(schema.Schema{})), "test", "desc", inHeader, false, false, "def", nil},
+	{"HeaderParamExample", HeaderParam("test", "desc", "def", Example("foo")), "test", "desc", inHeader, false, false, "def", "foo"},
+	{"HeaderParamInternal", HeaderParam("test", "desc", "def", Internal()), "test", "desc", inHeader, false, true, "def", nil},
 }
 
 func TestParamFuncs(outer *testing.T) {
 	for _, tt := range paramFuncsTable {
 		local := tt
 		outer.Run(fmt.Sprintf("%v", tt.n), func(t *testing.T) {
-			op := NewOperation()
-			local.param.ApplyOperation(op)
+			op := newOperation()
+			local.param.applyOperation(op)
 			param := op.params[0]
 			assert.Equal(t, local.name, param.Name)
 			assert.Equal(t, local.description, param.Description)
@@ -71,8 +71,8 @@ func TestResponseFuncs(outer *testing.T) {
 	for _, tt := range responseFuncsTable {
 		local := tt
 		outer.Run(fmt.Sprintf("%v", tt.n), func(t *testing.T) {
-			op := NewOperation()
-			local.resp.ApplyOperation(op)
+			op := newOperation()
+			local.resp.applyOperation(op)
 			resp := op.responses[0]
 			assert.Equal(t, local.statusCode, resp.StatusCode)
 			assert.Equal(t, local.description, resp.Description)
