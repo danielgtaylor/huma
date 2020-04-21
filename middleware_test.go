@@ -26,6 +26,21 @@ func TestRecoveryMiddleware(t *testing.T) {
 	assert.Equal(t, "application/json; charset=utf-8", w.Result().Header.Get("content-type"))
 }
 
+func TestRecoveryMiddlewareString(t *testing.T) {
+	r := NewTestRouter(t)
+	r.GinEngine().Use(Recovery())
+
+	r.Resource("/panic").Get("Panic recovery test", func() string {
+		panic("Some error")
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/panic", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, "application/json; charset=utf-8", w.Result().Header.Get("content-type"))
+}
+
 func TestRecoveryMiddlewareLogBody(t *testing.T) {
 	r := NewTestRouter(t)
 	r.GinEngine().Use(Recovery())

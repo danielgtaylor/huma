@@ -108,7 +108,13 @@ func Recovery() Middleware {
 
 				if l, ok := c.Get("log"); ok {
 					if log, ok := l.(*zap.SugaredLogger); ok {
-						log.With(zap.String("request", string(request)), zap.Error(err.(error))).Error("Caught panic")
+						if e, ok := err.(error); ok {
+							log = log.With(zap.Error(e))
+						} else {
+							log = log.With(zap.Any("error", err))
+						}
+
+						log.With(zap.String("request", string(request))).Error("Caught panic")
 					} else {
 						fmt.Printf("Caught panic: %v\n%s\n\nFrom request:\n%s", err, debug.Stack(), string(request))
 					}
