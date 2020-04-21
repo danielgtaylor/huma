@@ -515,6 +515,16 @@ func TestSchemaNonStringExampleErrorCast(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestSchemaFieldFilteredOut(t *testing.T) {
+	type Example struct {
+		Foo bool `json:"-"`
+	}
+
+	s, err := Generate(reflect.ValueOf(Example{}).Type())
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(s.Properties))
+}
+
 func TestPointerHelpers(t *testing.T) {
 	// Just confirm this compiles.
 	_ = Schema{

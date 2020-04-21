@@ -169,6 +169,11 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 				name = jsonTags[0]
 			}
 
+			if name == "-" {
+				// Skip deliberately filtered out items
+				continue
+			}
+
 			s, err := GenerateWithMode(f.Type, mode, nil)
 			if err != nil {
 				return nil, err
