@@ -75,14 +75,14 @@ import (
 // NoteSummary is used to list notes. It does not include the (potentially)
 // large note content.
 type NoteSummary struct {
-	ID      string
-	Created time.Time
+	ID      string    `json:"id" doc:"Note ID"`
+	Created time.Time `json:"created" doc:"Created date/time as ISO8601"`
 }
 
 // Note records some content text for later reference.
 type Note struct {
-	Created time.Time `readOnly:"true"`
-	Content string
+	Created time.Time `json:"created" readOnly:"true" doc:"Created date/time as ISO8601"`
+	Content string    `json:"content" doc:"Note content"`
 }
 
 // We'll use an in-memory DB (a goroutine-safe map). Don't do this in
@@ -91,9 +91,11 @@ var memoryDB = sync.Map{}
 
 func main() {
 	// Create a new router and give our API a title and version.
-	r := huma.NewRouter("Notes API", "1.0.0")
+	r := huma.NewRouter("Notes API", "1.0.0",
+		huma.DevServer("http://localhost:8888"),
+	)
 
-	notes := r.Resource("/notes")
+	notes := r.Resource("/v1/notes")
 	notes.List("Returns a list of all notes", func() []*NoteSummary {
 		// Create a list of summaries from all the notes.
 		summaries := make([]*NoteSummary, 0)
@@ -171,16 +173,16 @@ $ go get -u github.com/nojima/httpie-go/cmd/ht
 $ reflex -s go run notes/main.go
 
 # Make some requests (in another tab)
-$ ht put :8888/notes/test1 content="Some content for note 1"
+$ ht put :8888/v1/notes/test1 content="Some content for note 1"
 HTTP/1.1 204 No Content
 Date: Sat, 07 Mar 2020 22:22:06 GMT
 
-$ ht put :8888/notes/test2 content="Some content for note 2"
+$ ht put :8888/v1/notes/test2 content="Some content for note 2"
 HTTP/1.1 204 No Content
 Date: Sat, 07 Mar 2020 22:22:06 GMT
 
 # Parameter validation works too!
-$ ht put :8888/notes/@bad content="Some content for an invalid note"
+$ ht put :8888/v1/notes/@bad content="Some content for an invalid note"
 HTTP/1.1 400 Bad Request
 Content-Length: 97
 Content-Type: application/json; charset=utf-8
@@ -194,7 +196,7 @@ Date: Sat, 07 Mar 2020 22:22:06 GMT
 }
 
 # List all the notes
-$ ht :8888/notes
+$ ht :8888/v1/notes
 HTTP/1.1 200 OK
 Content-Length: 122
 Content-Type: application/json; charset=utf-8

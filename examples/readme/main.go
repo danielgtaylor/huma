@@ -12,14 +12,14 @@ import (
 // NoteSummary is used to list notes. It does not include the (potentially)
 // large note content.
 type NoteSummary struct {
-	ID      string
-	Created time.Time
+	ID      string    `json:"id" doc:"Note ID"`
+	Created time.Time `json:"created" doc:"Created date/time as ISO8601"`
 }
 
 // Note records some content text for later reference.
 type Note struct {
-	Created time.Time `readOnly:"true"`
-	Content string
+	Created time.Time `json:"created" readOnly:"true" doc:"Created date/time as ISO8601"`
+	Content string    `json:"content" doc:"Note content"`
 }
 
 // We'll use an in-memory DB (a goroutine-safe map). Don't do this in
@@ -28,9 +28,11 @@ var memoryDB = sync.Map{}
 
 func main() {
 	// Create a new router and give our API a title and version.
-	r := huma.NewRouter("Notes API", "1.0.0")
+	r := huma.NewRouter("Notes API", "1.0.0",
+		huma.DevServer("http://localhost:8888"),
+	)
 
-	notes := r.Resource("/notes")
+	notes := r.Resource("/v1/notes")
 	notes.List("Returns a list of all notes", func() []*NoteSummary {
 		// Create a list of summaries from all the notes.
 		summaries := make([]*NoteSummary, 0)
