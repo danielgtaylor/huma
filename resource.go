@@ -73,6 +73,17 @@ func (r *Resource) Path() string {
 	return generated
 }
 
+// PathParams returns the name of all path parameters.
+func (r *Resource) PathParams() []string {
+	params := make([]string, len(r.params))
+
+	for i, p := range r.params {
+		params[i] = p.Name
+	}
+
+	return params
+}
+
 // SubResource creates a new resource at the given path, which is appended
 // to the existing resource path after adding any existing path parameters.
 func (r *Resource) SubResource(path string, options ...ResourceOption) *Resource {

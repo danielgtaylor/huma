@@ -9,6 +9,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestNewResourceOption(t *testing.T) {
+	r := NewResource(nil, "/test", PathParam("id", "desc"))
+
+	assert.NotEmpty(t, r.params)
+}
+
 func TestResourceCopy(t *testing.T) {
 	r1 := NewResource(nil, "/test")
 	r2 := r1.Copy()
@@ -162,18 +168,6 @@ func TestResourceFuncs(outer *testing.T) {
 	}
 }
 
-var resourceShorthandFuncs = []struct {
-	n           string
-	statusCode  int
-	contentType string
-	desc        string
-}{
-	{"Text", http.StatusOK, "text/plain", "desc"},
-	{"JSON", http.StatusOK, "application/json", "desc"},
-	{"NoContent", http.StatusNoContent, "", "desc"},
-	{"Empty", http.StatusNotModified, "", "desc"},
-}
-
 func TestResourceAutoJSON(t *testing.T) {
 	r := NewTestRouter(t)
 
@@ -210,4 +204,12 @@ func TestResourceAutoNoContent(t *testing.T) {
 
 	assert.Equal(t, http.StatusNoContent, r.api.Paths["/test"][http.MethodGet].responses[0].StatusCode)
 	assert.Equal(t, "", r.api.Paths["/test"][http.MethodGet].responses[0].ContentType)
+}
+
+func TestResourceGetPathParams(t *testing.T) {
+	r := NewTestRouter(t)
+
+	res := r.Resource("/test", PathParam("foo", "desc"), PathParam("bar", "desc"))
+
+	assert.Equal(t, []string{"foo", "bar"}, res.PathParams())
 }
