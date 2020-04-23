@@ -31,6 +31,7 @@ type openAPIParam struct {
 	Schema      *schema.Schema `json:"schema,omitempty"`
 	Deprecated  bool           `json:"deprecated,omitempty"`
 	Example     interface{}    `json:"example,omitempty"`
+	Explode     *bool          `json:"explode,omitempty"`
 
 	// Internal params are excluded from the OpenAPI document and can set up
 	// params sent between a load balander / proxy and the service internally.
@@ -46,6 +47,10 @@ func newOpenAPIParam(name, description string, in paramLocation, options ...Para
 		Name:        name,
 		Description: description,
 		In:          in,
+	}
+
+	if in == inQuery {
+		p.Explode = new(bool)
 	}
 
 	for _, option := range options {
