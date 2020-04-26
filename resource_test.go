@@ -213,3 +213,21 @@ func TestResourceGetPathParams(t *testing.T) {
 
 	assert.Equal(t, []string{"foo", "bar"}, res.PathParams())
 }
+
+func TestResourceUnsafeHandler(t *testing.T) {
+	r := NewTestRouter(t)
+
+	assert.Panics(t, func() {
+		r.Resource("/unsafe").Get("doc", UnsafeHandler(func(inputs ...interface{}) []interface{} {
+			return []interface{}{true}
+		}))
+	})
+
+	assert.NotPanics(t, func() {
+		r.Resource("/unsafe",
+			Response(http.StatusNoContent, "doc"),
+		).Get("doc", UnsafeHandler(func(inputs ...interface{}) []interface{} {
+			return []interface{}{true}
+		}))
+	})
+}

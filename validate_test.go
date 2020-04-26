@@ -100,14 +100,6 @@ func TestOperationParamDep(t *testing.T) {
 			return "test"
 		})
 	})
-
-	assert.Panics(t, func() {
-		r.Resource("/",
-			QueryParam("foo", "Test", ""),
-		).Get("Test", func(c *openAPIOperation) string {
-			return "test"
-		})
-	})
 }
 
 func TestOperationParamRedeclare(t *testing.T) {

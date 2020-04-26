@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -522,4 +523,57 @@ func TestBodySlow(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusRequestTimeout, w.Code)
 	assert.Contains(t, w.Body.String(), "timed out")
+}
+
+func TestRouterUnsafeHandler(t *testing.T) {
+	r := NewTestRouter(t)
+
+	type Item struct {
+		ID    string `json:"id" readOnly:"true"`
+		Value int    `json:"value"`
+	}
+
+	readSchema, _ := schema.GenerateWithMode(reflect.TypeOf(Item{}), schema.ModeRead, nil)
+	writeSchema, _ := schema.GenerateWithMode(reflect.TypeOf(Item{}), schema.ModeWrite, nil)
+
+	items := map[string]Item{}
+
+	res := r.Resource("/test", PathParam("id", "doc"))
+
+	// Write handler
+	res.With(
+		RequestSchema(writeSchema),
+		Response(http.StatusNoContent, "doc"),
+	).Put("doc", UnsafeHandler(func(inputs ...interface{}) []interface{} {
+		id := inputs[0].(string)
+		item := inputs[1].(map[string]interface{})
+
+		items[id] = Item{
+			ID:    id,
+			Value: int(item["value"].(float64)),
+		}
+
+		return []interface{}{true}
+	}))
+
+	// Read handler
+	res.With(
+		ResponseJSON(http.StatusOK, "doc", Schema(*readSchema)),
+	).Get("doc", UnsafeHandler(func(inputs ...interface{}) []interface{} {
+		id := inputs[0].(string)
+
+		return []interface{}{items[id]}
+	}))
+
+	// Create an item
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPut, "/test/some-id", strings.NewReader(`{"value": 123}`))
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+
+	// Read the item
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/test/some-id", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
 }

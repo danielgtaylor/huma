@@ -45,6 +45,16 @@ func (p *openAPIParam) validate(t reflect.Type) {
 		panic(fmt.Errorf("parameter %s location invalid: %s", p.Name, p.In))
 	}
 
+	if t == nil {
+		// Unknown type for unsafe handlers defaults to `string` for path params
+		// and to the given default value's type for everything else.
+		if p.def != nil {
+			t = reflect.TypeOf(p.def)
+		} else {
+			t = reflect.TypeOf("")
+		}
+	}
+
 	if p.typ != nil && p.typ != t {
 		panic(fmt.Errorf("parameter %s declared as %s was previously declared as %s: %w", p.Name, t, p.typ, ErrParamInvalid))
 	}
@@ -86,6 +96,11 @@ func (p *openAPIParam) validate(t reflect.Type) {
 
 // validate the header and generate schemas
 func (h *openAPIResponseHeader) validate(t reflect.Type) {
+	if t == nil {
+		// Unsafe handlers default to string headers
+		t = reflect.TypeOf("")
+	}
+
 	if h.Schema == nil {
 		// Generate the schema from the handler function types.
 		s, err := schema.GenerateWithMode(t, schema.ModeRead, nil)
@@ -109,41 +124,49 @@ func (o *openAPIOperation) validate(method, path string) {
 		panic(fmt.Errorf("%s at least one response is required: %w", prefix, ErrOperationInvalid))
 	}
 
+	validateHandler := true
 	if o.handler == nil {
 		panic(fmt.Errorf("%s handler is required: %w", prefix, ErrOperationInvalid))
+	} else {
+		if _, ok := o.handler.(*unsafeHandler); ok {
+			// This is an unsafe handler, so skip validation.
+			validateHandler = false
+		}
 	}
 
 	handler := reflect.ValueOf(o.handler).Type()
 
-	totalIn := len(o.dependencies) + len(o.params)
-	totalOut := len(o.responseHeaders) + len(o.responses)
-	if !(handler.NumIn() == totalIn || (method != http.MethodGet && handler.NumIn() == totalIn+1)) || handler.NumOut() != totalOut {
-		expected := "func("
-		for _, dep := range o.dependencies {
-			expected += "? " + reflect.ValueOf(dep.handler).Type().String() + ", "
-		}
-		for _, param := range o.params {
-			expected += param.Name + " ?, "
-		}
-		expected = strings.TrimRight(expected, ", ")
-		expected += ") ("
-		for _, h := range o.responseHeaders {
-			expected += h.Name + " ?, "
-		}
-		for _, r := range o.responses {
-			expected += fmt.Sprintf("*Response%d, ", r.StatusCode)
-		}
-		expected = strings.TrimRight(expected, ", ")
-		expected += ")"
+	if validateHandler {
+		totalIn := len(o.dependencies) + len(o.params)
+		totalOut := len(o.responseHeaders) + len(o.responses)
+		if !(handler.NumIn() == totalIn || (method != http.MethodGet && handler.NumIn() == totalIn+1)) || handler.NumOut() != totalOut {
+			expected := "func("
+			for _, dep := range o.dependencies {
+				expected += "? " + reflect.ValueOf(dep.handler).Type().String() + ", "
+			}
+			for _, param := range o.params {
+				expected += param.Name + " ?, "
+			}
+			expected = strings.TrimRight(expected, ", ")
+			expected += ") ("
+			for _, h := range o.responseHeaders {
+				expected += h.Name + " ?, "
+			}
+			for _, r := range o.responses {
+				expected += fmt.Sprintf("*Response%d, ", r.StatusCode)
+			}
+			expected = strings.TrimRight(expected, ", ")
+			expected += ")"
 
-		panic(fmt.Errorf("%s expected handler %s but found %s: %w", prefix, expected, handler, ErrOperationInvalid))
+			panic(fmt.Errorf("%s expected handler %s but found %s: %w", prefix, expected, handler, ErrOperationInvalid))
+		}
 	}
 
 	if o.id == "" {
 		verb := method
 
 		// Try to detect calls returning lists of things.
-		if handler.NumOut() > 0 {
+		if validateHandler && handler.NumOut() > 0 {
 			k := handler.Out(0).Kind()
 			if k == reflect.Array || k == reflect.Slice {
 				verb = "list"
@@ -157,32 +180,36 @@ func (o *openAPIOperation) validate(method, path string) {
 	}
 
 	for i, dep := range o.dependencies {
-		paramType := handler.In(i)
+		if validateHandler {
+			paramType := handler.In(i)
 
-		// Catch common errors.
-		if paramType.String() == "gin.Context" {
-			panic(fmt.Errorf("%s gin.Context should be pointer *gin.Context: %w", prefix, ErrOperationInvalid))
+			// Catch common errors.
+			if paramType.String() == "gin.Context" {
+				panic(fmt.Errorf("%s gin.Context should be pointer *gin.Context: %w", prefix, ErrOperationInvalid))
+			}
+
+			dep.validate(paramType)
+		} else {
+			dep.validate(nil)
 		}
-
-		if paramType.String() == "huma.OpenAPIOperation" {
-			panic(fmt.Errorf("%s huma.Operation should be pointer *huma.Operation: %w", prefix, ErrOperationInvalid))
-		}
-
-		dep.validate(paramType)
 	}
 
 	types := []reflect.Type{}
-	for i := len(o.dependencies); i < handler.NumIn(); i++ {
-		paramType := handler.In(i)
+	if validateHandler {
+		for i := len(o.dependencies); i < handler.NumIn(); i++ {
+			paramType := handler.In(i)
 
-		switch paramType.String() {
-		case "gin.Context", "*gin.Context":
-			panic(fmt.Errorf("%s expected param but found gin.Context: %w", prefix, ErrOperationInvalid))
-		case "huma.Operation", "*huma.OpenAPIOperation":
-			panic(fmt.Errorf("%s expected param but found huma.Operation: %w", prefix, ErrOperationInvalid))
+			switch paramType.String() {
+			case "gin.Context", "*gin.Context":
+				panic(fmt.Errorf("%s expected param but found gin.Context: %w", prefix, ErrOperationInvalid))
+			}
+
+			types = append(types, paramType)
 		}
-
-		types = append(types, paramType)
+	} else {
+		for i := 0; i < len(o.params); i++ {
+			types = append(types, nil)
+		}
 	}
 
 	requestBody := false
@@ -208,20 +235,26 @@ func (o *openAPIOperation) validate(method, path string) {
 	}
 
 	for i, header := range o.responseHeaders {
-		header.validate(handler.Out(i))
+		if validateHandler {
+			header.validate(handler.Out(i))
+		} else {
+			header.validate(nil)
+		}
 	}
 
 	for i, resp := range o.responses {
-		respType := handler.Out(len(o.responseHeaders) + i)
-		// HTTP 204 explicitly forbids a response body. We model this with an
-		// empty content type.
-		if resp.ContentType != "" && resp.Schema == nil {
-			// Generate the schema from the handler function types.
-			s, err := schema.GenerateWithMode(respType, schema.ModeRead, nil)
-			if err != nil {
-				panic(fmt.Errorf("%s response %d schema generation error: %w", prefix, resp.StatusCode, err))
+		if validateHandler {
+			respType := handler.Out(len(o.responseHeaders) + i)
+			// HTTP 204 explicitly forbids a response body. We model this with an
+			// empty content type.
+			if resp.ContentType != "" && resp.Schema == nil {
+				// Generate the schema from the handler function types.
+				s, err := schema.GenerateWithMode(respType, schema.ModeRead, nil)
+				if err != nil {
+					panic(fmt.Errorf("%s response %d schema generation error: %w", prefix, resp.StatusCode, err))
+				}
+				resp.Schema = s
 			}
-			resp.Schema = s
 		}
 	}
 }

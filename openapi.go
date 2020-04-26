@@ -232,6 +232,15 @@ func (o *openAPIOperation) allResponseHeaders() []*openAPIResponseHeader {
 	return headers
 }
 
+// unsafe returns true if the operation's handler was made with UnsafeHandler.
+func (o *openAPIOperation) unsafe() bool {
+	if _, ok := o.handler.(*unsafeHandler); ok {
+		return true
+	}
+
+	return false
+}
+
 // openAPIServer describes an OpenAPI 3 API server location
 type openAPIServer struct {
 	URL         string `json:"url"`

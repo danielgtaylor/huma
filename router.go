@@ -81,6 +81,27 @@ var connContextKey = struct{}{}
 
 var timeType = reflect.TypeOf(time.Time{})
 
+type unsafeHandler struct {
+	handler func(inputs ...interface{}) []interface{}
+}
+
+// UnsafeHandler is used to register programmatic handlers without argument
+// count and type checking. This is useful for libraries that want to
+// programmatically create new resources/operations. Using UnsafeHandler outside
+// of that use-case is discouraged.
+//
+// The function's inputs are the ordered resolved dependencies, parsed
+// parameters, and potentially an input body for PUT/POST requests that have
+// a request schema defined. The output is a slice of response headers and
+// response models.
+//
+// When using UnsafeHandler, you must manually define schemas for request
+// and response bodies. They will be unmarshalled as `interface{}` when
+// passed to the handler.
+func UnsafeHandler(handler func(inputs ...interface{}) []interface{}) interface{} {
+	return &unsafeHandler{handler}
+}
+
 // getConn gets the underlying `net.Conn` from a request.
 func getConn(r *http.Request) net.Conn {
 	conn := r.Context().Value(connContextKey)
@@ -250,7 +271,14 @@ func getParamValue(c *gin.Context, param *openAPIParam) (interface{}, bool) {
 }
 
 func getRequestBody(c *gin.Context, t reflect.Type, op *openAPIOperation) (interface{}, bool) {
-	val := reflect.New(t).Interface()
+	var val interface{}
+
+	if t != nil {
+		// If we have a type, then use it. Otherwise the body will unmarshal into
+		// a generic `map[string]interface{}` or `[]interface{}`.
+		val = reflect.New(t).Interface()
+	}
+
 	if op.requestSchema != nil {
 		body, err := ioutil.ReadAll(c.Request.Body)
 		if err != nil {
@@ -416,8 +444,14 @@ func (r *Router) register(method, path string, op *openAPIOperation) {
 
 	// Then call it to register our handler function.
 	f(path, func(c *gin.Context) {
-		method := reflect.ValueOf(op.handler)
-		in := make([]reflect.Value, 0, method.Type().NumIn())
+		var method reflect.Value
+		if op.unsafe() {
+			method = reflect.ValueOf(op.handler.(*unsafeHandler).handler)
+		} else {
+			method = reflect.ValueOf(op.handler)
+		}
+
+		in := make([]reflect.Value, 0, len(op.dependencies)+len(op.params)+1)
 
 		// Limit the body size
 		if c.Request.Body != nil {
@@ -464,7 +498,7 @@ func (r *Router) register(method, path string, op *openAPIOperation) {
 		}
 
 		readTimeout := op.bodyReadTimeout
-		if len(in) != method.Type().NumIn() {
+		if op.requestSchema != nil {
 			if readTimeout == 0 {
 				// Default to 15s when reading/parsing/validating automatically.
 				readTimeout = 15 * time.Second
@@ -476,15 +510,24 @@ func (r *Router) register(method, path string, op *openAPIOperation) {
 
 			// Parse body
 			i := len(in)
-			val, success := getRequestBody(c, method.Type().In(i), op)
+
+			var bodyType reflect.Type
+			if op.unsafe() {
+				bodyType = reflect.TypeOf(map[string]interface{}{})
+			} else {
+				bodyType = method.Type().In(i)
+			}
+
+			b, success := getRequestBody(c, bodyType, op)
 			if !success {
 				// Error was already handled in `getRequestBody`.
 				return
 			}
-			in = append(in, reflect.ValueOf(val))
-			if in[i].Kind() == reflect.Ptr {
-				in[i] = in[i].Elem()
+			bval := reflect.ValueOf(b)
+			if bval.Kind() == reflect.Ptr {
+				bval = bval.Elem()
 			}
+			in = append(in, bval)
 		} else if readTimeout > 0 {
 			// We aren't processing the input, but still set the timeout.
 			if conn := getConn(c.Request); conn != nil {
@@ -493,6 +536,18 @@ func (r *Router) register(method, path string, op *openAPIOperation) {
 		}
 
 		out := method.Call(in)
+
+		if op.unsafe() {
+			// Normal handlers return multiple values. Unsafe handlers return one
+			// single list of response values. Here we convert.
+			newOut := make([]reflect.Value, out[0].Len())
+
+			for i := 0; i < out[0].Len(); i++ {
+				newOut[i] = out[0].Index(i)
+			}
+
+			out = newOut
+		}
 
 		// Find and return the first non-zero response. The status code comes
 		// from the registered `huma.Response` struct.

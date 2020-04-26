@@ -118,16 +118,19 @@ func (r *Resource) operation(method string, docs string, handler interface{}) {
 
 	op.handler = handler
 	if op.handler != nil {
-		t := reflect.TypeOf(op.handler)
-		if t.NumOut() == len(op.responseHeaders)+len(op.responses)+1 {
-			rtype := t.Out(t.NumOut() - 1)
-			switch rtype.Kind() {
-			case reflect.Bool:
-				op = op.With(Response(http.StatusNoContent, "Success"))
-			case reflect.String:
-				op = op.With(ResponseText(http.StatusOK, "Success"))
-			default:
-				op = op.With(ResponseJSON(http.StatusOK, "Success"))
+		// Only apply auto-response if it's *not* an unsafe handler.
+		if !op.unsafe() {
+			t := reflect.TypeOf(op.handler)
+			if t.NumOut() == len(op.responseHeaders)+len(op.responses)+1 {
+				rtype := t.Out(t.NumOut() - 1)
+				switch rtype.Kind() {
+				case reflect.Bool:
+					op = op.With(Response(http.StatusNoContent, "Success"))
+				case reflect.String:
+					op = op.With(ResponseText(http.StatusOK, "Success"))
+				default:
+					op = op.With(ResponseJSON(http.StatusOK, "Success"))
+				}
 			}
 		}
 	}
