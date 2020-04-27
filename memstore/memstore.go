@@ -210,14 +210,45 @@ func (m *MemoryStore) AutoResource(r *huma.Resource, dataStructure interface{}, 
 		ws.RemoveProperty(p)
 	}
 
-	listItem, _ := copystructure.Copy(rs)
+	li, _ := copystructure.Copy(rs)
+	listItem := li.(*schema.Schema)
+
+	propModified := false
+	propETag := false
+	for name := range listItem.Properties {
+		switch name {
+		case "modified":
+			propModified = true
+		case "etag":
+			propETag = true
+		}
+	}
+
+	if !propModified {
+		listItem.Properties["modified"] = &schema.Schema{
+			Type:        "string",
+			Format:      "date-time",
+			Description: "Last modified datetime as ISO8601",
+		}
+	}
+
+	if !propETag {
+		listItem.Properties["etag"] = &schema.Schema{
+			Type:        "string",
+			Description: "Computed content hash",
+		}
+	}
+
+	// TODO: recursively make everything optional
+	listItem.Required = []string{}
+
 	r.With(
 		// TODO: filters?
 		huma.QueryParam("fields", "List of fields to include", summaryFields),
 		// TODO: pagination
 		huma.ResponseJSON(http.StatusOK, "Success", huma.Schema(schema.Schema{
 			Type:  "array",
-			Items: listItem.(*schema.Schema),
+			Items: listItem,
 		})),
 	).List("List "+cfg.plural, huma.UnsafeHandler(func(inputs ...interface{}) []interface{} {
 		i := len(r.PathParams())
