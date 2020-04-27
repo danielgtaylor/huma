@@ -532,3 +532,29 @@ func TestPointerHelpers(t *testing.T) {
 		MinLength: I(5),
 	}
 }
+
+func TestHasValidation(t *testing.T) {
+	s := Schema{
+		Type: "string",
+	}
+	assert.Equal(t, false, s.HasValidation())
+
+	s.Pattern = "^[a-z]+$"
+	assert.Equal(t, true, s.HasValidation())
+}
+
+func TestRemoveProperty(t *testing.T) {
+	s := Schema{
+		Type: "object",
+		Properties: map[string]*Schema{
+			"foo": {Type: "string"},
+			"bar": {Type: "number"},
+		},
+		Required: []string{"foo", "bar"},
+	}
+
+	s.RemoveProperty("foo")
+
+	assert.Nil(t, s.Properties["foo"])
+	assert.NotContains(t, "foo", s.Required)
+}

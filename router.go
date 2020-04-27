@@ -149,7 +149,7 @@ func validAgainstSchema(c *gin.Context, label string, schema *schema.Schema, dat
 	return true
 }
 
-func parseParamValue(c *gin.Context, name string, typ reflect.Type, pstr string) (interface{}, bool) {
+func parseParamValue(c *gin.Context, name string, typ reflect.Type, timeFormat string, pstr string) (interface{}, bool) {
 	var pv interface{}
 	switch typ.Kind() {
 	case reflect.Bool:
@@ -195,7 +195,7 @@ func parseParamValue(c *gin.Context, name string, typ reflect.Type, pstr string)
 		}
 		slice := reflect.MakeSlice(typ, 0, 0)
 		for _, item := range strings.Split(pstr, ",") {
-			if itemValue, ok := parseParamValue(c, name, typ.Elem(), item); ok {
+			if itemValue, ok := parseParamValue(c, name, typ.Elem(), timeFormat, item); ok {
 				slice = reflect.Append(slice, reflect.ValueOf(itemValue))
 			} else {
 				// Error is already handled, just return.
@@ -205,7 +205,7 @@ func parseParamValue(c *gin.Context, name string, typ reflect.Type, pstr string)
 		pv = slice.Interface()
 	default:
 		if typ == timeType {
-			dt, err := time.Parse(time.RFC3339Nano, pstr)
+			dt, err := time.Parse(timeFormat, pstr)
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
 					Message: fmt.Sprintf("cannot parse time for param %s: %s", name, pstr),
@@ -223,6 +223,8 @@ func parseParamValue(c *gin.Context, name string, typ reflect.Type, pstr string)
 
 func getParamValue(c *gin.Context, param *openAPIParam) (interface{}, bool) {
 	var pstr string
+	timeFormat := time.RFC3339Nano
+
 	switch param.In {
 	case inPath:
 		pstr = c.Param(param.Name)
@@ -235,6 +237,12 @@ func getParamValue(c *gin.Context, param *openAPIParam) (interface{}, bool) {
 		pstr = c.GetHeader(param.Name)
 		if pstr == "" {
 			return param.def, true
+		}
+
+		// Some headers have special time formats that aren't ISO8601/RFC3339.
+		lowerName := strings.ToLower(param.Name)
+		if lowerName == "if-modified-since" || lowerName == "if-unmodified-since" {
+			timeFormat = http.TimeFormat
 		}
 	default:
 		panic(fmt.Errorf("%s: %w", param.In, ErrInvalidParamLocation))
@@ -262,7 +270,7 @@ func getParamValue(c *gin.Context, param *openAPIParam) (interface{}, bool) {
 		}
 	}
 
-	pv, ok := parseParamValue(c, param.Name, param.typ, pstr)
+	pv, ok := parseParamValue(c, param.Name, param.typ, timeFormat, pstr)
 	if !ok {
 		return nil, false
 	}
@@ -554,6 +562,13 @@ func (r *Router) register(method, path string, op *openAPIOperation) {
 		// This breaks down with scalar types... so they need to be passed
 		// as a pointer and we'll dereference it automatically.
 		for i, o := range out[len(op.responseHeaders):] {
+			if o.Kind() == reflect.Interface {
+				// Unsafe handlers return slices of interfaces and IsZero will never
+				// evaluate to true on items within them. Instead, pull out the
+				// underlying data which may or may not be zero.
+				o = o.Elem()
+			}
+
 			if !o.IsZero() {
 				body := o.Interface()
 

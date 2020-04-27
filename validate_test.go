@@ -3,10 +3,29 @@ package huma
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestParamTimeDefault(t *testing.T) {
+	p := openAPIParam{
+		Name: "test",
+		In:   inQuery,
+		def:  time.Time{},
+	}
+	p.validate(nil)
+	assert.Nil(t, p.Schema.Default)
+
+	p2 := openAPIParam{
+		Name: "test",
+		In:   inQuery,
+		def:  time.Now(),
+	}
+	p2.validate(nil)
+	assert.NotNil(t, p2.Schema.Default)
+}
 
 func TestOperationDescriptionRequired(t *testing.T) {
 	r := NewTestRouter(t)

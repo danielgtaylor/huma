@@ -122,6 +122,19 @@ func (s *Schema) HasValidation() bool {
 	return false
 }
 
+// RemoveProperty removes a property by name from the schema, making sure to
+// also remove it from the required property set if present.
+func (s *Schema) RemoveProperty(name string) {
+	delete(s.Properties, name)
+	for i := range s.Required {
+		if s.Required[i] == name {
+			s.Required[i] = s.Required[len(s.Required)-1]
+			s.Required = s.Required[:len(s.Required)-1]
+			break
+		}
+	}
+}
+
 // Generate creates a JSON schema for a Go type. Struct field tags
 // can be used to provide additional metadata such as descriptions and
 // validation.

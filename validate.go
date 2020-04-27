@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/danielgtaylor/huma/schema"
 	"github.com/gosimple/slug"
@@ -83,7 +84,14 @@ func (p *openAPIParam) validate(t reflect.Type) {
 		p.Schema = s
 
 		if p.def != nil {
-			p.Schema.Default = p.def
+			if t, ok := p.def.(time.Time); ok {
+				// Time defaults are only included if they are not the zero time.
+				if !t.IsZero() {
+					p.Schema.Default = p.def
+				}
+			} else {
+				p.Schema.Default = p.def
+			}
 		}
 
 		if p.Example != nil {
@@ -124,18 +132,13 @@ func (o *openAPIOperation) validate(method, path string) {
 		panic(fmt.Errorf("%s at least one response is required: %w", prefix, ErrOperationInvalid))
 	}
 
-	validateHandler := true
 	if o.handler == nil {
 		panic(fmt.Errorf("%s handler is required: %w", prefix, ErrOperationInvalid))
-	} else {
-		if _, ok := o.handler.(*unsafeHandler); ok {
-			// This is an unsafe handler, so skip validation.
-			validateHandler = false
-		}
 	}
 
 	handler := reflect.ValueOf(o.handler).Type()
 
+	validateHandler := !o.unsafe()
 	if validateHandler {
 		totalIn := len(o.dependencies) + len(o.params)
 		totalOut := len(o.responseHeaders) + len(o.responses)

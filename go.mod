@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	github.com/Jeffail/gabs v1.4.0
+	github.com/fatih/structs v1.1.0
 	github.com/getkin/kin-openapi v0.3.0
 	github.com/gin-contrib/cors v1.3.1
 	github.com/gin-gonic/autotls v0.0.0-20200314141124-cc69476aef2a
@@ -11,6 +12,8 @@ require (
 	github.com/gosimple/slug v1.9.0
 	github.com/labstack/echo/v4 v4.1.15
 	github.com/mattn/go-isatty v0.0.12
+	github.com/mitchellh/copystructure v1.0.0
+	github.com/mitchellh/mapstructure v1.1.2
 	github.com/pelletier/go-toml v1.4.0 // indirect
 	github.com/pkg/errors v0.8.1 // indirect
 	github.com/spf13/cobra v0.0.6
