@@ -35,7 +35,7 @@ type openAPIParam struct {
 
 	// Internal params are excluded from the OpenAPI document and can set up
 	// params sent between a load balander / proxy and the service internally.
-	Internal bool
+	Internal bool `json:"-"`
 
 	def interface{}
 	typ reflect.Type
