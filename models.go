@@ -3,7 +3,7 @@ package huma
 // ErrorModel defines a basic error message
 type ErrorModel struct {
 	// Type is a URI to get more information about the error type.
-	Type string `json:"type,omitempty" format:"uri" default:"about:blank" example:"https://example.com/errors/example" "doc:"A URI reference to human-readable documentation for the error."`
+	Type string `json:"type,omitempty" format:"uri" default:"about:blank" example:"https://example.com/errors/example" doc:"A URI reference to human-readable documentation for the error."`
 	// Title provides a short static summary of the problem. Huma will default this
 	// to the HTTP response status code text if not present.
 	Title string `json:"title,omitempty" example:"Bad Request" doc:"A short, human-readable summary of the problem type. This value should not change between occurances of the error."`
