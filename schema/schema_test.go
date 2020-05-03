@@ -558,3 +558,22 @@ func TestRemoveProperty(t *testing.T) {
 	assert.Nil(t, s.Properties["foo"])
 	assert.NotContains(t, "foo", s.Required)
 }
+
+func TestEmbedded(t *testing.T) {
+	type Foo struct {
+		A string `json:"a"`
+		B string `json:"b"`
+	}
+
+	type Bar struct {
+		*Foo
+		B int    `json:"b"`
+		C string `json:"c"`
+	}
+
+	s, err := Generate(reflect.TypeOf(Bar{}))
+	assert.NoError(t, err)
+
+	assert.Len(t, s.Properties, 3)
+	assert.Equal(t, "integer", s.Properties["b"].Type)
+}

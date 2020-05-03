@@ -142,6 +142,34 @@ func Generate(t reflect.Type) (*Schema, error) {
 	return GenerateWithMode(t, ModeAll, nil)
 }
 
+// getFields performs a breadth-first search for all fields including embedded
+// ones. It may return multiple fields with the same name, the first of which
+// represents the outer-most declaration.
+func getFields(typ reflect.Type) []reflect.StructField {
+	fields := make([]reflect.StructField, 0, typ.NumField())
+	embedded := []reflect.StructField{}
+
+	for i := 0; i < typ.NumField(); i++ {
+		f := typ.Field(i)
+		if f.Anonymous {
+			embedded = append(embedded, f)
+			continue
+		}
+
+		fields = append(fields, f)
+	}
+
+	for _, f := range embedded {
+		newTyp := f.Type
+		if newTyp.Kind() == reflect.Ptr {
+			newTyp = newTyp.Elem()
+		}
+		fields = append(fields, getFields(newTyp)...)
+	}
+
+	return fields
+}
+
 // GenerateWithMode creates a JSON schema for a Go type. Struct field
 // tags can be used to provide additional metadata such as descriptions and
 // validation. The mode can be all, read, or write. In read or write mode
@@ -173,9 +201,7 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 		schema.Type = "object"
 		schema.AdditionalProperties = false
 
-		for i := 0; i < t.NumField(); i++ {
-			f := t.Field(i)
-
+		for _, f := range getFields(t) {
 			jsonTags := strings.Split(f.Tag.Get("json"), ",")
 			name := strings.ToLower(f.Name)
 			if len(jsonTags) > 0 && jsonTags[0] != "" {
@@ -184,6 +210,12 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 
 			if name == "-" {
 				// Skip deliberately filtered out items
+				continue
+			}
+
+			if _, ok := properties[name]; ok {
+				// Item already exists, ignore it since we process embedded fields
+				// after top-level ones.
 				continue
 			}
 
