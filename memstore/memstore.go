@@ -302,7 +302,7 @@ func (m *MemoryStore) AutoResource(r *huma.Resource, dataStructure interface{}, 
 		loaded, ok := c.Load(id)
 		if !ok {
 			error404 = &huma.ErrorModel{
-				Message: cfg.single + " not found with ID: " + id,
+				Detail: cfg.single + " not found with ID: " + id,
 			}
 			return []interface{}{lastModified, etag, error404, notModified, item}
 		}
@@ -376,7 +376,7 @@ func (m *MemoryStore) AutoResource(r *huma.Resource, dataStructure interface{}, 
 			}
 			if err := checkConditionals(existing, ifMatch, ifNoneMatch, ifUnmodified, time.Time{}); err != nil {
 				errorPrecondition = &huma.ErrorModel{
-					Message: err.Error(),
+					Detail: err.Error(),
 				}
 				return []interface{}{lastModified, etag, errorPrecondition, success}
 			}
@@ -428,14 +428,14 @@ func (m *MemoryStore) AutoResource(r *huma.Resource, dataStructure interface{}, 
 
 		if !ok {
 			error404 = &huma.ErrorModel{
-				Message: fmt.Sprintf("%s not found: %s", cfg.single, id),
+				Detail: fmt.Sprintf("%s not found: %s", cfg.single, id),
 			}
 			return []interface{}{error404, errorEtag, success}
 		}
 
 		if err := checkConditionals(item.(map[string]interface{}), ifMatch, "", ifUnmodified, time.Time{}); err != nil {
 			errorEtag = &huma.ErrorModel{
-				Message: err.Error(),
+				Detail: err.Error(),
 			}
 			return []interface{}{error404, errorEtag, success}
 		}

@@ -111,15 +111,24 @@ func getConn(r *http.Request) net.Conn {
 	return nil
 }
 
+// abortWithError is a convenience function for setting an error on a Gin
+// context with a detail string and optional error strings.
+func abortWithError(c *gin.Context, status int, detail string, errors ...string) {
+	c.Header("content-type", "application/problem+json")
+	c.AbortWithStatusJSON(status, &ErrorModel{
+		Status: status,
+		Title:  http.StatusText(status),
+		Detail: detail,
+		Errors: errors,
+	})
+}
+
 // Checks if data validates against the given schema. Returns false on failure.
 func validAgainstSchema(c *gin.Context, label string, schema *schema.Schema, data []byte) bool {
 	defer func() {
 		// Catch panics from the `gojsonschema` library.
 		if err := recover(); err != nil {
-			c.AbortWithStatusJSON(400, &ErrorInvalidModel{
-				Message: "Invalid input: " + label,
-				Errors:  []string{err.(error).Error() + ": " + string(data)},
-			})
+			abortWithError(c, http.StatusBadRequest, "Invalid input: "+label, err.(error).Error()+": "+string(data))
 		}
 	}()
 
@@ -139,10 +148,7 @@ func validAgainstSchema(c *gin.Context, label string, schema *schema.Schema, dat
 		for _, desc := range result.Errors() {
 			errors = append(errors, fmt.Sprintf("%s", desc))
 		}
-		c.AbortWithStatusJSON(400, &ErrorInvalidModel{
-			Message: "Invalid input: " + label,
-			Errors:  errors,
-		})
+		abortWithError(c, http.StatusBadRequest, "Invalid input: "+label, errors...)
 		return false
 	}
 
@@ -155,9 +161,7 @@ func parseParamValue(c *gin.Context, name string, typ reflect.Type, timeFormat s
 	case reflect.Bool:
 		converted, err := strconv.ParseBool(pstr)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
-				Message: fmt.Sprintf("cannot parse boolean for param %s: %s", name, pstr),
-			})
+			abortWithError(c, http.StatusBadRequest, fmt.Sprintf("cannot parse boolean for param %s: %s", name, pstr))
 			return nil, false
 		}
 		pv = converted
@@ -165,27 +169,21 @@ func parseParamValue(c *gin.Context, name string, typ reflect.Type, timeFormat s
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		converted, err := strconv.Atoi(pstr)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
-				Message: fmt.Sprintf("cannot parse integer for param %s: %s", name, pstr),
-			})
+			abortWithError(c, http.StatusBadRequest, fmt.Sprintf("cannot parse integer for param %s: %s", name, pstr))
 			return nil, false
 		}
 		pv = reflect.ValueOf(converted).Convert(typ).Interface()
 	case reflect.Float32:
 		converted, err := strconv.ParseFloat(pstr, 32)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
-				Message: fmt.Sprintf("cannot parse float for param %s: %s", name, pstr),
-			})
+			abortWithError(c, http.StatusBadRequest, fmt.Sprintf("cannot parse float for param %s: %s", name, pstr))
 			return nil, false
 		}
 		pv = float32(converted)
 	case reflect.Float64:
 		converted, err := strconv.ParseFloat(pstr, 64)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
-				Message: fmt.Sprintf("cannot parse float for param %s: %s", name, pstr),
-			})
+			abortWithError(c, http.StatusBadRequest, fmt.Sprintf("cannot parse float for param %s: %s", name, pstr))
 			return nil, false
 		}
 		pv = converted
@@ -207,9 +205,7 @@ func parseParamValue(c *gin.Context, name string, typ reflect.Type, timeFormat s
 		if typ == timeType {
 			dt, err := time.Parse(timeFormat, pstr)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusBadRequest, &ErrorModel{
-					Message: fmt.Sprintf("cannot parse time for param %s: %s", name, pstr),
-				})
+				abortWithError(c, http.StatusBadRequest, fmt.Sprintf("cannot parse time for param %s: %s", name, pstr))
 				return nil, false
 			}
 			pv = dt
@@ -291,13 +287,9 @@ func getRequestBody(c *gin.Context, t reflect.Type, op *openAPIOperation) (inter
 		body, err := ioutil.ReadAll(c.Request.Body)
 		if err != nil {
 			if strings.Contains(err.Error(), "request body too large") {
-				c.AbortWithStatusJSON(http.StatusRequestEntityTooLarge, ErrorModel{
-					Message: fmt.Sprintf("Request body too large, limit = %d bytes", op.maxBodyBytes),
-				})
+				abortWithError(c, http.StatusRequestEntityTooLarge, fmt.Sprintf("Request body too large, limit = %d bytes", op.maxBodyBytes))
 			} else if e, ok := err.(net.Error); ok && e.Timeout() {
-				c.AbortWithStatusJSON(http.StatusRequestTimeout, ErrorModel{
-					Message: fmt.Sprintf("Request body took too long to read: timed out after %v", op.bodyReadTimeout),
-				})
+				abortWithError(c, http.StatusRequestTimeout, fmt.Sprintf("Request body took too long to read: timed out after %v", op.bodyReadTimeout))
 			} else {
 				panic(err)
 			}
@@ -482,9 +474,7 @@ func (r *Router) register(method, path string, op *openAPIOperation) {
 				if !c.IsAborted() {
 					// Nothing else has handled the error, so treat it like a general
 					// internal server error.
-					c.AbortWithStatusJSON(500, &ErrorModel{
-						Message: "Couldn't get dependency",
-					})
+					abortWithError(c, http.StatusInternalServerError, "Couldn't get dependency")
 				}
 			}
 
@@ -614,9 +604,20 @@ func (r *Router) register(method, path string, op *openAPIOperation) {
 					break
 				}
 
-				if strings.HasPrefix(r.ContentType, "application/json") {
+				if err, ok := body.(*ErrorModel); ok {
+					// This is an error response. Automatically set some values if missing.
+					if err.Status == 0 {
+						err.Status = r.StatusCode
+					}
+
+					if err.Title == "" {
+						err.Title = http.StatusText(r.StatusCode)
+					}
+				}
+
+				if strings.HasPrefix(r.ContentType, "application/json") || strings.HasSuffix(r.ContentType, "+json") {
 					c.JSON(r.StatusCode, body)
-				} else if strings.HasPrefix(r.ContentType, "application/yaml") {
+				} else if strings.HasPrefix(r.ContentType, "application/yaml") || strings.HasSuffix(r.ContentType, "+yaml") {
 					c.YAML(r.StatusCode, body)
 				} else {
 					if o.Kind() == reflect.Ptr {

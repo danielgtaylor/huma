@@ -22,7 +22,7 @@ func main() {
 	).Put("Echo back an input word",
 		func(word string, greet bool) (*huma.ErrorModel, *EchoResponse) {
 			if word == "test" {
-				return &huma.ErrorModel{Message: "Value not allowed: test"}, nil
+				return &huma.ErrorModel{Detail: "Value not allowed: test"}, nil
 			}
 
 			v := word

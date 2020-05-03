@@ -108,7 +108,7 @@ func BenchmarkGinComplex(b *testing.B) {
 		name := c.Query("name")
 		if name == "test" {
 			c.JSON(400, &ErrorModel{
-				Message: "Name cannot be test",
+				Detail: "Name cannot be test",
 			})
 		}
 		if name == "" {
@@ -155,7 +155,7 @@ func BenchmarkHumaComplex(b *testing.B) {
 	).Get("Greet the world", func(c *gin.Context, d2, d3, name string) (string, *helloResponse, *ErrorModel) {
 		if name == "test" {
 			return "", nil, &ErrorModel{
-				Message: "Name cannot be test",
+				Detail: "Name cannot be test",
 			}
 		}
 
@@ -192,7 +192,7 @@ func TestRouter(t *testing.T) {
 		ResponseError(http.StatusBadRequest, "Invalid input"),
 	).Put("Echo back an input word.", func(word string, greet bool) (*EchoResponse, *ErrorModel) {
 		if word == "test" {
-			return nil, &ErrorModel{Message: "Value not allowed: test"}
+			return nil, &ErrorModel{Detail: "Value not allowed: test"}
 		}
 
 		v := word

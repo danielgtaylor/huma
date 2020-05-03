@@ -303,7 +303,7 @@ type openAPI struct {
 
 // openAPIHandler returns a new handler function to generate an OpenAPI spec.
 func openAPIHandler(api *openAPI) gin.HandlerFunc {
-	respSchema400, _ := schema.Generate(reflect.ValueOf(ErrorInvalidModel{}).Type())
+	respSchema400, _ := schema.Generate(reflect.ValueOf(ErrorModel{}).Type())
 
 	return func(c *gin.Context) {
 		openapi := gabs.New()

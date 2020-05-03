@@ -21,6 +21,7 @@ Features include:
   - Request body
   - Responses (including errors)
   - Response headers
+- JSON Errors using [RFC7807](https://tools.ietf.org/html/rfc7807) and `application/problem+json`
 - Default (optional) middleware
   - Automatic recovery from panics with traceback & request logging
   - Automatically handle CORS headers

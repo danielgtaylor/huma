@@ -23,7 +23,7 @@ func TestRecoveryMiddleware(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodGet, "/panic", nil)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	assert.Equal(t, "application/json; charset=utf-8", w.Result().Header.Get("content-type"))
+	assert.Equal(t, "application/problem+json", w.Result().Header.Get("content-type"))
 }
 
 func TestRecoveryMiddlewareString(t *testing.T) {
@@ -38,7 +38,7 @@ func TestRecoveryMiddlewareString(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodGet, "/panic", nil)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	assert.Equal(t, "application/json; charset=utf-8", w.Result().Header.Get("content-type"))
+	assert.Equal(t, "application/problem+json", w.Result().Header.Get("content-type"))
 }
 
 func TestRecoveryMiddlewareLogBody(t *testing.T) {
@@ -53,7 +53,7 @@ func TestRecoveryMiddlewareLogBody(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodPut, "/panic", strings.NewReader(`{"foo": "bar"}`))
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	assert.Equal(t, "application/json; charset=utf-8", w.Result().Header.Get("content-type"))
+	assert.Equal(t, "application/problem+json", w.Result().Header.Get("content-type"))
 }
 
 func TestPreferMinimalMiddleware(t *testing.T) {
@@ -100,5 +100,5 @@ func TestHandler404(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodGet, "/notfound", nil)
 	g.ServeHTTP(w, req)
 	assert.Equal(t, w.Result().StatusCode, http.StatusNotFound)
-	assert.Equal(t, "application/json; charset=utf-8", w.Result().Header.Get("content-type"))
+	assert.Equal(t, "application/problem+json", w.Result().Header.Get("content-type"))
 }

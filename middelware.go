@@ -120,9 +120,7 @@ func Recovery() Middleware {
 					}
 				}
 
-				c.AbortWithStatusJSON(http.StatusInternalServerError, &ErrorModel{
-					Message: "Internal server error",
-				})
+				abortWithError(c, http.StatusInternalServerError, "")
 			}
 		}()
 
@@ -230,8 +228,11 @@ func LogDependency() DependencyOption {
 // Handler404 will return JSON responses for 404 errors.
 func Handler404() Handler {
 	return func(c *gin.Context) {
+		c.Header("content-type", "application/problem+json")
 		c.JSON(http.StatusNotFound, &ErrorModel{
-			Message: "Not found",
+			Status: http.StatusNotFound,
+			Title:  http.StatusText(http.StatusNotFound),
+			Detail: "Requested: " + c.Request.Method + " " + c.Request.URL.RequestURI(),
 		})
 	}
 }

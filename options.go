@@ -527,10 +527,11 @@ func ResponseJSON(statusCode int, description string, options ...ResponseOption)
 	return Response(statusCode, description, options...)
 }
 
-// ResponseError adds a new error response model. Alias for ResponseJSON
-// mainly useful for documentation purposes.
+// ResponseError adds a new error response model. This uses the RFC7807
+// application/problem+json response content type.
 func ResponseError(statusCode int, description string, options ...ResponseOption) OperationOption {
-	return ResponseJSON(statusCode, description, options...)
+	options = append(options, ContentType("application/problem+json"))
+	return Response(statusCode, description, options...)
 }
 
 // MaxBodyBytes sets the max number of bytes read from a request body before

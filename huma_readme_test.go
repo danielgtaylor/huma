@@ -71,7 +71,7 @@ func Example_readme() {
 			}
 
 			return &huma.ErrorModel{
-				Message: "Note " + id + " not found",
+				Detail: "Note " + id + " not found",
 			}, nil
 		},
 	)
@@ -85,7 +85,7 @@ func Example_readme() {
 			}
 
 			return &huma.ErrorModel{
-				Message: "Note " + id + " not found",
+				Detail: "Note " + id + " not found",
 			}, false
 		},
 	)

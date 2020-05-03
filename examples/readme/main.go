@@ -73,7 +73,7 @@ func main() {
 			}
 
 			return &huma.ErrorModel{
-				Message: "Note " + id + " not found",
+				Detail: "Note " + id + " not found",
 			}, nil
 		},
 	)
@@ -87,7 +87,7 @@ func main() {
 			}
 
 			return &huma.ErrorModel{
-				Message: "Note " + id + " not found",
+				Detail: "Note " + id + " not found",
 			}, false
 		},
 	)
