@@ -10,6 +10,7 @@ import (
 	"github.com/Jeffail/gabs"
 	"github.com/danielgtaylor/huma/schema"
 	"github.com/gin-gonic/gin"
+	"gopkg.in/yaml.v2"
 )
 
 // paramLocation describes where in the HTTP request the parameter comes from.
@@ -301,143 +302,166 @@ type openAPI struct {
 	Hook func(*gabs.Container)
 }
 
-// openAPIHandler returns a new handler function to generate an OpenAPI spec.
-func openAPIHandler(api *openAPI) gin.HandlerFunc {
+// OpenAPI returns a representation of the OpenAPI document describing this
+// router. Registered hooks are called before returning the data.
+func (r *Router) OpenAPI() *gabs.Container {
 	respSchema400, _ := schema.Generate(reflect.ValueOf(ErrorModel{}).Type())
 
-	return func(c *gin.Context) {
-		openapi := gabs.New()
+	api := r.api
+	openapi := gabs.New()
 
-		for k, v := range api.Extra {
-			openapi.Set(v, k)
+	for k, v := range api.Extra {
+		openapi.Set(v, k)
+	}
+
+	openapi.Set("3.0.1", "openapi")
+	openapi.Set(api.Title, "info", "title")
+	openapi.Set(api.Version, "info", "version")
+
+	if api.Description != "" {
+		openapi.Set(api.Description, "info", "description")
+	}
+
+	if api.Contact != nil {
+		openapi.Set(api.Contact, "info", "contact")
+	}
+
+	if len(api.Servers) > 0 {
+		openapi.Set(api.Servers, "servers")
+	}
+
+	if len(api.SecuritySchemes) > 0 {
+		openapi.Set(api.SecuritySchemes, "components", "securitySchemes")
+	}
+
+	if len(api.Security) > 0 {
+		openapi.Set(api.Security, "security")
+	}
+
+	for path, methods := range api.Paths {
+		if strings.Contains(path, ":") {
+			// Convert from gin-style params to OpenAPI-style params
+			path = paramRe.ReplaceAllString(path, "{$1$2}")
 		}
 
-		openapi.Set("3.0.1", "openapi")
-		openapi.Set(api.Title, "info", "title")
-		openapi.Set(api.Version, "info", "version")
+		for method, op := range methods {
+			method := strings.ToLower(method)
 
-		if api.Description != "" {
-			openapi.Set(api.Description, "info", "description")
-		}
-
-		if api.Contact != nil {
-			openapi.Set(api.Contact, "info", "contact")
-		}
-
-		if len(api.Servers) > 0 {
-			openapi.Set(api.Servers, "servers")
-		}
-
-		if len(api.SecuritySchemes) > 0 {
-			openapi.Set(api.SecuritySchemes, "components", "securitySchemes")
-		}
-
-		if len(api.Security) > 0 {
-			openapi.Set(api.Security, "security")
-		}
-
-		for path, methods := range api.Paths {
-			if strings.Contains(path, ":") {
-				// Convert from gin-style params to OpenAPI-style params
-				path = paramRe.ReplaceAllString(path, "{$1$2}")
+			for k, v := range op.extra {
+				openapi.Set(v, "paths", path, method, k)
 			}
 
-			for method, op := range methods {
-				method := strings.ToLower(method)
+			openapi.Set(op.id, "paths", path, method, "operationId")
+			if op.summary != "" {
+				openapi.Set(op.summary, "paths", path, method, "summary")
+			}
+			openapi.Set(op.description, "paths", path, method, "description")
+			if len(op.tags) > 0 {
+				openapi.Set(op.tags, "paths", path, method, "tags")
+			}
 
-				for k, v := range op.extra {
-					openapi.Set(v, "paths", path, method, k)
+			if len(op.security) > 0 {
+				openapi.Set(op.security, "paths", path, method, "security")
+			}
+
+			for _, param := range op.allParams() {
+				if param.Internal {
+					// Skip internal-only parameters.
+					continue
 				}
+				openapi.ArrayAppend(param, "paths", path, method, "parameters")
+			}
 
-				openapi.Set(op.id, "paths", path, method, "operationId")
-				if op.summary != "" {
-					openapi.Set(op.summary, "paths", path, method, "summary")
+			if op.requestSchema != nil {
+				ct := op.requestContentType
+				if ct == "" {
+					ct = "application/json"
 				}
-				openapi.Set(op.description, "paths", path, method, "description")
-				if len(op.tags) > 0 {
-					openapi.Set(op.tags, "paths", path, method, "tags")
+				openapi.Set(op.requestSchema, "paths", path, method, "requestBody", "content", ct, "schema")
+			}
+
+			responses := make([]*openAPIResponse, 0, len(op.responses))
+			found400 := false
+			for _, resp := range op.responses {
+				responses = append(responses, resp)
+				if resp.StatusCode == http.StatusBadRequest {
+					found400 = true
 				}
+			}
 
-				if len(op.security) > 0 {
-					openapi.Set(op.security, "paths", path, method, "security")
+			if op.requestSchema != nil && !found400 {
+				// Add a 400-level response in case parsing the request fails.
+				responses = append(responses, &openAPIResponse{
+					Description: "Invalid input",
+					ContentType: "application/json",
+					StatusCode:  http.StatusBadRequest,
+					Schema:      respSchema400,
+				})
+			}
+
+			headerMap := map[string]*openAPIResponseHeader{}
+			for _, header := range op.allResponseHeaders() {
+				headerMap[header.Name] = header
+			}
+
+			for _, resp := range op.responses {
+				status := fmt.Sprintf("%v", resp.StatusCode)
+				openapi.Set(resp.Description, "paths", path, method, "responses", status, "description")
+
+				headers := make([]string, 0, len(resp.Headers))
+				seen := map[string]bool{}
+				for _, name := range resp.Headers {
+					headers = append(headers, name)
+					seen[name] = true
 				}
-
-				for _, param := range op.allParams() {
-					if param.Internal {
-						// Skip internal-only parameters.
-						continue
-					}
-					openapi.ArrayAppend(param, "paths", path, method, "parameters")
-				}
-
-				if op.requestSchema != nil {
-					ct := op.requestContentType
-					if ct == "" {
-						ct = "application/json"
-					}
-					openapi.Set(op.requestSchema, "paths", path, method, "requestBody", "content", ct, "schema")
-				}
-
-				responses := make([]*openAPIResponse, 0, len(op.responses))
-				found400 := false
-				for _, resp := range op.responses {
-					responses = append(responses, resp)
-					if resp.StatusCode == http.StatusBadRequest {
-						found400 = true
-					}
-				}
-
-				if op.requestSchema != nil && !found400 {
-					// Add a 400-level response in case parsing the request fails.
-					responses = append(responses, &openAPIResponse{
-						Description: "Invalid input",
-						ContentType: "application/json",
-						StatusCode:  http.StatusBadRequest,
-						Schema:      respSchema400,
-					})
-				}
-
-				headerMap := map[string]*openAPIResponseHeader{}
-				for _, header := range op.allResponseHeaders() {
-					headerMap[header.Name] = header
-				}
-
-				for _, resp := range op.responses {
-					status := fmt.Sprintf("%v", resp.StatusCode)
-					openapi.Set(resp.Description, "paths", path, method, "responses", status, "description")
-
-					headers := make([]string, 0, len(resp.Headers))
-					seen := map[string]bool{}
-					for _, name := range resp.Headers {
-						headers = append(headers, name)
-						seen[name] = true
-					}
-					for _, dep := range op.dependencies {
-						for _, header := range dep.allResponseHeaders() {
-							if _, ok := seen[header.Name]; !ok {
-								headers = append(headers, header.Name)
-								seen[header.Name] = true
-							}
+				for _, dep := range op.dependencies {
+					for _, header := range dep.allResponseHeaders() {
+						if _, ok := seen[header.Name]; !ok {
+							headers = append(headers, header.Name)
+							seen[header.Name] = true
 						}
 					}
-
-					for _, name := range headers {
-						header := headerMap[name]
-						openapi.Set(header, "paths", path, method, "responses", status, "headers", header.Name)
-					}
-
-					if resp.Schema != nil {
-						openapi.Set(resp.Schema, "paths", path, method, "responses", status, "content", resp.ContentType, "schema")
-					}
 				}
 
+				for _, name := range headers {
+					header := headerMap[name]
+					openapi.Set(header, "paths", path, method, "responses", status, "headers", header.Name)
+				}
+
+				if resp.Schema != nil {
+					openapi.Set(resp.Schema, "paths", path, method, "responses", status, "content", resp.ContentType, "schema")
+				}
 			}
+
+		}
+	}
+
+	if api.Hook != nil {
+		api.Hook(openapi)
+	}
+
+	return openapi
+}
+
+// openAPIHandlerJSON returns a new handler function to generate an OpenAPI spec.
+func openAPIHandlerJSON(r *Router) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		openapi := r.OpenAPI()
+		c.Data(200, "application/vnd.oai.openapi+json", openapi.BytesIndent("", "  "))
+	}
+}
+
+// openAPIHandlerYAML returns a new handler function to generate an OpenAPI spec.
+func openAPIHandlerYAML(r *Router) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		openapi := r.OpenAPI()
+		var tmp interface{}
+		if err := yaml.Unmarshal(openapi.Bytes(), &tmp); err != nil {
+			abortWithError(c, http.StatusInternalServerError, err.Error())
+			return
 		}
 
-		if api.Hook != nil {
-			api.Hook(openapi)
-		}
-
-		c.Data(200, "application/json; charset=utf-8", openapi.BytesIndent("", "  "))
+		c.Header("content-type", "application/vnd.oai.openapi")
+		c.YAML(200, tmp)
 	}
 }

@@ -371,7 +371,8 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 	}
 
 	// Set up handlers for the auto-generated spec and docs.
-	r.engine.GET("/openapi.json", openAPIHandler(r.api))
+	r.engine.GET("/openapi.json", openAPIHandlerJSON(r))
+	r.engine.GET("/openapi.yaml", openAPIHandlerYAML(r))
 
 	r.engine.GET("/docs", func(c *gin.Context) {
 		r.docsHandler(c)
