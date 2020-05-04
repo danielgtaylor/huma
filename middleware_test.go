@@ -102,3 +102,34 @@ func TestHandler404(t *testing.T) {
 	assert.Equal(t, w.Result().StatusCode, http.StatusNotFound)
 	assert.Equal(t, "application/problem+json", w.Result().Header.Get("content-type"))
 }
+
+func TestServiceLinks(t *testing.T) {
+	r := NewTestRouter(t)
+	r.GinEngine().Use(ServiceLinkMiddleware())
+	r.GinEngine().NoRoute(Handler404())
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, w.Result().StatusCode, http.StatusNoContent)
+	assert.Contains(t, w.Result().Header.Get("link"), "service-desc")
+	assert.Contains(t, w.Result().Header.Get("link"), "service-doc")
+}
+
+func TestServiceLinksExists(t *testing.T) {
+	r := NewTestRouter(t)
+	r.GinEngine().Use(ServiceLinkMiddleware())
+	r.GinEngine().NoRoute(Handler404())
+	r.GinEngine().GET("/", func(c *gin.Context) {
+		c.Header("link", `<>; rel=self`)
+		AddServiceLinks(c)
+		c.Data(http.StatusOK, "text/plain", []byte("Hello"))
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, w.Result().StatusCode, http.StatusOK)
+	assert.Contains(t, w.Result().Header.Get("link"), "service-desc")
+	assert.Contains(t, w.Result().Header.Get("link"), "service-doc")
+}

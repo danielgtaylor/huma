@@ -228,6 +228,14 @@ func LogDependency() DependencyOption {
 // Handler404 will return JSON responses for 404 errors.
 func Handler404() Handler {
 	return func(c *gin.Context) {
+		if c.Request.URL.Path == "/" {
+			// Special case: just return an HTTP 204 for the root rather than an error
+			// if no custom root handler has been defined. This can be combined with
+			// the ServiceLinkMiddleware to provide service description links.
+			c.Status(http.StatusNoContent)
+			return
+		}
+
 		c.Header("content-type", "application/problem+json")
 		c.JSON(http.StatusNotFound, &ErrorModel{
 			Status: http.StatusNotFound,
@@ -268,6 +276,29 @@ func PreferMinimalMiddleware() Middleware {
 			c.Writer = &minimalWriter{ResponseWriter: c.Writer}
 		}
 
+		c.Next()
+	}
+}
+
+// AddServiceLinks addds RFC 8631 `service-desc` and `service-doc` link
+// relations to the response. Safe to call multiple times and after a link
+// header has already been set (it will append to it).
+func AddServiceLinks(c *gin.Context) {
+	link := c.Writer.Header().Get("link")
+	if link != "" {
+		link += ", "
+	}
+	link += `</openapi.json>; rel="service-desc", </docs>; rel="service-doc"`
+	c.Header("link", link)
+}
+
+// ServiceLinkMiddleware addds RFC 8631 `service-desc` and `service-doc` link
+// relations to the root response of the API.
+func ServiceLinkMiddleware() Middleware {
+	return func(c *gin.Context) {
+		if c.Request.URL.Path == "/" {
+			AddServiceLinks(c)
+		}
 		c.Next()
 	}
 }

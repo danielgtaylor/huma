@@ -23,6 +23,7 @@ Features include:
   - Response headers
 - JSON Errors using [RFC7807](https://tools.ietf.org/html/rfc7807) and `application/problem+json`
 - Default (optional) middleware
+  - [RFC8631](https://tools.ietf.org/html/rfc8631) service description & docs links
   - Automatic recovery from panics with traceback & request logging
   - Automatically handle CORS headers
   - Structured logging middleware using [Zap](https://github.com/uber-go/zap)
@@ -609,6 +610,7 @@ g.Use(huma.Recovery())
 g.Use(huma.LogMiddleware())
 g.Use(cors.Default())
 g.Use(huma.PreferMinimalMiddleware())
+g.Use(huma.ServiceLinkMiddleware())
 g.NoRoute(huma.Handler404())
 r := huma.NewRouter("My API", "1.0.0", huma.WithGin(g))
 ```
