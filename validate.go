@@ -24,6 +24,7 @@ var ErrOperationInvalid = errors.New("invalid operation")
 var ErrParamInvalid = errors.New("invalid parameter")
 
 var paramRe = regexp.MustCompile(`:([^/]+)|{([^}]+)}`)
+var versionRe = regexp.MustCompile(`^/v[0-9]+`)
 
 // validate the top-level API
 func (a *openAPI) validate() error {
@@ -178,6 +179,9 @@ func (o *openAPIOperation) validate(method, path string) {
 
 		// Remove variables from path so they aren't in the generated name.
 		path := paramRe.ReplaceAllString(path, "")
+
+		// Remove version at the beginning of the path if present
+		path = versionRe.ReplaceAllString(path, "")
 
 		o.id = slug.Make(verb + path)
 	}
