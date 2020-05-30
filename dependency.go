@@ -94,7 +94,7 @@ func (d *openAPIDependency) validate(returnType reflect.Type) {
 	v := reflect.ValueOf(d.handler)
 
 	if v.Kind() != reflect.Func {
-		if returnType != nil && returnType != v.Type() {
+		if returnType != nil && returnType != v.Type() && !v.Type().Implements(returnType) {
 			panic(fmt.Errorf("return type should be %s but got %s: %w", v.Type(), returnType, ErrDependencyInvalid))
 		}
 
