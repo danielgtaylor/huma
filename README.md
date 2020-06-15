@@ -623,10 +623,7 @@ cfg.AllowAllOrigins = true
 cfg.AllowHeaders = append(cfg.AllowHeaders, "Authorization", "X-My-Header")
 
 // And manual settings:
-g := gin.New()
-g.Use(huma.CORSHandler(cors.New(cfg)))
-g.NoRoute(huma.Handler404())
-r := huma.NewRouter("My API", "1.0.0", huma.WithGin(g))
+r := huma.NewRouter("My API", "1.0.0", huma.CORSHandler(cors.New(cfg)))
 ```
 
 ## Custom HTTP Server
