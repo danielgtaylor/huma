@@ -129,7 +129,7 @@ func TestResourceWithAddedParam(t *testing.T) {
 }
 
 var resourceFuncsTest = []string{
-	"Head", "List", "Get", "Post", "Put", "Patch", "Delete",
+	"Head", "List", "Get", "Post", "Put", "Patch", "Delete", "Options",
 }
 
 func TestResourceFuncs(outer *testing.T) {
@@ -156,6 +156,8 @@ func TestResourceFuncs(outer *testing.T) {
 				f = res.Patch
 			case "Delete":
 				f = res.Delete
+			case "Options":
+				f = res.Options
 			default:
 				panic("invalid case " + local)
 			}
