@@ -182,7 +182,7 @@ func TestRouterDefault(t *testing.T) {
 func TestRouterConfigurableCors(t *testing.T) {
 	cfg := cors.DefaultConfig()
 	cfg.AllowAllOrigins = true
-	cfg.AllowHeaders = append(cfg.AllowHeaders, "Authorization", "X-istreamplanet-user-identity")
+	cfg.AllowHeaders = append(cfg.AllowHeaders, "Authorization", "X-Istreamplanet-User-Identity")
 
 	r := NewTestRouter(t, CORSHandler(cors.New(cfg)))
 
@@ -211,13 +211,14 @@ func TestRouterConfigurableCors(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodOptions, "/echo/world", nil)
 	req.Header.Add("Authorization", "Bearer CAFEBEEF")
-	req.Header.Add("X-istreamplanet-user-identity", "identity")
+	req.Header.Add("X-Istreamplanet-User-Identity", "identity")
 	req.Header.Add("Origin", "blah")
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
-	assert.Equal(t, true, strings.Contains(w.Header().Get("Access-Control-Allow-Headers"), "Authorization"))
-	assert.Equal(t, true, strings.Contains(w.Header().Get("Access-Control-Allow-Headers"), "X-istreamplanet-identity"))
+	allowedHeaders := w.Header().Get("Access-Control-Allow-Headers")
+	assert.Equal(t, true, strings.Contains(allowedHeaders, "Authorization"))
+	assert.Equal(t, true, strings.Contains(allowedHeaders, "X-Istreamplanet-User-Identity"))
 
 }
 
