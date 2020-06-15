@@ -615,6 +615,21 @@ g.NoRoute(huma.Handler404())
 r := huma.NewRouter("My API", "1.0.0", huma.WithGin(g))
 ```
 
+
+## Custom CORS Handler
+
+If you would like CORS preflight requests to allow specific headers, do the following:
+
+```go
+// CORS: Allow non-standard headers "Authorization" and "X-My-Header" in preflight requests
+cfg := cors.DefaultConfig()
+cfg.AllowAllOrigins = true
+cfg.AllowHeaders = append(cfg.AllowHeaders, "Authorization", "X-My-Header")
+
+// And manual settings:
+r := huma.NewRouter("My API", "1.0.0", huma.CORSHandler(cors.New(cfg)))
+```
+
 ## Custom HTTP Server
 
 You can have full control over the `http.Server` that is created.
