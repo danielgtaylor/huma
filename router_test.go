@@ -210,8 +210,6 @@ func TestRouterConfigurableCors(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodOptions, "/echo/world", nil)
-	req.Header.Add("Authorization", "Bearer CAFEBEEF")
-	req.Header.Add("X-Istreamplanet-User-Identity", "identity")
 	req.Header.Add("Origin", "blah")
 	r.ServeHTTP(w, req)
 
