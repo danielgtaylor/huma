@@ -182,41 +182,31 @@ func TestRouterDefault(t *testing.T) {
 func TestRouterConfigurableCors(t *testing.T) {
 	cfg := cors.DefaultConfig()
 	cfg.AllowAllOrigins = true
-	cfg.AllowHeaders = append(cfg.AllowHeaders, "Authorization", "X-Istreamplanet-User-Identity")
+	cfg.AllowHeaders = append(cfg.AllowHeaders, "Authorization", "X-My-Header")
 
 	r := NewTestRouter(t, CORSHandler(cors.New(cfg)))
 
-	type EchoResponse struct {
+	type PongResponse struct {
 		Value string `json:"value" description:"The echoed back word"`
 	}
 
-	r.Resource("/echo",
-		PathParam("word", "The word to echo back"),
-		QueryParam("greet", "Return a greeting", false),
+	r.Resource("/ping",
 		ResponseJSON(http.StatusOK, "Successful echo response"),
 		ResponseError(http.StatusBadRequest, "Invalid input"),
-	).Put("Echo back an input word.", func(word string, greet bool) (*EchoResponse, *ErrorModel) {
-		if word == "test" {
-			return nil, &ErrorModel{Detail: "Value not allowed: test"}
-		}
+	).Get("ping", func() (*PongResponse, *ErrorModel) {
 
-		v := word
-		if greet {
-			v = "Hello, " + word
-		}
-
-		return &EchoResponse{Value: v}, nil
+		return &PongResponse{Value: "pong"}, nil
 	})
 
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodOptions, "/echo/world", nil)
+	req, _ := http.NewRequest(http.MethodOptions, "/ping", nil)
 	req.Header.Add("Origin", "blah")
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
 	allowedHeaders := w.Header().Get("Access-Control-Allow-Headers")
 	assert.Equal(t, true, strings.Contains(allowedHeaders, "Authorization"))
-	assert.Equal(t, true, strings.Contains(allowedHeaders, "X-Istreamplanet-User-Identity"))
+	assert.Equal(t, true, strings.Contains(allowedHeaders, "X-My-Header"))
 
 }
 
