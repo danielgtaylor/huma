@@ -375,6 +375,15 @@ func DocsHandler(f Handler) RouterOption {
 	}}
 }
 
+// CORSHandler sets the CORS handler function. This can be used to set custom
+// domains, headers, auth, etc. If not given, then a default CORS handler is
+// used instead.
+func CORSHandler(f Handler) RouterOption {
+	return &routerOption{func(r *Router) {
+		r.corsHandler = f
+	}}
+}
+
 // OpenAPIHook registers a function to be called after the OpenAPI spec is
 // generated but before being sent to the client.
 func OpenAPIHook(f func(*gabs.Container)) RouterOption {

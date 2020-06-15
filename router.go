@@ -318,6 +318,7 @@ type Router struct {
 	root        *cobra.Command
 	prestart    []func()
 	docsHandler Handler
+	corsHandler Handler
 
 	// Tracks the currently running server for graceful shutdown.
 	server     *http.Server
@@ -335,7 +336,6 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 	g := gin.New()
 	g.Use(Recovery())
 	g.Use(LogMiddleware())
-	g.Use(cors.Default())
 	g.Use(PreferMinimalMiddleware())
 	g.Use(ServiceLinkMiddleware())
 	g.NoRoute(Handler404())
@@ -357,6 +357,7 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 		engine:      g,
 		prestart:    []func(){},
 		docsHandler: RapiDocHandler(title),
+		corsHandler: cors.Default(),
 	}
 
 	r.setupCLI()
@@ -365,6 +366,11 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 	for _, option := range options {
 		option.ApplyRouter(r)
 	}
+
+	// Apply CORS handler *after* options in case a custom Gin Engine is passed.
+	r.GinEngine().Use(func(c *gin.Context) {
+		r.corsHandler(c)
+	})
 
 	// Validate the router/API setup.
 	if err := r.api.validate(); err != nil {
