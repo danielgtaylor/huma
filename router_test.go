@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/schema"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -176,6 +177,37 @@ func BenchmarkHumaComplex(b *testing.B) {
 func TestRouterDefault(t *testing.T) {
 	// Just test we can create it without panic.
 	_ = NewTestRouter(t)
+}
+
+func TestRouterConfigurableCors(t *testing.T) {
+	cfg := cors.DefaultConfig()
+	cfg.AllowAllOrigins = true
+	cfg.AllowHeaders = append(cfg.AllowHeaders, "Authorization", "X-My-Header")
+
+	r := NewTestRouter(t, CORSHandler(cors.New(cfg)))
+
+	type PongResponse struct {
+		Value string `json:"value" description:"The echoed back word"`
+	}
+
+	r.Resource("/ping",
+		ResponseJSON(http.StatusOK, "Successful echo response"),
+		ResponseError(http.StatusBadRequest, "Invalid input"),
+	).Get("ping", func() (*PongResponse, *ErrorModel) {
+
+		return &PongResponse{Value: "pong"}, nil
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodOptions, "/ping", nil)
+	req.Header.Add("Origin", "blah")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
+	allowedHeaders := w.Header().Get("Access-Control-Allow-Headers")
+	assert.Equal(t, true, strings.Contains(allowedHeaders, "Authorization"))
+	assert.Equal(t, true, strings.Contains(allowedHeaders, "X-My-Header"))
+
 }
 
 func TestRouter(t *testing.T) {
