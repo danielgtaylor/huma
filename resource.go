@@ -188,3 +188,8 @@ func (r *Resource) Patch(docs string, handler interface{}) {
 func (r *Resource) Delete(docs string, handler interface{}) {
 	r.operation(http.MethodDelete, docs, handler)
 }
+
+// Options creates an HTTP OPTIONS operation on the resource.
+func (r *Resource) Options(docs string, handler interface{}) {
+	r.operation(http.MethodOptions, docs, handler)
+}

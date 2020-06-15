@@ -316,6 +316,7 @@ Operations perform an action on a resource using an HTTP method verb. The follow
 - Put
 - Patch
 - Delete
+- Options
 
 Operations can take dependencies, parameters, & request bodies and produce response headers and responses. These are each discussed in more detail below.
 
