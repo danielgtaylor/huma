@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/schema"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -176,6 +177,48 @@ func BenchmarkHumaComplex(b *testing.B) {
 func TestRouterDefault(t *testing.T) {
 	// Just test we can create it without panic.
 	_ = NewTestRouter(t)
+}
+
+func TestRouterConfigurableCors(t *testing.T) {
+	cfg := cors.DefaultConfig()
+	cfg.AllowAllOrigins = true
+	cfg.AllowHeaders = append(cfg.AllowHeaders, "Authorization", "X-istreamplanet-user-identity")
+
+	r := NewTestRouter(t, CORSHandler(cors.New(cfg)))
+
+	type EchoResponse struct {
+		Value string `json:"value" description:"The echoed back word"`
+	}
+
+	r.Resource("/echo",
+		PathParam("word", "The word to echo back"),
+		QueryParam("greet", "Return a greeting", false),
+		ResponseJSON(http.StatusOK, "Successful echo response"),
+		ResponseError(http.StatusBadRequest, "Invalid input"),
+	).Put("Echo back an input word.", func(word string, greet bool) (*EchoResponse, *ErrorModel) {
+		if word == "test" {
+			return nil, &ErrorModel{Detail: "Value not allowed: test"}
+		}
+
+		v := word
+		if greet {
+			v = "Hello, " + word
+		}
+
+		return &EchoResponse{Value: v}, nil
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodOptions, "/echo/world", nil)
+	req.Header.Add("Authorization", "Bearer CAFEBEEF")
+	req.Header.Add("X-istreamplanet-user-identity", "identity")
+	req.Header.Add("Origin", "blah")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, "*", w.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, true, strings.Contains(w.Header().Get("Access-Control-Allow-Headers"), "Authorization"))
+	assert.Equal(t, true, strings.Contains(w.Header().Get("Access-Control-Allow-Headers"), "X-istreamplanet-identity"))
+
 }
 
 func TestRouter(t *testing.T) {
