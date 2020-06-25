@@ -135,12 +135,19 @@ func NewLogger() (*zap.Logger, error) {
 		config := zap.NewDevelopmentConfig()
 		logLevel = &config.Level
 		config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+		config.EncoderConfig.EncodeTime = iso8601UTCTimeEncoder
 		return config.Build()
 	}
 
 	config := zap.NewProductionConfig()
+	config.EncoderConfig.EncodeTime = iso8601UTCTimeEncoder
 	logLevel = &config.Level
 	return config.Build()
+}
+
+// A UTC variation of ZapCore.ISO8601TimeEncoder with millisecond precision
+func iso8601UTCTimeEncoder(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
+	enc.AppendString(t.UTC().Format("2006-01-02T15:04:05.000Z"))
 }
 
 // LogOption is used to set optional configuration for logging.
