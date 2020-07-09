@@ -1,6 +1,6 @@
 package main
 
-import "github.com/danielgtaylor/huma"
+import "github.com/istreamlabs/huma"
 
 func routes(r *huma.Router) {
 	// Register a single test route that returns a text/plain response.

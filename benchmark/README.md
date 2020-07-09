@@ -7,7 +7,7 @@ This folder contains four implementations of the same service using the followin
 - [FastAPI](https://github.com/tiangolo/fastapi) (Python, popular framework)
 - [Gin](https://github.com/gin-gonic/gin) (Go, popular framework)
 - [Echo](https://echo.labstack.com/) (Go, popular framework)
-- [Huma](https://github.com/danielgtaylor/huma) (Go, this project)
+- [Huma](https://github.com/istreamlabs/huma) (Go, this project)
 
 The [wrk](https://github.com/wg/wrk) benchmarking tool is used to make requests against each implementation for 10 seconds with 10 concurrent workers. The results on a 2017 MacBook Pro are shown below:
 

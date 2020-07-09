@@ -1,4 +1,4 @@
-module github.com/danielgtaylor/huma
+module github.com/istreamlabs/huma
 
 go 1.13
 

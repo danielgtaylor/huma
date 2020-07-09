@@ -5,7 +5,7 @@ package humatest
 import (
 	"testing"
 
-	"github.com/danielgtaylor/huma"
+	"github.com/istreamlabs/huma"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"

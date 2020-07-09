@@ -3,7 +3,7 @@ package main
 import (
 	"net/http"
 
-	"github.com/danielgtaylor/huma"
+	"github.com/istreamlabs/huma"
 )
 
 // EchoResponse message which echoes a value.
