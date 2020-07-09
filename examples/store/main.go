@@ -3,8 +3,8 @@ package main
 import (
 	"time"
 
-	"github.com/danielgtaylor/huma"
-	"github.com/danielgtaylor/huma/memstore"
+	"github.com/istreamlabs/huma"
+	"github.com/istreamlabs/huma/memstore"
 )
 
 // Note represents a sticky note.

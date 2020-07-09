@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/danielgtaylor/huma"
-	"github.com/danielgtaylor/huma/schema"
+	"github.com/istreamlabs/huma"
+	"github.com/istreamlabs/huma/schema"
 )
 
 // NoteSummary is used to list notes. It does not include the (potentially)

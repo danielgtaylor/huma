@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/danielgtaylor/huma"
+	"github.com/istreamlabs/huma"
 )
 
 func main() {

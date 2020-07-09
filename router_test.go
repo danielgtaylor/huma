@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/danielgtaylor/huma/schema"
+	"github.com/istreamlabs/huma/schema"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/danielgtaylor/huma/humatest"
+	"github.com/istreamlabs/huma/humatest"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )

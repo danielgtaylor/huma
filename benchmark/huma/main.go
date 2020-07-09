@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/danielgtaylor/huma"
+	"github.com/istreamlabs/huma"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )

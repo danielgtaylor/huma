@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/danielgtaylor/huma"
+	"github.com/istreamlabs/huma"
 )
 
 func main() {

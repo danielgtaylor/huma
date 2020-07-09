@@ -44,7 +44,7 @@
 //   	assert.Equal(t, "pong", w.Body.String())
 //   }
 //
-// See https://github.com/danielgtaylor/huma#readme for more high-level feature
+// See https://github.com/istreamlabs/huma#readme for more high-level feature
 // docs with examples.
 package huma
 
@@ -63,7 +63,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/danielgtaylor/huma/schema"
+	"github.com/istreamlabs/huma/schema"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/danielgtaylor/huma/schema"
+	"github.com/istreamlabs/huma/schema"
 	"github.com/gosimple/slug"
 )
 

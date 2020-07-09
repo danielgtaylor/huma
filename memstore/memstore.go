@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/danielgtaylor/huma"
-	"github.com/danielgtaylor/huma/schema"
+	"github.com/istreamlabs/huma"
+	"github.com/istreamlabs/huma/schema"
 	"github.com/fatih/structs"
 	"github.com/gosimple/slug"
 	"github.com/mitchellh/copystructure"

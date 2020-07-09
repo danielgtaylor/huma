@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"reflect"
 
-	"github.com/danielgtaylor/huma"
-	"github.com/danielgtaylor/huma/schema"
+	"github.com/istreamlabs/huma"
+	"github.com/istreamlabs/huma/schema"
 )
 
 // Item stores some value.

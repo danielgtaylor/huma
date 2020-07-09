@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/Jeffail/gabs"
-	"github.com/danielgtaylor/huma/schema"
+	"github.com/istreamlabs/huma/schema"
 	"github.com/gin-gonic/gin"
 	"gopkg.in/yaml.v2"
 )
