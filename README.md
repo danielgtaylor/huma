@@ -38,7 +38,7 @@ Features include:
   - Set via e.g. `-p 8000`, `--port=8000`, or `SERVICE_PORT=8000`
   - Connection timeouts & graceful shutdown built-in
 - Generates OpenAPI JSON for access to a rich ecosystem of tools
-  - Mocks with [API Sprout](https://github.com/istreamlabs/apisprout)
+  - Mocks with [API Sprout](https://github.com/danielgtaylor/apisprout)
   - SDKs with [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator)
   - CLIs with [OpenAPI CLI Generator](https://github.com/danielgtaylor/openapi-cli-generator)
   - And [plenty](https://openapi.tools/) [more](https://apis.guru/awesome-openapi3/category.html)
