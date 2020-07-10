@@ -1,6 +1,6 @@
 ![Huma Rest API Framework](https://user-images.githubusercontent.com/106826/78105564-51102780-73a6-11ea-99ff-84d6c1b3e8df.png)
 
-[![HUMA Powered](https://img.shields.io/badge/Powered%20By-HUMA-f40273)](https://huma.rocks/) [![CI](https://github.com/danielgtaylor/huma/workflows/CI/badge.svg?branch=master)](https://github.com/danielgtaylor/huma/actions?query=workflow%3ACI+branch%3Amaster++) [![codecov](https://codecov.io/gh/danielgtaylor/huma/branch/master/graph/badge.svg)](https://codecov.io/gh/danielgtaylor/huma) [![Docs](https://godoc.org/github.com/danielgtaylor/huma?status.svg)](https://pkg.go.dev/github.com/danielgtaylor/huma?tab=doc) [![Go Report Card](https://goreportcard.com/badge/github.com/danielgtaylor/huma)](https://goreportcard.com/report/github.com/danielgtaylor/huma)
+[![HUMA Powered](https://img.shields.io/badge/Powered%20By-HUMA-f40273)](https://huma.rocks/) [![CI](https://github.com/istreamlabs/huma/workflows/CI/badge.svg?branch=main)](https://github.com/istreamlabs/huma/actions?query=workflow%3ACI+branch%3Amain++) [![codecov](https://codecov.io/gh/istreamlabs/huma/branch/main/graph/badge.svg)](https://codecov.io/gh/istreamlabs/huma) [![Docs](https://godoc.org/github.com/istreamlabs/huma?status.svg)](https://pkg.go.dev/github.com/istreamlabs/huma?tab=doc) [![Go Report Card](https://goreportcard.com/badge/github.com/istreamlabs/huma)](https://goreportcard.com/report/github.com/istreamlabs/huma)
 
 A modern, simple, fast & opinionated REST API framework for Go with batteries included. Pronounced IPA: [/'hjuːmɑ/](https://en.wiktionary.org/wiki/Wiktionary:International_Phonetic_Alphabet). The goals of this project are to provide:
 
@@ -38,12 +38,12 @@ Features include:
   - Set via e.g. `-p 8000`, `--port=8000`, or `SERVICE_PORT=8000`
   - Connection timeouts & graceful shutdown built-in
 - Generates OpenAPI JSON for access to a rich ecosystem of tools
-  - Mocks with [API Sprout](https://github.com/danielgtaylor/apisprout)
+  - Mocks with [API Sprout](https://github.com/istreamlabs/apisprout)
   - SDKs with [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator)
   - CLIs with [OpenAPI CLI Generator](https://github.com/danielgtaylor/openapi-cli-generator)
   - And [plenty](https://openapi.tools/) [more](https://apis.guru/awesome-openapi3/category.html)
 
-This project was inspired by [FastAPI](https://fastapi.tiangolo.com/), [Gin](https://github.com/gin-gonic/gin), and countless others. Look at the [benchmarks](https://github.com/danielgtaylor/huma/tree/master/benchmark) to see how Huma compares.
+This project was inspired by [FastAPI](https://fastapi.tiangolo.com/), [Gin](https://github.com/gin-gonic/gin), and countless others. Look at the [benchmarks](https://github.com/istreamlabs/huma/tree/main/benchmark) to see how Huma compares.
 
 Logo & branding designed by [Kari Taylor](https://www.kari.photography/).
 
@@ -70,8 +70,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/danielgtaylor/huma"
-	"github.com/danielgtaylor/huma/schema"
+	"github.com/istreamlabs/huma"
+	"github.com/istreamlabs/huma/schema"
 )
 
 // NoteSummary is used to list notes. It does not include the (potentially)
@@ -868,12 +868,12 @@ TODO
 
 The Go standard library provides useful testing utilities and Huma routers implement the [`http.Handler`](https://golang.org/pkg/net/http/#Handler) interface they expect. Huma also provides a `humatest` package with utilities for creating test routers capable of e.g. capturing logs.
 
-You can see an example in the [`examples/test`](https://github.com/danielgtaylor/huma/tree/master/examples/test) directory:
+You can see an example in the [`examples/test`](https://github.com/istreamlabs/huma/tree/main/examples/test) directory:
 
 ```go
 package main
 
-import "github.com/danielgtaylor/huma"
+import "github.com/istreamlabs/huma"
 
 func routes(r *huma.Router) {
 	// Register a single test route that returns a text/plain response.
@@ -902,7 +902,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/danielgtaylor/huma/humatest"
+	"github.com/istreamlabs/huma/humatest"
 	"github.com/stretchr/testify/assert"
 )
 
