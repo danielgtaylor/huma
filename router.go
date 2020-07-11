@@ -338,6 +338,7 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 	g.Use(LogMiddleware())
 	g.Use(PreferMinimalMiddleware())
 	g.Use(ServiceLinkMiddleware())
+	g.Use(ContentEncodingMiddleware())
 	g.NoRoute(Handler404())
 
 	title, desc := splitDocs(docs)

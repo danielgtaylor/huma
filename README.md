@@ -29,6 +29,8 @@ Features include:
   - Structured logging middleware using [Zap](https://github.com/uber-go/zap)
   - Automatic handling of `Prefer: return=minimal` from [RFC 7240](https://tools.ietf.org/html/rfc7240#section-4.2)
 - Per-operation request size limits & timeouts with sane defaults
+- [Content negotiation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Content_negotiation) between server and client
+  - Support for GZip ([RFC 1952](https://tools.ietf.org/html/rfc1952)) & Brotli ([RFC 7932](https://tools.ietf.org/html/rfc7932)) content encoding
 - Annotated Go types for input and output models
   - Generates JSON Schema from Go types
   - Automatic input model validation & error handling
