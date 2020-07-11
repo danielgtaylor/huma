@@ -445,6 +445,7 @@ func ContentEncodingMiddleware() Middleware {
 
 			if best != "" {
 				buf := bufPool.Get().(*bytes.Buffer)
+				buf.Reset()
 				defer bufPool.Put(buf)
 
 				cew := &contentEncodingWriter{
