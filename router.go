@@ -64,6 +64,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/schema"
+	"github.com/fxamacker/cbor/v2"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
@@ -624,10 +625,36 @@ func (r *Router) register(method, path string, op *openAPIOperation) {
 					}
 				}
 
-				if strings.HasPrefix(r.ContentType, "application/json") || strings.HasSuffix(r.ContentType, "+json") {
+				ct := r.ContentType
+
+				// Allow content-negotiation to override the default for known structured
+				// responses.
+				if strings.Contains(ct, "json") || strings.Contains(ct, "yaml") || strings.Contains(ct, "cbor") {
+					if accept := c.GetHeader("Accept"); accept != "" {
+						best := selectQValue(accept, []string{"application/cbor", "application/json", "application/yaml", "application/x-yaml"})
+						if best != "" {
+							ct = best
+						}
+					}
+				}
+
+				if strings.HasPrefix(ct, "application/json") || strings.HasSuffix(ct, "+json") {
 					c.JSON(r.StatusCode, body)
-				} else if strings.HasPrefix(r.ContentType, "application/yaml") || strings.HasSuffix(r.ContentType, "+yaml") {
+				} else if strings.HasPrefix(ct, "application/yaml") || strings.HasPrefix(ct, "application/x-yaml") || strings.HasSuffix(ct, "+yaml") {
 					c.YAML(r.StatusCode, body)
+				} else if strings.HasPrefix(ct, "application/cbor") || strings.HasSuffix(ct, "+cbor") {
+					opts := cbor.CanonicalEncOptions()
+					opts.Time = cbor.TimeRFC3339Nano
+					opts.TimeTag = cbor.EncTagRequired
+					mode, err := opts.EncMode()
+					if err != nil {
+						panic(err)
+					}
+					m, err := mode.Marshal(body)
+					if err != nil {
+						panic(err)
+					}
+					c.Data(r.StatusCode, ct, m)
 				} else {
 					if o.Kind() == reflect.Ptr {
 						// This is a pointer to something, so we derefernce it and get
@@ -635,7 +662,7 @@ func (r *Router) register(method, path string, op *openAPIOperation) {
 						// by default print pointer addresses instead of their value.
 						body = o.Elem().Interface()
 					}
-					c.Data(r.StatusCode, r.ContentType, []byte(fmt.Sprintf("%v", body)))
+					c.Data(r.StatusCode, ct, []byte(fmt.Sprintf("%v", body)))
 				}
 				break
 			}

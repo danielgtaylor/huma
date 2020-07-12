@@ -6,6 +6,7 @@ require (
 	github.com/Jeffail/gabs v1.4.0
 	github.com/andybalholm/brotli v1.0.0
 	github.com/fatih/structs v1.1.0
+	github.com/fxamacker/cbor/v2 v2.2.0
 	github.com/getkin/kin-openapi v0.3.0
 	github.com/gin-contrib/cors v1.3.1
 	github.com/gin-gonic/autotls v0.0.0-20200314141124-cc69476aef2a
