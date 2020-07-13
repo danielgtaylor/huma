@@ -1,12 +1,15 @@
 package huma
 
 import (
+	"compress/gzip"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/andybalholm/brotli"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
@@ -132,4 +135,105 @@ func TestServiceLinksExists(t *testing.T) {
 	assert.Equal(t, w.Result().StatusCode, http.StatusOK)
 	assert.Contains(t, w.Result().Header.Get("link"), "service-desc")
 	assert.Contains(t, w.Result().Header.Get("link"), "service-doc")
+}
+
+func TestContentEncodingTooSmall(t *testing.T) {
+	r := NewTestRouter(t)
+	r.GinEngine().Use(ContentEncodingMiddleware())
+	r.Resource("/").Get("test", func() string {
+		return "Short string"
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Add("Accept-Encoding", "gzip, br")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, w.Result().StatusCode, http.StatusOK)
+	assert.Equal(t, "", w.Result().Header.Get("Content-Encoding"))
+	assert.Equal(t, "Short string", w.Body.String())
+}
+
+func TestContentEncodingIgnoredPath(t *testing.T) {
+	r := NewTestRouter(t)
+	r.GinEngine().Use(ContentEncodingMiddleware())
+	r.Resource("/foo.png").Get("test", func() string {
+		return "fake png"
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/foo.png", nil)
+	req.Header.Add("Accept-Encoding", "gzip, br")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, w.Result().StatusCode, http.StatusOK)
+	assert.Equal(t, "", w.Result().Header.Get("Content-Encoding"))
+	assert.Equal(t, "fake png", w.Body.String())
+}
+
+func TestContentEncodingCompressed(t *testing.T) {
+	r := NewTestRouter(t)
+	r.GinEngine().Use(ContentEncodingMiddleware())
+	r.Resource("/").Get("test", func() string {
+		// Highly compressable 1500 zero bytes.
+		buf := make([]byte, 1500)
+		return string(buf)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Add("Accept-Encoding", "gzip, br")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, w.Result().StatusCode, http.StatusOK)
+	assert.Equal(t, "br", w.Result().Header.Get("Content-Encoding"))
+	assert.Less(t, len(w.Body.String()), 1500)
+
+	br := brotli.NewReader(w.Body)
+	decoded, _ := ioutil.ReadAll(br)
+	assert.Equal(t, 1500, len(decoded))
+}
+
+func TestContentEncodingCompressedPick(t *testing.T) {
+	r := NewTestRouter(t)
+	r.GinEngine().Use(ContentEncodingMiddleware())
+	r.Resource("/").Get("test", func() string {
+		// Highly compressable 1500 zero bytes.
+		buf := make([]byte, 1500)
+		return string(buf)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Add("Accept-Encoding", "gzip, br; q=0.9, deflate")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, w.Result().StatusCode, http.StatusOK)
+	assert.Equal(t, "gzip", w.Result().Header.Get("Content-Encoding"))
+	assert.Less(t, len(w.Body.String()), 1500)
+}
+
+func TestContentEncodingCompressedMultiWrite(t *testing.T) {
+	r := NewTestRouter(t)
+	r.GinEngine().Use(ContentEncodingMiddleware())
+	r.GinEngine().GET("/", func(c *gin.Context) {
+		buf := make([]byte, 750)
+		// Making writes past the MTU boundary should still work.
+		c.Writer.Write(buf)
+		c.Writer.Write(buf)
+		c.Writer.Write(buf)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Add("Accept-Encoding", "gzip")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, w.Result().StatusCode, http.StatusOK)
+	assert.Equal(t, "gzip", w.Result().Header.Get("Content-Encoding"))
+	assert.Less(t, len(w.Body.String()), 2250)
+
+	gr, _ := gzip.NewReader(w.Body)
+	decoded, _ := ioutil.ReadAll(gr)
+	assert.Equal(t, 2250, len(decoded))
 }

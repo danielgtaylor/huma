@@ -2,16 +2,21 @@ package huma
 
 import (
 	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"os"
+	"path"
 	"runtime/debug"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/andybalholm/brotli"
 	"github.com/gin-gonic/gin"
 	"github.com/mattn/go-isatty"
 	"go.uber.org/zap"
@@ -306,6 +311,202 @@ func ServiceLinkMiddleware() Middleware {
 		if c.Request.URL.Path == "/" {
 			AddServiceLinks(c)
 		}
+		c.Next()
+	}
+}
+
+// selectQValue selects and returns the best value from the allowed set
+// given a header with optional quality values, as you would get for an
+// Accept or Accept-Encoding header. The *first* item in allowed is preferred
+// if there is a tie. If nothing matches, returns an empty string.
+func selectQValue(header string, allowed []string) string {
+	formats := strings.Split(header, ",")
+	best := ""
+	bestQ := 0.0
+	for _, format := range formats {
+		parts := strings.Split(format, ";")
+		name := strings.Trim(parts[0], " \t")
+
+		found := false
+		for _, n := range allowed {
+			if n == name {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			// Skip formats we don't support.
+			continue
+		}
+
+		// Default weight to 1 if no value is passed.
+		q := 1.0
+		if len(parts) > 1 {
+			trimmed := strings.Trim(parts[1], " \t")
+			if strings.HasPrefix(trimmed, "q=") {
+				q, _ = strconv.ParseFloat(trimmed[2:], 64)
+			}
+		}
+
+		// Prefer the first one if there is a tie.
+		if q > bestQ || (q == bestQ && name == allowed[0]) {
+			bestQ = q
+			best = name
+		}
+	}
+
+	return best
+}
+
+const gzipEncoding = "gzip"
+const brotliEncoding = "br"
+
+var supportedEncodings []string = []string{brotliEncoding, gzipEncoding}
+var compressDenyList []string = []string{".gif", ".png", ".jpg", ".jpeg", ".zip", ".gz", ".bz2"}
+
+type contentEncodingWriter struct {
+	gin.ResponseWriter
+	status      int
+	encoding    string
+	buf         *bytes.Buffer
+	writer      io.Writer
+	minSize     int
+	gzPool      *sync.Pool
+	brPool      *sync.Pool
+	wroteHeader bool
+}
+
+func (w *contentEncodingWriter) Write(data []byte) (int, error) {
+	if w.writer != nil {
+		// We are writing compressed data.
+		return w.writer.Write(data)
+	}
+
+	// Buffer the data until we can decide whether to compress it or not.
+	w.buf.Write(data)
+
+	cl, _ := strconv.Atoi(w.Header().Get("Content-Length"))
+	if cl >= w.minSize || w.buf.Len() >= w.minSize {
+		// We reached our minimum compression size. Set the writer, write the buffer
+		// and make sure to set the correct headers.
+		switch w.encoding {
+		case gzipEncoding:
+			gz := w.gzPool.Get().(*gzip.Writer)
+			gz.Reset(w.ResponseWriter)
+			w.writer = gz
+		case brotliEncoding:
+			br := w.brPool.Get().(*brotli.Writer)
+			br.Reset(w.ResponseWriter)
+			w.writer = br
+		}
+		w.Header().Set("Content-Encoding", w.encoding)
+		w.Header().Set("Vary", "Accept-Encoding")
+		w.ResponseWriter.WriteHeader(w.status)
+		w.wroteHeader = true
+		bufData := w.buf.Bytes()
+		w.buf.Reset()
+		return w.writer.Write(bufData)
+	}
+
+	// Not sure yet whether this should be compressed.
+	return len(data), nil
+}
+
+func (w *contentEncodingWriter) WriteHeader(code int) {
+	w.Header().Del("Content-Length")
+	w.status = code
+}
+
+func (w *contentEncodingWriter) Close() {
+	if !w.wroteHeader {
+		w.ResponseWriter.WriteHeader(w.status)
+	}
+
+	if w.buf.Len() > 0 {
+		w.ResponseWriter.Write(w.buf.Bytes())
+	}
+
+	if w.writer != nil {
+		if wc, ok := w.writer.(io.WriteCloser); ok {
+			wc.Close()
+		}
+
+		// Return the writer to the pool so it can be reused.
+		switch w.encoding {
+		case gzipEncoding:
+			w.gzPool.Put(w.writer)
+		case brotliEncoding:
+			w.brPool.Put(w.writer)
+		}
+	}
+}
+
+// ContentEncodingMiddleware uses content negotiation with the client to pick
+// an appropriate encoding (compression) method and transparently encodes
+// the response. Supports GZip and Brotli.
+func ContentEncodingMiddleware() Middleware {
+	// Use pools to reduce allocations. We use a byte buffer to temporarily store
+	// some of each response in order to determine whether compression should
+	// be applied. The others are just re-using the GZip and Brotli compressors.
+	bufPool := sync.Pool{
+		New: func() interface{} {
+			return new(bytes.Buffer)
+		},
+	}
+
+	gzPool := sync.Pool{
+		New: func() interface{} {
+			return gzip.NewWriter(ioutil.Discard)
+		},
+	}
+
+	brPool := sync.Pool{
+		New: func() interface{} {
+			return brotli.NewWriter(ioutil.Discard)
+		},
+	}
+
+	return func(c *gin.Context) {
+		if ext := path.Ext(c.Request.URL.Path); ext != "" {
+			for _, deny := range compressDenyList {
+				if ext == deny {
+					// This is a file type we should not try to compress.
+					c.Next()
+					return
+				}
+			}
+		}
+
+		if ac := c.Request.Header.Get("Accept-Encoding"); ac != "" {
+			best := selectQValue(ac, supportedEncodings)
+
+			if best != "" {
+				buf := bufPool.Get().(*bytes.Buffer)
+				buf.Reset()
+				defer bufPool.Put(buf)
+
+				cew := &contentEncodingWriter{
+					ResponseWriter: c.Writer,
+					encoding:       best,
+					buf:            buf,
+					gzPool:         &gzPool,
+					brPool:         &brPool,
+
+					// minSize of the body at which compression is enabled. Internet MTU
+					// size is 1500 bytes, so anything smaller will still require sending
+					// at least that size. 1400 seems to be a sane default.
+					minSize: 1400,
+				}
+				// Since we aren't sure if we will be compressing the response (due
+				// to size), here we trigger a call to close the writer after all
+				// writes have completed. This will send the status/headers and flush
+				// any buffers as needed.
+				defer cew.Close()
+				c.Writer = cew
+			}
+		}
+
 		c.Next()
 	}
 }
