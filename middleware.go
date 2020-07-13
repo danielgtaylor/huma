@@ -388,7 +388,7 @@ func (w *contentEncodingWriter) Write(data []byte) (int, error) {
 
 	cl, _ := strconv.Atoi(w.Header().Get("Content-Length"))
 	if cl >= w.minSize || w.buf.Len() >= w.minSize {
-		// We reached out minimum compression size. Set the writer, write the buffer
+		// We reached our minimum compression size. Set the writer, write the buffer
 		// and make sure to set the correct headers.
 		switch w.encoding {
 		case gzipEncoding:
@@ -498,10 +498,10 @@ func ContentEncodingMiddleware() Middleware {
 					// at least that size. 1400 seems to be a sane default.
 					minSize: 1400,
 				}
-				// Status/headers are cached before any data is sent. Calling
-				// ensureHeaders makes sure we always send the headers, even for 204
-				// responses with no content. It's safe to call even if data was
-				// written, in which case this is a no-op.
+				// Since we aren't sure if we will be compressing the response (due
+				// to size), here we trigger a call to close the writer after all
+				// writes have completed. This will send the status/headers and flush
+				// any buffers as needed.
 				defer cew.Close()
 				c.Writer = cew
 			}
