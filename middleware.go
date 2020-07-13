@@ -359,6 +359,12 @@ func selectQValue(header string, allowed []string) string {
 	return best
 }
 
+const gzipEncoding = "gzip"
+const brotliEncoding = "br"
+
+var supportedEncodings []string = []string{brotliEncoding, gzipEncoding}
+var compressDenyList []string = []string{".gif", ".png", ".jpg", ".jpeg", ".zip", ".gz", ".bz2"}
+
 type contentEncodingWriter struct {
 	gin.ResponseWriter
 	status      int
@@ -382,14 +388,14 @@ func (w *contentEncodingWriter) Write(data []byte) (int, error) {
 
 	cl, _ := strconv.Atoi(w.Header().Get("Content-Length"))
 	if cl >= w.minSize || w.buf.Len() >= w.minSize {
-		// We reached out minimum compression size. Set the writer, write the buffer
+		// We reached our minimum compression size. Set the writer, write the buffer
 		// and make sure to set the correct headers.
 		switch w.encoding {
-		case "gzip":
+		case gzipEncoding:
 			gz := w.gzPool.Get().(*gzip.Writer)
 			gz.Reset(w.ResponseWriter)
 			w.writer = gz
-		case "br":
+		case brotliEncoding:
 			br := w.brPool.Get().(*brotli.Writer)
 			br.Reset(w.ResponseWriter)
 			w.writer = br
@@ -425,6 +431,14 @@ func (w *contentEncodingWriter) Close() {
 		if wc, ok := w.writer.(io.WriteCloser); ok {
 			wc.Close()
 		}
+
+		// Return the writer to the pool so it can be reused.
+		switch w.encoding {
+		case gzipEncoding:
+			w.gzPool.Put(w.writer)
+		case brotliEncoding:
+			w.brPool.Put(w.writer)
+		}
 	}
 }
 
@@ -454,13 +468,18 @@ func ContentEncodingMiddleware() Middleware {
 	}
 
 	return func(c *gin.Context) {
-		if ext := path.Ext(c.Request.URL.Path); ext == ".gif" || ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".zip" {
-			c.Next()
-			return
+		if ext := path.Ext(c.Request.URL.Path); ext != "" {
+			for _, deny := range compressDenyList {
+				if ext == deny {
+					// This is a file type we should not try to compress.
+					c.Next()
+					return
+				}
+			}
 		}
 
 		if ac := c.Request.Header.Get("Accept-Encoding"); ac != "" {
-			best := selectQValue(ac, []string{"br", "gzip"})
+			best := selectQValue(ac, supportedEncodings)
 
 			if best != "" {
 				buf := bufPool.Get().(*bytes.Buffer)
@@ -479,10 +498,10 @@ func ContentEncodingMiddleware() Middleware {
 					// at least that size. 1400 seems to be a sane default.
 					minSize: 1400,
 				}
-				// Status/headers are cached before any data is sent. Calling
-				// ensureHeaders makes sure we always send the headers, even for 204
-				// responses with no content. It's safe to call even if data was
-				// written, in which case this is a no-op.
+				// Since we aren't sure if we will be compressing the response (due
+				// to size), here we trigger a call to close the writer after all
+				// writes have completed. This will send the status/headers and flush
+				// any buffers as needed.
 				defer cew.Close()
 				c.Writer = cew
 			}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -23,6 +24,7 @@ import (
 
 func init() {
 	gin.SetMode(gin.TestMode)
+	os.Setenv("SERVICE_HOST", "127.0.0.1")
 }
 
 func ExampleNewRouter_customGin() {
