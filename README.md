@@ -6,7 +6,7 @@ A modern, simple, fast & opinionated REST API framework for Go with batteries in
 
 - A modern REST API backend framework for Go developers
   - Described by [OpenAPI 3](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md) & [JSON Schema](https://json-schema.org/)
-  - First class support for middleware, JSON, and other features
+  - First class support for middleware, JSON/CBOR, and other features
 - Guard rails to prevent common mistakes
 - Documentation that can't get out of date
 - High-quality developer tooling
@@ -29,6 +29,9 @@ Features include:
   - Structured logging middleware using [Zap](https://github.com/uber-go/zap)
   - Automatic handling of `Prefer: return=minimal` from [RFC 7240](https://tools.ietf.org/html/rfc7240#section-4.2)
 - Per-operation request size limits & timeouts with sane defaults
+- [Content negotiation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Content_negotiation) between server and client
+  - Support for GZip ([RFC 1952](https://tools.ietf.org/html/rfc1952)) & Brotli ([RFC 7932](https://tools.ietf.org/html/rfc7932)) content encoding via the `Accept-Encoding` header.
+  - Support for JSON ([RFC 8259](https://tools.ietf.org/html/rfc8259)), YAML, and CBOR ([RFC 7049](https://tools.ietf.org/html/rfc7049)) content types via the `Accept` header.
 - Annotated Go types for input and output models
   - Generates JSON Schema from Go types
   - Automatic input model validation & error handling
@@ -615,7 +618,6 @@ g.Use(huma.ServiceLinkMiddleware())
 g.NoRoute(huma.Handler404())
 r := huma.NewRouter("My API", "1.0.0", huma.WithGin(g))
 ```
-
 
 ## Custom CORS Handler
 

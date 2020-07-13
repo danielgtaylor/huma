@@ -609,3 +609,88 @@ func TestRouterUnsafeHandler(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+
+func TestContentNegotiationYAML(t *testing.T) {
+	r := NewTestRouter(t)
+
+	type TestResponse struct {
+		Hello string `json:"hello"`
+	}
+
+	r.Resource("/").Get("test", func() *TestResponse {
+		return &TestResponse{
+			Hello: "world",
+		}
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Accept", "application/yaml")
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Type"), "yaml")
+	assert.Equal(t, "hello: world\n", w.Body.String())
+}
+
+func TestContentNegotiationCBOR(t *testing.T) {
+	r := NewTestRouter(t)
+
+	type TestResponse struct {
+		Hello string `json:"hello"`
+	}
+
+	r.Resource("/").Get("test", func() *TestResponse {
+		return &TestResponse{
+			Hello: "world",
+		}
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Accept", "application/cbor")
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Type"), "cbor")
+}
+
+func TestContentNegotiationStar(t *testing.T) {
+	r := NewTestRouter(t)
+
+	type TestResponse struct {
+		Hello string `json:"hello"`
+	}
+
+	r.Resource("/").Get("test", func() *TestResponse {
+		return &TestResponse{
+			Hello: "world",
+		}
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Accept", "*")
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Type"), "json")
+}
+
+func TestContentNegotiationMultiple(t *testing.T) {
+	r := NewTestRouter(t)
+
+	type TestResponse struct {
+		Hello string `json:"hello"`
+	}
+
+	r.Resource("/").Get("test", func() *TestResponse {
+		return &TestResponse{
+			Hello: "world",
+		}
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("Accept", "application/cbor, application/yaml")
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Header().Get("Content-Type"), "cbor")
+}

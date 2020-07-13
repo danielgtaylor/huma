@@ -404,7 +404,7 @@ func (r *Router) OpenAPI() *gabs.Container {
 				headerMap[header.Name] = header
 			}
 
-			for _, resp := range op.responses {
+			for _, resp := range responses {
 				status := fmt.Sprintf("%v", resp.StatusCode)
 				openapi.Set(resp.Description, "paths", path, method, "responses", status, "description")
 
