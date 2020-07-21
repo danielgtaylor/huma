@@ -237,3 +237,28 @@ func TestContentEncodingCompressedMultiWrite(t *testing.T) {
 	decoded, _ := ioutil.ReadAll(gr)
 	assert.Equal(t, 2250, len(decoded))
 }
+
+func TestContentEncodingError(t *testing.T) {
+	var status int
+
+	r := NewTestRouter(t)
+	r.GinEngine().Use(ContentEncodingMiddleware())
+	r.GinEngine().Use(func(c *gin.Context) {
+		c.Next()
+
+		// Other middleware should be able to read the response status
+		status = c.Writer.Status()
+	})
+	r.GinEngine().GET("/", func(c *gin.Context) {
+		c.Writer.WriteHeader(http.StatusNotFound)
+		c.Writer.Write([]byte("some text"))
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Add("Accept-Encoding", "gzip")
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNotFound, status)
+	assert.Equal(t, http.StatusNotFound, w.Result().StatusCode)
+}
