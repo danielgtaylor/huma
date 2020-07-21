@@ -418,6 +418,10 @@ func (w *contentEncodingWriter) WriteHeader(code int) {
 	w.status = code
 }
 
+func (w *contentEncodingWriter) Status() int {
+	return w.status
+}
+
 func (w *contentEncodingWriter) Close() {
 	if !w.wroteHeader {
 		w.ResponseWriter.WriteHeader(w.status)
