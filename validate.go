@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/istreamlabs/huma/schema"
 	"github.com/gosimple/slug"
+	"github.com/istreamlabs/huma/schema"
 )
 
 // ErrAPIInvalid is returned when validating the OpenAPI top-level fields
@@ -146,7 +146,11 @@ func (o *openAPIOperation) validate(method, path string) {
 		if !(handler.NumIn() == totalIn || (method != http.MethodGet && handler.NumIn() == totalIn+1)) || handler.NumOut() != totalOut {
 			expected := "func("
 			for _, dep := range o.dependencies {
-				expected += "? " + reflect.ValueOf(dep.handler).Type().String() + ", "
+				val := reflect.ValueOf(dep.handler)
+				if !val.IsValid() {
+					panic(fmt.Errorf("dependency %s is not a valid type: %w", dep.handler, ErrParamInvalid))
+				}
+				expected += "? " + val.Type().String() + ", "
 			}
 			for _, param := range o.params {
 				expected += param.Name + " ?, "

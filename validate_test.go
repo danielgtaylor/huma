@@ -59,6 +59,20 @@ func TestOperationHandlerInput(t *testing.T) {
 	})
 }
 
+func TestOperationBadHandler(t *testing.T) {
+	r := NewTestRouter(t)
+
+	assert.Panics(t, func() {
+		r.Resource("/",
+			SimpleDependency(nil),
+			ResponseText(200, "Test"),
+		).Get("Test", func(pa *string, b int) string {
+			// Wrong number of inputs!
+			return "boom"
+		})
+	})
+}
+
 func TestOperationHandlerOutput(t *testing.T) {
 	r := NewTestRouter(t)
 
