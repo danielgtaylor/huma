@@ -264,6 +264,43 @@ func TestRouter(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestRouterDocsPrefix(t *testing.T) {
+	type EchoResponse struct {
+		Value string `json:"value" description:"The echoed back word"`
+	}
+
+	r := NewTestRouter(t, DocsRoutePrefix("/prefix"))
+
+	r.Resource("/echo",
+		PathParam("word", "The word to echo back"),
+		QueryParam("greet", "Return a greeting", false),
+		ResponseJSON(http.StatusOK, "Successful echo response"),
+		ResponseError(http.StatusBadRequest, "Invalid input"),
+	).Put("Echo back an input word.", func(word string, greet bool) (*EchoResponse, *ErrorModel) {
+		if word == "test" {
+			return nil, &ErrorModel{Detail: "Value not allowed: test"}
+		}
+
+		v := word
+		if greet {
+			v = "Hello, " + word
+		}
+
+		return &EchoResponse{Value: v}, nil
+	})
+
+	// Check spec & docs routes
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/prefix/openapi.json", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/prefix/docs", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
 func TestRouterRequestBody(t *testing.T) {
 	type EchoRequest struct {
 		Value string `json:"value"`
