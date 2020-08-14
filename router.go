@@ -319,6 +319,7 @@ type Router struct {
 	root        *cobra.Command
 	prestart    []func()
 	docsHandler Handler
+	docsPrefix  string
 	corsHandler Handler
 
 	// Tracks the currently running server for graceful shutdown.
@@ -359,6 +360,7 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 		engine:      g,
 		prestart:    []func(){},
 		docsHandler: RapiDocHandler(title),
+		docsPrefix:  "",
 		corsHandler: cors.Default(),
 	}
 
@@ -380,10 +382,10 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 	}
 
 	// Set up handlers for the auto-generated spec and docs.
-	r.engine.GET("/openapi.json", openAPIHandlerJSON(r))
-	r.engine.GET("/openapi.yaml", openAPIHandlerYAML(r))
+	r.engine.GET(fmt.Sprintf("%s/openapi.json", r.docsPrefix), openAPIHandlerJSON(r))
+	r.engine.GET(fmt.Sprintf("%s/openapi.yaml", r.docsPrefix), openAPIHandlerYAML(r))
 
-	r.engine.GET("/docs", func(c *gin.Context) {
+	r.engine.GET(fmt.Sprintf("%s/docs", r.docsPrefix), func(c *gin.Context) {
 		r.docsHandler(c)
 	})
 

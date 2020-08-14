@@ -301,6 +301,13 @@ func ContactEmail(name, email string) RouterOption {
 	}}
 }
 
+// DocsRoutePrefix enables the API documentation to be available from `prefix/{docs, openapi.yaml}`
+func DocsRoutePrefix(prefix string) RouterOption {
+	return &routerOption{func(r *Router) {
+		r.docsPrefix = prefix
+	}}
+}
+
 // BasicAuth adds a named HTTP Basic Auth security scheme.
 func BasicAuth(name string) RouterOption {
 	return &routerOption{func(r *Router) {
