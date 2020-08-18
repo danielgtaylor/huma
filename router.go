@@ -318,6 +318,7 @@ type Router struct {
 	root        *cobra.Command
 	prestart    []func()
 	docsHandler Handler
+	docsDomType string
 	docsPrefix  string
 	corsHandler Handler
 
@@ -358,6 +359,7 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 		engine:      g,
 		prestart:    []func(){},
 		docsHandler: RapiDocHandler(title),
+		docsDomType: "rapi",
 		docsPrefix:  "",
 		corsHandler: cors.Default(),
 	}
@@ -380,11 +382,21 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 	}
 
 	// Set up handlers for the auto-generated spec and docs.
-	r.engine.GET(fmt.Sprintf("%s/openapi.json", r.docsPrefix), openAPIHandlerJSON(r))
+	openapiJsonPath := fmt.Sprintf("%s/openapi.json", r.docsPrefix)
+	r.engine.GET(openapiJsonPath, openAPIHandlerJSON(r))
 	r.engine.GET(fmt.Sprintf("%s/openapi.yaml", r.docsPrefix), openAPIHandlerYAML(r))
 
 	r.engine.GET(fmt.Sprintf("%s/docs", r.docsPrefix), func(c *gin.Context) {
-		r.docsHandler(c)
+		docsPayload := ""
+		switch r.docsDomType {
+		case "rapi":
+			docsPayload = fmt.Sprintf(RapiDocTemplate, title, openapiJsonPath)
+		case "swagger":
+			docsPayload = fmt.Sprintf(SwaggerUITemplate, title, openapiJsonPath)
+		case "redoc":
+			docsPayload = fmt.Sprintf(ReDocTemplate, title, openapiJsonPath)
+		}
+		c.Data(200, "text/html", []byte(docsPayload))
 	})
 
 	// If downloads like a CLI or SDKs are available, serve them automatically
