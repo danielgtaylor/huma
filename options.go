@@ -376,9 +376,20 @@ func HTTPServer(server *http.Server) RouterOption {
 // DocsHandler sets the documentation rendering handler function. You can
 // use `huma.RapiDocHandler`, `huma.ReDocHandler`, `huma.SwaggerUIHandler`, or
 // provide your own (e.g. with custom auth or branding).
+//
+// DEPRECATED! Use `DocsDomType` instead!
 func DocsHandler(f Handler) RouterOption {
+	fmt.Println("This option is deprecated, use `DocsDomType` instead")
 	return &routerOption{func(r *Router) {
 		r.docsHandler = f
+	}}
+}
+
+// DocsDomType sets the presentation for the docs UI.  Valid values are:
+// "rapi" (default), "redoc", or "swagger"
+func DocsDomType(t string) RouterOption {
+	return &routerOption{func(r *Router) {
+		r.docsDomType = t
 	}}
 }
 

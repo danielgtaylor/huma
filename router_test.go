@@ -281,7 +281,7 @@ func TestRouterDocsPrefix(t *testing.T) {
 	req, _ = http.NewRequest(http.MethodGet, "/prefix/docs", nil)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, "prefix/openapi", w.Body.String())
+	assert.Contains(t, w.Body.String(), "prefix/openapi")
 }
 
 func TestRouterRequestBody(t *testing.T) {
