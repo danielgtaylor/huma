@@ -319,7 +319,7 @@ type Router struct {
 	root        *cobra.Command
 	prestart    []func()
 	docsHandler Handler
-	docsDomType string
+	docsDomType ApiUIDocType
 	docsPrefix  string
 	corsHandler Handler
 
@@ -361,7 +361,7 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 		engine:      g,
 		prestart:    []func(){},
 		docsHandler: RapiDocHandler(title),
-		docsDomType: "rapi",
+		docsDomType: RAPIDOCTYPE,
 		docsPrefix:  "",
 		corsHandler: cors.Default(),
 	}
@@ -391,11 +391,11 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 	r.engine.GET(fmt.Sprintf("%s/docs", r.docsPrefix), func(c *gin.Context) {
 		docsPayload := ""
 		switch r.docsDomType {
-		case "rapi":
+		case RAPIDOCTYPE:
 			docsPayload = RapiDocString(title, openapiJsonPath)
-		case "swagger":
+		case SWAGGERDOCTYPE:
 			docsPayload = SwaggerUIDocString(title, openapiJsonPath)
-		case "redoc":
+		case REDOCTYPE:
 			docsPayload = ReDocString(title, openapiJsonPath)
 		}
 		c.Data(200, "text/html", []byte(docsPayload))

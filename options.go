@@ -20,6 +20,15 @@ type routerOption struct {
 	handler func(*Router)
 }
 
+// ApiUIDocType represents the type of UI presentation for the API docs: Rapi, ReDoc, or Swagger
+type ApiUIDocType int
+
+const (
+	RAPIDOCTYPE ApiUIDocType = 1 + iota
+	REDOCTYPE
+	SWAGGERDOCTYPE
+)
+
 func (o *routerOption) ApplyRouter(router *Router) {
 	o.handler(router)
 }
@@ -386,8 +395,8 @@ func DocsHandler(f Handler) RouterOption {
 }
 
 // DocsDomType sets the presentation for the docs UI.  Valid values are:
-// "rapi" (default), "redoc", or "swagger"
-func DocsDomType(t string) RouterOption {
+// RAPIDOCTYPE (default), REDOCTYPE, or SWAGGERDOCTYPE
+func DocsDomType(t ApiUIDocType) RouterOption {
 	return &routerOption{func(r *Router) {
 		r.docsDomType = t
 	}}
