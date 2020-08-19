@@ -392,11 +392,11 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 		docsPayload := ""
 		switch r.docsDomType {
 		case "rapi":
-			docsPayload = fmt.Sprintf(RapiDocTemplate, title, openapiJsonPath)
+			docsPayload = RapiDocString(title, openapiJsonPath)
 		case "swagger":
-			docsPayload = fmt.Sprintf(SwaggerUITemplate, title, openapiJsonPath)
+			docsPayload = SwaggerUIDocString(title, openapiJsonPath)
 		case "redoc":
-			docsPayload = fmt.Sprintf(ReDocTemplate, title, openapiJsonPath)
+			docsPayload = ReDocString(title, openapiJsonPath)
 		}
 		c.Data(200, "text/html", []byte(docsPayload))
 	})
