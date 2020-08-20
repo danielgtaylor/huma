@@ -378,6 +378,12 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 		r.corsHandler(c)
 	})
 
+	// We need to ensure that if the docs have a prefixed path,
+	// that the ServiceLinkMiddleware can reflect the true path to the docs
+	r.GinEngine().Use(func(c *gin.Context) {
+		c.Set("docsPrefix", r.docsPrefix)
+	})
+
 	// Validate the router/API setup.
 	if err := r.api.validate(); err != nil {
 		panic(err)
