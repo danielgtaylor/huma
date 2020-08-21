@@ -266,6 +266,24 @@ func TestRouter(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
+func TestRouterDocsPrefix(t *testing.T) {
+
+	r := NewRouter("api", "v", DocsRoutePrefix("/prefix"))
+	r.Resource("/hello").Get("doc", func() string { return "Hello" })
+
+	// Check spec & docs routes
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/prefix/openapi.json", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/prefix/docs", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "prefix/openapi")
+}
+
 func TestRouterRequestBody(t *testing.T) {
 	type EchoRequest struct {
 		Value string `json:"value"`

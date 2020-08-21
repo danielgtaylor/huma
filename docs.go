@@ -19,10 +19,10 @@ func splitDocs(docs string) (title, desc string) {
 	return
 }
 
-// RapiDocHandler renders documentation using RapiDoc.
-func RapiDocHandler(pageTitle string) Handler {
-	return func(c *gin.Context) {
-		c.Data(200, "text/html", []byte(fmt.Sprintf(`<!doctype html>
+// rapiDocTemplate is the template used to generate the RapiDoc.  It needs two args to render:
+// 1. the title
+// 2. the path to the openapi.yaml file
+var rapiDocTemplate = `<!doctype html>
 <html>
 <head>
 	<title>%s</title>
@@ -31,21 +31,19 @@ func RapiDocHandler(pageTitle string) Handler {
 </head>
 <body>
   <rapi-doc
-		spec-url="/openapi.json"
+		spec-url="%s"
 		render-style="read"
     show-header="false"
     primary-color="#f74799"
     nav-accent-color="#47afe8"
   > </rapi-doc>
 </body>
-</html>`, pageTitle)))
-	}
-}
+</html>`
 
-// ReDocHandler renders documentation using ReDoc.
-func ReDocHandler(pageTitle string) Handler {
-	return func(c *gin.Context) {
-		c.Data(200, "text/html", []byte(fmt.Sprintf(`<!DOCTYPE html>
+// reDocTemplate is the template used to generate the ReDoc.  It needs two args to render:
+// 1. the title
+// 2. the path to the openapi.yaml file
+var reDocTemplate = `<!DOCTYPE html>
 <html>
   <head>
     <title>%s</title>
@@ -55,17 +53,15 @@ func ReDocHandler(pageTitle string) Handler {
 		<style>body { margin: 0; padding: 0; }</style>
   </head>
   <body>
-    <redoc spec-url='/openapi.json'></redoc>
+    <redoc spec-url='%s'></redoc>
     <script src="https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js"> </script>
   </body>
-</html>`, pageTitle)))
-	}
-}
+</html>`
 
-// SwaggerUIHandler renders documentation using Swagger UI.
-func SwaggerUIHandler(pageTitle string) Handler {
-	return func(c *gin.Context) {
-		c.Data(200, "text/html", []byte(fmt.Sprintf(`<!-- HTML for static distribution bundle build -->
+// swaggerUITemplate is the template used to generate the SwaggerUI.  It needs two args to render:
+// 1. the title
+// 2. the path to the openapi.yaml file
+var swaggerUITemplate = `<!-- HTML for static distribution bundle build -->
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -104,7 +100,7 @@ func SwaggerUIHandler(pageTitle string) Handler {
     window.onload = function() {
       // Begin Swagger UI call region
       const ui = SwaggerUIBundle({
-        url: "/openapi.json",
+        url: "%s",
         dom_id: '#swagger-ui',
         deepLinking: true,
         presets: [
@@ -122,6 +118,46 @@ func SwaggerUIHandler(pageTitle string) Handler {
     }
   </script>
   </body>
-</html>`, pageTitle)))
+</html>`
+
+// RapiDocString generates the RapiDoc.  It needs two args to render:
+// 1. the title
+// 2. the path to the openapi.yaml file
+func RapiDocString(pageTitle, openapiPath string) string {
+	return fmt.Sprintf(rapiDocTemplate, pageTitle, openapiPath)
+}
+
+// ReDocString generates the RapiDoc.  It needs two args to render:
+// 1. the title
+// 2. the path to the openapi.yaml file
+func ReDocString(pageTitle, openapiPath string) string {
+	return fmt.Sprintf(reDocTemplate, pageTitle, openapiPath)
+}
+
+// SwaggerUIDocString generates the RapiDoc.  It needs two args to render:
+// 1. the title
+// 2. the path to the openapi.yaml file
+func SwaggerUIDocString(pageTitle, openapiPath string) string {
+	return fmt.Sprintf(swaggerUITemplate, pageTitle, openapiPath)
+}
+
+// RapiDocHandler renders documentation using RapiDoc.
+func RapiDocHandler(pageTitle string) Handler {
+	return func(c *gin.Context) {
+		c.Data(200, "text/html", []byte(RapiDocString(pageTitle, "/openapi.json")))
+	}
+}
+
+// ReDocHandler renders documentation using ReDoc.
+func ReDocHandler(pageTitle string) Handler {
+	return func(c *gin.Context) {
+		c.Data(200, "text/html", []byte(ReDocString(pageTitle, "/openapi.json")))
+	}
+}
+
+// SwaggerUIHandler renders documentation using Swagger UI.
+func SwaggerUIHandler(pageTitle string) Handler {
+	return func(c *gin.Context) {
+		c.Data(200, "text/html", []byte(SwaggerUIDocString(pageTitle, "/openapi.json")))
 	}
 }

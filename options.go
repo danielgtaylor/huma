@@ -20,6 +20,15 @@ type routerOption struct {
 	handler func(*Router)
 }
 
+// ApiUIDocType represents the type of UI presentation for the API docs: Rapi, ReDoc, or Swagger
+type ApiUIDocType int
+
+const (
+	RAPIDOCTYPE ApiUIDocType = 1 + iota
+	REDOCTYPE
+	SWAGGERDOCTYPE
+)
+
 func (o *routerOption) ApplyRouter(router *Router) {
 	o.handler(router)
 }
@@ -301,6 +310,13 @@ func ContactEmail(name, email string) RouterOption {
 	}}
 }
 
+// DocsRoutePrefix enables the API documentation to be available from `prefix/{docs, openapi.yaml}`
+func DocsRoutePrefix(prefix string) RouterOption {
+	return &routerOption{func(r *Router) {
+		r.docsPrefix = prefix
+	}}
+}
+
 // BasicAuth adds a named HTTP Basic Auth security scheme.
 func BasicAuth(name string) RouterOption {
 	return &routerOption{func(r *Router) {
@@ -369,9 +385,20 @@ func HTTPServer(server *http.Server) RouterOption {
 // DocsHandler sets the documentation rendering handler function. You can
 // use `huma.RapiDocHandler`, `huma.ReDocHandler`, `huma.SwaggerUIHandler`, or
 // provide your own (e.g. with custom auth or branding).
+//
+// DEPRECATED! Use `DocsDomType` instead!
 func DocsHandler(f Handler) RouterOption {
+	fmt.Println("This option is deprecated, use `DocsDomType` instead")
 	return &routerOption{func(r *Router) {
 		r.docsHandler = f
+	}}
+}
+
+// DocsDomType sets the presentation for the docs UI.  Valid values are:
+// RAPIDOCTYPE (default), REDOCTYPE, or SWAGGERDOCTYPE
+func DocsDomType(t ApiUIDocType) RouterOption {
+	return &routerOption{func(r *Router) {
+		r.docsDomType = t
 	}}
 }
 

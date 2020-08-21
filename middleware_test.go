@@ -135,6 +135,26 @@ func TestServiceLinksExists(t *testing.T) {
 	assert.Equal(t, w.Result().StatusCode, http.StatusOK)
 	assert.Contains(t, w.Result().Header.Get("link"), "service-desc")
 	assert.Contains(t, w.Result().Header.Get("link"), "service-doc")
+	assert.Contains(t, w.Result().Header.Get("link"), "</openapi.json")
+	assert.Contains(t, w.Result().Header.Get("link"), "</docs")
+}
+
+func TestServiceLinksExistsOnDocPrefix(t *testing.T) {
+	r := NewTestRouter(t, DocsRoutePrefix("/prefix"))
+	r.GinEngine().Use(ServiceLinkMiddleware())
+	r.GinEngine().NoRoute(Handler404())
+	r.GinEngine().GET("/prefix", func(c *gin.Context) {
+		c.Header("link", `<>; rel=self`)
+		AddServiceLinks(c)
+		c.Data(http.StatusOK, "text/plain", []byte("Hello"))
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/prefix", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, w.Result().StatusCode, http.StatusOK)
+	assert.Contains(t, w.Result().Header.Get("link"), "/prefix/openapi.json")
+	assert.Contains(t, w.Result().Header.Get("link"), "/prefix/docs")
 }
 
 func TestContentEncodingTooSmall(t *testing.T) {

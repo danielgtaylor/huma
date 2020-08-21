@@ -319,6 +319,8 @@ type Router struct {
 	root        *cobra.Command
 	prestart    []func()
 	docsHandler Handler
+	docsDomType ApiUIDocType
+	docsPrefix  string
 	corsHandler Handler
 
 	// Tracks the currently running server for graceful shutdown.
@@ -359,6 +361,8 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 		engine:      g,
 		prestart:    []func(){},
 		docsHandler: RapiDocHandler(title),
+		docsDomType: RAPIDOCTYPE,
+		docsPrefix:  "",
 		corsHandler: cors.Default(),
 	}
 
@@ -374,17 +378,33 @@ func NewRouter(docs, version string, options ...RouterOption) *Router {
 		r.corsHandler(c)
 	})
 
+	// We need to ensure that if the docs have a prefixed path,
+	// that the ServiceLinkMiddleware can reflect the true path to the docs
+	r.GinEngine().Use(func(c *gin.Context) {
+		c.Set("docsPrefix", r.docsPrefix)
+	})
+
 	// Validate the router/API setup.
 	if err := r.api.validate(); err != nil {
 		panic(err)
 	}
 
 	// Set up handlers for the auto-generated spec and docs.
-	r.engine.GET("/openapi.json", openAPIHandlerJSON(r))
-	r.engine.GET("/openapi.yaml", openAPIHandlerYAML(r))
+	openapiJsonPath := fmt.Sprintf("%s/openapi.json", r.docsPrefix)
+	r.engine.GET(openapiJsonPath, openAPIHandlerJSON(r))
+	r.engine.GET(fmt.Sprintf("%s/openapi.yaml", r.docsPrefix), openAPIHandlerYAML(r))
 
-	r.engine.GET("/docs", func(c *gin.Context) {
-		r.docsHandler(c)
+	r.engine.GET(fmt.Sprintf("%s/docs", r.docsPrefix), func(c *gin.Context) {
+		docsPayload := ""
+		switch r.docsDomType {
+		case RAPIDOCTYPE:
+			docsPayload = RapiDocString(title, openapiJsonPath)
+		case SWAGGERDOCTYPE:
+			docsPayload = SwaggerUIDocString(title, openapiJsonPath)
+		case REDOCTYPE:
+			docsPayload = ReDocString(title, openapiJsonPath)
+		}
+		c.Data(200, "text/html", []byte(docsPayload))
 	})
 
 	// If downloads like a CLI or SDKs are available, serve them automatically
