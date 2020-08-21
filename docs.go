@@ -19,7 +19,7 @@ func splitDocs(docs string) (title, desc string) {
 	return
 }
 
-// RapiDocTemplate is the template used to generate the RapiDoc.  It needs two args to render:
+// rapiDocTemplate is the template used to generate the RapiDoc.  It needs two args to render:
 // 1. the title
 // 2. the path to the openapi.yaml file
 var rapiDocTemplate = `<!doctype html>
@@ -40,7 +40,7 @@ var rapiDocTemplate = `<!doctype html>
 </body>
 </html>`
 
-// ReDocTemplate is the template used to generate the RapiDoc.  It needs two args to render:
+// reDocTemplate is the template used to generate the ReDoc.  It needs two args to render:
 // 1. the title
 // 2. the path to the openapi.yaml file
 var reDocTemplate = `<!DOCTYPE html>
@@ -58,6 +58,9 @@ var reDocTemplate = `<!DOCTYPE html>
   </body>
 </html>`
 
+// swaggerUITemplate is the template used to generate the SwaggerUI.  It needs two args to render:
+// 1. the title
+// 2. the path to the openapi.yaml file
 var swaggerUITemplate = `<!-- HTML for static distribution bundle build -->
 <!DOCTYPE html>
 <html lang="en">
