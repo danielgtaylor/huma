@@ -312,8 +312,7 @@ func AddServiceLinks(c *gin.Context) {
 // relations to the root response of the API.
 func ServiceLinkMiddleware() Middleware {
 	return func(c *gin.Context) {
-		docsPrefix, exists := c.Get("docsPrefix")
-		if (exists && c.Request.URL.Path == docsPrefix) || c.Request.URL.Path == "/" {
+		if c.Request.URL.Path == "/" {
 			AddServiceLinks(c)
 		}
 		c.Next()
