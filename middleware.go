@@ -292,15 +292,19 @@ func PreferMinimalMiddleware() Middleware {
 	}
 }
 
-// AddServiceLinks addds RFC 8631 `service-desc` and `service-doc` link
+// AddServiceLinks adds RFC 8631 `service-desc` and `service-doc` link
 // relations to the response. Safe to call multiple times and after a link
 // header has already been set (it will append to it).
 func AddServiceLinks(c *gin.Context) {
 	link := c.Writer.Header().Get("link")
+	docsPrefix, exists := c.Get("docsPrefix")
+	if !exists {
+		docsPrefix = ""
+	}
 	if link != "" {
 		link += ", "
 	}
-	link += `</openapi.json>; rel="service-desc", </docs>; rel="service-doc"`
+	link += fmt.Sprintf(`<%s/openapi.json>; rel="service-desc", <%s/docs>; rel="service-doc"`, docsPrefix, docsPrefix)
 	c.Header("link", link)
 }
 
