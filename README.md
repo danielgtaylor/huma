@@ -57,9 +57,9 @@ package main
 import (
 	"net/http"
 
-	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/cli"
-	"github.com/danielgtaylor/huma/v2/responses"
+	"github.com/danielgtaylor/huma"
+	"github.com/danielgtaylor/huma/cli"
+	"github.com/danielgtaylor/huma/responses"
 )
 
 func main() {
