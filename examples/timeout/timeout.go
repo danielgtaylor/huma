@@ -6,14 +6,17 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma"
+	"github.com/danielgtaylor/huma/cli"
+	"github.com/danielgtaylor/huma/responses"
 )
 
 func main() {
-	r := huma.NewRouter("Timeout Example", "1.0.0")
+	app := cli.NewRouter("Timeout Example", "1.0.0")
 
-	r.Resource("/timeout",
-		huma.ContextDependency(),
-	).Get("timeout example", func(ctx context.Context) string {
+	app.Resource("/timeout").Get("timeout", "Timeout example",
+		responses.String(http.StatusOK),
+		responses.InternalServerError(),
+	).Run(func(ctx huma.Context) {
 		// Add a timeout to the context. No request should take longer than 2 seconds
 		newCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
@@ -26,11 +29,12 @@ func main() {
 		// deadline of 2 seconds is shorter than the request duration of 5 seconds.
 		_, err := http.DefaultClient.Do(req)
 		if err != nil {
-			return err.Error()
+			ctx.WriteError(http.StatusInternalServerError, "Problem with HTTP request", err)
+			return
 		}
 
-		return "success"
+		ctx.Write([]byte("success!"))
 	})
 
-	r.Run()
+	app.Run()
 }

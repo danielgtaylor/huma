@@ -2,9 +2,8 @@ package huma
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
-
-	"github.com/gin-gonic/gin"
 )
 
 // splitDocs will split a single string out into a title/description combo.
@@ -20,9 +19,10 @@ func splitDocs(docs string) (title, desc string) {
 }
 
 // RapiDocHandler renders documentation using RapiDoc.
-func RapiDocHandler(pageTitle string) Handler {
-	return func(c *gin.Context) {
-		c.Data(200, "text/html", []byte(fmt.Sprintf(`<!doctype html>
+func RapiDocHandler(pageTitle string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(fmt.Sprintf(`<!doctype html>
 <html>
 <head>
 	<title>%s</title>
@@ -39,13 +39,14 @@ func RapiDocHandler(pageTitle string) Handler {
   > </rapi-doc>
 </body>
 </html>`, pageTitle)))
-	}
+	})
 }
 
 // ReDocHandler renders documentation using ReDoc.
-func ReDocHandler(pageTitle string) Handler {
-	return func(c *gin.Context) {
-		c.Data(200, "text/html", []byte(fmt.Sprintf(`<!DOCTYPE html>
+func ReDocHandler(pageTitle string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(fmt.Sprintf(`<!DOCTYPE html>
 <html>
   <head>
     <title>%s</title>
@@ -59,13 +60,14 @@ func ReDocHandler(pageTitle string) Handler {
     <script src="https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js"> </script>
   </body>
 </html>`, pageTitle)))
-	}
+	})
 }
 
 // SwaggerUIHandler renders documentation using Swagger UI.
-func SwaggerUIHandler(pageTitle string) Handler {
-	return func(c *gin.Context) {
-		c.Data(200, "text/html", []byte(fmt.Sprintf(`<!-- HTML for static distribution bundle build -->
+func SwaggerUIHandler(pageTitle string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(fmt.Sprintf(`<!-- HTML for static distribution bundle build -->
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -123,5 +125,5 @@ func SwaggerUIHandler(pageTitle string) Handler {
   </script>
   </body>
 </html>`, pageTitle)))
-	}
+	})
 }

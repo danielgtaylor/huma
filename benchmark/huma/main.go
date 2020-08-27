@@ -5,8 +5,9 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/huma"
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
+	"github.com/danielgtaylor/huma/cli"
+	"github.com/danielgtaylor/huma/middleware"
+	"github.com/danielgtaylor/huma/responses"
 )
 
 // Item tracks the price of a good.
@@ -17,34 +18,30 @@ type Item struct {
 	IsOffer bool    `json:"is_offer,omitempty"`
 }
 
+type Input struct {
+	AuthInfo string
+	ID       int `path:"id"`
+}
+
+func (i *Input) Resolve(ctx huma.Context, r *http.Request) {
+	i.AuthInfo = strings.Split(r.Header.Get("Authorization"), " ")[0]
+}
+
 func main() {
-	gin.SetMode(gin.ReleaseMode)
-	g := gin.New()
-	g.Use(huma.Recovery())
-	g.Use(cors.Default())
-	g.Use(huma.PreferMinimalMiddleware())
+	app := cli.New(huma.New("Benchmark", "1.0.0"))
+	app.Middleware(middleware.Recovery, middleware.ContentEncoding)
 
-	r := huma.NewRouter("Benchmark", "1.0.0", huma.Gin(g))
-
-	d := huma.Dependency(
-		huma.HeaderParam("authorization", "Auth header", ""),
-		func(auth string) (string, error) {
-			return strings.Split(auth, " ")[0], nil
-		},
-	)
-
-	r.Resource("/items", d,
-		huma.PathParam("id", "The item's unique ID"),
-		huma.ResponseHeader("x-authinfo", "..."),
-		huma.ResponseJSON(http.StatusOK, "Successful hello response", huma.Headers("x-authinfo")),
-	).Get("Huma benchmark test", func(authInfo string, id int) (string, *Item) {
-		return authInfo, &Item{
-			ID:      id,
+	app.Resource("/items", "id").Get("get", "Huma benchmark test",
+		responses.OK().Headers("x-authinfo").Model(Item{}),
+	).Run(func(ctx huma.Context, input Input) {
+		ctx.Header().Set("x-authinfo", input.AuthInfo)
+		ctx.WriteModel(http.StatusOK, &Item{
+			ID:      input.ID,
 			Name:    "Hello",
 			Price:   1.24,
 			IsOffer: false,
-		}
+		})
 	})
 
-	r.Run()
+	app.Run()
 }

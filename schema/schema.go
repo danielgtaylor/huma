@@ -467,6 +467,8 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 		schema.Type = "string"
 	case reflect.Ptr:
 		return GenerateWithMode(t.Elem(), mode, schema)
+	case reflect.Interface:
+		// Interfaces can be any type.
 	default:
 		return nil, fmt.Errorf("unsupported type %s from %s", t.Kind(), t)
 	}
