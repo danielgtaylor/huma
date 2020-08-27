@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -19,12 +18,14 @@ func requestIDMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// EchoRequest is the request input
 type EchoRequest struct {
 	Word  string `path:"word" doc:"The word to echo back. Cannot be 'test'."`
 	Greet bool   `query:"greet" doc:"Return a greeting" default:"false"`
 	Foo   int    `query:"foo" enum:"1,3,5,7" doc:"..."`
 }
 
+// Resolve does additional validation / transformation
 func (e *EchoRequest) Resolve(ctx huma.Context, r *http.Request) {
 	// Extra validation for returning exhaustive errors. Huma handles returning
 	// the actual errors after resolving all request dependencies.
@@ -41,17 +42,10 @@ func (e *EchoRequest) Resolve(ctx huma.Context, r *http.Request) {
 	e.Word = strings.ToLower(e.Word)
 }
 
-type EtagHeader struct {
-	Etag string `header:"etag" doc:"some docs..."`
-}
-
 // EchoResponse message which echoes a value.
 type EchoResponse struct {
-	EtagHeader
-	Body struct {
-		Value string `json:"value"`
-		Foo   int    `json:"foo,omitempty"`
-	}
+	Value string `json:"value"`
+	Foo   int    `json:"foo,omitempty"`
 }
 
 func main() {
@@ -62,7 +56,7 @@ func main() {
 	app.Resource("/echo", "word").
 		//WithTags("echo-tag").
 		Get("echo", "Echo back an input word",
-			responses.OK().Model(&EchoResponse{}),
+			responses.OK().Headers("Etag").Model(EchoResponse{}),
 			responses.BadRequest(),
 		).
 		//WithDeadline(30 * time.Second).
@@ -72,14 +66,11 @@ func main() {
 				v = "Hello, " + v
 			}
 
-			resp := &EchoResponse{}
-			resp.Etag = `W/"foo"`
-			resp.Body.Value = v
-			resp.Body.Foo = input.Foo
-
-			panic(fmt.Errorf("some error"))
-
-			ctx.WriteModel(http.StatusOK, resp)
+			ctx.Header().Set("Etag", `W/"foo"`)
+			ctx.WriteModel(http.StatusOK, EchoResponse{
+				Value: v,
+				Foo:   input.Foo,
+			})
 		})
 
 	app.Run()

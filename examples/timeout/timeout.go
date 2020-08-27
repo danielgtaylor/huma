@@ -17,7 +17,8 @@ func main() {
 		responses.String(http.StatusOK),
 		responses.InternalServerError(),
 	).Run(func(ctx huma.Context) {
-		// Add a timeout to the context. No request should take longer than 2 seconds
+		// Add a timeout to the context. No outgoing request should take longer
+		// than 2 seconds or we abort.
 		newCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
 
@@ -33,6 +34,7 @@ func main() {
 			return
 		}
 
+		// Success case, which we never get to.
 		ctx.Write([]byte("success!"))
 	})
 
