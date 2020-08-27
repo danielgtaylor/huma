@@ -74,12 +74,11 @@ func (r *Resource) Delete(operationID, description string, responses ...Response
 	return r.Operation(http.MethodDelete, operationID, description, responses...)
 }
 
-// AddMiddleware adds a new standard middleware to this resource, so it will
+// Middleware adds a new standard middleware to this resource, so it will
 // apply to requests at the resource's path (including any subresources).
 // Middleware can also be applied at the router level to apply to all requests.
-func (r *Resource) AddMiddleware(middlewares ...func(next http.Handler) http.Handler) *Resource {
+func (r *Resource) Middleware(middlewares ...func(next http.Handler) http.Handler) {
 	r.mux.Use(middlewares...)
-	return r
 }
 
 // SubResource creates a new resource attached to this resource. Any passed
@@ -113,8 +112,7 @@ func (r *Resource) SubResource(parts ...string) *Resource {
 	return sub
 }
 
-// AddTags appends to the list of tags, used for documentation.
-func (r *Resource) AddTags(names ...string) *Resource {
+// Tags appends to the list of tags, used for documentation.
+func (r *Resource) Tags(names ...string) {
 	r.tags = append(r.tags, names...)
-	return r
 }

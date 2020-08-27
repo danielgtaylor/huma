@@ -3,6 +3,7 @@ package huma
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"reflect"
@@ -21,6 +22,7 @@ import (
 // var ErrInvalidParamLocation = errors.New("invalid parameter location")
 
 var timeType = reflect.TypeOf(time.Time{})
+var readerType = reflect.TypeOf((*io.Reader)(nil)).Elem()
 
 // Resolver provides a way to resolve input values from a request or to post-
 // process input values in some way, including additional validation beyond
@@ -238,6 +240,12 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 		}
 
 		if _, ok := f.Tag.Lookup("body"); ok || f.Name == "Body" {
+			// Special case: body field is a reader for streaming
+			if f.Type == readerType {
+				inField.Set(reflect.ValueOf(req.Body))
+				continue
+			}
+
 			// load body
 			data, err := ioutil.ReadAll(req.Body)
 			if err != nil {
