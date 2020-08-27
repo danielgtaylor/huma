@@ -38,7 +38,7 @@ func NewRouter(docs, version string) *CLI {
 	app := New(r)
 
 	// Set up the default middleware
-	middleware.Defaults(r, app)
+	middleware.Defaults(app)
 
 	return app
 }

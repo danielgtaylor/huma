@@ -32,11 +32,15 @@ func DefaultChain(next http.Handler) http.Handler {
 
 // Defaults sets up the default middleware. This convenience function adds the
 // `DefaultChain` to the router and adds the `--debug` option for logging to
-// the CLI.
-func Defaults(r Middlewarer, app Flagger) {
+// the CLI if app is a CLI.
+func Defaults(app interface {
+	Middlewarer
+}) {
 	// Add the default middleware chain.
-	r.Middleware(DefaultChain)
+	app.Middleware(DefaultChain)
 
 	// Add the command line options.
-	AddLoggerOptions(app)
+	if flagger, ok := app.(Flagger); ok {
+		AddLoggerOptions(flagger)
+	}
 }

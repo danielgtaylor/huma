@@ -103,6 +103,29 @@ Official Go package documentation can always be found at https://pkg.go.dev/gith
 
 > :whale: Hi there! I'm the happy Huma whale here to provide help. You'll see me leave helpful tips down below.
 
+## The Router
+
+The Huma router is the entrypoint to your application. There are a couple of ways to create it, depending on what level of customization you need.
+
+```go
+// Simplest way to get started, which creats a router and a CLI with default
+// middleware attached. Note that the CLI is a router.
+app := cli.NewRouter("API Name", "1.0.0")
+
+// Doing the same as above by hand:
+router := huma.New("API Name", "1.0.0")
+app := cli.New(router)
+middleware.Defaults(app)
+
+// Start the CLI after adding routes:
+app.Run()
+
+// -----------------------------------------
+// You can also skip using the built-in CLI.
+router := huma.New("API Name", "1.0.0")
+router.Listen("127.0.0.1:8888")
+```
+
 ## Resources
 
 Huma APIs are composed of resources and sub-resources attached to a router. A resource refers to a unique URI on which operations can be performed. Huma resources can have middleware attached to them, which run before operation handlers.
