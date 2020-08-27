@@ -92,6 +92,11 @@ Even though the example is tiny you can also see some generated documentation at
 
 See the examples directory for more complete examples.
 
+- [Minimal](./examples/minimal/minimal.go) (a minimal "hello world")
+- [Echo](./examples/echo/echo.go) (echo input back to the user with validation)
+- [Notes](./examples/notes/notes.go) (note-taking API)
+- [Timeout](./examples/timeout/timeout.go) (show third-party request timing out)
+
 # Documentation
 
 Official Go package documentation can always be found at https://pkg.go.dev/github.com/danielgtaylor/huma. Below is an introduction to the various features available in Huma.
