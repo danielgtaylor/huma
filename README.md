@@ -63,19 +63,19 @@ import (
 )
 
 func main() {
-  // Create a new router & CLI with default middleware.
+	// Create a new router & CLI with default middleware.
 	app := cli.NewRouter("Minimal Example", "1.0.0")
 
-  // Declare the root resource and a GET operation on it.
-  app.Resource("/").Get("get-root", "Get a short text message",
-    // The only response is HTTP 200 with text/plain
+	// Declare the root resource and a GET operation on it.
+	app.Resource("/").Get("get-root", "Get a short text message",
+		// The only response is HTTP 200 with text/plain
 		responses.OK().ContentType("text/plain"),
 	).Run(func(ctx huma.Context) {
-    // This is he handler function for the operation. Write the response.
+		// This is he handler function for the operation. Write the response.
 		ctx.Write([]byte("Hello, world"))
 	})
 
-  // Run the CLI. When passed no arguments, it starts the server.
+	// Run the CLI. When passed no arguments, it starts the server.
 	app.Run()
 }
 ```
@@ -165,9 +165,9 @@ Every operation has a handler function and takes at least a `huma.Context`, desc
 
 ```go
 app.Resource("/op").Get("get-op", "Example operation",
-  // Response declaration goes here!
+	// Response declaration goes here!
 ).Run(func (ctx huma.Context) {
-  // Handler implementation goes here!
+	// Handler implementation goes here!
 })
 ```
 
@@ -196,30 +196,30 @@ In order to keep the documentation & service specification up to date with the c
 ```go
 // Response structures are just normal Go structs
 type Thing struct {
-  Name string `json:"name"`
+	Name string `json:"name"`
 }
 
 // ... initialization code goes here ...
 
 things := app.Resource("/things")
 things.Get("list-things", "Get a list of things",
-  // Declare a successful response that returns a slice of things
-  responses.OK().Headers("Foo").Model([]Thing{}),
-  // Errors automatically set the right status, content type, and model for you.
-  responses.InternalServerError(),
+	// Declare a successful response that returns a slice of things
+	responses.OK().Headers("Foo").Model([]Thing{}),
+	// Errors automatically set the right status, content type, and model for you.
+	responses.InternalServerError(),
 ).Run(func(ctx huma.Context) {
-  // This works because the `Foo` header was declared above.
-  ctx.Header().Set("Foo", "Some value")
+	// This works because the `Foo` header was declared above.
+	ctx.Header().Set("Foo", "Some value")
 
-  // The `WriteModel` convenience method handles content negotiation and
-  // serializaing the response for you.
-  ctx.WriteModel(http.StatusOK, []Thing{
-    Thing{Name: "Test1"},
-    Thing{Name: "Test2"},
-  })
+	// The `WriteModel` convenience method handles content negotiation and
+	// serializaing the response for you.
+	ctx.WriteModel(http.StatusOK, []Thing{
+		Thing{Name: "Test1"},
+		Thing{Name: "Test2"},
+	})
 
-  // Alternatively, you can write an error
-  ctx.WriteError(http.StatusInternalServerError, "Some message")
+	// Alternatively, you can write an error
+	ctx.WriteError(http.StatusInternalServerError, "Some message")
 })
 ```
 
@@ -248,21 +248,21 @@ It is recommended to return exhaustive errors whenever possible to prevent user 
 
 ```go
 app.Resource("/exhaustive").Get("exhaustive", "Exhastive errors example",
-  responses.OK(),
-  responses.BadRequest(),
+	responses.OK(),
+	responses.BadRequest(),
 ).Run(func(ctx huma.Context) {
-  for i := 0; i < 5; i++ {
-    // Use AddError to add multiple error details to the response.
-    ctx.AddError(fmt.Errorf("Error %d", i))
-  }
+	for i := 0; i < 5; i++ {
+		// Use AddError to add multiple error details to the response.
+		ctx.AddError(fmt.Errorf("Error %d", i))
+	}
 
-  // Check if the context has had any errors added yet.
-  if ctx.HasError() {
-    // Use WriteError to set the actual status code, top-level message, and
-    // any additional errors. This sends the response.
-    ctx.WriteError(http.StatusBadRequest, "Bad input")
-    return
-  }
+	// Check if the context has had any errors added yet.
+	if ctx.HasError() {
+		// Use WriteError to set the actual status code, top-level message, and
+		// any additional errors. This sends the response.
+		ctx.WriteError(http.StatusBadRequest, "Bad input")
+		return
+	}
 })
 ```
 
@@ -272,14 +272,14 @@ Requests can have parameters and/or a body as input to the handler function. Lik
 
 ```go
 type MyInputBody struct {
-  Name string `json:"name"`
+	Name string `json:"name"`
 }
 
 type MyInput struct {
-  ThingID     string      `path:"thing-id" doc:"Example path parameter"`
-  QueryParam  int         `query:"q" doc:"Example query string parameter"`
-  HeaderParam string      `header:"Foo" doc:"Example header parameter"`
-  Body        MyInputBody `doc:"Example request body"`
+	ThingID     string      `path:"thing-id" doc:"Example path parameter"`
+	QueryParam  int         `query:"q" doc:"Example query string parameter"`
+	HeaderParam string      `header:"Foo" doc:"Example header parameter"`
+	Body        MyInputBody `doc:"Example request body"`
 }
 
 // ... Later you use the inputs
@@ -290,12 +290,12 @@ thing := app.Resource("/things", "thing-id")
 
 // Next, declare the handler with an input argument.
 thing.Get("get-thing", "Get a single thing",
-  responses.NoContent(),
+	responses.NoContent(),
 ).Run(func(ctx huma.Context, input MyInput) {
-  fmt.Printf("Thing ID: %s\n", input.ThingID)
-  fmt.Printf("Query param: %s\n", input.QueryParam)
-  fmt.Printf("Header param: %s\n", input.HeaderParam)
-  fmt.Printf("Body name: %s\n", input.Body.Name)
+	fmt.Printf("Thing ID: %s\n", input.ThingID)
+	fmt.Printf("Query param: %s\n", input.QueryParam)
+	fmt.Printf("Header param: %s\n", input.HeaderParam)
+	fmt.Printf("Body name: %s\n", input.Body.Name)
 })
 ```
 
@@ -312,8 +312,8 @@ All supported JSON Schema tags work for parameters and body fields. Validation h
 
 ```go
 type MyInput struct {
-  ThingID    string `path:"thing-id" pattern:"^th-[0-9a-z]+$" doc:"..."`
-  QueryParam int    `query:"q" minimum:"1" doc:"..."`
+	ThingID    string `path:"thing-id" pattern:"^th-[0-9a-z]+$" doc:"..."`
+	QueryParam int    `query:"q" minimum:"1" doc:"..."`
 }
 ```
 
@@ -325,22 +325,22 @@ Because inputs are just Go structs, they are composable and reusable. For exampl
 
 ```go
 type AuthParam struct {
-  Authorization string `header:"Authorization"`
+	Authorization string `header:"Authorization"`
 }
 
 type PaginationParams struct {
-  Cursor string `query:"cursor"`
-  Limit  int    `query:"limit"`
+	Cursor string `query:"cursor"`
+	Limit  int    `query:"limit"`
 }
 
 // ... Later in the code
 app.Resource("/things").Get("list-things", "List things",
-  responses.NoContent(),
+	responses.NoContent(),
 ).Run(func (ctx huma.Context, input struct {
-  AuthParam
-  PaginationParams
+	AuthParam
+	PaginationParams
 }) {
-  fmt.Printf("Auth: %s, Cursor: %s, Limit: %d\n", input.Authorization, input.Cursor, input.Limit)
+	fmt.Printf("Auth: %s, Cursor: %s, Limit: %d\n", input.Authorization, input.Cursor, input.Limit)
 })
 ```
 
@@ -350,7 +350,7 @@ It's possible to support input body streaming for large inputs by declaring your
 
 ```go
 type StreamingBody struct {
-  Body io.Reader
+	Body io.Reader
 }
 ```
 
@@ -358,7 +358,7 @@ You probably want to combine this with custom timeouts, or removing them altoget
 
 ```go
 app.Resource("/streaming").Post("post-stream", "Write streamed data",
-  responses.NoContent(),
+	responses.NoContent(),
 ).WithoutTimeout().Run
 ```
 
@@ -371,16 +371,16 @@ Any input struct can be a resolver by implementing the `huma.Resolver` interface
 ```go
 // Extra validation
 type MyInput struct {
-  Host   string
-  Name string `query:"name"`
+	Host   string
+	Name string `query:"name"`
 }
 
 func (m *MyInput) Resolve(ctx huma.Context, r *http.Request) {
-  // Get request info you don't normally have access to.
-  m.Host = r.Host
+	// Get request info you don't normally have access to.
+	m.Host = r.Host
 
-  // Transformations or other data validation
-  m.Name = strings.Title(m.Name)
+	// Transformations or other data validation
+	m.Name = strings.Title(m.Name)
 }
 ```
 
@@ -427,9 +427,9 @@ app.Middleware(somelibrary.New())
 
 // Custom middleware
 app.Middleware(func(next http.Handler) http.Handler {
-  return http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
-    fmt.Println("In middleware")
-  })
+	return http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
+		fmt.Println("In middleware")
+	})
 })
 ```
 
@@ -445,8 +445,8 @@ Set timeouts and deadlines on the request context and pass that along to librari
 
 ```go
 app.Resource("/timeout").Get("timeout", "Timeout example",
-  responses.String(http.StatusOK),
-  responses.GatewayTimeout(),
+	responses.String(http.StatusOK),
+	responses.GatewayTimeout(),
 ).Run(func(ctx huma.Context) {
 	// Add a timeout to the context. No request should take longer than 2 seconds
 	newCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
@@ -460,7 +460,7 @@ app.Resource("/timeout").Get("timeout", "Timeout example",
 	// deadline of 2 seconds is shorter than the request duration of 5 seconds.
 	_, err := http.DefaultClient.Do(req)
 	if err != nil {
-    ctx.WriteError(http.StatusGatewayTimeout, "Problem with HTTP request", err)
+		ctx.WriteError(http.StatusGatewayTimeout, "Problem with HTTP request", err)
 		return
 	}
 
@@ -486,11 +486,11 @@ foo := app.Resource("/foo")
 
 // Limit to 5 seconds
 create := foo.Post("create-item", "Create a new item",
-  responses.NoContent(),
+	responses.NoContent(),
 )
 create.BodyReadTimeout(5 * time.Second)
 create.Run(func (ctx huma.Context, input Input) {
-  // Do something here.
+	// Do something here.
 })
 ```
 
@@ -498,23 +498,23 @@ You can also access the underlying TCP connection and set deadlines manually:
 
 ```go
 create.Run(func (ctx huma.Context, input struct {
-  Body io.Reader
+	Body io.Reader
 }) {
-  // Get the connection.
-  conn := huma.GetConn(ctx)
+	// Get the connection.
+	conn := huma.GetConn(ctx)
 
-  // Set a new deadline on connection reads.
-  conn.SetReadDeadline(time.Now().Add(600 * time.Second))
+	// Set a new deadline on connection reads.
+	conn.SetReadDeadline(time.Now().Add(600 * time.Second))
 
-  // Read all the data from the request.
+	// Read all the data from the request.
 	data, err := ioutil.ReadAll(input.Body)
 	if err != nil {
-    // If a timeout occurred, this will be a net.Error with `err.Timeout()`
-    // returning true.
+		// If a timeout occurred, this will be a net.Error with `err.Timeout()`
+		// returning true.
 		panic(err)
-  }
+	}
 
-  // Do something with data here...
+	// Do something with data here...
 })
 ```
 
@@ -530,12 +530,12 @@ When using the built-in model processing and the timeout is triggered, the serve
 app := cli.NewRouter("My API", "1.0.0")
 
 create := app.Resource("/foo").Post("create-item", "Create a new item",
-  responses.NoContent(),
+	responses.NoContent(),
 )
 // Limit set to 10 MiB
 create.MaxBodyBytes(10 * 1024 * 1024)
 create.Run(func (ctx huma.Context, input Input) {
-  // Body is guaranteed to be 10MiB or less here.
+	// Body is guaranteed to be 10MiB or less here.
 })
 ```
 
@@ -549,10 +549,10 @@ Huma provides a Zap-based contextual structured logger as part of the default mi
 app := cli.NewRouter("Logging Example", "1.0.0")
 
 app.Resource("/log").Get("log", "Log example",
-  responses.NoContent(),
+	responses.NoContent(),
 ).Run(func (ctx huma.Context) {
-  logger := middleware.GetLogger(ctx)
-  logger.Info("Hello, world!")
+	logger := middleware.GetLogger(ctx)
+	logger.Info("Hello, world!")
 })
 ```
 
@@ -572,15 +572,15 @@ You can also modify the base logger as needed. Set this up _before_ adding any r
 
 ```go
 middleware.NewLogger = func() (*zap.Logger, error) {
-  l, err := middleware.NewDefaultLogger()
-  if err != nil {
-    return nil, err
-  }
+	l, err := middleware.NewDefaultLogger()
+	if err != nil {
+		return nil, err
+	}
 
-  // Add your own global tags.
-  l = l.With(zap.String("env", "prod"))
+	// Add your own global tags.
+	l = l.With(zap.String("env", "prod"))
 
-  return l, nil
+	return l, nil
 }
 ```
 
@@ -642,7 +642,7 @@ app := cli.NewRouter("My API", "1.0.0")
 app.Flag("env", "e", "Environment", "local")
 
 r.Resource("/current_env").Get("get-env", "Get current env",
-  responses.String(http.StatusOK),
+	responses.String(http.StatusOK),
 ).Run(func(ctx huma.Context) string {
 		// The flag is automatically bound to viper settings using the same name.
 		ctx.Write([]byte(viper.GetString("env")))
