@@ -357,9 +357,11 @@ type StreamingBody struct {
 You probably want to combine this with custom timeouts, or removing them altogether.
 
 ```go
-app.Resource("/streaming").Post("post-stream", "Write streamed data",
+op := app.Resource("/streaming").Post("post-stream", "Write streamed data",
 	responses.NoContent(),
-).WithoutTimeout().Run
+)
+op.NoBodyReadTimeout()
+op.Run(...)
 ```
 
 ### Resolvers
@@ -428,7 +430,15 @@ app.Middleware(somelibrary.New())
 // Custom middleware
 app.Middleware(func(next http.Handler) http.Handler {
 	return http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
-		fmt.Println("In middleware")
+		// Request phase, do whatever you want before next middleware or handler
+		// gets called.
+		fmt.Println("Request coming in")
+
+		// Call the next middleware/handler
+		next.ServeHTTP(w, r)
+
+		// Response phase, after handler has run.
+		fmt.Println("Response going out!")
 	})
 })
 ```
@@ -593,12 +603,11 @@ var db *mongo.Client
 
 app := cli.NewRouter("My API", "1.0.0")
 app.PreStart(func() {
-		// Connect to the datastore
-		var err error
-		db, err = mongo.Connect(context.Background(),
-			options.Client().ApplyURI("..."))
-	})
-)
+	// Connect to the datastore
+	var err error
+	db, err = mongo.Connect(context.Background(),
+		options.Client().ApplyURI("..."))
+})
 ```
 
 > :whale: This is especially useful for external dependencies and if any custom CLI commands are set up. For example, you may not want to require a database to run `my-service openapi my-api.json`.
@@ -616,7 +625,7 @@ app.DocsHandler(huma.ReDocHandler("My API"))
 
 ## Custom OpenAPI Fields
 
-Use the OpenAPI hook for OpenAPI customization. It gives you a `*gab.Container` instance that represents the root of the OpenAPI document.
+Use the OpenAPI hook for OpenAPI customization. It gives you a `*gabs.Container` instance that represents the root of the OpenAPI document.
 
 ```go
 func modify(openapi *gabs.Container) {
@@ -643,11 +652,10 @@ app.Flag("env", "e", "Environment", "local")
 
 r.Resource("/current_env").Get("get-env", "Get current env",
 	responses.String(http.StatusOK),
-).Run(func(ctx huma.Context) string {
-		// The flag is automatically bound to viper settings using the same name.
-		ctx.Write([]byte(viper.GetString("env")))
-	},
-)
+).Run(func(ctx huma.Context) {
+	// The flag is automatically bound to viper settings using the same name.
+	ctx.Write([]byte(viper.GetString("env")))
+})
 ```
 
 Then run the service:
