@@ -17,6 +17,7 @@ type Operation struct {
 	method             string
 	id                 string
 	description        string
+	params             map[string]oaParam
 	requestContentType string
 	requestSchema      *schema.Schema
 	responses          []Response
@@ -46,7 +47,15 @@ func (o *Operation) toOpenAPI() *gabs.Container {
 		doc.SetP(o.description, "description")
 	}
 
-	// params
+	// Request params
+	for _, param := range o.params {
+		if param.Internal {
+			// Skip documenting internal-only params.
+			continue
+		}
+
+		doc.ArrayAppend(param, "parameters")
+	}
 
 	// Request body
 	if o.requestSchema != nil {
@@ -138,6 +147,7 @@ func (o *Operation) Run(handler interface{}) {
 		input := t.In(1)
 
 		// Get parameters
+		o.params = getParamInfo(input)
 
 		// Get body if present.
 		if body, ok := input.FieldByName("Body"); ok {
@@ -164,7 +174,7 @@ func (o *Operation) Run(handler interface{}) {
 			Context:        r.Context(),
 			ResponseWriter: w,
 			r:              r,
-			schema:         o.requestSchema,
+			params:         o.params,
 		}
 
 		callHandler(ctx, handler)

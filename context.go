@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/huma/negotiation"
-	"github.com/danielgtaylor/huma/schema"
 	"github.com/fxamacker/cbor/v2"
 	"gopkg.in/yaml.v2"
 )
@@ -49,7 +48,7 @@ type hcontext struct {
 	http.ResponseWriter
 	r      *http.Request
 	errors []error
-	schema *schema.Schema
+	params map[string]oaParam
 }
 
 func (c *hcontext) AddError(err error) {

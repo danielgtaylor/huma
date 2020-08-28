@@ -300,10 +300,9 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 				continue
 			}
 
-			if ctx.schema != nil && ctx.schema.Properties != nil {
-				s := ctx.schema.Properties[f.Name]
-				// spew.Dump(ctx.schema, s)
-				if s != nil && s.HasValidation() {
+			if oap, ok := ctx.params[pname]; ok {
+				s := oap.Schema
+				if s.HasValidation() {
 					data := pv
 					if s.Type == "string" {
 						// Strings are special in that we don't expect users to provide them
@@ -339,6 +338,72 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 			resolver.Resolve(ctx, req)
 		}
 	}
+}
+
+// getParamInfo recursively gets info about params from an input struct. It
+// returns a map of parameter name => parameter object.
+func getParamInfo(t reflect.Type) map[string]oaParam {
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
+	if t.Kind() != reflect.Struct {
+		panic("not a struct")
+	}
+
+	params := map[string]oaParam{}
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+
+		if f.Anonymous {
+			// Embedded struct
+			for k, v := range getParamInfo(f.Type) {
+				params[k] = v
+			}
+			continue
+		}
+
+		p := oaParam{}
+
+		if name, ok := f.Tag.Lookup("path"); ok {
+			p.Name = name
+			p.In = inPath
+			p.Required = true
+		}
+
+		if name, ok := f.Tag.Lookup("query"); ok {
+			p.Name = name
+			p.In = inQuery
+			p.Explode = new(bool)
+		}
+
+		if name, ok := f.Tag.Lookup("header"); ok {
+			p.Name = name
+			p.In = inHeader
+		}
+
+		if doc, ok := f.Tag.Lookup("doc"); ok {
+			p.Description = doc
+		}
+
+		if deprecated, ok := f.Tag.Lookup("deprecated"); ok {
+			p.Deprecated = deprecated == "true"
+		}
+
+		if internal, ok := f.Tag.Lookup("internal"); ok {
+			p.Internal = internal == "true"
+		}
+
+		_, _, s, err := schema.GenerateFromField(f, schema.ModeRead)
+		if err != nil {
+			panic(err)
+		}
+		p.Schema = s
+
+		params[p.Name] = p
+	}
+
+	return params
 }
 
 // Unfortunately `handler` has to be `interface{}` because of how function args
