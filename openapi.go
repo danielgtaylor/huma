@@ -35,7 +35,6 @@ type oaParam struct {
 	Required    bool           `json:"required,omitempty"`
 	Schema      *schema.Schema `json:"schema,omitempty"`
 	Deprecated  bool           `json:"deprecated,omitempty"`
-	Example     interface{}    `json:"example,omitempty"`
 	Explode     *bool          `json:"explode,omitempty"`
 
 	// Internal params are excluded from the OpenAPI document and can set up

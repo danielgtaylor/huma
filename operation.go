@@ -139,8 +139,6 @@ func (o *Operation) Run(handler interface{}) {
 		register = o.resource.mux.Delete
 	}
 
-	// TODO: get input param definitions?
-
 	t := reflect.TypeOf(handler)
 	if t.Kind() == reflect.Func && t.NumIn() > 1 {
 		var err error
@@ -157,6 +155,9 @@ func (o *Operation) Run(handler interface{}) {
 			}
 		}
 	}
+
+	// Future improvement idea: use a sync.Pool for the input structure to save
+	// on allocations if the struct has a Reset() method.
 
 	register("/", func(w http.ResponseWriter, r *http.Request) {
 		// Limit the request body size and set a read timeout.
