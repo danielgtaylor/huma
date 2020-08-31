@@ -105,7 +105,7 @@ Official Go package documentation can always be found at https://pkg.go.dev/gith
 
 ## The Router
 
-The Huma router is the entrypoint to your application. There are a couple of ways to create it, depending on what level of customization you need.
+The Huma router is the entrypoint to your service or application. There are a couple of ways to create it, depending on what level of customization you need.
 
 ```go
 // Simplest way to get started, which creats a router and a CLI with default
@@ -672,18 +672,71 @@ You can access the root `cobra.Command` via `app.Root()` and add new custom comm
 
 > :whale: You can also overwite `app.Root().Run` to completely customize how you run the server. Or just ditch the `cli` package completely.
 
+## Testing
+
+The Go standard library provides useful testing utilities and Huma routers implement the [`http.Handler`](https://golang.org/pkg/net/http/#Handler) interface they expect. Huma also provides a `humatest` package with utilities for creating test routers capable of e.g. capturing logs.
+
+You can see an example in the [`examples/test`](https://github.com/danielgtaylor/huma/tree/master/examples/test) directory:
+
+```go
+package main
+
+import (
+	"github.com/danielgtaylor/huma"
+	"github.com/danielgtaylor/huma/cli"
+	"github.com/danielgtaylor/huma/responses"
+)
+
+func routes(r *huma.Router) {
+	// Register a single test route that returns a text/plain response.
+	r.Resource("/test").Get("test", "Test route",
+		responses.OK().ContentType("text/plain"),
+	).Run(func(ctx huma.Context) {
+		ctx.Write([]byte("Hello, test!"))
+	})
+}
+
+func main() {
+	// Create the router.
+	app := cli.NewRouter("Test", "1.0.0")
+
+	// Register routes.
+	routes(app.Router)
+
+	// Run the service.
+	app.Run()
+}
+```
+
+```go
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/danielgtaylor/huma/humatest"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestHandler(t *testing.T) {
+	// Set up the test router and register the routes.
+	r := humatest.NewRouter(t)
+	routes(r)
+
+	// Make a request against the service.
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+	r.ServeHTTP(w, req)
+
+	// Assert the response is as expected.
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "Hello, test!", w.Body.String())
+}
+```
+
 # Design
-
-- Why not Gin? Lots of stars on GitHub, but... Overkill, non-standard handlers & middlware, weird debug mode.
-- Why not fasthttp? Fiber? Not fully HTTP compliant, no HTTP/2, no streaming request/response support.
-- Why not httprouter? Non-standard handlers, no middleware.
-- HTTP/2 means HTTP pipelining benchmarks don't matter.
-
-Ultimately using Chi because:
-
-- Fast router with support for parameterized paths & middleware
-- Standard HTTP handlers
-- Standard HTTP middleware
 
 General Huma design principles:
 
@@ -692,3 +745,53 @@ General Huma design principles:
 - Generate OpenAPI for automated tooling
 - Re-use idiomatic Go concepts whenever possible
 - Encourage good behavior, e.g. exhaustive errors
+
+## High-level design
+
+The high-level design centers around a `Router` object.
+
+- CLI (optional)
+  - Router
+    - []Middleware
+    - []Resource
+      - URI path
+      - []Middleware
+      - []Operations
+        - HTTP method
+        - Inputs / outputs
+          - Go structs with tags
+        - Handler function
+
+## Router Selection
+
+- Why not Gin? Lots of stars on GitHub, but... Overkill, non-standard handlers & middlware, weird debug mode.
+- Why not fasthttp? Fiber? Not fully HTTP compliant, no HTTP/2, no streaming request/response support.
+- Why not httprouter? Non-standard handlers, no middleware.
+- HTTP/2 means HTTP pipelining benchmarks don't really matter.
+
+Ultimately using Chi because:
+
+- Fast router with support for parameterized paths & middleware
+- Standard HTTP handlers
+- Standard HTTP middleware
+
+### Compatibility
+
+Huma tries to be compatible with as many Go libraries as possible by using standard interfaces and idiomatic concepts.
+
+- Standard middleware `func(next http.Handler) http.Handler`
+- Standard context `huma.Context` is a `context.Context`
+- Standard HTTP writer `huma.Context` is an `http.ResponseWriter` that can check against declared response codes and models.
+- Standard streaming support via the `io.Reader` and `io.Writer` interfaces
+
+## Compromises
+
+Given the features of Go, the desire to strictly keep the code and docs/tools in sync, and a desire to be developer-friendly and quick to start using, Huma makes some necessary compromises.
+
+- Struct tags are used as metadata for fields to support things like JSON Schema-style validation. There are no compile-time checks for these, but basic linter support.
+- Handler functions registration uses `interface{}` to support any kind of input struct.
+- Response registration takes an _instance_ of your type since you can't pass types in Go.
+- Many checks happen at service startup rather than compile-time. Luckily the most basic unit test that creates a router should catch these.
+- `ctx.WriteModel` and `ctx.WriteError` do checks at runtime and can be at least partially bypassed with `ctx.Write` by design. We trade looser checks for a nicer interface and more compatibility.
+
+> :whale: Thanks for reading!
