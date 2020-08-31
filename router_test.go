@@ -6,10 +6,27 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func newTestRouter() *Router {
+	app := New("Test API", "1.0.0")
+	return app
+}
+
+func TestRouterServiceLink(t *testing.T) {
+	r := newTestRouter()
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	r.ServeHTTP(w, req)
+	assert.Contains(t, w.Header().Get("Link"), `</openapi.json>; rel="service-desc"`)
+	assert.Contains(t, w.Header().Get("Link"), `</docs>; rel="service-doc"`)
+}
 
 func TestRouterHello(t *testing.T) {
 	r := New("Test", "1.0.0")
@@ -61,7 +78,7 @@ func TestModelInputOutput(t *testing.T) {
 	}
 
 	r := New("Test", "1.0.0")
-	r.Resource("/players", "category").Post("player", "Create player",
+	r.Resource("/players").SubResource("category").Post("player", "Create player",
 		NewResponse(http.StatusOK, "test").Model(Response{}),
 	).Run(func(ctx Context, input struct {
 		Category string `path:"category"`
@@ -95,4 +112,88 @@ func TestModelInputOutput(t *testing.T) {
 			"id": "abc123",
 			"age": 25
 		}`, w.Body.String())
+
+	// Should be able to get OpenAPI describing this API with its resource,
+	// operation, schema, etc.
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/openapi.json", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+func TestTooBigBody(t *testing.T) {
+	app := newTestRouter()
+
+	type Input struct {
+		Body struct {
+			ID string `json:"id"`
+		}
+	}
+
+	op := app.Resource("/test").Put("put", "desc",
+		NewResponse(http.StatusNoContent, "desc"),
+	)
+	op.MaxBodyBytes(5)
+	op.Run(func(ctx Context, input Input) {
+		// Do nothing...
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPut, "/test", strings.NewReader(`{"id": "foo"}`))
+	app.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Request body too large")
+
+	// With content length
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodPut, "/test", strings.NewReader(`{"id": "foo"}`))
+	req.Header.Set("Content-Length", "13")
+	app.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Request body too large")
+}
+
+type timeoutError struct{}
+
+func (e *timeoutError) Error() string {
+	return "timed out"
+}
+
+func (e *timeoutError) Timeout() bool {
+	return true
+}
+
+func (e *timeoutError) Temporary() bool {
+	return false
+}
+
+type slowReader struct{}
+
+func (r *slowReader) Read(p []byte) (int, error) {
+	return 0, &timeoutError{}
+}
+
+func TestBodySlow(t *testing.T) {
+	app := newTestRouter()
+
+	type Input struct {
+		Body struct {
+			ID string
+		}
+	}
+
+	op := app.Resource("/test").Put("put", "desc",
+		NewResponse(http.StatusNoContent, "desc"),
+	)
+	op.BodyReadTimeout(1 * time.Millisecond)
+	op.Run(func(ctx Context, input Input) {
+		// Do nothing...
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPut, "/test", &slowReader{})
+	app.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "timed out")
 }

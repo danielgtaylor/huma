@@ -16,7 +16,7 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 )
 
-func NewTestRouter(t testing.TB) (*huma.Router, *observer.ObservedLogs) {
+func newTestRouter(t testing.TB) (*huma.Router, *observer.ObservedLogs) {
 	core, logs := observer.New(zapcore.DebugLevel)
 
 	router := huma.New("Test API", "1.0.0")
@@ -31,7 +31,7 @@ func NewTestRouter(t testing.TB) (*huma.Router, *observer.ObservedLogs) {
 }
 
 func TestRecoveryMiddleware(t *testing.T) {
-	app, _ := NewTestRouter(t)
+	app, _ := newTestRouter(t)
 
 	app.Resource("/panic").Get("panic", "Panic recovery test",
 		responses.NoContent(),
@@ -47,7 +47,7 @@ func TestRecoveryMiddleware(t *testing.T) {
 }
 
 func TestRecoveryMiddlewareString(t *testing.T) {
-	app, _ := NewTestRouter(t)
+	app, _ := newTestRouter(t)
 
 	app.Resource("/panic").Get("panic", "Panic recovery test",
 		responses.NoContent(),
@@ -63,7 +63,7 @@ func TestRecoveryMiddlewareString(t *testing.T) {
 }
 
 func TestRecoveryMiddlewareLogBody(t *testing.T) {
-	app, log := NewTestRouter(t)
+	app, log := newTestRouter(t)
 
 	app.Resource("/panic").Put("panic", "Panic recovery test",
 		responses.NoContent(),

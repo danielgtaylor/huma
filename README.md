@@ -28,7 +28,7 @@ Features include:
   - Automatic handling of `Prefer: return=minimal` from [RFC 7240](https://tools.ietf.org/html/rfc7240#section-4.2)
 - Per-operation request size limits & timeouts with sane defaults
 - [Content negotiation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Content_negotiation) between server and client
-  - Support for GZip ([RFC 1952](https://tools.ietf.org/html/rfc1952)) & Brotli ([RFC 7932](https://tools.ietf.org/html/rfc7932)) content encoding via the `Accept-Encoding` header.
+  - Support for gzip ([RFC 1952](https://tools.ietf.org/html/rfc1952)) & Brotli ([RFC 7932](https://tools.ietf.org/html/rfc7932)) content encoding via the `Accept-Encoding` header.
   - Support for JSON ([RFC 8259](https://tools.ietf.org/html/rfc8259)), YAML, and CBOR ([RFC 7049](https://tools.ietf.org/html/rfc7049)) content types via the `Accept` header.
 - Annotated Go types for input and output models
   - Generates JSON Schema from Go types
@@ -484,7 +484,7 @@ By default, a `ReadHeaderTimeout` of _10 seconds_ and an `IdleTimeout` of _15 se
 
 Each operation's individual read timeout defaults to _15 seconds_ and can be changed as needed. This enables large request and response bodies to be sent without fear of timing out, as well as the use of WebSockets, in an opt-in fashion with sane defaults.
 
-When using the built-in model processing and the timeout is triggered, the server sends a 408 Request Timeout as JSON with a message containing the time waited.
+When using the built-in model processing and the timeout is triggered, the server sends an error as JSON with a message containing the time waited.
 
 ```go
 type Input struct {
@@ -534,7 +534,7 @@ create.Run(func (ctx huma.Context, input struct {
 
 By default each operation has a 1 MiB reqeuest body size limit.
 
-When using the built-in model processing and the timeout is triggered, the server sends a 413 Request Entity Too Large as JSON with a message containing the maximum body size for this operation.
+When using the built-in model processing and the timeout is triggered, the server sends an error as JSON with a message containing the maximum body size for this operation.
 
 ```go
 app := cli.NewRouter("My API", "1.0.0")

@@ -2,7 +2,6 @@ package huma
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"net/http"
 	"sync"
@@ -41,8 +40,9 @@ type Router struct {
 	// security
 
 	// Documentation handler function
-	docsPrefix  string
-	docsHandler http.Handler
+	docsPrefix   string
+	docsHandler  http.Handler
+	docsAreSetup bool
 
 	// Tracks the currently running server for graceful shutdown.
 	server     *http.Server
@@ -161,13 +161,12 @@ func (r *Router) OpenAPIHook(hook func(*gabs.Container)) {
 	r.openapiHook = hook
 }
 
-func (r *Router) listen(addr, certFile, keyFile string) error {
+// Set up the docs & OpenAPI routes.
+func (r *Router) setupDocs() {
 	// Register the docs handlers if needed.
 	if !r.mux.Match(chi.NewRouteContext(), http.MethodGet, r.OpenAPIPath()) {
 		r.mux.Get(r.OpenAPIPath(), func(w http.ResponseWriter, req *http.Request) {
-			fmt.Println("Getting spec now")
 			spec := r.OpenAPI()
-			fmt.Println("Spec is done, writing response")
 			w.Header().Set("Content-Type", "application/vnd.oai.openapi+json")
 			w.Write(spec.Bytes())
 		})
@@ -176,6 +175,14 @@ func (r *Router) listen(addr, certFile, keyFile string) error {
 	if !r.mux.Match(chi.NewRouteContext(), http.MethodGet, "/docs") {
 		r.mux.Get(r.docsPrefix+"/docs", r.docsHandler.ServeHTTP)
 	}
+
+	r.docsAreSetup = true
+}
+
+func (r *Router) listen(addr, certFile, keyFile string) error {
+	// Setup docs on startup so we can fail fast if the handler is broken in
+	// some way.
+	r.setupDocs()
 
 	// Start the server.
 	r.serverLock.Lock()
@@ -224,6 +231,10 @@ func (r *Router) ListenTLS(addr, certFile, keyFile string) error {
 // ServeHTTP handles an incoming request and is compatible with the standard
 // library `http` package.
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if !r.docsAreSetup {
+		r.setupDocs()
+	}
+
 	r.mux.ServeHTTP(w, req)
 }
 
@@ -268,7 +279,7 @@ func New(docs, version string) *Router {
 				if link != "" {
 					link += ", "
 				}
-				link += `<` + r.OpenAPIPath() + `>; rel="service-desc", <` + r.OpenAPIPath() + `/docs>; rel="service-doc"`
+				link += `<` + r.OpenAPIPath() + `>; rel="service-desc", <` + r.docsPrefix + `/docs>; rel="service-doc"`
 				w.Header().Set("link", link)
 			}
 		})

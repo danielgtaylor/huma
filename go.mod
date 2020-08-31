@@ -5,10 +5,11 @@ go 1.13
 require (
 	github.com/Jeffail/gabs/v2 v2.6.0
 	github.com/andybalholm/brotli v1.0.0
-	github.com/davecgh/go-spew v1.1.1
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
+	github.com/fxamacker/cbor v1.5.1
 	github.com/fxamacker/cbor/v2 v2.2.0
 	github.com/go-chi/chi v4.1.2+incompatible
+	github.com/goccy/go-yaml v1.8.1
 	github.com/magiconair/properties v1.8.2 // indirect
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mitchellh/mapstructure v1.3.3 // indirect
@@ -26,5 +27,4 @@ require (
 	golang.org/x/sys v0.0.0-20200826173525-f9321e4c35a6 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/ini.v1 v1.60.1 // indirect
-	gopkg.in/yaml.v2 v2.3.0
 )

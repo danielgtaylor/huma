@@ -175,7 +175,7 @@ func (o *Operation) Run(handler interface{}) {
 			Context:        r.Context(),
 			ResponseWriter: w,
 			r:              r,
-			params:         o.params,
+			op:             o,
 		}
 
 		callHandler(ctx, handler)

@@ -14,7 +14,7 @@ import (
 )
 
 func TestContentEncodingTooSmall(t *testing.T) {
-	app, _ := NewTestRouter(t)
+	app, _ := newTestRouter(t)
 	app.Resource("/").Get("root", "test",
 		responses.OK().ContentType("text/plain"),
 	).Run(func(ctx huma.Context) {
@@ -32,7 +32,7 @@ func TestContentEncodingTooSmall(t *testing.T) {
 }
 
 func TestContentEncodingIgnoredPath(t *testing.T) {
-	app, _ := NewTestRouter(t)
+	app, _ := newTestRouter(t)
 	app.Resource("/foo.png").Get("root", "test",
 		responses.OK().ContentType("image/png"),
 	).Run(func(ctx huma.Context) {
@@ -51,7 +51,7 @@ func TestContentEncodingIgnoredPath(t *testing.T) {
 }
 
 func TestContentEncodingCompressed(t *testing.T) {
-	app, _ := NewTestRouter(t)
+	app, _ := newTestRouter(t)
 	app.Resource("/").Get("root", "test",
 		responses.OK(),
 	).Run(func(ctx huma.Context) {
@@ -73,7 +73,7 @@ func TestContentEncodingCompressed(t *testing.T) {
 }
 
 func TestContentEncodingCompressedPick(t *testing.T) {
-	app, _ := NewTestRouter(t)
+	app, _ := newTestRouter(t)
 	app.Resource("/").Get("root", "test",
 		responses.OK(),
 	).Run(func(ctx huma.Context) {
@@ -91,7 +91,7 @@ func TestContentEncodingCompressedPick(t *testing.T) {
 }
 
 func TestContentEncodingCompressedMultiWrite(t *testing.T) {
-	app, _ := NewTestRouter(t)
+	app, _ := newTestRouter(t)
 	app.Resource("/").Get("root", "test",
 		responses.OK(),
 	).Run(func(ctx huma.Context) {
@@ -118,7 +118,7 @@ func TestContentEncodingCompressedMultiWrite(t *testing.T) {
 func TestContentEncodingError(t *testing.T) {
 	var status int
 
-	app, _ := NewTestRouter(t)
+	app, _ := newTestRouter(t)
 	app.Middleware(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			wrapped := &statusRecorder{ResponseWriter: w}

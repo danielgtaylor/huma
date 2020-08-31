@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -12,7 +13,6 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/schema"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/go-chi/chi"
 	"github.com/xeipuuv/gojsonschema"
 )
@@ -246,16 +246,43 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 				continue
 			}
 
-			// load body
+			// Check if a content-length has been sent. If it's too big then there
+			// is no need to waste time reading.
+			if length := req.Header.Get("Content-Length"); length != "" {
+				if l, err := strconv.ParseInt(length, 10, 64); err == nil {
+					if l > ctx.op.maxBodyBytes {
+						ctx.AddError(&ErrorDetail{
+							Message:  fmt.Sprintf("Request body too large, limit = %d bytes", ctx.op.maxBodyBytes),
+							Location: "body",
+							Value:    length,
+						})
+						continue
+					}
+				}
+			}
+
+			// Load the body (read/unmarshal).
 			data, err := ioutil.ReadAll(req.Body)
 			if err != nil {
-				spew.Dump(err)
+				if strings.Contains(err.Error(), "request body too large") {
+					ctx.AddError(&ErrorDetail{
+						Message:  fmt.Sprintf("Request body too large, limit = %d bytes", ctx.op.maxBodyBytes),
+						Location: "body",
+					})
+				} else if e, ok := err.(net.Error); ok && e.Timeout() {
+					ctx.AddError(&ErrorDetail{
+						Message:  fmt.Sprintf("Request body took too long to read: timed out after %v", ctx.op.bodyReadTimeout),
+						Location: "body",
+					})
+				} else {
+					panic(err)
+				}
+				continue
 			}
 			err = json.Unmarshal(data, inField.Addr().Interface())
 			if err != nil {
-				spew.Dump(err)
+				panic(err)
 			}
-			// spew.Dump("Read in body", inField.Interface())
 			continue
 		}
 
@@ -300,7 +327,7 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 				continue
 			}
 
-			if oap, ok := ctx.params[pname]; ok {
+			if oap, ok := ctx.op.params[pname]; ok {
 				s := oap.Schema
 				if s.HasValidation() {
 					data := pv

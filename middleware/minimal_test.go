@@ -11,7 +11,7 @@ import (
 )
 
 func TestPreferMinimalMiddleware(t *testing.T) {
-	app, _ := NewTestRouter(t)
+	app, _ := newTestRouter(t)
 
 	app.Resource("/test").Get("id", "desc",
 		responses.OK().ContentType("text/plain"),

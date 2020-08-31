@@ -5,17 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 
 	"github.com/danielgtaylor/huma/negotiation"
 	"github.com/fxamacker/cbor/v2"
-	"gopkg.in/yaml.v2"
+	"github.com/goccy/go-yaml"
 )
 
 // ContextFromRequest returns a Huma context for a request, useful for
 // accessing high-level convenience functions from e.g. middleware.
 func ContextFromRequest(w http.ResponseWriter, r *http.Request) Context {
 	return &hcontext{
+		Context:        r.Context(),
 		ResponseWriter: w,
 		r:              r,
 	}
@@ -48,7 +50,7 @@ type hcontext struct {
 	http.ResponseWriter
 	r      *http.Request
 	errors []error
-	params map[string]oaParam
+	op     *Operation
 }
 
 func (c *hcontext) AddError(err error) {
@@ -83,7 +85,7 @@ func (c *hcontext) WriteError(status int, message string, errors ...error) {
 	switch ct {
 	case "application/cbor":
 		ct = "application/problem+cbor"
-	case "application/json":
+	case "", "application/json":
 		ct = "application/problem+json"
 	case "application/yaml", "application/x-yaml":
 		ct = "application/problem+yaml"
@@ -93,6 +95,34 @@ func (c *hcontext) WriteError(status int, message string, errors ...error) {
 }
 
 func (c *hcontext) WriteModel(status int, model interface{}) {
+	// Is this allowed? Find the right response.
+	responses := []Response{}
+	names := []string{}
+	for _, r := range c.op.responses {
+		if r.status == status {
+			responses = append(responses, r)
+			if r.model != nil {
+				names = append(names, r.model.Name())
+			}
+		}
+	}
+
+	if len(responses) == 0 {
+		panic(fmt.Errorf("HTTP status %d not allowed for %s %s", status, c.op.method, c.op.resource.path))
+	}
+
+	found := false
+	for _, r := range responses {
+		if r.model == reflect.TypeOf(model) {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		panic(fmt.Errorf("Invalid model, expecting %s for %s %s", strings.Join(names, ", "), c.op.method, c.op.resource.path))
+	}
+
 	// Get the negotiated content type the client wants and we are willing to
 	// provide.
 	ct := selectContentType(c.r)
