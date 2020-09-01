@@ -15,7 +15,7 @@ var response func(int) huma.Response = newResponse
 func errorResponse(status int) huma.Response {
 	return response(status).
 		ContentType(huma.NegotiatedErrorContentType).
-		Model(huma.ErrorModel{})
+		Model(&huma.ErrorModel{})
 }
 
 // OK HTTP 200 response.
