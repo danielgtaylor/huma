@@ -154,6 +154,20 @@ func (o *Operation) Run(handler interface{}) {
 				panic(fmt.Errorf("unable to generate JSON schema: %w", err))
 			}
 		}
+
+		// It's possible for the inputs to generate a 400, so add it if it wasn't
+		// explicitly defined.
+		found400 := false
+		for _, r := range o.responses {
+			if r.status == http.StatusBadRequest {
+				found400 = true
+				break
+			}
+		}
+
+		if !found400 {
+			o.responses = append(o.responses, NewResponse(http.StatusBadRequest, http.StatusText(http.StatusBadRequest)).Model(&ErrorModel{}))
+		}
 	}
 
 	// Future improvement idea: use a sync.Pool for the input structure to save

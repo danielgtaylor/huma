@@ -32,63 +32,6 @@ type Resolver interface {
 	Resolve(ctx Context, r *http.Request)
 }
 
-// func getParamValue(c *gin.Context, param *openAPIParam) (interface{}, bool) {
-// 	var pstr string
-// 	timeFormat := time.RFC3339Nano
-
-// 	switch param.In {
-// 	case inPath:
-// 		pstr = c.Param(param.Name)
-// 	case inQuery:
-// 		pstr = c.Query(param.Name)
-// 		if pstr == "" {
-// 			return param.def, true
-// 		}
-// 	case inHeader:
-// 		pstr = c.GetHeader(param.Name)
-// 		if pstr == "" {
-// 			return param.def, true
-// 		}
-
-// 		// Some headers have special time formats that aren't ISO8601/RFC3339.
-// 		lowerName := strings.ToLower(param.Name)
-// 		if lowerName == "if-modified-since" || lowerName == "if-unmodified-since" {
-// 			timeFormat = http.TimeFormat
-// 		}
-// 	default:
-// 		panic(fmt.Errorf("%s: %w", param.In, ErrInvalidParamLocation))
-// 	}
-
-// 	if param.Schema.HasValidation() {
-// 		data := pstr
-// 		if param.Schema.Type == "string" {
-// 			// Strings are special in that we don't expect users to provide them
-// 			// with quotes, so wrap them here for the parser that does the
-// 			// validation step below.
-// 			data = `"` + data + `"`
-// 		} else if param.Schema.Type == "array" {
-// 			// Array type needs to have `[` and `]` added.
-// 			if param.Schema.Items.Type == "string" {
-// 				// Same as above, quote each item.
-// 				data = `"` + strings.Join(strings.Split(data, ","), `","`) + `"`
-// 			}
-// 			if len(data) > 0 && data[0] != '[' {
-// 				data = "[" + data + "]"
-// 			}
-// 		}
-// 		if !validAgainstSchema(c, param.Name, param.Schema, []byte(data)) {
-// 			return nil, false
-// 		}
-// 	}
-
-// 	pv, ok := parseParamValue(c, param.Name, param.typ, timeFormat, pstr)
-// 	if !ok {
-// 		return nil, false
-// 	}
-
-// 	return pv, true
-// }
-
 // Checks if data validates against the given schema. Returns false on failure.
 func validAgainstSchema(ctx *hcontext, label string, schema *schema.Schema, data []byte) bool {
 	defer func() {
@@ -279,6 +222,13 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 				}
 				continue
 			}
+
+			if ctx.op.requestSchema != nil && ctx.op.requestSchema.HasValidation() {
+				if !validAgainstSchema(ctx, "body.", ctx.op.requestSchema, data) {
+					continue
+				}
+			}
+
 			err = json.Unmarshal(data, inField.Addr().Interface())
 			if err != nil {
 				panic(err)
@@ -455,10 +405,6 @@ func callHandler(ctx *hcontext, handler interface{}) {
 		return
 	}
 
-	// spew.Dump(input, input.Interface())
-
 	in := []reflect.Value{reflect.ValueOf(ctx), input.Elem()}
 	reflect.ValueOf(handler).Call(in)
-
-	// fmt.Println(out)
 }

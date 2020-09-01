@@ -97,7 +97,7 @@ func TestErrorNegotiation(t *testing.T) {
 	app := newTestRouter()
 
 	app.Resource("/error").Get("test", "Test",
-		NewResponse(400, "desc").Model(ErrorModel{}),
+		NewResponse(400, "desc").Model(&ErrorModel{}),
 	).Run(func(ctx Context) {
 		ctx.AddError(fmt.Errorf("some error"))
 		ctx.AddError(&ErrorDetail{
@@ -203,6 +203,42 @@ func TestInvalidModel(t *testing.T) {
 	assert.Panics(t, func() {
 		w := httptest.NewRecorder()
 		req, _ := http.NewRequest(http.MethodGet, "/bad-model", nil)
+		app.ServeHTTP(w, req)
+	})
+}
+
+func TestInvalidHeader(t *testing.T) {
+	app := newTestRouter()
+
+	app.Resource("/").Get("test", "Test",
+		NewResponse(http.StatusNoContent, "desc").Headers("Extra"),
+	).Run(func(ctx Context) {
+		// Typo in the header should not be allowed
+		ctx.Header().Set("Extra2", "some-value")
+		ctx.WriteHeader(http.StatusNoContent)
+	})
+
+	assert.Panics(t, func() {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, "/", nil)
+		app.ServeHTTP(w, req)
+	})
+}
+
+func TestWriteAfterClose(t *testing.T) {
+	app := newTestRouter()
+
+	app.Resource("/").Get("test", "Test",
+		NewResponse(http.StatusBadRequest, "desc").Model(&ErrorModel{}),
+	).Run(func(ctx Context) {
+		ctx.WriteError(http.StatusBadRequest, "some error")
+		// Second write should fail
+		ctx.WriteError(http.StatusBadRequest, "some error")
+	})
+
+	assert.Panics(t, func() {
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest(http.MethodGet, "/", nil)
 		app.ServeHTTP(w, req)
 	})
 }

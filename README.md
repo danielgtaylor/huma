@@ -96,6 +96,7 @@ See the examples directory for more complete examples.
 - [Echo](./examples/echo/echo.go) (echo input back to the user with validation)
 - [Notes](./examples/notes/notes.go) (note-taking API)
 - [Timeout](./examples/timeout/timeout.go) (show third-party request timing out)
+- [Test](./examples/test/service.go) (how to write a test)
 
 # Documentation
 
@@ -223,7 +224,7 @@ things.Get("list-things", "Get a list of things",
 })
 ```
 
-If you try to set a response status code or header that was not declared you will get a runtime error.
+If you try to set a response status code or header that was not declared you will get a runtime error. If you try to call `WriteModel` or `WriteError` more than once then you will get an error because the writer is considered closed after those methods.
 
 ### Errors
 
@@ -268,7 +269,15 @@ app.Resource("/exhaustive").Get("exhaustive", "Exhastive errors example",
 
 ## Request Inputs
 
-Requests can have parameters and/or a body as input to the handler function. Like responses, inputs use standard Go structs but the tags are different. Here is an example:
+Requests can have parameters and/or a body as input to the handler function. Like responses, inputs use standard Go structs but the tags are different. Here are the available tags:
+
+| Tag      | Description                        | Example                  |
+| -------- | ---------------------------------- | ------------------------ |
+| `path`   | Name of the path parameter         | `path:"thing-id"`        |
+| `query`  | Name of the query string parameter | `query:"q"`              |
+| `header` | Name of the header parameter       | `header:"Authorization"` |
+
+Here is an example:
 
 ```go
 type MyInputBody struct {
@@ -368,10 +377,10 @@ op.Run(...)
 
 Sometimes the built-in validation isn't sufficient for your use-case, or you want to do something more complex with the incoming request object. This is where resolvers come in.
 
-Any input struct can be a resolver by implementing the `huma.Resolver` interface. Each resolver takes the current context and the incoming request. For example:
+Any input struct can be a resolver by implementing the `huma.Resolver` interface, including embedded structs. Each resolver takes the current context and the incoming request. For example:
 
 ```go
-// Extra validation
+// MyInput demonstrates inputs/transformation
 type MyInput struct {
 	Host   string
 	Name string `query:"name"`
@@ -387,6 +396,26 @@ func (m *MyInput) Resolve(ctx huma.Context, r *http.Request) {
 ```
 
 It is recommended that you do not save the request. Whenever possible, use existing mechanisms for describing your input so that it becomes part of the OpenAPI description.
+
+#### Resolver Errors
+
+Resolvers can set errors as needed and Huma will automatically return a 400-level error response before calling your handler. This makes resolvers a good place to run additional complex validation steps so you can provide the user with a set of exhaustive errors.
+
+```go
+type MyInput struct {
+	Host   string
+}
+
+func (m *MyInput) Resolve(ctx huma.Context, r *http.Request) {
+	if m.Host = r.Hostname; m.Host == "localhost" {
+		ctx.AddError(&huma.ErrorDetail{
+			Message: "Invalid value!",
+			Location: "request.host",
+			Value: m.Host,
+		})
+	}
+}
+```
 
 ## Validation
 
@@ -418,6 +447,12 @@ The standard `json` tag is supported and can be used to rename a field and mark 
 | `readOnly`         | Sent in the response only                 | `readOnly:"true"`        |
 | `writeOnly`        | Sent in the request only                  | `writeOnly:"true"`       |
 | `deprecated`       | This field is deprecated                  | `deprecated:"true"`      |
+
+Parameters have some additional validation tags:
+
+| Tag        | Description                    | Example           |
+| ---------- | ------------------------------ | ----------------- |
+| `internal` | Internal-only (not documented) | `internal:"true"` |
 
 ## Middleware
 

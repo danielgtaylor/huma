@@ -1,6 +1,9 @@
 package huma
 
-import "reflect"
+import (
+	"reflect"
+	"strings"
+)
 
 // NegotiatedContentType is a special value to tell Huma to use content
 // negotiation with the client to determine what format to send, e.g. JSON
@@ -62,16 +65,33 @@ func (r Response) Headers(names ...string) Response {
 // Because Go cannot pass types, `bodyModel` should be an instance of the
 // response body.
 func (r Response) Model(bodyModel interface{}) Response {
+	// Add a content type if none has been set. We prefer JSON since it's easy to
+	// represent in OpenAPI. Content negotiation means we also support other
+	// content types which the client can dynamically request.
 	ct := r.contentType
 	if ct == "" {
 		ct = "application/json"
+	}
+
+	// Allow the `Content-Type` header if not already allowed.
+	found := false
+	for _, h := range r.headers {
+		if strings.ToLower(h) == "content-type" {
+			found = true
+			break
+		}
+	}
+
+	headers := r.headers
+	if !found {
+		headers = append(headers, "Content-Type")
 	}
 
 	return Response{
 		description: r.description,
 		status:      r.status,
 		contentType: ct,
-		headers:     r.headers,
+		headers:     headers,
 		model:       reflect.TypeOf(bodyModel),
 	}
 }

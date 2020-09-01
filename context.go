@@ -51,6 +51,7 @@ type hcontext struct {
 	r      *http.Request
 	errors []error
 	op     *Operation
+	closed bool
 }
 
 func (c *hcontext) AddError(err error) {
@@ -59,6 +60,45 @@ func (c *hcontext) AddError(err error) {
 
 func (c *hcontext) HasError() bool {
 	return len(c.errors) > 0
+}
+
+func (c *hcontext) WriteHeader(status int) {
+	if c.op != nil {
+		allowed := []string{}
+		for _, r := range c.op.responses {
+			if r.status == status {
+				for _, h := range r.headers {
+					allowed = append(allowed, h)
+				}
+			}
+		}
+
+		// Check that all headers were allowed to be sent.
+		for name := range c.Header() {
+			found := false
+
+			for _, h := range allowed {
+				if strings.ToLower(name) == strings.ToLower(h) {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				panic(fmt.Errorf("Header %s is not declared for %s %s (allowed: %s)", name, c.r.Method, c.r.URL.Path, allowed))
+			}
+		}
+	}
+
+	c.ResponseWriter.WriteHeader(status)
+}
+
+func (c *hcontext) Write(data []byte) (int, error) {
+	if c.closed {
+		panic(fmt.Errorf("Trying to write to response after WriteModel or WriteError for %s %s", c.r.Method, c.r.URL.Path))
+	}
+
+	return c.ResponseWriter.Write(data)
 }
 
 func (c *hcontext) WriteError(status int, message string, errors ...error) {
@@ -95,34 +135,6 @@ func (c *hcontext) WriteError(status int, message string, errors ...error) {
 }
 
 func (c *hcontext) WriteModel(status int, model interface{}) {
-	// Is this allowed? Find the right response.
-	responses := []Response{}
-	names := []string{}
-	for _, r := range c.op.responses {
-		if r.status == status {
-			responses = append(responses, r)
-			if r.model != nil {
-				names = append(names, r.model.Name())
-			}
-		}
-	}
-
-	if len(responses) == 0 {
-		panic(fmt.Errorf("HTTP status %d not allowed for %s %s", status, c.op.method, c.op.resource.path))
-	}
-
-	found := false
-	for _, r := range responses {
-		if r.model == reflect.TypeOf(model) {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		panic(fmt.Errorf("Invalid model, expecting %s for %s %s", strings.Join(names, ", "), c.op.method, c.op.resource.path))
-	}
-
 	// Get the negotiated content type the client wants and we are willing to
 	// provide.
 	ct := selectContentType(c.r)
@@ -131,6 +143,38 @@ func (c *hcontext) WriteModel(status int, model interface{}) {
 }
 
 func (c *hcontext) writeModel(ct string, status int, model interface{}) {
+	// Is this allowed? Find the right response.
+	if c.op != nil {
+		responses := []Response{}
+		names := []string{}
+		statuses := []string{}
+		for _, r := range c.op.responses {
+			statuses = append(statuses, fmt.Sprintf("%d", r.status))
+			if r.status == status {
+				responses = append(responses, r)
+				if r.model != nil {
+					names = append(names, r.model.Name())
+				}
+			}
+		}
+
+		if len(responses) == 0 {
+			panic(fmt.Errorf("HTTP status %d not allowed for %s %s, expected one of %s", status, c.r.Method, c.r.URL.Path, statuses))
+		}
+
+		found := false
+		for _, r := range responses {
+			if r.model == reflect.TypeOf(model) {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			panic(fmt.Errorf("Invalid model %s, expecting %s for %s %s", reflect.TypeOf(model), strings.Join(names, ", "), c.r.Method, c.r.URL.Path))
+		}
+	}
+
 	// Do the appropriate encoding.
 	var encoded []byte
 	var err error
@@ -159,9 +203,10 @@ func (c *hcontext) writeModel(ct string, status int, model interface{}) {
 	}
 
 	// Encoding succeeded, write the data!
-	c.ResponseWriter.Header().Set("Content-Type", ct)
-	c.ResponseWriter.WriteHeader(status)
-	c.ResponseWriter.Write(encoded)
+	c.Header().Set("Content-Type", ct)
+	c.WriteHeader(status)
+	c.Write(encoded)
+	c.closed = true
 }
 
 // selectContentType selects the best availalable content type via content
