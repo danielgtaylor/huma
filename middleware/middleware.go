@@ -23,6 +23,7 @@ func DefaultChain(next http.Handler) http.Handler {
 	// Note: logger goes before recovery so that recovery can use it. We don't
 	// expect the logger to cause panics.
 	return chi.Chain(
+		OpenTracing,
 		Logger,
 		Recovery,
 		ContentEncoding,

@@ -26,6 +26,7 @@ Features include:
   - Automatic recovery from panics with traceback & request logging
   - Structured logging middleware using [Zap](https://github.com/uber-go/zap)
   - Automatic handling of `Prefer: return=minimal` from [RFC 7240](https://tools.ietf.org/html/rfc7240#section-4.2)
+  - [OpenTracing](https://opentracing.io/) for requests and errors
 - Per-operation request size limits & timeouts with sane defaults
 - [Content negotiation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Content_negotiation) between server and client
   - Support for gzip ([RFC 1952](https://tools.ietf.org/html/rfc1952)) & Brotli ([RFC 7932](https://tools.ietf.org/html/rfc7932)) content encoding via the `Accept-Encoding` header.
@@ -479,6 +480,30 @@ app.Middleware(func(next http.Handler) http.Handler {
 ```
 
 When using the `cli.NewRouter` convenience method, a set of default middleware is added for you. See `middleware.DefaultChain` for more info.
+
+### Enabling OpenTracing
+
+[OpenTracing](https://opentracing.io/) support is built-in, but you have to tell the global tracer where to send the information, otherwise it acts as a no-op. For example, if you use [DataDog APM](https://www.datadoghq.com/blog/opentracing-datadog-cncf/) and have the agent configured wherever you deploy your service:
+
+```go
+import (
+	"github.com/opentracing/opentracing-go"
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
+)
+
+func main() {
+	t := opentracer.New(tracer.WithAgentAddr("host:port"))
+	defer tracer.Stop()
+
+	// Set it as a Global Tracer
+	opentracing.SetGlobalTracer(t)
+
+	app := cli.NewRouter("My Cool Service", "1.0.0")
+	// register routes here
+	app.Run()
+}
+```
 
 ### Timeouts, Deadlines, Cancellation & Limits
 

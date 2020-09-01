@@ -12,6 +12,8 @@ import (
 
 	"github.com/danielgtaylor/huma"
 	"github.com/go-chi/chi"
+	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/ext"
 	"go.uber.org/zap"
 )
 
@@ -108,6 +110,11 @@ func Recovery(next http.Handler) http.Handler {
 					).Error("Caught panic")
 				} else {
 					fmt.Printf("Caught panic: %v\n%s\n\nFrom request:\n%s", err, debug.Stack(), string(request))
+				}
+
+				// If OpenTracing is enabled, augment the span with error info
+				if span := opentracing.SpanFromContext(r.Context()); span != nil {
+					span.SetTag(string(ext.Error), err)
 				}
 
 				ctx := huma.ContextFromRequest(w, r)
