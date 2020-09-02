@@ -278,6 +278,21 @@ Requests can have parameters and/or a body as input to the handler function. Lik
 | `query`  | Name of the query string parameter | `query:"q"`              |
 | `header` | Name of the header parameter       | `header:"Authorization"` |
 
+The following types are supported out of the box:
+
+| Type                | Example Inputs         |
+| ------------------- | ---------------------- |
+| `bool`              | `true`, `false`        |
+| `[u]int[16/32/64]`  | `1234`, `5`, `-1`      |
+| `float32/64`        | `1.234`, `1.0`         |
+| `string`            | `hello`, `t`           |
+| `time.Time`         | `2020-01-01T12:00:00Z` |
+| slice, e.g. `[]int` | `1,2,3`, `tag1,tag2`   |
+
+For example, if the parameter is a query param and the type is `[]string` it might look like `?tags=tag1,tag2` in the URI.
+
+The special struct field `Body` will be treated as the input request body and can refer to another struct or you can embed a struct inline.
+
 Here is an example:
 
 ```go
