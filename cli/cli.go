@@ -57,6 +57,8 @@ func New(router *huma.Router) *CLI {
 		Use:     filepath.Base(os.Args[0]),
 		Version: app.GetVersion(),
 		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("Starting %s %s on %s:%v\n", app.GetTitle(), app.GetVersion(), viper.Get("host"), viper.Get("port"))
+
 			// Call any pre-start functions.
 			for _, f := range app.prestart {
 				f()

@@ -249,6 +249,11 @@ func (r *Router) Shutdown(ctx context.Context) error {
 	return r.server.Shutdown(ctx)
 }
 
+// GetTitle returns the server API title.
+func (r *Router) GetTitle() string {
+	return r.title
+}
+
 // GetVersion returns the server version.
 func (r *Router) GetVersion() string {
 	return r.version
