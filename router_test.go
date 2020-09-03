@@ -197,3 +197,27 @@ func TestBodySlow(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	assert.Contains(t, w.Body.String(), "timed out")
 }
+
+func TestErrorHandlers(t *testing.T) {
+	app := newTestRouter()
+
+	app.Resource("/").Get("root", "desc",
+		NewResponse(http.StatusNoContent, "desc"),
+	).Run(func(ctx Context) {
+		// Do nothing
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/notfound", nil)
+	app.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Equal(t, "application/problem+json", w.Header().Get("Content-Type"))
+	assert.Contains(t, w.Body.String(), "/notfound")
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodPut, "/", nil)
+	app.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	assert.Equal(t, "application/problem+json", w.Header().Get("Content-Type"))
+	assert.Contains(t, w.Body.String(), "PUT")
+}

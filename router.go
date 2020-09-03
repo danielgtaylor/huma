@@ -2,6 +2,7 @@ package huma
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"sync"
@@ -273,6 +274,17 @@ func New(docs, version string) *Router {
 		servers:     []oaServer{},
 		docsHandler: RapiDocHandler(title),
 	}
+
+	// Error handlers
+	r.mux.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := ContextFromRequest(w, r)
+		ctx.WriteError(http.StatusNotFound, fmt.Sprintf("Cannot find %s", r.URL.String()))
+	}))
+
+	r.mux.MethodNotAllowed(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := ContextFromRequest(w, r)
+		ctx.WriteError(http.StatusMethodNotAllowed, fmt.Sprintf("No handler for method %s", r.Method))
+	}))
 
 	// Automatically add links to OpenAPI and docs.
 	r.Middleware(func(next http.Handler) http.Handler {
