@@ -121,10 +121,14 @@ middleware.Defaults(app)
 
 // Start the CLI after adding routes:
 app.Run()
+```
 
-// -----------------------------------------
-// You can also skip using the built-in CLI.
+You can also skip using the built-in `cli` package:
+
+```go
+// Create and start a new router by hand:
 router := huma.New("API Name", "1.0.0")
+router.Middleware(middleware.DefaultChain)
 router.Listen("127.0.0.1:8888")
 ```
 
