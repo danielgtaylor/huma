@@ -5,16 +5,6 @@ import (
 	"strings"
 )
 
-// NegotiatedContentType is a special value to tell Huma to use content
-// negotiation with the client to determine what format to send, e.g. JSON
-// or CBOR.
-const NegotiatedContentType = "application/vnd.huma.negotiated"
-
-// NegotiatedErrorContentType is a special value to tell Huma to use content
-// negotiation with the client to determine what format to send, e.g. JSON
-// or CBOR. Use this for errors to get e.g. application/problem+json.
-const NegotiatedErrorContentType = "application/vnd.huma.negotiated.error"
-
 // Response describes an HTTP response that can be returned from an operation.
 type Response struct {
 	description string

@@ -14,7 +14,7 @@ var response func(int) huma.Response = newResponse
 
 func errorResponse(status int) huma.Response {
 	return response(status).
-		ContentType(huma.NegotiatedErrorContentType).
+		ContentType("application/json").
 		Model(&huma.ErrorModel{})
 }
 
