@@ -221,3 +221,19 @@ func TestErrorHandlers(t *testing.T) {
 	assert.Equal(t, "application/problem+json", w.Header().Get("Content-Type"))
 	assert.Contains(t, w.Body.String(), "PUT")
 }
+
+func TestInvalidPathParam(t *testing.T) {
+	type Input struct {
+		ThingID string `path:"thing-if"`
+	}
+
+	app := newTestRouter()
+
+	assert.Panics(t, func() {
+		app.Resource("/things", "thing-id").Get("get", "Test",
+			NewResponse(http.StatusNoContent, "desc"),
+		).Run(func(ctx Context, input Input) {
+			// Do nothing
+		})
+	})
+}

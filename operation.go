@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/Jeffail/gabs/v2"
@@ -146,6 +147,15 @@ func (o *Operation) Run(handler interface{}) {
 
 		// Get parameters
 		o.params = getParamInfo(input)
+		for k, v := range o.params {
+			if v.In == inPath {
+				// Confirm each declared input struct path parameter is actually a part
+				// of the declared resource path.
+				if !strings.Contains(o.resource.path, "{"+k+"}") {
+					panic(fmt.Errorf("Parameter '%s' not in URI path: %s", k, o.resource.path))
+				}
+			}
+		}
 
 		// Get body if present.
 		if body, ok := input.FieldByName("Body"); ok {
