@@ -239,8 +239,8 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 		var pv string
 		var pname string
 		var location string
+		timeFormat := time.RFC3339Nano
 		if v, ok := f.Tag.Lookup("default"); ok {
-			// fmt.Println("Setting default from tag: " + d)
 			pv = v
 		}
 
@@ -267,11 +267,17 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 			if v := req.Header.Get(name); v != "" {
 				pv = v
 			}
+
+			// Some headers have special time formats that aren't ISO8601/RFC3339.
+			lowerName := strings.ToLower(name)
+			if lowerName == "if-modified-since" || lowerName == "if-unmodified-since" {
+				timeFormat = http.TimeFormat
+			}
 		}
 
 		if pv != "" {
 			// Parse value into the right type.
-			parsed := parseParamValue(ctx, location, pname, f.Type, time.RFC3339Nano, pv)
+			parsed := parseParamValue(ctx, location, pname, f.Type, timeFormat, pv)
 			if parsed == nil {
 				// At least one error, just keep going trying to parse other fields.
 				continue
