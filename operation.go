@@ -123,6 +123,10 @@ func (o *Operation) NoBodyReadTimeout() {
 // form: `func (ctx huma.Context)` or `func (ctx huma.Context, input)` where
 // input is your input struct describing the input parameters and/or body.
 func (o *Operation) Run(handler interface{}) {
+	if reflect.ValueOf(handler).Kind() != reflect.Func {
+		panic(fmt.Errorf("Handler must be a function taking a huma.Context and optionally a user-defined input struct, but got: %s for %s %s", handler, o.method, o.resource.path))
+	}
+
 	var register func(string, http.HandlerFunc)
 
 	switch o.method {
@@ -202,6 +206,25 @@ func (o *Operation) Run(handler interface{}) {
 			op:             o,
 		}
 
-		callHandler(ctx, handler)
+		// If there is no input struct (just a context), then the call is simple.
+		if simple, ok := handler.(func(Context)); ok {
+			simple(ctx)
+			return
+		}
+
+		// Otherwise, create a new input struct instance and populate it.
+		v := reflect.ValueOf(handler)
+		inputType := v.Type().In(1)
+		input := reflect.New(inputType)
+
+		setFields(ctx, ctx.r, input, inputType)
+		if ctx.HasError() {
+			ctx.WriteError(http.StatusBadRequest, "Error while parsing input parameters")
+			return
+		}
+
+		// Call the handler with the context and newly populated input struct.
+		in := []reflect.Value{reflect.ValueOf(ctx), input.Elem()}
+		reflect.ValueOf(handler).Call(in)
 	})
 }

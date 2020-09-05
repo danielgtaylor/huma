@@ -89,8 +89,8 @@ func (r *Router) Contact(name, email, url string) {
 	r.contact.URL = url
 }
 
-// Server adds a new server link to this router for documentation.
-func (r *Router) Server(description, uri string) {
+// ServerLink adds a new server link to this router for documentation.
+func (r *Router) ServerLink(description, uri string) {
 	r.servers = append(r.servers, oaServer{
 		Description: description,
 		URL:         uri,

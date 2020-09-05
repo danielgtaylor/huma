@@ -17,10 +17,6 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 )
 
-// ErrInvalidParamLocation is returned when the `in` field of the parameter
-// is not a valid value.
-// var ErrInvalidParamLocation = errors.New("invalid parameter location")
-
 var timeType = reflect.TypeOf(time.Time{})
 var readerType = reflect.TypeOf((*io.Reader)(nil)).Elem()
 
@@ -47,6 +43,7 @@ func validAgainstSchema(ctx *hcontext, label string, schema *schema.Schema, data
 		}
 	}()
 
+	// TODO: load and pre-cache schemas once per operation
 	loader := gojsonschema.NewGoLoader(schema)
 	doc := gojsonschema.NewBytesLoader(data)
 	s, err := gojsonschema.NewSchema(loader)
@@ -74,6 +71,8 @@ func validAgainstSchema(ctx *hcontext, label string, schema *schema.Schema, data
 	return true
 }
 
+// parseParamValue parses and returns a value from its string representation
+// based on the given type/format info.
 func parseParamValue(ctx Context, location string, name string, typ reflect.Type, timeFormat string, pstr string) interface{} {
 	var pv interface{}
 	switch typ.Kind() {
@@ -173,11 +172,8 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 		f := t.Field(i)
 		inField := input.Field(i)
 
-		// spew.Dump(f, inField)
-
 		if f.Anonymous {
 			// Embedded struct
-			// fmt.Println("Recursing for embedded struct")
 			setFields(ctx, req, inField, f.Type)
 			continue
 		}
@@ -317,7 +313,6 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 	// and also so that any embedded structs are resolved first.
 	if input.CanInterface() {
 		if resolver, ok := input.Addr().Interface().(Resolver); ok {
-			// fmt.Println("Resolving ptr...")
 			resolver.Resolve(ctx, req)
 		}
 	}
@@ -387,30 +382,4 @@ func getParamInfo(t reflect.Type) map[string]oaParam {
 	}
 
 	return params
-}
-
-// Unfortunately `handler` has to be `interface{}` because of how function args
-// work. We can't use `func(interface{})` and expect custom structs to work.
-func callHandler(ctx *hcontext, handler interface{}) {
-	if simple, ok := handler.(func(Context)); ok {
-		simple(ctx)
-		return
-	}
-
-	v := reflect.ValueOf(handler)
-	if v.Kind() != reflect.Func {
-		panic("not a func")
-	}
-
-	inputType := v.Type().In(1)
-	input := reflect.New(inputType)
-
-	setFields(ctx, ctx.r, input, inputType)
-	if ctx.HasError() {
-		ctx.WriteError(http.StatusBadRequest, "Error while parsing input parameters")
-		return
-	}
-
-	in := []reflect.Value{reflect.ValueOf(ctx), input.Elem()}
-	reflect.ValueOf(handler).Call(in)
 }
