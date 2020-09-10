@@ -57,7 +57,7 @@ func main() {
 	})
 
 	// Add an `id` path parameter to create a note resource.
-	note := notes.SubResource("note-id")
+	note := notes.SubResource("/{note-id}")
 
 	note.Put("put-note", "Create or update a note",
 		responses.NoContent(),

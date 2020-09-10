@@ -144,8 +144,8 @@ notes := app.Resource("/notes")
 notes.Middleware(MyMiddleware())
 
 // Create another resource that includes a path parameter: /notes/{id}
-// Any resource/sub-resource that does NOT begin with a `/` is a path param.
-note := notes.SubResource("id")
+// Paths look like URI templates and use wrap parameters in curly braces.
+note := notes.SubResource("/{id}")
 
 // Create a sub-resource at /notes/{id}/likes.
 sub := note.SubResource("/likes")
@@ -315,7 +315,7 @@ type MyInput struct {
 
 // Declare a resource with a path parameter that matches the input struct. This
 // is needed because path parameter positions matter in the URL.
-thing := app.Resource("/things", "thing-id")
+thing := app.Resource("/things/{thing-id}")
 
 // Next, declare the handler with an input argument.
 thing.Get("get-thing", "Get a single thing",

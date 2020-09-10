@@ -81,27 +81,14 @@ func (r *Resource) Middleware(middlewares ...func(next http.Handler) http.Handle
 	r.mux.Use(middlewares...)
 }
 
-// SubResource creates a new resource attached to this resource. Any passed
-// path parts and params are attached to the existing resource path.
-func (r *Resource) SubResource(parts ...string) *Resource {
-	uriTemplate := ""
-	for _, part := range parts {
-		if len(part) == 0 {
-			continue
-		}
-
-		if part[0] == '/' {
-			// This is a path component
-			uriTemplate += part
-		} else {
-			// This is a parameter component
-			uriTemplate += "/{" + part + "}"
-		}
-	}
-
+// SubResource creates a new resource attached to this resource. The passed
+// path will be appended to the resource's existing path. The path can
+// include parameters, e.g. `/things/{thing-id}`. Each resource path must
+// be unique.
+func (r *Resource) SubResource(path string) *Resource {
 	sub := &Resource{
-		path:         r.path + uriTemplate,
-		mux:          r.mux.Route(uriTemplate, nil),
+		path:         r.path + path,
+		mux:          r.mux.Route(path, nil),
 		subResources: []*Resource{},
 		operations:   []*Operation{},
 		tags:         append([]string{}, r.tags...),

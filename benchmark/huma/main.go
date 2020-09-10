@@ -31,7 +31,7 @@ func main() {
 	app := cli.New(huma.New("Benchmark", "1.0.0"))
 	app.Middleware(middleware.Recovery, middleware.ContentEncoding)
 
-	app.Resource("/items", "id").Get("get", "Huma benchmark test",
+	app.Resource("/items/{id}").Get("get", "Huma benchmark test",
 		responses.OK().Headers("x-authinfo").Model(Item{}),
 	).Run(func(ctx huma.Context, input Input) {
 		ctx.Header().Set("x-authinfo", input.AuthInfo)

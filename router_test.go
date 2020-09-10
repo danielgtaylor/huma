@@ -78,7 +78,7 @@ func TestModelInputOutput(t *testing.T) {
 	}
 
 	r := New("Test", "1.0.0")
-	r.Resource("/players").SubResource("category").Post("player", "Create player",
+	r.Resource("/players/{category}").Post("player", "Create player",
 		NewResponse(http.StatusOK, "test").Model(Response{}),
 	).Run(func(ctx Context, input struct {
 		Category string `path:"category"`
@@ -230,7 +230,7 @@ func TestInvalidPathParam(t *testing.T) {
 	app := newTestRouter()
 
 	assert.Panics(t, func() {
-		app.Resource("/things", "thing-id").Get("get", "Test",
+		app.Resource("/things/{thing-id}").Get("get", "Test",
 			NewResponse(http.StatusNoContent, "desc"),
 		).Run(func(ctx Context, input Input) {
 			// Do nothing

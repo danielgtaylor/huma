@@ -53,7 +53,7 @@ func main() {
 
 	app.Middleware(requestIDMiddleware)
 
-	app.Resource("/echo", "word").
+	app.Resource("/echo/{word}").
 		//WithTags("echo-tag").
 		Get("echo", "Echo back an input word",
 			responses.OK().Headers("Etag").Model(EchoResponse{}),

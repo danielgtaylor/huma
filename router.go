@@ -97,30 +97,13 @@ func (r *Router) ServerLink(description, uri string) {
 	})
 }
 
-// Resource creates a new resource attached to this router. Parts is an
-// ordered set of path components which are static if they start with / and
-// treated as a path parameter otherwise. Example:
-// `router.Resource("/foo", "foo-id", "/bar", "bar-id")`
-// Each resource path must be unique.
-func (r *Router) Resource(parts ...string) *Resource {
-	uriTemplate := ""
-	for _, part := range parts {
-		if len(part) == 0 {
-			continue
-		}
-
-		if part[0] == '/' {
-			// This is a path component
-			uriTemplate += part
-		} else {
-			// This is a parameter component
-			uriTemplate += "/{" + part + "}"
-		}
-	}
-
+// Resource creates a new resource attached to this router at the given path.
+// The path can include parameters, e.g. `/things/{thing-id}`. Each resource
+// path must be unique.
+func (r *Router) Resource(path string) *Resource {
 	res := &Resource{
-		path:         uriTemplate,
-		mux:          r.mux.Route(uriTemplate, nil),
+		path:         path,
+		mux:          r.mux.Route(path, nil),
 		subResources: []*Resource{},
 		operations:   []*Operation{},
 		tags:         []string{},
