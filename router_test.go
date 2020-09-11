@@ -229,6 +229,9 @@ func TestInvalidPathParam(t *testing.T) {
 
 	app := newTestRouter()
 
+	// The router has no middleware, so no panic recovery will happen. This lets
+	// us test via a simple assertion that it would panic, and the actual test
+	// to ensure a 5xx error happens in the `middleware` package instead.
 	assert.Panics(t, func() {
 		app.Resource("/things/{thing-id}").Get("get", "Test",
 			NewResponse(http.StatusNoContent, "desc"),

@@ -414,6 +414,14 @@ func (m *MyInput) Resolve(ctx huma.Context, r *http.Request) {
 	// Transformations or other data validation
 	m.Name = strings.Title(m.Name)
 }
+
+// Then use it like any other input struct:
+app.Resource("/things").Get("list-things", "Get a filtered list of things",
+	responses.NoContent(),
+).Run(func(ctx huma.Context, input MyInput) {
+	fmt.Printf("Host: %s\n", input.Host)
+	fmt.Printf("Name: %s\n", input.Name)
+})
 ```
 
 It is recommended that you do not save the request. Whenever possible, use existing mechanisms for describing your input so that it becomes part of the OpenAPI description.
