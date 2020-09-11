@@ -12,6 +12,7 @@ func main() {
 	app.Resource("/").Get("get-root", "Get a short text message",
 		responses.OK().ContentType("text/plain"),
 	).Run(func(ctx huma.Context) {
+		ctx.Header().Set("Content-Type", "text/plain")
 		ctx.Write([]byte("Hello, world"))
 	})
 

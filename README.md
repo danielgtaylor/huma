@@ -73,6 +73,7 @@ func main() {
 		responses.OK().ContentType("text/plain"),
 	).Run(func(ctx huma.Context) {
 		// This is he handler function for the operation. Write the response.
+		ctx.Header().Set("Content-Type", "text/plain")
 		ctx.Write([]byte("Hello, world"))
 	})
 
