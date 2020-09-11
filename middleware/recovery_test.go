@@ -80,5 +80,5 @@ func TestRecoveryMiddlewareLogBody(t *testing.T) {
 	app.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Equal(t, "application/problem+json", w.Result().Header.Get("content-type"))
-	assert.Contains(t, log.All()[0].ContextMap()["request"], `{"foo": "bar"}`)
+	assert.Contains(t, log.All()[0].ContextMap()["http.request"], `{"foo": "bar"}`)
 }
