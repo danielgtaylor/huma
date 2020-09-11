@@ -12,9 +12,9 @@ var handlers = []struct {
 	name    string
 	handler http.Handler
 }{
-	{"RapiDoc", RapiDocHandler("Test API")},
-	{"ReDoc", ReDocHandler("Test API")},
-	{"SwaggerUI", SwaggerUIHandler("Test API")},
+	{"RapiDoc", RapiDocHandler(New("Test API", "1.0.0"))},
+	{"ReDoc", ReDocHandler(New("Test API", "1.0.0"))},
+	{"SwaggerUI", SwaggerUIHandler(New("Test API", "1.0.0"))},
 }
 
 func TestDocHandlers(outer *testing.T) {

@@ -255,8 +255,9 @@ func New(docs, version string) *Router {
 		description: desc,
 		version:     version,
 		servers:     []oaServer{},
-		docsHandler: RapiDocHandler(title),
 	}
+
+	r.docsHandler = RapiDocHandler(r)
 
 	// Error handlers
 	r.mux.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

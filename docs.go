@@ -19,7 +19,7 @@ func splitDocs(docs string) (title, desc string) {
 }
 
 // RapiDocHandler renders documentation using RapiDoc.
-func RapiDocHandler(pageTitle string) http.Handler {
+func RapiDocHandler(router *Router) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(fmt.Sprintf(`<!doctype html>
@@ -31,19 +31,19 @@ func RapiDocHandler(pageTitle string) http.Handler {
 </head>
 <body>
   <rapi-doc
-		spec-url="/openapi.json"
+		spec-url="%s"
 		render-style="read"
     show-header="false"
     primary-color="#f74799"
     nav-accent-color="#47afe8"
   > </rapi-doc>
 </body>
-</html>`, pageTitle)))
+</html>`, router.GetTitle(), router.OpenAPIPath())))
 	})
 }
 
 // ReDocHandler renders documentation using ReDoc.
-func ReDocHandler(pageTitle string) http.Handler {
+func ReDocHandler(router *Router) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(fmt.Sprintf(`<!DOCTYPE html>
@@ -56,15 +56,15 @@ func ReDocHandler(pageTitle string) http.Handler {
 		<style>body { margin: 0; padding: 0; }</style>
   </head>
   <body>
-    <redoc spec-url='/openapi.json'></redoc>
+    <redoc spec-url='%s'></redoc>
     <script src="https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js"> </script>
   </body>
-</html>`, pageTitle)))
+</html>`, router.GetTitle(), router.OpenAPIPath())))
 	})
 }
 
 // SwaggerUIHandler renders documentation using Swagger UI.
-func SwaggerUIHandler(pageTitle string) http.Handler {
+func SwaggerUIHandler(router *Router) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(fmt.Sprintf(`<!-- HTML for static distribution bundle build -->
@@ -106,7 +106,7 @@ func SwaggerUIHandler(pageTitle string) http.Handler {
     window.onload = function() {
       // Begin Swagger UI call region
       const ui = SwaggerUIBundle({
-        url: "/openapi.json",
+        url: "%s",
         dom_id: '#swagger-ui',
         deepLinking: true,
         presets: [
@@ -124,6 +124,6 @@ func SwaggerUIHandler(pageTitle string) http.Handler {
     }
   </script>
   </body>
-</html>`, pageTitle)))
+</html>`, router.GetTitle(), router.OpenAPIPath())))
 	})
 }
