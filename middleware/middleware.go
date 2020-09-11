@@ -1,9 +1,11 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/go-chi/chi"
+	"go.uber.org/zap"
 )
 
 // Middlewarer lets you add middlewares
@@ -25,7 +27,14 @@ func DefaultChain(next http.Handler) http.Handler {
 	return chi.Chain(
 		OpenTracing,
 		Logger,
-		Recovery,
+		Recovery(func(ctx context.Context, err error, request string) {
+			log := GetLogger(ctx)
+			log = log.With(zap.Error(err))
+			log.With(
+				zap.String("http.request", string(request)),
+				zap.String("http.template", chi.RouteContext(ctx).RoutePattern()),
+			).Error("Caught panic")
+		}),
 		ContentEncoding,
 		PreferMinimal,
 	).Handler(next)

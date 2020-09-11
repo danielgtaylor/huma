@@ -79,11 +79,12 @@ func Logger(next http.Handler) http.Handler {
 		chiCtx := chi.RouteContext(r.Context())
 
 		contextLog := l.With(
-			zap.String("method", r.Method),
+			zap.String("http.version", r.Proto),
+			zap.String("http.method", r.Method),
 			// The route pattern isn't filled out until *after* the handler runs...
-			// zap.String("template", chiCtx.RoutePattern()),
-			zap.String("path", r.URL.RequestURI()),
-			zap.String("ip", r.RemoteAddr),
+			// zap.String("http.template", chiCtx.RoutePattern()),
+			zap.String("http.url", r.URL.String()),
+			zap.String("network.client.ip", r.RemoteAddr),
 		)
 		r = r.WithContext(context.WithValue(r.Context(), logContextKey, contextLog.Sugar()))
 		nw := &statusRecorder{ResponseWriter: w}
@@ -91,8 +92,8 @@ func Logger(next http.Handler) http.Handler {
 		next.ServeHTTP(nw, r)
 
 		contextLog = contextLog.With(
-			zap.String("template", chiCtx.RoutePattern()),
-			zap.Int("status", nw.status),
+			zap.String("http.template", chiCtx.RoutePattern()),
+			zap.Int("http.status_code", nw.status),
 			zap.Duration("duration", time.Since(start)),
 		)
 
@@ -119,12 +120,13 @@ func AddLoggerOptions(app Flagger) {
 	})
 }
 
-// GetLogger returns the contextual logger for the current request.
+// GetLogger returns the contextual logger for the current request. If no
+// logger is present, it returns a no-op logger so no nil check is required.
 func GetLogger(ctx context.Context) *zap.SugaredLogger {
 	log := ctx.Value(logContextKey)
 	if log != nil {
 		return log.(*zap.SugaredLogger)
 	}
 
-	return nil
+	return zap.NewNop().Sugar()
 }
