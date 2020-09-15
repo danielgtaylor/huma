@@ -198,7 +198,7 @@ ctx.Write([]byte("Could not find foo"))
 
 ## Responses
 
-In order to keep the documentation & service specification up to date with the code, you **must** declare the responses that your handler may return. This includes declaring the content type, any headers it might return, and what model it returns (if any). The `responses` package helps with declaring well-known responses with the right code/docs/model:
+In order to keep the documentation & service specification up to date with the code, you **must** declare the responses that your handler may return. This includes declaring the content type, any headers it might return, and what model it returns (if any). The `responses` package helps with declaring well-known responses with the right code/docs/model and corresponds to the statuses in the `http` package, e.g. `resposes.OK()` will create a response with the `http.StatusOK` status code.
 
 ```go
 // Response structures are just normal Go structs
@@ -485,7 +485,7 @@ Parameters have some additional validation tags:
 
 ## Middleware
 
-Standard Go middleware is supported. It can be attached to the main router/app or to individual resources, but **must** be added _before_ operation handlers are added.
+Standard [Go HTTP middleware](https://justinas.org/writing-http-middleware-in-go) is supported. It can be attached to the main router/app or to individual resources, but **must** be added _before_ operation handlers are added.
 
 ```go
 // Middleware from some library
