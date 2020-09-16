@@ -147,3 +147,8 @@ func GetLogger(ctx context.Context) *zap.SugaredLogger {
 
 	return zap.NewNop().Sugar()
 }
+
+// SetLogger sets the contextual logger for the current request.
+func SetLogger(r *http.Request, logger *zap.SugaredLogger) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), logContextKey, logger))
+}
