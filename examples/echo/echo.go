@@ -66,7 +66,7 @@ func main() {
 				v = "Hello, " + v
 			}
 
-			ctx.Header().Set("Etag", `W/"foo"`)
+			ctx.Header().Set("ETag", `W/"foo"`)
 			ctx.WriteModel(http.StatusOK, EchoResponse{
 				Value: v,
 				Foo:   input.Foo,
