@@ -31,7 +31,7 @@ func DefaultChain(next http.Handler) http.Handler {
 			log := GetLogger(ctx)
 			log = log.With(zap.Error(err))
 			log.With(
-				zap.String("http.request", string(request)),
+				zap.String("http.request", request),
 				zap.String("http.template", chi.RouteContext(ctx).RoutePattern()),
 			).Error("Caught panic")
 		}),
