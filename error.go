@@ -9,9 +9,9 @@ type ErrorDetailer interface {
 
 // ErrorDetail provides details about a specific error.
 type ErrorDetail struct {
-	Message  string      `json:"message,omitempty"`
-	Location string      `json:"location,omitempty"`
-	Value    interface{} `json:"value,omitempty"`
+	Message  string      `json:"message,omitempty" doc:"Error message text"`
+	Location string      `json:"location,omitempty" doc:"Where the error occured, e.g. 'body.items[3].tags' or 'path.thing-id'"`
+	Value    interface{} `json:"value,omitempty" doc:"The value at the given location"`
 }
 
 // Error returns the error message / satisfies the `error` interface.

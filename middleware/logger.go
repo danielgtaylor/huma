@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/mattn/go-isatty"
+	"github.com/opentracing/opentracing-go"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -21,6 +22,11 @@ var logConfig zap.Config
 // LogLevel sets the current Zap root logger's level when using the logging
 // middleware. This can be changed dynamically at runtime.
 var LogLevel *zap.AtomicLevel
+
+// LogTracePrefix is used to prefix OpenTracing trace and span ID key names in
+// emitted log message tag names. Use this to integrate with DataDog and other
+// tracing service providers.
+var LogTracePrefix = "dd."
 
 // NewDefaultLogger returns a new low-level `*zap.Logger` instance. If the
 // current terminal is a TTY, it will try ot use colored output automatically.
@@ -86,6 +92,17 @@ func Logger(next http.Handler) http.Handler {
 			zap.String("http.url", r.URL.String()),
 			zap.String("network.client.ip", r.RemoteAddr),
 		)
+
+		if span := opentracing.SpanFromContext(r.Context()); span != nil {
+			// We have a span context, so log its info to help with correlation.
+			if sc, ok := span.Context().(spanContext); ok {
+				contextLog = contextLog.With(
+					zap.Uint64(LogTracePrefix+"trace_id", sc.TraceID()),
+					zap.Uint64(LogTracePrefix+"span_id", sc.SpanID()),
+				)
+			}
+		}
+
 		r = r.WithContext(context.WithValue(r.Context(), logContextKey, contextLog.Sugar()))
 		nw := &statusRecorder{ResponseWriter: w}
 

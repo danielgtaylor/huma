@@ -22,7 +22,7 @@ func (w *minimalWriter) Write(data []byte) (int, error) {
 }
 
 func (w *minimalWriter) WriteHeader(statusCode int) {
-	if statusCode >= 200 && statusCode < 300 {
+	if statusCode >= 200 && statusCode < 300 && statusCode != 201 {
 		statusCode = http.StatusNoContent
 	}
 

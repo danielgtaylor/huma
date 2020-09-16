@@ -8,6 +8,14 @@ import (
 	"github.com/opentracing/opentracing-go/ext"
 )
 
+type spanContext interface {
+	// SpanID returns the span ID that this context is carrying.
+	SpanID() uint64
+
+	// TraceID returns the trace ID that this context is carrying.
+	TraceID() uint64
+}
+
 // OpenTracing provides a middleware for cross-service tracing support.
 func OpenTracing(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

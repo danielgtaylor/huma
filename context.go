@@ -85,7 +85,7 @@ func (c *hcontext) WriteHeader(status int) {
 			}
 
 			if !found {
-				panic(fmt.Errorf("Header %s is not declared for %s %s (allowed: %s)", name, c.r.Method, c.r.URL.Path, allowed))
+				panic(fmt.Errorf("Response header %s is not declared for %s %s with status code %d (allowed: %s)", name, c.r.Method, c.r.URL.Path, status, allowed))
 			}
 		}
 	}
@@ -102,6 +102,10 @@ func (c *hcontext) Write(data []byte) (int, error) {
 }
 
 func (c *hcontext) WriteError(status int, message string, errors ...error) {
+	if c.closed {
+		panic(fmt.Errorf("Trying to write to response after WriteModel or WriteError for %s %s", c.r.Method, c.r.URL.Path))
+	}
+
 	details := []*ErrorDetail{}
 
 	c.errors = append(c.errors, errors...)
@@ -135,6 +139,10 @@ func (c *hcontext) WriteError(status int, message string, errors ...error) {
 }
 
 func (c *hcontext) WriteModel(status int, model interface{}) {
+	if c.closed {
+		panic(fmt.Errorf("Trying to write to response after WriteModel or WriteError for %s %s", c.r.Method, c.r.URL.Path))
+	}
+
 	// Get the negotiated content type the client wants and we are willing to
 	// provide.
 	ct := selectContentType(c.r)
