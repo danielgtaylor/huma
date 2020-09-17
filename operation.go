@@ -77,7 +77,18 @@ func (o *Operation) toOpenAPI() *gabs.Container {
 			// TODO: get header description from shared registry
 			//header := headerMap[name]
 			header := name
-			doc.Set(header, "responses", status, "headers", name)
+			doc.Set(header, "responses", status, "headers", name, "description")
+
+			typ := "string"
+			for _, param := range o.params {
+				if param.In == inHeader && param.Name == name {
+					if param.Schema.Type != "" {
+						typ = param.Schema.Type
+					}
+					break
+				}
+			}
+			doc.Set(typ, "responses", status, "headers", name, "schema", "type")
 		}
 
 		if resp.model != nil {

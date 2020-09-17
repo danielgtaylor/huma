@@ -360,6 +360,12 @@ func getParamInfo(t reflect.Type) map[string]oaParam {
 			p.In = inHeader
 		}
 
+		if p.Name == "" {
+			// This is not a known param. May be filled in later by a resolver so
+			// we shouldn't touch it. Skip!
+			continue
+		}
+
 		if doc, ok := f.Tag.Lookup("doc"); ok {
 			p.Description = doc
 		}
