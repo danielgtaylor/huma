@@ -2,7 +2,6 @@ module github.com/danielgtaylor/huma/benchmark
 
 go 1.14
 
-replace github.com/danielgtaylor/huma => ../
 
 require (
 	github.com/danielgtaylor/huma v0.0.0-20200821183705-0c275cfd3c4a
