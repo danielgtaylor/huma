@@ -37,41 +37,41 @@ func (r *Resource) toOpenAPI() *gabs.Container {
 }
 
 // Operation creates a new HTTP operation with the given method at this resource.
-func (r *Resource) Operation(method, operationID, description string, responses ...Response) *Operation {
-	op := newOperation(r, method, operationID, description, responses)
+func (r *Resource) Operation(method, operationID, docs string, responses ...Response) *Operation {
+	op := newOperation(r, method, operationID, docs, responses)
 	r.operations = append(r.operations, op)
 
 	return op
 }
 
 // Post creates a new HTTP POST operation at this resource.
-func (r *Resource) Post(operationID, description string, responses ...Response) *Operation {
-	return r.Operation(http.MethodPost, operationID, description, responses...)
+func (r *Resource) Post(operationID, docs string, responses ...Response) *Operation {
+	return r.Operation(http.MethodPost, operationID, docs, responses...)
 }
 
 // Head creates a new HTTP HEAD operation at this resource.
-func (r *Resource) Head(operationID, description string, responses ...Response) *Operation {
-	return r.Operation(http.MethodHead, operationID, description, responses...)
+func (r *Resource) Head(operationID, docs string, responses ...Response) *Operation {
+	return r.Operation(http.MethodHead, operationID, docs, responses...)
 }
 
 // Get creates a new HTTP GET operation at this resource.
-func (r *Resource) Get(operationID, description string, responses ...Response) *Operation {
-	return r.Operation(http.MethodGet, operationID, description, responses...)
+func (r *Resource) Get(operationID, docs string, responses ...Response) *Operation {
+	return r.Operation(http.MethodGet, operationID, docs, responses...)
 }
 
 // Put creates a new HTTP PUT operation at this resource.
-func (r *Resource) Put(operationID, description string, responses ...Response) *Operation {
-	return r.Operation(http.MethodPut, operationID, description, responses...)
+func (r *Resource) Put(operationID, docs string, responses ...Response) *Operation {
+	return r.Operation(http.MethodPut, operationID, docs, responses...)
 }
 
 // Patch creates a new HTTP PATCH operation at this resource.
-func (r *Resource) Patch(operationID, description string, responses ...Response) *Operation {
-	return r.Operation(http.MethodPatch, operationID, description, responses...)
+func (r *Resource) Patch(operationID, docs string, responses ...Response) *Operation {
+	return r.Operation(http.MethodPatch, operationID, docs, responses...)
 }
 
 // Delete creates a new HTTP DELETE operation at this resource.
-func (r *Resource) Delete(operationID, description string, responses ...Response) *Operation {
-	return r.Operation(http.MethodDelete, operationID, description, responses...)
+func (r *Resource) Delete(operationID, docs string, responses ...Response) *Operation {
+	return r.Operation(http.MethodDelete, operationID, docs, responses...)
 }
 
 // Middleware adds a new standard middleware to this resource, so it will

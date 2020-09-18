@@ -17,6 +17,7 @@ type Operation struct {
 	resource           *Resource
 	method             string
 	id                 string
+	summary            string
 	description        string
 	params             map[string]oaParam
 	requestContentType string
@@ -26,12 +27,14 @@ type Operation struct {
 	bodyReadTimeout    time.Duration
 }
 
-func newOperation(resource *Resource, method, id, description string, responses []Response) *Operation {
+func newOperation(resource *Resource, method, id, docs string, responses []Response) *Operation {
+	summary, desc := splitDocs(docs)
 	return &Operation{
 		resource:    resource,
 		method:      method,
 		id:          id,
-		description: description,
+		summary:     summary,
+		description: desc,
 		responses:   responses,
 		// 1 MiB body limit by default
 		maxBodyBytes: 1024 * 1024,
@@ -43,9 +46,12 @@ func newOperation(resource *Resource, method, id, description string, responses 
 func (o *Operation) toOpenAPI() *gabs.Container {
 	doc := gabs.New()
 
-	doc.SetP(o.id, "operationId")
+	doc.Set(o.id, "operationId")
+	if o.summary != "" {
+		doc.Set(o.summary, "summary")
+	}
 	if o.description != "" {
-		doc.SetP(o.description, "description")
+		doc.Set(o.description, "description")
 	}
 
 	// Request params
