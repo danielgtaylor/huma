@@ -22,6 +22,11 @@ func NewResponse(status int, description string) Response {
 	}
 }
 
+// GetStatus returns the response's HTTP status code.
+func (r Response) GetStatus() int {
+	return r.status
+}
+
 // ContentType sets the response's content type header.
 func (r Response) ContentType(ct string) Response {
 	return Response{
