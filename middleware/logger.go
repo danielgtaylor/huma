@@ -37,14 +37,12 @@ func NewDefaultLogger() (*zap.Logger, error) {
 	}
 
 	if isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd()) {
-		config := zap.NewDevelopmentConfig()
-		LogLevel = &config.Level
-		config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-		config.EncoderConfig.EncodeTime = iso8601UTCTimeEncoder
-		return config.Build()
+		logConfig = zap.NewDevelopmentConfig()
+		logConfig.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	} else {
+		logConfig = zap.NewProductionConfig()
 	}
 
-	logConfig = zap.NewProductionConfig()
 	logConfig.EncoderConfig.EncodeTime = iso8601UTCTimeEncoder
 	LogLevel = &logConfig.Level
 	return logConfig.Build()
