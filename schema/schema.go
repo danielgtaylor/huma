@@ -109,6 +109,7 @@ type Schema struct {
 	ReadOnly             bool               `json:"readOnly,omitempty"`
 	WriteOnly            bool               `json:"writeOnly,omitempty"`
 	Deprecated           bool               `json:"deprecated,omitempty"`
+	ContentEncoding      string             `json:"contentEncoding,omitempty"`
 }
 
 // HasValidation returns true if at least one validator is set on the schema.
@@ -451,12 +452,18 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 		}
 		schema.AdditionalProperties = s
 	case reflect.Slice, reflect.Array:
-		schema.Type = "array"
-		s, err := GenerateWithMode(t.Elem(), mode, nil)
-		if err != nil {
-			return nil, err
+		if t.Elem().Kind() == reflect.Uint8 {
+			// Special case: `[]byte` should be a Base-64 string.
+			schema.Type = "string"
+			schema.ContentEncoding = "base64"
+		} else {
+			schema.Type = "array"
+			s, err := GenerateWithMode(t.Elem(), mode, nil)
+			if err != nil {
+				return nil, err
+			}
+			schema.Items = s
 		}
-		schema.Items = s
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
 		schema.Type = "integer"
 		schema.Format = "int32"

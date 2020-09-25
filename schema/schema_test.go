@@ -44,6 +44,7 @@ var types = []struct {
 	{net.IP{}, "string", "ipv4"},
 	{time.Time{}, "string", "date-time"},
 	{url.URL{}, "string", "uri"},
+	{[]byte{}, "string", ""},
 	// TODO: map
 }
 
