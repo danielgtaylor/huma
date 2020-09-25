@@ -18,7 +18,10 @@ import (
 )
 
 // MaxLogBodyBytes logs at most this many bytes of any request body during a
-// panic when using the recovery middleware. Defaults to 10KiB.
+// panic when using the recovery middleware. Defaults to 10KiB. Changing this
+// value changes the amount of potential memory used for *each* incoming
+// request, so change it carefully and complement the change with load testing
+// because larger values can have a detrimental effect on the server.
 var MaxLogBodyBytes int64 = 10 * 1024
 
 // bufferedReadCloser will read and buffer up to max bytes into buf. Additional
