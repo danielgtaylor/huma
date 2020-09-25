@@ -159,6 +159,8 @@ func (o *Operation) Run(handler interface{}) {
 		register = o.resource.mux.Patch
 	case http.MethodDelete:
 		register = o.resource.mux.Delete
+	default:
+		panic(fmt.Errorf("Unknown HTTP verb: %s", o.method))
 	}
 
 	t := reflect.TypeOf(handler)
