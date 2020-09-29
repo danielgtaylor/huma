@@ -91,7 +91,8 @@ func Recovery(onPanic PanicFunc) func(http.Handler) http.Handler {
 			}
 
 			// Recovering comes *after* the above so the buffer is not returned to
-			// the pool until after we print out its contents.
+			// the pool until after we print out its contents. This deferred func
+			// is used to recover from panics and deliberately left in-line.
 			defer func() {
 				if err := recover(); err != nil {
 					// The body might have been read or partially read, so replace it
