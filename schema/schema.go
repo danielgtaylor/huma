@@ -109,6 +109,7 @@ type Schema struct {
 	ReadOnly             bool               `json:"readOnly,omitempty"`
 	WriteOnly            bool               `json:"writeOnly,omitempty"`
 	Deprecated           bool               `json:"deprecated,omitempty"`
+	ContentEncoding      string             `json:"contentEncoding,omitempty"`
 }
 
 // HasValidation returns true if at least one validator is set on the schema.
@@ -170,6 +171,208 @@ func getFields(typ reflect.Type) []reflect.StructField {
 	return fields
 }
 
+// GenerateFromField generates a schema for a single struct field. It returns
+// the computed field name, whether it is optional, its schema, and any error
+// which may have occurred.
+func GenerateFromField(f reflect.StructField, mode Mode) (string, bool, *Schema, error) {
+	jsonTags := strings.Split(f.Tag.Get("json"), ",")
+	name := strings.ToLower(f.Name)
+	if len(jsonTags) > 0 && jsonTags[0] != "" {
+		name = jsonTags[0]
+	}
+
+	if name == "-" {
+		// Skip deliberately filtered out items
+		return name, false, nil, nil
+	}
+
+	s, err := GenerateWithMode(f.Type, mode, nil)
+	if err != nil {
+		return name, false, nil, err
+	}
+
+	if tag, ok := f.Tag.Lookup("description"); ok {
+		s.Description = tag
+	}
+
+	if tag, ok := f.Tag.Lookup("doc"); ok {
+		s.Description = tag
+	}
+
+	if tag, ok := f.Tag.Lookup("format"); ok {
+		s.Format = tag
+	}
+
+	if tag, ok := f.Tag.Lookup("enum"); ok {
+		s.Enum = []interface{}{}
+		for _, v := range strings.Split(tag, ",") {
+			parsed, err := getTagValue(s, f.Type, v)
+			if err != nil {
+				return name, false, nil, err
+			}
+			s.Enum = append(s.Enum, parsed)
+		}
+	}
+
+	if tag, ok := f.Tag.Lookup("default"); ok {
+		v, err := getTagValue(s, f.Type, tag)
+		if err != nil {
+			return name, false, nil, err
+		}
+
+		s.Default = v
+	}
+
+	if tag, ok := f.Tag.Lookup("example"); ok {
+		v, err := getTagValue(s, f.Type, tag)
+		if err != nil {
+			return name, false, nil, err
+		}
+
+		s.Example = v
+	}
+
+	if tag, ok := f.Tag.Lookup("minimum"); ok {
+		min, err := strconv.ParseFloat(tag, 64)
+		if err != nil {
+			return name, false, nil, err
+		}
+		s.Minimum = &min
+	}
+
+	if tag, ok := f.Tag.Lookup("exclusiveMinimum"); ok {
+		min, err := strconv.ParseFloat(tag, 64)
+		if err != nil {
+			return name, false, nil, err
+		}
+		s.ExclusiveMinimum = &min
+	}
+
+	if tag, ok := f.Tag.Lookup("maximum"); ok {
+		max, err := strconv.ParseFloat(tag, 64)
+		if err != nil {
+			return name, false, nil, err
+		}
+		s.Maximum = &max
+	}
+
+	if tag, ok := f.Tag.Lookup("exclusiveMaximum"); ok {
+		max, err := strconv.ParseFloat(tag, 64)
+		if err != nil {
+			return name, false, nil, err
+		}
+		s.ExclusiveMaximum = &max
+	}
+
+	if tag, ok := f.Tag.Lookup("multipleOf"); ok {
+		mof, err := strconv.ParseFloat(tag, 64)
+		if err != nil {
+			return name, false, nil, err
+		}
+		s.MultipleOf = mof
+	}
+
+	if tag, ok := f.Tag.Lookup("minLength"); ok {
+		min, err := strconv.ParseUint(tag, 10, 64)
+		if err != nil {
+			return name, false, nil, err
+		}
+		s.MinLength = &min
+	}
+
+	if tag, ok := f.Tag.Lookup("maxLength"); ok {
+		max, err := strconv.ParseUint(tag, 10, 64)
+		if err != nil {
+			return name, false, nil, err
+		}
+		s.MaxLength = &max
+	}
+
+	if tag, ok := f.Tag.Lookup("pattern"); ok {
+		s.Pattern = tag
+
+		if _, err := regexp.Compile(s.Pattern); err != nil {
+			return name, false, nil, err
+		}
+	}
+
+	if tag, ok := f.Tag.Lookup("minItems"); ok {
+		min, err := strconv.ParseUint(tag, 10, 64)
+		if err != nil {
+			return name, false, nil, err
+		}
+		s.MinItems = &min
+	}
+
+	if tag, ok := f.Tag.Lookup("maxItems"); ok {
+		max, err := strconv.ParseUint(tag, 10, 64)
+		if err != nil {
+			return name, false, nil, err
+		}
+		s.MaxItems = &max
+	}
+
+	if tag, ok := f.Tag.Lookup("uniqueItems"); ok {
+		if !(tag == "true" || tag == "false") {
+			return name, false, nil, fmt.Errorf("%s uniqueItems: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
+		}
+		s.UniqueItems = tag == "true"
+	}
+
+	if tag, ok := f.Tag.Lookup("minProperties"); ok {
+		min, err := strconv.ParseUint(tag, 10, 64)
+		if err != nil {
+			return name, false, nil, err
+		}
+		s.MinProperties = &min
+	}
+
+	if tag, ok := f.Tag.Lookup("maxProperties"); ok {
+		max, err := strconv.ParseUint(tag, 10, 64)
+		if err != nil {
+			return name, false, nil, err
+		}
+		s.MaxProperties = &max
+	}
+
+	if tag, ok := f.Tag.Lookup("nullable"); ok {
+		if !(tag == "true" || tag == "false") {
+			return name, false, nil, fmt.Errorf("%s nullable: boolean should be true or false but got %s: %w", f.Name, tag, ErrSchemaInvalid)
+		}
+		s.Nullable = tag == "true"
+	}
+
+	if tag, ok := f.Tag.Lookup("readOnly"); ok {
+		if !(tag == "true" || tag == "false") {
+			return name, false, nil, fmt.Errorf("%s readOnly: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
+		}
+		s.ReadOnly = tag == "true"
+	}
+
+	if tag, ok := f.Tag.Lookup("writeOnly"); ok {
+		if !(tag == "true" || tag == "false") {
+			return name, false, nil, fmt.Errorf("%s writeOnly: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
+		}
+		s.WriteOnly = tag == "true"
+	}
+
+	if tag, ok := f.Tag.Lookup("deprecated"); ok {
+		if !(tag == "true" || tag == "false") {
+			return name, false, nil, fmt.Errorf("%s deprecated: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
+		}
+		s.Deprecated = tag == "true"
+	}
+
+	optional := false
+	for _, tag := range jsonTags[1:] {
+		if tag == "omitempty" {
+			optional = true
+		}
+	}
+
+	return name, optional, s, nil
+}
+
 // GenerateWithMode creates a JSON schema for a Go type. Struct field
 // tags can be used to provide additional metadata such as descriptions and
 // validation. The mode can be all, read, or write. In read or write mode
@@ -202,13 +405,12 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 		schema.AdditionalProperties = false
 
 		for _, f := range getFields(t) {
-			jsonTags := strings.Split(f.Tag.Get("json"), ",")
-			name := strings.ToLower(f.Name)
-			if len(jsonTags) > 0 && jsonTags[0] != "" {
-				name = jsonTags[0]
+			name, optional, s, err := GenerateFromField(f, mode)
+			if err != nil {
+				return nil, err
 			}
 
-			if name == "-" {
+			if s == nil {
 				// Skip deliberately filtered out items
 				continue
 			}
@@ -219,200 +421,16 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 				continue
 			}
 
-			s, err := GenerateWithMode(f.Type, mode, nil)
-			if err != nil {
-				return nil, err
+			if s.ReadOnly && mode == ModeWrite {
+				continue
 			}
+
+			if s.WriteOnly && mode == ModeRead {
+				continue
+			}
+
 			properties[name] = s
 
-			if tag, ok := f.Tag.Lookup("description"); ok {
-				s.Description = tag
-			}
-
-			if tag, ok := f.Tag.Lookup("doc"); ok {
-				s.Description = tag
-			}
-
-			if tag, ok := f.Tag.Lookup("format"); ok {
-				s.Format = tag
-			}
-
-			if tag, ok := f.Tag.Lookup("enum"); ok {
-				s.Enum = []interface{}{}
-				for _, v := range strings.Split(tag, ",") {
-					parsed, err := getTagValue(s, f.Type, v)
-					if err != nil {
-						return nil, err
-					}
-					s.Enum = append(s.Enum, parsed)
-				}
-			}
-
-			if tag, ok := f.Tag.Lookup("default"); ok {
-				v, err := getTagValue(s, f.Type, tag)
-				if err != nil {
-					return nil, err
-				}
-
-				s.Default = v
-			}
-
-			if tag, ok := f.Tag.Lookup("example"); ok {
-				v, err := getTagValue(s, f.Type, tag)
-				if err != nil {
-					return nil, err
-				}
-
-				s.Example = v
-			}
-
-			if tag, ok := f.Tag.Lookup("minimum"); ok {
-				min, err := strconv.ParseFloat(tag, 64)
-				if err != nil {
-					return nil, err
-				}
-				s.Minimum = &min
-			}
-
-			if tag, ok := f.Tag.Lookup("exclusiveMinimum"); ok {
-				min, err := strconv.ParseFloat(tag, 64)
-				if err != nil {
-					return nil, err
-				}
-				s.ExclusiveMinimum = &min
-			}
-
-			if tag, ok := f.Tag.Lookup("maximum"); ok {
-				max, err := strconv.ParseFloat(tag, 64)
-				if err != nil {
-					return nil, err
-				}
-				s.Maximum = &max
-			}
-
-			if tag, ok := f.Tag.Lookup("exclusiveMaximum"); ok {
-				max, err := strconv.ParseFloat(tag, 64)
-				if err != nil {
-					return nil, err
-				}
-				s.ExclusiveMaximum = &max
-			}
-
-			if tag, ok := f.Tag.Lookup("multipleOf"); ok {
-				mof, err := strconv.ParseFloat(tag, 64)
-				if err != nil {
-					return nil, err
-				}
-				s.MultipleOf = mof
-			}
-
-			if tag, ok := f.Tag.Lookup("minLength"); ok {
-				min, err := strconv.ParseUint(tag, 10, 64)
-				if err != nil {
-					return nil, err
-				}
-				s.MinLength = &min
-			}
-
-			if tag, ok := f.Tag.Lookup("maxLength"); ok {
-				max, err := strconv.ParseUint(tag, 10, 64)
-				if err != nil {
-					return nil, err
-				}
-				s.MaxLength = &max
-			}
-
-			if tag, ok := f.Tag.Lookup("pattern"); ok {
-				s.Pattern = tag
-
-				if _, err := regexp.Compile(s.Pattern); err != nil {
-					return nil, err
-				}
-			}
-
-			if tag, ok := f.Tag.Lookup("minItems"); ok {
-				min, err := strconv.ParseUint(tag, 10, 64)
-				if err != nil {
-					return nil, err
-				}
-				s.MinItems = &min
-			}
-
-			if tag, ok := f.Tag.Lookup("maxItems"); ok {
-				max, err := strconv.ParseUint(tag, 10, 64)
-				if err != nil {
-					return nil, err
-				}
-				s.MaxItems = &max
-			}
-
-			if tag, ok := f.Tag.Lookup("uniqueItems"); ok {
-				if !(tag == "true" || tag == "false") {
-					return nil, fmt.Errorf("%s uniqueItems: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
-				}
-				s.UniqueItems = tag == "true"
-			}
-
-			if tag, ok := f.Tag.Lookup("minProperties"); ok {
-				min, err := strconv.ParseUint(tag, 10, 64)
-				if err != nil {
-					return nil, err
-				}
-				s.MinProperties = &min
-			}
-
-			if tag, ok := f.Tag.Lookup("maxProperties"); ok {
-				max, err := strconv.ParseUint(tag, 10, 64)
-				if err != nil {
-					return nil, err
-				}
-				s.MaxProperties = &max
-			}
-
-			if tag, ok := f.Tag.Lookup("nullable"); ok {
-				if !(tag == "true" || tag == "false") {
-					return nil, fmt.Errorf("%s nullable: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
-				}
-				s.Nullable = tag == "true"
-			}
-
-			if tag, ok := f.Tag.Lookup("readOnly"); ok {
-				if !(tag == "true" || tag == "false") {
-					return nil, fmt.Errorf("%s readOnly: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
-				}
-				s.ReadOnly = tag == "true"
-
-				if s.ReadOnly && mode == ModeWrite {
-					delete(properties, name)
-					continue
-				}
-			}
-
-			if tag, ok := f.Tag.Lookup("writeOnly"); ok {
-				if !(tag == "true" || tag == "false") {
-					return nil, fmt.Errorf("%s writeOnly: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
-				}
-				s.WriteOnly = tag == "true"
-
-				if s.WriteOnly && mode == ModeRead {
-					delete(properties, name)
-					continue
-				}
-			}
-
-			if tag, ok := f.Tag.Lookup("deprecated"); ok {
-				if !(tag == "true" || tag == "false") {
-					return nil, fmt.Errorf("%s deprecated: boolean should be true or false: %w", f.Name, ErrSchemaInvalid)
-				}
-				s.Deprecated = tag == "true"
-			}
-
-			optional := false
-			for _, tag := range jsonTags[1:] {
-				if tag == "omitempty" {
-					optional = true
-				}
-			}
 			if !optional {
 				required = append(required, name)
 			}
@@ -434,12 +452,18 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 		}
 		schema.AdditionalProperties = s
 	case reflect.Slice, reflect.Array:
-		schema.Type = "array"
-		s, err := GenerateWithMode(t.Elem(), mode, nil)
-		if err != nil {
-			return nil, err
+		if t.Elem().Kind() == reflect.Uint8 {
+			// Special case: `[]byte` should be a Base-64 string.
+			schema.Type = "string"
+			schema.ContentEncoding = "base64"
+		} else {
+			schema.Type = "array"
+			s, err := GenerateWithMode(t.Elem(), mode, nil)
+			if err != nil {
+				return nil, err
+			}
+			schema.Items = s
 		}
-		schema.Items = s
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
 		schema.Type = "integer"
 		schema.Format = "int32"
@@ -467,6 +491,8 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 		schema.Type = "string"
 	case reflect.Ptr:
 		return GenerateWithMode(t.Elem(), mode, schema)
+	case reflect.Interface:
+		// Interfaces can be any type.
 	default:
 		return nil, fmt.Errorf("unsupported type %s from %s", t.Kind(), t)
 	}

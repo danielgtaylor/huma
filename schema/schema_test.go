@@ -33,13 +33,18 @@ var types = []struct {
 }{
 	{false, "boolean", ""},
 	{0, "integer", "int32"},
+	{int64(0), "integer", "int64"},
+	{uint64(0), "integer", "int64"},
+	{float32(0), "number", "float"},
 	{0.0, "number", "double"},
+	{F(0.0), "number", "double"},
 	{"hello", "string", ""},
 	{struct{}{}, "object", ""},
 	{[]string{"foo"}, "array", ""},
 	{net.IP{}, "string", "ipv4"},
 	{time.Time{}, "string", "date-time"},
 	{url.URL{}, "string", "uri"},
+	{[]byte{}, "string", ""},
 	// TODO: map
 }
 

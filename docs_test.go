@@ -1,7 +1,6 @@
 package huma
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,24 +10,31 @@ import (
 
 var handlers = []struct {
 	name    string
-	handler Handler
+	handler http.Handler
 }{
-	{"RapiDoc", RapiDocHandler("Test API")},
-	{"ReDoc", ReDocHandler("Test API")},
-	{"SwaggerUI", SwaggerUIHandler("Test API")},
+	{"RapiDoc", RapiDocHandler(New("Test API", "1.0.0"))},
+	{"ReDoc", ReDocHandler(New("Test API", "1.0.0"))},
+	{"SwaggerUI", SwaggerUIHandler(New("Test API", "1.0.0"))},
 }
 
 func TestDocHandlers(outer *testing.T) {
 	for _, tt := range handlers {
 		local := tt
-		outer.Run(fmt.Sprintf("%v", tt.name), func(t *testing.T) {
-			r := NewTestRouter(t, DocsHandler(local.handler))
+		outer.Run(local.name, func(t *testing.T) {
+			app := newTestRouter()
+			app.DocsHandler(local.handler)
 
 			w := httptest.NewRecorder()
 			req, _ := http.NewRequest(http.MethodGet, "/docs", nil)
-			r.ServeHTTP(w, req)
+			app.ServeHTTP(w, req)
 
 			assert.Equal(t, http.StatusOK, w.Code)
 		})
 	}
+}
+
+func TestSplitDocs(t *testing.T) {
+	title, desc := splitDocs("One two\nthree\nfour five")
+	assert.Equal(t, "One two", title)
+	assert.Equal(t, "three\nfour five", desc)
 }
