@@ -7,6 +7,7 @@ import (
 
 	"github.com/istreamlabs/huma"
 	"github.com/istreamlabs/huma/humatest"
+	"github.com/istreamlabs/huma/responses"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -18,8 +19,10 @@ func Example() {
 	r := humatest.NewRouter(t)
 
 	// Set up routes & handlers.
-	r.Resource("/test").Get("Test get", func() string {
-		return "Hello, test!"
+	r.Resource("/test").Get("test", "Test get",
+		responses.OK().ContentType("text/plain"),
+	).Run(func(ctx huma.Context) {
+		ctx.Write([]byte("Hello, test!"))
 	})
 
 	// Make a test request.
@@ -30,7 +33,21 @@ func Example() {
 	assert.Equal(t, "Hello, test!", w.Body.String())
 }
 
-func TestNewRouter(t *testing.T) {
-	// Should not panic
-	humatest.NewRouter(t, huma.DevServer("http://localhost:8888"))
+func TestPackage(t *testing.T) {
+	// Create the test router. Logs will be hidden unless the test fails.
+	r := humatest.NewRouter(t)
+
+	// Set up routes & handlers.
+	r.Resource("/test").Get("test", "Test get",
+		responses.OK().ContentType("text/plain"),
+	).Run(func(ctx huma.Context) {
+		ctx.Write([]byte("Hello, test!"))
+	})
+
+	// Make a test request.
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "Hello, test!", w.Body.String())
 }

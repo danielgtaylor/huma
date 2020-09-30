@@ -2,194 +2,104 @@ package huma
 
 import (
 	"net/http"
-	"reflect"
 	"strings"
+
+	"github.com/Jeffail/gabs/v2"
+	"github.com/go-chi/chi"
 )
 
-// Resource describes a REST resource at a given URI path. Resources are
-// typically created from a router or as a sub-resource of an existing resource.
+// Resource represents an API resource attached to a router at a specific path
+// (URI template). Resources can have operations or subresources attached to
+// them.
 type Resource struct {
-	*openAPIOperation
-	router *Router
 	path   string
+	mux    chi.Router
+	router *Router
+
+	subResources []*Resource
+	operations   []*Operation
+
+	tags []string
 }
 
-// NewResource creates a new resource with the given router and path. All
-// dependencies, security requirements, params, headers, and responses are
-// empty.
-func NewResource(router *Router, path string, options ...ResourceOption) *Resource {
-	r := &Resource{
-		openAPIOperation: newOperation(),
-		router:           router,
-		path:             path,
+func (r *Resource) toOpenAPI() *gabs.Container {
+	doc := gabs.New()
+
+	for _, sub := range r.subResources {
+		doc.Merge(sub.toOpenAPI())
 	}
 
-	for _, option := range options {
-		option.ApplyResource(r)
+	for _, op := range r.operations {
+		doc.Set(op.toOpenAPI(), r.path, strings.ToLower(op.method))
 	}
 
-	return r
+	return doc
 }
 
-// Copy the resource. New arrays are created for dependencies, security
-// requirements, params, response headers, and responses but the underlying
-// pointer values themselves are the same.
-func (r *Resource) Copy() *Resource {
-	return &Resource{
-		openAPIOperation: r.openAPIOperation.Copy(),
-		router:           r.router,
-		path:             r.path,
-	}
+// Operation creates a new HTTP operation with the given method at this resource.
+func (r *Resource) Operation(method, operationID, docs string, responses ...Response) *Operation {
+	op := newOperation(r, method, operationID, docs, responses)
+	r.operations = append(r.operations, op)
+
+	return op
 }
 
-// With returns a copy of this resource with the given dependencies, security
-// requirements, params, response headers, or responses added to it.
-func (r *Resource) With(options ...ResourceOption) *Resource {
-	c := r.Copy()
-
-	for _, option := range options {
-		option.ApplyResource(c)
-	}
-
-	return c
+// Post creates a new HTTP POST operation at this resource.
+func (r *Resource) Post(operationID, docs string, responses ...Response) *Operation {
+	return r.Operation(http.MethodPost, operationID, docs, responses...)
 }
 
-// Path returns the generated path including any path parameters.
-func (r *Resource) Path() string {
-	generated := r.path
-
-	for _, p := range r.params {
-		if p.In == "path" {
-			component := "{" + p.Name + "}"
-			if !strings.Contains(generated, component) {
-				if !strings.HasSuffix(generated, "/") {
-					generated += "/"
-				}
-				generated += component
-			}
-		}
-	}
-
-	return generated
+// Head creates a new HTTP HEAD operation at this resource.
+func (r *Resource) Head(operationID, docs string, responses ...Response) *Operation {
+	return r.Operation(http.MethodHead, operationID, docs, responses...)
 }
 
-// PathParams returns the name of all path parameters.
-func (r *Resource) PathParams() []string {
-	params := make([]string, len(r.params))
-
-	for i, p := range r.params {
-		params[i] = p.Name
-	}
-
-	return params
+// Get creates a new HTTP GET operation at this resource.
+func (r *Resource) Get(operationID, docs string, responses ...Response) *Operation {
+	return r.Operation(http.MethodGet, operationID, docs, responses...)
 }
 
-// SubResource creates a new resource at the given path, which is appended
-// to the existing resource path after adding any existing path parameters.
-func (r *Resource) SubResource(path string, options ...ResourceOption) *Resource {
-	// Apply all existing params to the path.
-	newPath := r.Path()
-
-	// Apply the new passed-in path component.
-	if !strings.HasSuffix(newPath, "/") {
-		newPath += "/"
-	}
-	if strings.HasPrefix(path, "/") {
-		path = path[1:]
-	}
-	newPath += path
-
-	// Clone the resource and update the path.
-	c := r.With(options...)
-	c.path = newPath
-
-	return c
+// Put creates a new HTTP PUT operation at this resource.
+func (r *Resource) Put(operationID, docs string, responses ...Response) *Operation {
+	return r.Operation(http.MethodPut, operationID, docs, responses...)
 }
 
-// Operation adds the operation to this resource's router with all the
-// combined deps, security requirements, params, headers, responses, etc.
-func (r *Resource) operation(method string, docs string, handler interface{}) {
-	summary, desc := splitDocs(docs)
+// Patch creates a new HTTP PATCH operation at this resource.
+func (r *Resource) Patch(operationID, docs string, responses ...Response) *Operation {
+	return r.Operation(http.MethodPatch, operationID, docs, responses...)
+}
 
-	// Copy the operation and set new fields.
-	op := r.openAPIOperation.Copy()
-	op.summary = summary
-	op.description = desc
+// Delete creates a new HTTP DELETE operation at this resource.
+func (r *Resource) Delete(operationID, docs string, responses ...Response) *Operation {
+	return r.Operation(http.MethodDelete, operationID, docs, responses...)
+}
 
-	op.handler = handler
-	if op.handler != nil {
-		// Only apply auto-response if it's *not* an unsafe handler.
-		if !op.unsafe() {
-			t := reflect.TypeOf(op.handler)
-			if t.NumOut() == len(op.responseHeaders)+len(op.responses)+1 {
-				rtype := t.Out(t.NumOut() - 1)
-				switch rtype.Kind() {
-				case reflect.Bool:
-					op = op.With(Response(http.StatusNoContent, "Success"))
-				case reflect.String:
-					op = op.With(ResponseText(http.StatusOK, "Success"))
-				default:
-					op = op.With(ResponseJSON(http.StatusOK, "Success"))
-				}
-			}
-		}
+// Middleware adds a new standard middleware to this resource, so it will
+// apply to requests at the resource's path (including any subresources).
+// Middleware can also be applied at the router level to apply to all requests.
+func (r *Resource) Middleware(middlewares ...func(next http.Handler) http.Handler) {
+	r.mux.Use(middlewares...)
+}
+
+// SubResource creates a new resource attached to this resource. The passed
+// path will be appended to the resource's existing path. The path can
+// include parameters, e.g. `/things/{thing-id}`. Each resource path must
+// be unique.
+func (r *Resource) SubResource(path string) *Resource {
+	sub := &Resource{
+		path:         r.path + path,
+		mux:          r.mux.Route(path, nil),
+		subResources: []*Resource{},
+		operations:   []*Operation{},
+		tags:         append([]string{}, r.tags...),
 	}
 
-	// Update path with any required path parameters if they are not yet present.
-	allParams := append([]*openAPIParam{}, r.params...)
-	allParams = append(allParams, op.params...)
-	path := r.path
-	for _, p := range allParams {
-		if p.In == "path" {
-			component := "{" + p.Name + "}"
-			if !strings.Contains(path, component) {
-				if !strings.HasSuffix(path, "/") {
-					path += "/"
-				}
-				path += component
-			}
-		}
-	}
+	r.subResources = append(r.subResources, sub)
 
-	r.router.register(method, path, op)
+	return sub
 }
 
-// Head creates an HTTP HEAD operation on the resource.
-func (r *Resource) Head(docs string, handler interface{}) {
-	r.operation(http.MethodHead, docs, handler)
-}
-
-// List is an alias for `Get`.
-func (r *Resource) List(docs string, handler interface{}) {
-	r.Get(docs, handler)
-}
-
-// Get creates an HTTP GET operation on the resource.
-func (r *Resource) Get(docs string, handler interface{}) {
-	r.operation(http.MethodGet, docs, handler)
-}
-
-// Post creates an HTTP POST operation on the resource.
-func (r *Resource) Post(docs string, handler interface{}) {
-	r.operation(http.MethodPost, docs, handler)
-}
-
-// Put creates an HTTP PUT operation on the resource.
-func (r *Resource) Put(docs string, handler interface{}) {
-	r.operation(http.MethodPut, docs, handler)
-}
-
-// Patch creates an HTTP PATCH operation on the resource.
-func (r *Resource) Patch(docs string, handler interface{}) {
-	r.operation(http.MethodPatch, docs, handler)
-}
-
-// Delete creates an HTTP DELETE operation on the resource.
-func (r *Resource) Delete(docs string, handler interface{}) {
-	r.operation(http.MethodDelete, docs, handler)
-}
-
-// Options creates an HTTP OPTIONS operation on the resource.
-func (r *Resource) Options(docs string, handler interface{}) {
-	r.operation(http.MethodOptions, docs, handler)
+// Tags appends to the list of tags, used for documentation.
+func (r *Resource) Tags(names ...string) {
+	r.tags = append(r.tags, names...)
 }
