@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/istreamlabs/huma"
-	"github.com/gin-gonic/gin"
+	"github.com/istreamlabs/huma/middleware"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
@@ -16,22 +16,23 @@ import (
 // NewRouter creates a new test router. It includes a logger attached to the
 // test so if it fails you will see additional output. There is no recovery
 // middleware so panics will get caught by the test runner.
-func NewRouter(t testing.TB, options ...huma.RouterOption) *huma.Router {
-	r, _ := NewRouterObserver(t, options...)
+func NewRouter(t testing.TB) *huma.Router {
+	r, _ := NewRouterObserver(t)
 	return r
 }
 
 // NewRouterObserver creates a new router and a log output observer for testing
 // log output at "debug" level and above during requests.
-func NewRouterObserver(t testing.TB, options ...huma.RouterOption) (*huma.Router, *observer.ObservedLogs) {
+func NewRouterObserver(t testing.TB) (*huma.Router, *observer.ObservedLogs) {
 	core, logs := observer.New(zapcore.DebugLevel)
-	l := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(func(zapcore.Core) zapcore.Core { return core })))
 
-	g := gin.New()
-	g.Use(huma.LogMiddleware(huma.Logger(l)))
+	router := huma.New("Test API", "1.0.0")
+	router.Middleware(middleware.DefaultChain)
 
-	// Passed-in options may override our custom Gin instance.
-	options = append([]huma.RouterOption{huma.Gin(g)}, options...)
+	middleware.NewLogger = func() (*zap.Logger, error) {
+		l := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(func(zapcore.Core) zapcore.Core { return core })))
+		return l, nil
+	}
 
-	return huma.NewRouter("Test API", "1.0.0", options...), logs
+	return router, logs
 }

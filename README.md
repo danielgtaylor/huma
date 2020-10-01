@@ -14,8 +14,7 @@ A modern, simple, fast & opinionated REST API framework for Go with batteries in
 Features include:
 
 - HTTP, HTTPS (TLS), and [HTTP/2](https://http2.github.io/) built-in
-  - Let's Encrypt auto-updating certificates via `--autotls`
-- Declarative interface on top of [Gin](https://github.com/gin-gonic/gin)
+- Declarative interface on top of [Chi](https://github.com/go-chi/chi)
   - Operation & model documentation
   - Request params (path, query, or header)
   - Request body
@@ -25,17 +24,16 @@ Features include:
 - Default (optional) middleware
   - [RFC8631](https://tools.ietf.org/html/rfc8631) service description & docs links
   - Automatic recovery from panics with traceback & request logging
-  - Automatically handle CORS headers
   - Structured logging middleware using [Zap](https://github.com/uber-go/zap)
   - Automatic handling of `Prefer: return=minimal` from [RFC 7240](https://tools.ietf.org/html/rfc7240#section-4.2)
+  - [OpenTracing](https://opentracing.io/) for requests and errors
 - Per-operation request size limits & timeouts with sane defaults
 - [Content negotiation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Content_negotiation) between server and client
-  - Support for GZip ([RFC 1952](https://tools.ietf.org/html/rfc1952)) & Brotli ([RFC 7932](https://tools.ietf.org/html/rfc7932)) content encoding via the `Accept-Encoding` header.
+  - Support for gzip ([RFC 1952](https://tools.ietf.org/html/rfc1952)) & Brotli ([RFC 7932](https://tools.ietf.org/html/rfc7932)) content encoding via the `Accept-Encoding` header.
   - Support for JSON ([RFC 8259](https://tools.ietf.org/html/rfc8259)), YAML, and CBOR ([RFC 7049](https://tools.ietf.org/html/rfc7049)) content types via the `Accept` header.
 - Annotated Go types for input and output models
   - Generates JSON Schema from Go types
   - Automatic input model validation & error handling
-- Dependency injection for loggers, datastores, etc
 - Documentation generation using [RapiDoc](https://mrin9.github.io/RapiDoc/), [ReDoc](https://github.com/Redocly/redoc), or [SwaggerUI](https://swagger.io/tools/swagger-ui/)
 - CLI built-in, configured via arguments or environment variables
   - Set via e.g. `-p 8000`, `--port=8000`, or `SERVICE_PORT=8000`
@@ -43,268 +41,116 @@ Features include:
 - Generates OpenAPI JSON for access to a rich ecosystem of tools
   - Mocks with [API Sprout](https://github.com/danielgtaylor/apisprout)
   - SDKs with [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator)
-  - CLIs with [OpenAPI CLI Generator](https://github.com/danielgtaylor/openapi-cli-generator)
+  - CLI with [Restish](https://rest.sh/)
   - And [plenty](https://openapi.tools/) [more](https://apis.guru/awesome-openapi3/category.html)
 
-This project was inspired by [FastAPI](https://fastapi.tiangolo.com/), [Gin](https://github.com/gin-gonic/gin), and countless others. Look at the [benchmarks](https://github.com/istreamlabs/huma/tree/main/benchmark) to see how Huma compares.
+This project was inspired by [FastAPI](https://fastapi.tiangolo.com/). Look at the [benchmarks](https://github.com/istreamlabs/huma/tree/main/benchmark) to see how Huma compares.
 
 Logo & branding designed by [Kari Taylor](https://www.kari.photography/).
 
-# Concepts & Example
+# Example
 
-REST APIs are composed of operations against resources and can include descriptions of various inputs and possible outputs. For each operation you will typically provide info like:
-
-- HTTP method & path (e.g. `GET /items/{id}`)
-- User-friendly description text
-- Input path, query, or header parameters
-- Input request body model, if appropriate
-- Response header names and descriptions
-- Response status code, content type, and output model
-
-Huma uses standard Go types and a declarative API to capture those descriptions in order to provide a combination of a simple interface and idiomatic code leveraging Go's speed and strong typing.
-
-Let's start by taking a quick look at a note-taking REST API. You can list notes, get a note's contents, create or update notes, and delete notes from an in-memory store. Each of the operations is registered with the router and descibes its inputs and outputs. You can view the full working example below:
+Here is a complete basic hello world example in Huma, that shows how to initialize a Huma app complete with CLI & default middleware, declare a resource with an operation, and define its handler function.
 
 ```go
 package main
 
 import (
 	"net/http"
-	"sync"
-	"time"
 
 	"github.com/istreamlabs/huma"
-	"github.com/istreamlabs/huma/schema"
+	"github.com/istreamlabs/huma/cli"
+	"github.com/istreamlabs/huma/responses"
 )
 
-// NoteSummary is used to list notes. It does not include the (potentially)
-// large note content.
-type NoteSummary struct {
-	ID      string    `json:"id" doc:"Note ID"`
-	Created time.Time `json:"created" doc:"Created date/time as ISO8601"`
-}
-
-// Note records some content text for later reference.
-type Note struct {
-	Created time.Time `json:"created" readOnly:"true" doc:"Created date/time as ISO8601"`
-	Content string    `json:"content" doc:"Note content"`
-}
-
-// We'll use an in-memory DB (a goroutine-safe map). Don't do this in
-// production code!
-var memoryDB = sync.Map{}
-
 func main() {
-	// Create a new router and give our API a title and version.
-	r := huma.NewRouter("Notes API", "1.0.0",
-		huma.DevServer("http://localhost:8888"),
-	)
+	// Create a new router & CLI with default middleware.
+	app := cli.NewRouter("Minimal Example", "1.0.0")
 
-	notes := r.Resource("/v1/notes")
-	notes.List("Returns a list of all notes", func() []*NoteSummary {
-		// Create a list of summaries from all the notes.
-		summaries := make([]*NoteSummary, 0)
-
-		memoryDB.Range(func(k, v interface{}) bool {
-			summaries = append(summaries, &NoteSummary{
-				ID:      k.(string),
-				Created: v.(*Note).Created,
-			})
-			return true
-		})
-
-		return summaries
+	// Declare the root resource and a GET operation on it.
+	app.Resource("/").Get("get-root", "Get a short text message",
+		// The only response is HTTP 200 with text/plain
+		responses.OK().ContentType("text/plain"),
+	).Run(func(ctx huma.Context) {
+		// This is he handler function for the operation. Write the response.
+		ctx.Header().Set("Content-Type", "text/plain")
+		ctx.Write([]byte("Hello, world"))
 	})
 
-	// Set up a custom schema to limit identifier values.
-	idSchema := schema.Schema{Pattern: "^[a-zA-Z0-9._-]{1,32}$"}
-
-	// Add an `id` path parameter to create a note resource.
-	note := notes.With(huma.PathParam("id", "Note ID", huma.Schema(idSchema)))
-
-	notFound := huma.ResponseError(http.StatusNotFound, "Note not found")
-
-	note.Put("Create or update a note", func(id string, n *Note) bool {
-		// Set the created time to now and then save the note in the DB.
-		n.Created = time.Now()
-		memoryDB.Store(id, n)
-
-		// Empty responses don't have a body, so you can just return `true`.
-		return true
-	})
-
-	note.With(notFound).Get("Get a note by its ID",
-		func(id string) (*huma.ErrorModel, *Note) {
-			if n, ok := memoryDB.Load(id); ok {
-				// Note with that ID exists!
-				return nil, n.(*Note)
-			}
-
-			return &huma.ErrorModel{
-				Message: "Note " + id + " not found",
-			}, nil
-		},
-	)
-
-	note.With(notFound).Delete("Delete a note by its ID",
-		func(id string) (*huma.ErrorModel, bool) {
-			if _, ok := memoryDB.Load(id); ok {
-				// Note with that ID exists!
-				memoryDB.Delete(id)
-				return nil, true
-			}
-
-			return &huma.ErrorModel{
-				Message: "Note " + id + " not found",
-			}, false
-		},
-	)
-
-	// Run the app!
-	r.Run()
+	// Run the CLI. When passed no arguments, it starts the server.
+	app.Run()
 }
 ```
 
-Save this file as `notes/main.go`. Run it and then try to access the API with [HTTPie-Go](https://github.com/nojima/httpie-go) (or curl):
+You can test it with `go run hello.go` and make a sample request using [Restish](https://rest.sh/) (or `curl`). By default, Huma runs on port `8888`:
 
 ```sh
-# Grab reflex to enable reloading the server on code changes:
-$ go get github.com/cespare/reflex
-
-# Grab HTTPie-go for making requests
-$ go get -u github.com/nojima/httpie-go/cmd/ht
-
-# Run the server (default host/port is 0.0.0.0:8888, see --help for options)
-$ reflex -s go run notes/main.go
-
-# Make some requests (in another tab)
-$ ht put :8888/v1/notes/test1 content="Some content for note 1"
-HTTP/1.1 204 No Content
-Date: Sat, 07 Mar 2020 22:22:06 GMT
-
-$ ht put :8888/v1/notes/test2 content="Some content for note 2"
-HTTP/1.1 204 No Content
-Date: Sat, 07 Mar 2020 22:22:06 GMT
-
-# Parameter validation works too!
-$ ht put :8888/v1/notes/@bad content="Some content for an invalid note"
-HTTP/1.1 400 Bad Request
-Content-Length: 97
-Content-Type: application/json; charset=utf-8
-Date: Sat, 07 Mar 2020 22:22:06 GMT
-
-{
-    "errors": [
-        "(root): Does not match pattern '^[a-zA-Z0-9._-]{1,32}$'"
-    ],
-    "message": "Invalid input"
-}
-
-# List all the notes
-$ ht :8888/v1/notes
-HTTP/1.1 200 OK
-Content-Length: 122
-Content-Type: application/json; charset=utf-8
-Date: Sat, 07 Mar 2020 22:22:06 GMT
-
-[
-    {
-        "created": "2020-03-07T22:22:06-07:00",
-        "id": "test1"
-    },
-    {
-        "created": "2020-03-07T22:22:06-07:00",
-        "id": "test2"
-    }
-]
+# Get the message from the server
+$ restish :8888
+Hello, world
 ```
 
-The server works and responds as expected. There are also some neat extras built-in. If you go to http://localhost:8888/docs in a browser, you will see auto-generated interactive documentation:
+Even though the example is tiny you can also see some generated documentation at http://localhost:8888/docs.
 
-<img width="878" alt="Screen Shot 2020-03-31 at 11 22 55 PM" src="https://user-images.githubusercontent.com/106826/78105715-a9dfc000-73a6-11ea-8002-371024253daf.png">
+See the examples directory for more complete examples.
 
-The documentation is generated from the OpenAPI 3 spec file that is available at http://localhost:8888/openapi.json. You can also access this spec without running the server:
-
-```sh
-# Save the OpenAPI 3 spec to a file.
-$ go run notes/main.go openapi notes.json
-```
-
-Combine the above with [openapi-cli-generator](https://github.com/danielgtaylor/openapi-cli-generator) and [huma-build](https://github.com/danielgtaylor/huma-build) and you get the following out of the box:
-
-- Small, efficient deployment Docker image with your service
-- Auto-generated service documentation
-- Auto-generated SDKs for any language
-- Auto-generated cross-platform zero-dependency CLI
+- [Minimal](./examples/minimal/minimal.go) (a minimal "hello world")
+- [Echo](./examples/echo/echo.go) (echo input back to the user with validation)
+- [Notes](./examples/notes/notes.go) (note-taking API)
+- [Timeout](./examples/timeout/timeout.go) (show third-party request timing out)
+- [Test](./examples/test/service.go) (how to write a test)
 
 # Documentation
 
-Official Go package documentation can always be found at https://pkg.go.dev/github.com/danielgtaylor/huma. Below is an introduction to the various features available in Huma.
+Official Go package documentation can always be found at https://pkg.go.dev/github.com/istreamlabs/huma. Below is an introduction to the various features available in Huma.
 
 > :whale: Hi there! I'm the happy Huma whale here to provide help. You'll see me leave helpful tips down below.
 
-## Constructors & Options
+## The Router
 
-Huma uses the [functional options](https://dave.cheney.net/2014/10/17/functional-options-for-friendly-apis) paradigm when creating a router, resource, operation, parameter, etc. Functional options were chosen due to an exponential explosion of constructor functions and the complexity of the problem space. They come with several advantages:
-
-- Friendly APIs with sane defaults
-- Extensible without breaking clients or polluting the global namespace with too many constructors
-- Options are immutable, reusable, and composable
-
-They are easy to use and look like this:
+The Huma router is the entrypoint to your service or application. There are a couple of ways to create it, depending on what level of customization you need.
 
 ```go
-// Add a parameter with an example
-huma.PathParam("id", "Resource identifier", huma.Example("abc123"))
+// Simplest way to get started, which creats a router and a CLI with default
+// middleware attached. Note that the CLI is a router.
+app := cli.NewRouter("API Name", "1.0.0")
+
+// Doing the same as above by hand:
+router := huma.New("API Name", "1.0.0")
+app := cli.New(router)
+middleware.Defaults(app)
+
+// Start the CLI after adding routes:
+app.Run()
 ```
 
-Most text editors will auto-complete and show only the available options, which is an improvement over e.g. accepting `interface{}`.
-
-### Extending & Composition
-
-Functional options can be wrapped to extend the set of available options. For example:
+You can also skip using the built-in `cli` package:
 
 ```go
-// IDParam creates a new path parameter limited to characters and a length that
-// is allowed for resource identifiers.
-func IDParam(name, description string) huma.DependencyOption {
-	s := schema.Schema{Pattern: "^[a-zA-Z0-9_-]{3,20}"}
-
-	return huma.PathParam(name, description, huma.Schema(s))
-}
-```
-
-You can also compose multiple options into one, e.g by using `huma.ResourceOptions(..)` or one of the other related functions:
-
-```go
-// CommonOptions sets up common options for every operation.
-func CommonOptions() huma.ResourceOption {
-	return huma.ResourceOptions(
-		huma.Tags("some-tag"),
-		huma.HeaderParam("customer", "Customer name", "", huma.Internal()),
-		huma.ResponseError(http.StatusInternalServerError, "Server error"),
-	)
-}
+// Create and start a new router by hand:
+router := huma.New("API Name", "1.0.0")
+router.Middleware(middleware.DefaultChain)
+router.Listen("127.0.0.1:8888")
 ```
 
 ## Resources
 
-Huma APIs are composed of resources and sub-resources attached to a router. A resource refers to a unique URI on which operations can be performed. Huma resources can have dependencies, security requirements, parameters, response headers, and responses attached to them which are all applied to every operation and sub-resource.
+Huma APIs are composed of resources and sub-resources attached to a router. A resource refers to a unique URI on which operations can be performed. Huma resources can have middleware attached to them, which run before operation handlers.
 
 ```go
-r := huma.NewRouter("My API", "1.0.0")
+// Create a resource at a given path.
+notes := app.Resource("/notes")
 
-// Create a resource at a given path
-notes := r.Resource("/notes")
+// Add a middleware to all operations under `/notes`.
+notes.Middleware(MyMiddleware())
 
 // Create another resource that includes a path parameter: /notes/{id}
-note := notes.With(huma.PathParam("id", "Note ID"))
+// Paths look like URI templates and use wrap parameters in curly braces.
+note := notes.SubResource("/{id}")
 
-// Create a sub-resource at /notes/{id}/likes
+// Create a sub-resource at /notes/{id}/likes.
 sub := note.SubResource("/likes")
 ```
-
-The `With(...)` function is very powerful and can accept dependencies, security requirements, parameters, response headers, and response description options. It returns a copy of the resource with those values applied.
 
 > :whale: Resources should be nouns, and plural if they return more than one item. Good examples: `/notes`, `/likes`, `/users`, `/videos`, etc.
 
@@ -313,7 +159,6 @@ The `With(...)` function is very powerful and can accept dependencies, security 
 Operations perform an action on a resource using an HTTP method verb. The following verbs are available:
 
 - Head
-- List (alias for Get)
 - Get
 - Post
 - Put
@@ -321,168 +166,289 @@ Operations perform an action on a resource using an HTTP method verb. The follow
 - Delete
 - Options
 
-Operations can take dependencies, parameters, & request bodies and produce response headers and responses. These are each discussed in more detail below.
+Operations can take inputs in the form of path, query, and header parameters and/or request bodies. They must declare what response status codes, content types, and structures they return.
 
-If you don't provide a response description, then one is generated for you based on the response type with the following rules:
-
-- Boolean: If true, returns `HTTP 204 No Content`
-- String: If not empty, returns `HTTP 200 OK` with content type `text/plain`
-- Slice, map, struct pointer: If not `nil`, marshal to JSON and return `HTTP 200 OK` with content type `application/json`
-
-If you need any customization beyond the above then you must provide a response description.
+Every operation has a handler function and takes at least a `huma.Context`, described in further detail below:
 
 ```go
-r := huma.NewRouter("My API", "1.0.0")
-
-// Create a resource
-notes := r.Resource("/notes")
-
-// Create the operation with an auto-generated response.
-notes.Get("Get a list of all notes", func () []*NoteSummary {
-	// Implementation goes here
-})
-
-// Manually provide the response. This is equivalent to the above, but allows
-// you to add additional options like allowed response headers.
-notes.With(
-	huma.ResponseJSON(http.StatusOK, "Success"),
-).Get("Get a list of all notes", func () []*NoteSummary {
-	// Implementation goes here
+app.Resource("/op").Get("get-op", "Example operation",
+	// Response declaration goes here!
+).Run(func (ctx huma.Context) {
+	// Handler implementation goes here!
 })
 ```
 
 > :whale: Operations map an HTTP action verb to a resource. You might `POST` a new note or `GET` a user. Sometimes the mapping is less obvious and you can consider using a sub-resource. For example, rather than unliking a post, maybe you `DELETE` the `/posts/{id}/likes` resource.
 
-## Handler Functions
+## Context
 
-The basic structure of a Huma handler function looks like this, with most arguments being optional and dependent on the declaritively described operation:
+As seen above, every handler function gets at least a `huma.Context`, which combines an `http.ResponseWriter` for creating responses, a `context.Context` for cancellation/timeouts, and some convenience functions. Any library that can use either of these interfaces will work with a Huma context object. Some examples:
 
 ```go
-func (deps..., params..., requestModel) (headers..., responseModels...)
+// Calling third-party libraries that might take too long
+results := mydb.Fetch(ctx, "some query")
+
+// Write an HTTP response
+ctx.Header().Set("Content-Type", "text/plain")
+ctx.WriteHeader(http.StatusNotFound)
+ctx.Write([]byte("Could not find foo"))
 ```
 
-Dependencies, parameters, headers, and models are covered in more detail in the following sections. For now this gives an idea of how to write handler functions based on the inputs and outputs of your operation.
+> :whale: Since you can write data to the response multiple times, the context also supports streaming responses. Just remember to set (or remove) the timeout.
 
-For example, the most basic "Hello world" that takes no parameters and returns a greeting message might look like this:
+## Responses
 
-```go
-func () string { return "Hello, world" }
-```
-
-Another example: you have an `id` parameter input and return a response model to be marshalled as JSON:
+In order to keep the documentation & service specification up to date with the code, you **must** declare the responses that your handler may return. This includes declaring the content type, any headers it might return, and what model it returns (if any). The `responses` package helps with declaring well-known responses with the right code/docs/model and corresponds to the statuses in the `http` package, e.g. `resposes.OK()` will create a response with the `http.StatusOK` status code.
 
 ```go
-func (id string) *MyModel { return &MyModel{ID: id} }
-```
+// Response structures are just normal Go structs
+type Thing struct {
+	Name string `json:"name"`
+}
 
-> :whale: Confused about what a handler should look like? Just run your service and it'll print out an approximate handler function when it panics.
+// ... initialization code goes here ...
 
-## Parameters
+things := app.Resource("/things")
+things.Get("list-things", "Get a list of things",
+	// Declare a successful response that returns a slice of things
+	responses.OK().Headers("Foo").Model([]Thing{}),
+	// Errors automatically set the right status, content type, and model for you.
+	responses.InternalServerError(),
+).Run(func(ctx huma.Context) {
+	// This works because the `Foo` header was declared above.
+	ctx.Header().Set("Foo", "Some value")
 
-Huma supports three types of parameters:
+	// The `WriteModel` convenience method handles content negotiation and
+	// serializaing the response for you.
+	ctx.WriteModel(http.StatusOK, []Thing{
+		Thing{Name: "Test1"},
+		Thing{Name: "Test2"},
+	})
 
-- Required path parameters, e.g. `/things/{thingId}`
-- Optional query string parameters, e.g. `/things?q=filter`
-- Optional header parameters, e.g. `X-MyHeader: my-value`
-
-Optional parameters require a default value.
-
-Here is an example of an `id` parameter:
-
-```go
-r.Resource("/notes",
-	huma.PathParam("id", "Note ID"),
-	huma.ResponseError(404, "Note was not found"),
-	huma.ResponseJSON(200, "Success"),
-).
-Get("Get a note by its ID", func(id string) (*huma.ErrorModel, *Note) {
-	// Implementation goes here
+	// Alternatively, you can write an error
+	ctx.WriteError(http.StatusInternalServerError, "Some message")
 })
 ```
 
-You can also declare parameters with additional validation logic by using the `schema` module:
+If you try to set a response status code or header that was not declared you will get a runtime error. If you try to call `WriteModel` or `WriteError` more than once then you will get an error because the writer is considered closed after those methods.
 
-```go
-s := schema.Schema{
-	MinLength: 1,
-	MaxLength: 32,
-}
+### Errors
 
-huma.PathParam("id", "Note ID", huma.Schema(s))
-```
+Errors use [RFC 7807](https://tools.ietf.org/html/rfc7807) and return a structure that looks like:
 
-Once a parameter is declared it will get parsed, validated, and then sent to your handler function. If parsing or validation fails, the client gets a 400-level HTTP error.
-
-> :whale: If a proxy is providing e.g. authentication or rate-limiting and exposes additional internal-only information then use the internal parameters like `huma.HeaderParam("UserID", "Parsed user from the auth system", "nobody", huma.Internal())`. Internal parameters are never included in the generated OpenAPI 3 spec or documentation.
-
-## Request & Response Models
-
-Request and response models are just plain Go structs with optional tags to annotate additional validation logic for their fields. From the notes API example above:
-
-```go
-// Note records some content text for later reference.
-type Note struct {
-	Created time.Time `readOnly:"true"`
-	Content string
+```json
+{
+  "status": 504,
+  "title": "Gateway Timeout",
+  "detail": "Problem with HTTP request",
+  "errors": [
+    {
+      "message": "Get \"https://httpstat.us/418?sleep=5000\": context deadline exceeded"
+    }
+  ]
 }
 ```
 
-The `Note` struct has two fields which will get serialized to JSON. The `Created` field has a special tag `readOnly` set which means it will not get used for write operations like `PUT /notes/{id}`.
+The `errors` field is optional and may contain more details about which specific errors occurred.
 
-This struct provides enough information to create JSON Schema for the OpenAPI 3 spec. You can provide as much or as little information and validation as you like.
-
-### Request Model
-
-Request models are used by adding a new input argument that is a pointer to a struct to your handler function as the last argument. For example:
+It is recommended to return exhaustive errors whenever possible to prevent user frustration with having to keep retrying a bad request and getting back a different error. The context has `AddError` and `HasError()` functions for this:
 
 ```go
-r.Resource("/notes", huma.PathParam("id", "Note ID")).
-	Put("Create or update a note",
-		// Handler without an input body looks like:
-		func(id string) bool {
-			// Implementation goes here
-		},
+app.Resource("/exhaustive").Get("exhaustive", "Exhastive errors example",
+	responses.OK(),
+	responses.BadRequest(),
+).Run(func(ctx huma.Context) {
+	for i := 0; i < 5; i++ {
+		// Use AddError to add multiple error details to the response.
+		ctx.AddError(fmt.Errorf("Error %d", i))
+	}
 
-		// Handler with an input body looks like:
-		func(id string, note *Note) bool {
-			// Implementation goes here
-		},
-	)
-```
-
-The presence of the `note *Note` argument tells Huma to parse the request body and validate it against the generated JSON Schema for the `Note` struct.
-
-### Response Model
-
-Response models are used by adding a response to the list of possible responses along with a new function return value that is a pointer to your struct. You can specify multiple different response models.
-
-```go
-r.Resource("/notes",
-	huma.ResponseError(http.NotFound, "Not found"),
-	huma.ResponseJSON(http.StatusOK, "Success")).
-Get("Description", func() (*huma.ErrorModel, *Note) {
-	// Implementation goes here
+	// Check if the context has had any errors added yet.
+	if ctx.HasError() {
+		// Use WriteError to set the actual status code, top-level message, and
+		// any additional errors. This sends the response.
+		ctx.WriteError(http.StatusBadRequest, "Bad input")
+		return
+	}
 })
 ```
 
-Whichever model is not `nil` will get sent back to the client.
+## Request Inputs
 
-Empty responses, e.g. a `204 No Content` or `304 Not Modified` are also supported by setting a `ContentType` of `""` (the default zero value). Use `huma.Response` paired with a simple boolean to return a response without a body. Passing `false` acts like `nil` for models and prevents that response from being sent.
+Requests can have parameters and/or a body as input to the handler function. Like responses, inputs use standard Go structs but the tags are different. Here are the available tags:
+
+| Tag      | Description                        | Example                  |
+| -------- | ---------------------------------- | ------------------------ |
+| `path`   | Name of the path parameter         | `path:"thing-id"`        |
+| `query`  | Name of the query string parameter | `query:"q"`              |
+| `header` | Name of the header parameter       | `header:"Authorization"` |
+
+The following types are supported out of the box:
+
+| Type                | Example Inputs         |
+| ------------------- | ---------------------- |
+| `bool`              | `true`, `false`        |
+| `[u]int[16/32/64]`  | `1234`, `5`, `-1`      |
+| `float32/64`        | `1.234`, `1.0`         |
+| `string`            | `hello`, `t`           |
+| `time.Time`         | `2020-01-01T12:00:00Z` |
+| slice, e.g. `[]int` | `1,2,3`, `tag1,tag2`   |
+
+For example, if the parameter is a query param and the type is `[]string` it might look like `?tags=tag1,tag2` in the URI.
+
+The special struct field `Body` will be treated as the input request body and can refer to another struct or you can embed a struct inline.
+
+Here is an example:
 
 ```go
-r.Resource("/notes",
-	huma.Response(http.StatusNoContent, "This should have no body")).
-Get("description", func() bool {
-	return true
+type MyInputBody struct {
+	Name string `json:"name"`
+}
+
+type MyInput struct {
+	ThingID     string      `path:"thing-id" doc:"Example path parameter"`
+	QueryParam  int         `query:"q" doc:"Example query string parameter"`
+	HeaderParam string      `header:"Foo" doc:"Example header parameter"`
+	Body        MyInputBody `doc:"Example request body"`
+}
+
+// ... Later you use the inputs
+
+// Declare a resource with a path parameter that matches the input struct. This
+// is needed because path parameter positions matter in the URL.
+thing := app.Resource("/things/{thing-id}")
+
+// Next, declare the handler with an input argument.
+thing.Get("get-thing", "Get a single thing",
+	responses.NoContent(),
+).Run(func(ctx huma.Context, input MyInput) {
+	fmt.Printf("Thing ID: %s\n", input.ThingID)
+	fmt.Printf("Query param: %s\n", input.QueryParam)
+	fmt.Printf("Header param: %s\n", input.HeaderParam)
+	fmt.Printf("Body name: %s\n", input.Body.Name)
 })
-},
 ```
 
-> :whale: In some cases Huma can [auto-generate a resonse model](#operations) for you.
+Try a request against the service like:
 
-### Model Tags
+```sh
+# Restish example
+$ restish :8888/things/abc123?q=3 -H "Foo: bar" name: Kari
+```
 
-Go struct tags are used to annotate the model with information that gets turned into [JSON Schema](https://json-schema.org/) for documentation and validation.
+### Parameter & Body Validation
+
+All supported JSON Schema tags work for parameters and body fields. Validation happens before the request handler is called, and if needed an error response is returned. For example:
+
+```go
+type MyInput struct {
+	ThingID    string `path:"thing-id" pattern:"^th-[0-9a-z]+$" doc:"..."`
+	QueryParam int    `query:"q" minimum:"1" doc:"..."`
+}
+```
+
+See "Validation" for more info.
+
+### Input Composition
+
+Because inputs are just Go structs, they are composable and reusable. For example:
+
+```go
+type AuthParam struct {
+	Authorization string `header:"Authorization"`
+}
+
+type PaginationParams struct {
+	Cursor string `query:"cursor"`
+	Limit  int    `query:"limit"`
+}
+
+// ... Later in the code
+app.Resource("/things").Get("list-things", "List things",
+	responses.NoContent(),
+).Run(func (ctx huma.Context, input struct {
+	AuthParam
+	PaginationParams
+}) {
+	fmt.Printf("Auth: %s, Cursor: %s, Limit: %d\n", input.Authorization, input.Cursor, input.Limit)
+})
+```
+
+### Input Streaming
+
+It's possible to support input body streaming for large inputs by declaring your body as an `io.Reader`:
+
+```go
+type StreamingBody struct {
+	Body io.Reader
+}
+```
+
+You probably want to combine this with custom timeouts, or removing them altogether.
+
+```go
+op := app.Resource("/streaming").Post("post-stream", "Write streamed data",
+	responses.NoContent(),
+)
+op.NoBodyReadTimeout()
+op.Run(...)
+```
+
+### Resolvers
+
+Sometimes the built-in validation isn't sufficient for your use-case, or you want to do something more complex with the incoming request object. This is where resolvers come in.
+
+Any input struct can be a resolver by implementing the `huma.Resolver` interface, including embedded structs. Each resolver takes the current context and the incoming request. For example:
+
+```go
+// MyInput demonstrates inputs/transformation
+type MyInput struct {
+	Host   string
+	Name string `query:"name"`
+}
+
+func (m *MyInput) Resolve(ctx huma.Context, r *http.Request) {
+	// Get request info you don't normally have access to.
+	m.Host = r.Host
+
+	// Transformations or other data validation
+	m.Name = strings.Title(m.Name)
+}
+
+// Then use it like any other input struct:
+app.Resource("/things").Get("list-things", "Get a filtered list of things",
+	responses.NoContent(),
+).Run(func(ctx huma.Context, input MyInput) {
+	fmt.Printf("Host: %s\n", input.Host)
+	fmt.Printf("Name: %s\n", input.Name)
+})
+```
+
+It is recommended that you do not save the request. Whenever possible, use existing mechanisms for describing your input so that it becomes part of the OpenAPI description.
+
+#### Resolver Errors
+
+Resolvers can set errors as needed and Huma will automatically return a 400-level error response before calling your handler. This makes resolvers a good place to run additional complex validation steps so you can provide the user with a set of exhaustive errors.
+
+```go
+type MyInput struct {
+	Host   string
+}
+
+func (m *MyInput) Resolve(ctx huma.Context, r *http.Request) {
+	if m.Host = r.Hostname; m.Host == "localhost" {
+		ctx.AddError(&huma.ErrorDetail{
+			Message: "Invalid value!",
+			Location: "request.host",
+			Value: m.Host,
+		})
+	}
+}
+```
+
+## Validation
+
+Go struct tags are used to annotate inputs/output structs with information that gets turned into [JSON Schema](https://json-schema.org/) for documentation and validation.
 
 The standard `json` tag is supported and can be used to rename a field and mark fields as optional using `omitempty`. The following additional tags are supported on model fields:
 
@@ -511,155 +477,75 @@ The standard `json` tag is supported and can be used to rename a field and mark 
 | `writeOnly`        | Sent in the request only                  | `writeOnly:"true"`       |
 | `deprecated`       | This field is deprecated                  | `deprecated:"true"`      |
 
-### Response Headers
+Parameters have some additional validation tags:
 
-Response headers must be defined before they can be sent back to a client. This includes several steps:
+| Tag        | Description                    | Example           |
+| ---------- | ------------------------------ | ----------------- |
+| `internal` | Internal-only (not documented) | `internal:"true"` |
 
-1. Describe the response header (name & description)
-2. Specify which responses may send this header
-3. Add the header to the handler function return values
+## Middleware
 
-For example:
+Standard [Go HTTP middleware](https://justinas.org/writing-http-middleware-in-go) is supported. It can be attached to the main router/app or to individual resources, but **must** be added _before_ operation handlers are added.
 
 ```go
-r.Resource("/notes",
-	huma.ResponseHeader("expires", "Expiration date for this content"),
-	huma.ResponseText(http.StatusOK, "Success", huma.Headers("expires"))
-).Get("description", func() (string, string) {
-	expires := time.Now().Add(7 * 24 * time.Hour).MarshalText()
-	return expires, "Hello!"
+// Middleware from some library
+app.Middleware(somelibrary.New())
+
+// Custom middleware
+app.Middleware(func(next http.Handler) http.Handler {
+	return http.HandlerFunc(func (w http.ResponseWriter, r *http.Request) {
+		// Request phase, do whatever you want before next middleware or handler
+		// gets called.
+		fmt.Println("Request coming in")
+
+		// Call the next middleware/handler
+		next.ServeHTTP(w, r)
+
+		// Response phase, after handler has run.
+		fmt.Println("Response going out!")
+	})
 })
 ```
 
-You can make use of named return values with a naked return to disambiguate complex functions:
+When using the `cli.NewRouter` convenience method, a set of default middleware is added for you. See `middleware.DefaultChain` for more info.
+
+### Enabling OpenTracing
+
+[OpenTracing](https://opentracing.io/) support is built-in, but you have to tell the global tracer where to send the information, otherwise it acts as a no-op. For example, if you use [DataDog APM](https://www.datadoghq.com/blog/opentracing-datadog-cncf/) and have the agent configured wherever you deploy your service:
 
 ```go
-func() (expires string, message string) {
-	expires = time.Now().Add(7 * 24 * time.Hour).MarshalText()
-	message = "Hello!"
-	return
-},
-```
-
-> :whale: If you forget to declare a response header for a particular response and then try to set it when returning that response it will **not** be sent to the client and an error will be logged.
-
-## Dependencies
-
-Huma includes a dependency injection system that can be used to pass additional arguments to operation handler functions. You can register global dependencies (ones that do not change from request to request) or contextual dependencies (ones that change with each request).
-
-Global dependencies are created by just setting some value, while contextual dependencies are implemented using a function that returns the value of the form `func (deps..., params...) (headers..., *YourType, error)` where the value you want injected is of `*YourType` and the function arguments can be any previously registered dependency types or one of the hard-coded types:
-
-- `huma.ConnDependency()` the current `http.Request` connection (returns `net.Conn`)
-- `huma.ContextDependency()` the current `http.Request` context (returns `context.Context`)
-- `huma.GinContextDependency()` the current Gin request context (returns `*gin.Context`)
-- `huma.OperationIDDependency()` the current operation ID (returns `string`)
-
-```go
-// Register a new database connection dependency
-db := huma.SimpleDependency(db.NewConnection())
-
-// Register a new request logger dependency. This is contextual because we
-// will print out the requester's IP address with each log message.
-type MyLogger struct {
-	Info: func(msg string),
-}
-
-logger := huma.Dependency(
-	huma.GinContextDependency(),
-	func(c *gin.Context) (*MyLogger, error) {
-		return &MyLogger{
-			Info: func(msg string) {
-				fmt.Printf("%s [ip:%s]\n", msg, c.Request.RemoteAddr)
-			},
-		}, nil
-	},
+import (
+	"github.com/opentracing/opentracing-go"
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
 
-// Use them in any handler by adding them to both `Depends` and the list of
-// handler function arguments.
-r.Resource("/foo").With(
-	db, logger
-).Get("doc", func(db *db.Connection, log *MyLogger) string {
-	log.Info("test")
-	item := db.Fetch("query")
-	return item.ID
-})
-```
+func main() {
+	t := opentracer.New(tracer.WithAgentAddr("host:port"))
+	defer tracer.Stop()
 
-When creating a new dependency you can use `huma.DependencyOptions` to group multiple options:
+	// Set it as a Global Tracer
+	opentracing.SetGlobalTracer(t)
 
-```go
-logger := huma.Dependency(huma.DependencyOptions(
-	huma.GinContextDependency(),
-	huma.OperationIDDependency(),
-), func (c *gin.Context, operationID string) (*MyLogger, error) {
-	return ...
-})
-```
-
-> :whale: Note that global dependencies cannot be functions. You can wrap them in a struct as a workaround if needed.
-
-## Custom Gin
-
-You can create a Huma router instance with a custom Gin instance. This lets you set up custom middleware, CORS configurations, logging, etc.
-
-```go
-// The following two are equivalent:
-// Default settings:
-r := huma.NewRouter("My API", "1.0.0")
-
-// And manual settings:
-g := gin.New()
-g.Use(huma.Recovery())
-g.Use(huma.LogMiddleware())
-g.Use(cors.Default())
-g.Use(huma.PreferMinimalMiddleware())
-g.Use(huma.ServiceLinkMiddleware())
-g.NoRoute(huma.Handler404())
-r := huma.NewRouter("My API", "1.0.0", huma.WithGin(g))
-```
-
-## Custom CORS Handler
-
-If you would like CORS preflight requests to allow specific headers, do the following:
-
-```go
-// CORS: Allow non-standard headers "Authorization" and "X-My-Header" in preflight requests
-cfg := cors.DefaultConfig()
-cfg.AllowAllOrigins = true
-cfg.AllowHeaders = append(cfg.AllowHeaders, "Authorization", "X-My-Header")
-
-// And manual settings:
-r := huma.NewRouter("My API", "1.0.0", huma.CORSHandler(cors.New(cfg)))
-```
-
-## Custom HTTP Server
-
-You can have full control over the `http.Server` that is created.
-
-```go
-// Set low timeouts to kick off slow clients.
-s := &http.Server{
-	ReadTimeout: 5 * time.Seconds,
-	WriteTimeout: 5 * time.Seconds,
-	Handler: r
+	app := cli.NewRouter("My Cool Service", "1.0.0")
+	// register routes here
+	app.Run()
 }
-
-r := huma.NewRouter("My API", "1.0.0", huma.HTTPServer(s))
-
-r.Run()
 ```
 
-### Timeouts, Deadlines, & Cancellation
+### Timeouts, Deadlines, Cancellation & Limits
 
-By default, only a `ReadHeaderTimeout` of _10 seconds_ and an `IdleTimeout` of _15 seconds_ are set at the server level. This allows large request and response bodies to be sent without fear of timing out in the default config, as well as the use of WebSockets.
+Huma provides utilities to prevent long-running handlers and issues with huge request bodies and slow clients with sane defaults out of the box.
+
+#### Context Timeouts
 
 Set timeouts and deadlines on the request context and pass that along to libraries to prevent long-running handlers. For example:
 
 ```go
-r.Resource("/timeout",
-	huma.ContextDependency(),
-).Get("timeout example", func(ctx context.Context) string {
+app.Resource("/timeout").Get("timeout", "Timeout example",
+	responses.String(http.StatusOK),
+	responses.GatewayTimeout(),
+).Run(func(ctx huma.Context) {
 	// Add a timeout to the context. No request should take longer than 2 seconds
 	newCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
@@ -672,119 +558,144 @@ r.Resource("/timeout",
 	// deadline of 2 seconds is shorter than the request duration of 5 seconds.
 	_, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err.Error()
+		ctx.WriteError(http.StatusGatewayTimeout, "Problem with HTTP request", err)
+		return
 	}
 
-	return "success"
+	ctx.Write([]byte("success!"))
 })
 ```
 
-### Request Body Timeouts
+#### Request Timeouts
 
-By default any handler which takes in a request body parameter will have a read timeout of 15 seconds set on it. If set to nonzero for a handler which does **not** take a body, then the timeout will be set on the underlying connection before calling your handler.
+By default, a `ReadHeaderTimeout` of _10 seconds_ and an `IdleTimeout` of _15 seconds_ are set at the server level and apply to every incoming request.
 
-When triggered, the server sends a 408 Request Timeout as JSON with a message containing the time waited.
+Each operation's individual read timeout defaults to _15 seconds_ and can be changed as needed. This enables large request and response bodies to be sent without fear of timing out, as well as the use of WebSockets, in an opt-in fashion with sane defaults.
+
+When using the built-in model processing and the timeout is triggered, the server sends an error as JSON with a message containing the time waited.
 
 ```go
 type Input struct {
-	ID string
+	ID string `json:"id"`
 }
 
-r := huma.NewRouter("My API", "1.0.0")
+app := cli.NewRouter("My API", "1.0.0")
+foo := app.Resource("/foo")
 
 // Limit to 5 seconds
-r.Resource("/foo", huma.BodyReadTimeout(5 * time.Second)).Post(
-	"Create item", func(input *Input) string {
-		return "Hello, " + input.ID
-	})
+create := foo.Post("create-item", "Create a new item",
+	responses.NoContent(),
+)
+create.BodyReadTimeout(5 * time.Second)
+create.Run(func (ctx huma.Context, input Input) {
+	// Do something here.
+})
 ```
 
 You can also access the underlying TCP connection and set deadlines manually:
 
 ```go
-r.Resource("/foo", huma.ConnDependency()).Get(func (conn net.Conn) string {
+create.Run(func (ctx huma.Context, input struct {
+	Body io.Reader
+}) {
+	// Get the connection.
+	conn := huma.GetConn(ctx)
+
 	// Set a new deadline on connection reads.
 	conn.SetReadDeadline(time.Now().Add(600 * time.Second))
 
 	// Read all the data from the request.
-	data, err := ioutil.ReadAll(c.Request.Body)
+	data, err := ioutil.ReadAll(input.Body)
 	if err != nil {
+		// If a timeout occurred, this will be a net.Error with `err.Timeout()`
+		// returning true.
 		panic(err)
 	}
 
-	// Do something with the data...
-	return fmt.Sprintf("Read %d bytes", len(data))
+	// Do something with data here...
 })
 ```
 
-> :whale: Set to `-1` in order to disable the timeout.
+> :whale: Use `NoBodyReadTimeout()` to disable the default.
 
-### Request Body Size Limits
+#### Request Body Size Limits
 
 By default each operation has a 1 MiB reqeuest body size limit.
 
-When triggered, the server sends a 413 Request Entity Too Large as JSON with a message containing the maximum body size for this operation.
+When using the built-in model processing and the timeout is triggered, the server sends an error as JSON with a message containing the maximum body size for this operation.
 
 ```go
-r := huma.NewRouter("My API", "1.0.0")
+app := cli.NewRouter("My API", "1.0.0")
 
+create := app.Resource("/foo").Post("create-item", "Create a new item",
+	responses.NoContent(),
+)
 // Limit set to 10 MiB
-r.Resource("/foo", MaxBodyBytes(10 * 1024 * 1024)).Get(...)
-```
-
-> :whale: Set to `-1` in order to disable the check, allowing for unlimited request body size for e.g. large streaming file uploads.
-
-## Logging
-
-Huma provides a Zap-based contextual structured logger built-in. You can access it via the `huma.LogDependency()` which returns a `*zap.SugaredLogger`. It requires the use of the `huma.LogMiddleware(...)`, which is included by default. If you provide a custom Gin instance you should include the middleware.
-
-```go
-r.Resource("/test",
-	huma.LogDependency(),
-).Get("Logger test", func(log *zap.SugaredLogger) string {
-	log.Info("I'm using the logger!")
-	return "Hello, world"
+create.MaxBodyBytes(10 * 1024 * 1024)
+create.Run(func (ctx huma.Context, input Input) {
+	// Body is guaranteed to be 10MiB or less here.
 })
 ```
 
-## Customizing Logging
+> :whale: Use `NoMaxBodyBytes()` to disable the default.
 
-Logging is completely customizable.
+## Logging
+
+Huma provides a Zap-based contextual structured logger as part of the default middleware stack. You can access it via the `middleware.GetLogger(ctx)` which returns a `*zap.SugaredLogger`. It requires the use of the `middleware.Logger`, which is included by default when using either `cli.NewRouter` or `middleware.Defaults`.
 
 ```go
-// Create your own logger, or use the Huma built-in:
-l, err := huma.NewLogger()
-if err != nil {
-	panic(err)
+app := cli.NewRouter("Logging Example", "1.0.0")
+
+app.Resource("/log").Get("log", "Log example",
+	responses.NoContent(),
+).Run(func (ctx huma.Context) {
+	logger := middleware.GetLogger(ctx)
+	logger.Info("Hello, world!")
+})
+```
+
+Manual setup:
+
+```go
+router := huma.New("Loggin Example", "1.0.0")
+app := cli.New(router)
+
+app.Middleware(middleware.Logger)
+middleware.AddLoggerOptions(app)
+
+// Rest is same as above...
+```
+
+You can also modify the base logger as needed. Set this up _before_ adding any routes. Note that the function returns a low-level `Logger`, not a `SugaredLogger`.
+
+```go
+middleware.NewLogger = func() (*zap.Logger, error) {
+	l, err := middleware.NewDefaultLogger()
+	if err != nil {
+		return nil, err
+	}
+
+	// Add your own global tags.
+	l = l.With(zap.String("env", "prod"))
+
+	return l, nil
 }
-
-// Update the logger somehow with your custom logic.
-l = l.With(zap.String("some", "value"))
-
-// Set up the router with the default settings and your custom logger.
-g := gin.New()
-g.Use(gin.Recovery())
-g.Use(cors.Default())
-g.Use(huma.LogMiddleware(l))
-
-r := huma.NewRouter("My API", "1.0.0", huma.WithGin(g))
 ```
 
 ## Lazy-loading at Server Startup
 
-You can register functions to run before the server starts, allowing for things like lazy-loading dependencies.
+You can register functions to run before the server starts, allowing for things like lazy-loading dependencies. It is safe to call this method multiple times.
 
 ```go
 var db *mongo.Client
 
-r := huma.NewRouter("My API", "1.0.0",
-	huma.PreStart(func() {
-		// Connect to the datastore
-		var err error
-		db, err = mongo.Connect(context.Background(),
-			options.Client().ApplyURI("..."))
-	})
-)
+app := cli.NewRouter("My API", "1.0.0")
+app.PreStart(func() {
+	// Connect to the datastore
+	var err error
+	db, err = mongo.Connect(context.Background(),
+		options.Client().ApplyURI("..."))
+})
 ```
 
 > :whale: This is especially useful for external dependencies and if any custom CLI commands are set up. For example, you may not want to require a database to run `my-service openapi my-api.json`.
@@ -794,50 +705,45 @@ r := huma.NewRouter("My API", "1.0.0",
 You can choose between [RapiDoc](https://mrin9.github.io/RapiDoc/), [ReDoc](https://github.com/Redocly/redoc), or [SwaggerUI](https://swagger.io/tools/swagger-ui/) to auto-generate documentation. Simply set the documentation handler on the router:
 
 ```go
-r := huma.NewRouter("My API", "1.0.0", huma.DocsHandler(huma.ReDocHandler("My API")))
+app := cli.NewRouter("My API", "1.0.0")
+app.DocsHandler(huma.ReDocHandler("My API"))
 ```
 
 > :whale: Pass a custom handler function to have even more control for branding or browser authentication.
 
 ## Custom OpenAPI Fields
 
-You can set custom OpenAPI fields via the `Extra` field in the `OpenAPI` and `Operation` structs.
-
-```go
-r := huma.NewRouter("My API", "1.0.0", huma.Extra(map[string]interface{}{
-	"x-something": "some-value",
-}))
-```
-
-Use the OpenAPI hook for additional customization. It gives you a `*gab.Container` instance that represents the root of the OpenAPI document.
+Use the OpenAPI hook for OpenAPI customization. It gives you a `*gabs.Container` instance that represents the root of the OpenAPI document.
 
 ```go
 func modify(openapi *gabs.Container) {
 	openapi.Set("value", "paths", "/test", "get", "x-foo")
 }
 
-r := huma.NewRouter("My API", "1.0.0", huma.OpenAPIHook(modify))
+app := cli.NewRouter("My API", "1.0.0")
+app.OpenAPIHook(modify)
 ```
 
-> :whale: See the [OpenAPI 3 spec](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.2.md) for everything that can be set.
+> :whale: See the [OpenAPI 3 spec](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md) for everything that can be set.
 
 ## Custom CLI Arguments
 
-You can add additional CLI arguments, e.g. for additional logging tags. Use the `AddGlobalFlag` function along with the `viper` module to get the parsed value.
+The `cli` package provides a convenience layer to create a simple CLI for your server, which lets a user set the host, port, TLS settings, etc when running your service.
+
+You can add additional CLI arguments, e.g. for additional logging tags. Use the `Flag` method along with the `viper` module to get the parsed value.
 
 ```go
-r := huma.NewRouter("My API", "1.0.0",
-	// Add a long arg (--env), short (-e), description & default
-	huma.GlobalFlag("env", "e", "Environment", "local")
-)
+app := cli.NewRouter("My API", "1.0.0")
 
-r.Resource("/current_env").Text(http.StatusOK, "Success").Get(
-	"Return the current environment",
-	func() string {
-		// The flag is automatically bound to viper settings.
-		return viper.GetString("env")
-	},
-)
+// Add a long arg (--env), short (-e), description & default
+app.Flag("env", "e", "Environment", "local")
+
+r.Resource("/current_env").Get("get-env", "Get current env",
+	responses.String(http.StatusOK),
+).Run(func(ctx huma.Context) {
+	// The flag is automatically bound to viper settings using the same name.
+	ctx.Write([]byte(viper.GetString("env")))
+})
 ```
 
 Then run the service:
@@ -850,21 +756,9 @@ $ go run yourservice.go --env=prod
 
 ## Custom CLI Commands
 
-You can access the root `cobra.Command` via `r.Root()` and add new custom commands via `r.Root().AddCommand(...)`. The `openapi` sub-command is one such example in the default setup.
+You can access the root `cobra.Command` via `app.Root()` and add new custom commands via `app.Root().AddCommand(...)`. The `openapi` sub-command is one such example in the default setup.
 
-> :whale: You can also overwite `r.Root().Run` to completely customize how you run the server.
-
-## Middleware
-
-You can make use of any Gin-compatible middleware via the `GinMiddleware()` router option.
-
-```go
-r := huma.NewRouter("My API", "1.0.0", huma.GinMiddleware(gin.Logger()))
-```
-
-## HTTP/2 Setup
-
-TODO
+> :whale: You can also overwite `app.Root().Run` to completely customize how you run the server. Or just ditch the `cli` package completely.
 
 ## Testing
 
@@ -875,24 +769,30 @@ You can see an example in the [`examples/test`](https://github.com/istreamlabs/h
 ```go
 package main
 
-import "github.com/istreamlabs/huma"
+import (
+	"github.com/istreamlabs/huma"
+	"github.com/istreamlabs/huma/cli"
+	"github.com/istreamlabs/huma/responses"
+)
 
 func routes(r *huma.Router) {
 	// Register a single test route that returns a text/plain response.
-	r.Resource("/test").Get("Test route", func() string {
-		return "Hello, test!"
+	r.Resource("/test").Get("test", "Test route",
+		responses.OK().ContentType("text/plain"),
+	).Run(func(ctx huma.Context) {
+		ctx.Write([]byte("Hello, test!"))
 	})
 }
 
 func main() {
 	// Create the router.
-	r := huma.NewRouter("Test", "1.0.0")
+	app := cli.NewRouter("Test", "1.0.0")
 
 	// Register routes.
-	routes(r)
+	routes(app.Router)
 
 	// Run the service.
-	r.Run()
+	app.Run()
 }
 ```
 
@@ -924,18 +824,62 @@ func TestHandler(t *testing.T) {
 }
 ```
 
-# How it Works
+# Design
 
-Huma's philosophy is to make it harder to make mistakes by providing tools that reduce duplication and encourage practices which make it hard to forget to update some code.
+General Huma design principles:
 
-An example of this is how handler functions **must** declare all headers that they return and which responses may send those headers. You simply **cannot** return from the function without considering the values of each of those headers. If you set one that isn't appropriate for the response you return, Huma will let you know.
+- HTTP/2 and streaming out of the box
+- Describe inputs/outputs and keep docs up to date
+- Generate OpenAPI for automated tooling
+- Re-use idiomatic Go concepts whenever possible
+- Encourage good behavior, e.g. exhaustive errors
 
-How does it work? Huma asks that you give up one compile-time static type check for handler function signatures and instead let it be a runtime startup check. It's simple enough that even the most basic unit test will invoke the runtime check, giving you most of the security you would from static typing.
+## High-level design
 
-Using a small amount of reflection, Huma can verify the function signatures, inject dependencies and parameters, and handle responses and headers as well as making sure that they all match the declared operation.
+The high-level design centers around a `Router` object.
 
-By strictly enforcing this runtime interface you get several advantages. No more out of date API description. No more out of date documenatation. No more out of date SDKs or CLIs. Your entire ecosystem of tooling is driven off of one simple backend implementation. Stuff just works.
+- CLI (optional)
+  - Router
+    - []Middleware
+    - []Resource
+      - URI path
+      - []Middleware
+      - []Operations
+        - HTTP method
+        - Inputs / outputs
+          - Go structs with tags
+        - Handler function
 
-More docs coming soon.
+## Router Selection
+
+- Why not Gin? Lots of stars on GitHub, but... Overkill, non-standard handlers & middlware, weird debug mode.
+- Why not fasthttp? Fiber? Not fully HTTP compliant, no HTTP/2, no streaming request/response support.
+- Why not httprouter? Non-standard handlers, no middleware.
+- HTTP/2 means HTTP pipelining benchmarks don't really matter.
+
+Ultimately using Chi because:
+
+- Fast router with support for parameterized paths & middleware
+- Standard HTTP handlers
+- Standard HTTP middleware
+
+### Compatibility
+
+Huma tries to be compatible with as many Go libraries as possible by using standard interfaces and idiomatic concepts.
+
+- Standard middleware `func(next http.Handler) http.Handler`
+- Standard context `huma.Context` is a `context.Context`
+- Standard HTTP writer `huma.Context` is an `http.ResponseWriter` that can check against declared response codes and models.
+- Standard streaming support via the `io.Reader` and `io.Writer` interfaces
+
+## Compromises
+
+Given the features of Go, the desire to strictly keep the code and docs/tools in sync, and a desire to be developer-friendly and quick to start using, Huma makes some necessary compromises.
+
+- Struct tags are used as metadata for fields to support things like JSON Schema-style validation. There are no compile-time checks for these, but basic linter support.
+- Handler functions registration uses `interface{}` to support any kind of input struct.
+- Response registration takes an _instance_ of your type since you can't pass types in Go.
+- Many checks happen at service startup rather than compile-time. Luckily the most basic unit test that creates a router should catch these.
+- `ctx.WriteModel` and `ctx.WriteError` do checks at runtime and can be at least partially bypassed with `ctx.Write` by design. We trade looser checks for a nicer interface and more compatibility.
 
 > :whale: Thanks for reading!
