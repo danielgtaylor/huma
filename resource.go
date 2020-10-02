@@ -30,7 +30,13 @@ func (r *Resource) toOpenAPI() *gabs.Container {
 	}
 
 	for _, op := range r.operations {
-		doc.Set(op.toOpenAPI(), r.path, strings.ToLower(op.method))
+		opValue := op.toOpenAPI()
+
+		if len(r.tags) > 0 {
+			opValue.Set(r.tags, "tags")
+		}
+
+		doc.Set(opValue, r.path, strings.ToLower(op.method))
 	}
 
 	return doc
