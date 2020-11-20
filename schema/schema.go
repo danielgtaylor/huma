@@ -54,8 +54,18 @@ func F(value float64) *float64 {
 // getTagValue returns a value of the schema's type for the given tag string.
 // Uses JSON parsing if the schema is not a string.
 func getTagValue(s *Schema, t reflect.Type, value string) (interface{}, error) {
+	// Special case: strings don't need quotes.
 	if s.Type == "string" {
 		return value, nil
+	}
+
+	// Special case: array of strings with comma-separated values and no quotes.
+	if s.Type == "array" && s.Items != nil && s.Items.Type == "string" && value[0] != '[' {
+		values := []string{}
+		for _, s := range strings.Split(value, ",") {
+			values = append(values, strings.TrimSpace(s))
+		}
+		return values, nil
 	}
 
 	var v interface{}
@@ -63,9 +73,23 @@ func getTagValue(s *Schema, t reflect.Type, value string) (interface{}, error) {
 		return nil, err
 	}
 
+	vv := reflect.ValueOf(v)
 	tv := reflect.TypeOf(v)
 	if v != nil && tv != t {
-		if !tv.ConvertibleTo(t) {
+		if tv.Kind() == reflect.Slice {
+			// Slices can't be cast due to the different layouts. Instead, we make a
+			// new instance of the destination slice, and convert each value in
+			// the original to the new type.
+			tmp := reflect.MakeSlice(t, 0, vv.Len())
+			for i := 0; i < vv.Len(); i++ {
+				if !vv.Index(i).Elem().Type().ConvertibleTo(t.Elem()) {
+					return nil, fmt.Errorf("unable to convert %v to %v: %w", vv.Index(i).Interface(), t.Elem(), ErrSchemaInvalid)
+				}
+
+				tmp = reflect.Append(tmp, vv.Index(i).Elem().Convert(t.Elem()))
+			}
+			v = tmp.Interface()
+		} else if !tv.ConvertibleTo(t) {
 			return nil, fmt.Errorf("unable to convert %v to %v: %w", tv, t, ErrSchemaInvalid)
 		}
 

@@ -582,3 +582,25 @@ func TestEmbedded(t *testing.T) {
 	assert.Len(t, s.Properties, 3)
 	assert.Equal(t, "integer", s.Properties["b"].Type)
 }
+
+func TestStringArrayExample(t *testing.T) {
+	type Foo struct {
+		A []string `json:"a" example:"[\"a\",\"b\",\"c\"]"`
+		B []string `json:"b" example:"a, b, c"`
+	}
+
+	s, err := Generate(reflect.TypeOf(Foo{}))
+	assert.NoError(t, err)
+
+	assert.Equal(t, s.Properties["a"].Example, []string{"a", "b", "c"})
+	assert.Equal(t, s.Properties["b"].Example, []string{"a", "b", "c"})
+}
+
+func TestExampleBadJSON(t *testing.T) {
+	type Foo struct {
+		A []string `json:"a" example:"[\"a\", 1]"`
+	}
+
+	_, err := Generate(reflect.TypeOf(Foo{}))
+	assert.Error(t, err)
+}
