@@ -32,6 +32,16 @@ const (
 	ModeWrite
 )
 
+// JSON Schema type constants
+const (
+	TypeBoolean = "boolean"
+	TypeInteger = "integer"
+	TypeNumber  = "number"
+	TypeString  = "string"
+	TypeArray   = "array"
+	TypeObject  = "object"
+)
+
 var (
 	timeType      = reflect.TypeOf(time.Time{})
 	ipType        = reflect.TypeOf(net.IP{})
@@ -55,12 +65,12 @@ func F(value float64) *float64 {
 // Uses JSON parsing if the schema is not a string.
 func getTagValue(s *Schema, t reflect.Type, value string) (interface{}, error) {
 	// Special case: strings don't need quotes.
-	if s.Type == "string" {
+	if s.Type == TypeString {
 		return value, nil
 	}
 
 	// Special case: array of strings with comma-separated values and no quotes.
-	if s.Type == "array" && s.Items != nil && s.Items.Type == "string" && value[0] != '[' {
+	if s.Type == TypeArray && s.Items != nil && s.Items.Type == TypeString && value[0] != '[' {
 		values := []string{}
 		for _, s := range strings.Split(value, ",") {
 			values = append(values, strings.TrimSpace(s))
@@ -410,7 +420,7 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 
 	if t == ipType {
 		// Special case: IP address.
-		return &Schema{Type: "string", Format: "ipv4"}, nil
+		return &Schema{Type: TypeString, Format: "ipv4"}, nil
 	}
 
 	switch t.Kind() {
@@ -418,14 +428,14 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 		// Handle special cases.
 		switch t {
 		case timeType:
-			return &Schema{Type: "string", Format: "date-time"}, nil
+			return &Schema{Type: TypeString, Format: "date-time"}, nil
 		case uriType:
-			return &Schema{Type: "string", Format: "uri"}, nil
+			return &Schema{Type: TypeString, Format: "uri"}, nil
 		}
 
 		properties := make(map[string]*Schema)
 		required := make([]string, 0)
-		schema.Type = "object"
+		schema.Type = TypeObject
 		schema.AdditionalProperties = false
 
 		for _, f := range getFields(t) {
@@ -469,7 +479,7 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 		}
 
 	case reflect.Map:
-		schema.Type = "object"
+		schema.Type = TypeObject
 		s, err := GenerateWithMode(t.Elem(), mode, nil)
 		if err != nil {
 			return nil, err
@@ -478,10 +488,10 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 	case reflect.Slice, reflect.Array:
 		if t.Elem().Kind() == reflect.Uint8 {
 			// Special case: `[]byte` should be a Base-64 string.
-			schema.Type = "string"
+			schema.Type = TypeString
 			schema.ContentEncoding = "base64"
 		} else {
-			schema.Type = "array"
+			schema.Type = TypeArray
 			s, err := GenerateWithMode(t.Elem(), mode, nil)
 			if err != nil {
 				return nil, err
@@ -489,30 +499,30 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 			schema.Items = s
 		}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
-		schema.Type = "integer"
+		schema.Type = TypeInteger
 		schema.Format = "int32"
 	case reflect.Int64:
-		schema.Type = "integer"
+		schema.Type = TypeInteger
 		schema.Format = "int64"
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32:
 		// Unsigned integers can't be negative.
-		schema.Type = "integer"
+		schema.Type = TypeInteger
 		schema.Format = "int32"
 		schema.Minimum = F(0.0)
 	case reflect.Uint64:
-		schema.Type = "integer"
+		schema.Type = TypeInteger
 		schema.Format = "int64"
 		schema.Minimum = F(0.0)
 	case reflect.Float32:
-		schema.Type = "number"
+		schema.Type = TypeNumber
 		schema.Format = "float"
 	case reflect.Float64:
-		schema.Type = "number"
+		schema.Type = TypeNumber
 		schema.Format = "double"
 	case reflect.Bool:
-		schema.Type = "boolean"
+		schema.Type = TypeBoolean
 	case reflect.String:
-		schema.Type = "string"
+		schema.Type = TypeString
 	case reflect.Ptr:
 		return GenerateWithMode(t.Elem(), mode, schema)
 	case reflect.Interface:
