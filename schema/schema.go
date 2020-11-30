@@ -32,6 +32,16 @@ const (
 	ModeWrite
 )
 
+// JSON Schema type constants
+const (
+	TypeBoolean = "boolean"
+	TypeInteger = "integer"
+	TypeNumber  = "number"
+	TypeString  = "string"
+	TypeArray   = "array"
+	TypeObject  = "object"
+)
+
 var (
 	timeType      = reflect.TypeOf(time.Time{})
 	ipType        = reflect.TypeOf(net.IP{})
@@ -54,8 +64,18 @@ func F(value float64) *float64 {
 // getTagValue returns a value of the schema's type for the given tag string.
 // Uses JSON parsing if the schema is not a string.
 func getTagValue(s *Schema, t reflect.Type, value string) (interface{}, error) {
-	if s.Type == "string" {
+	// Special case: strings don't need quotes.
+	if s.Type == TypeString {
 		return value, nil
+	}
+
+	// Special case: array of strings with comma-separated values and no quotes.
+	if s.Type == TypeArray && s.Items != nil && s.Items.Type == TypeString && value[0] != '[' {
+		values := []string{}
+		for _, s := range strings.Split(value, ",") {
+			values = append(values, strings.TrimSpace(s))
+		}
+		return values, nil
 	}
 
 	var v interface{}
@@ -63,9 +83,23 @@ func getTagValue(s *Schema, t reflect.Type, value string) (interface{}, error) {
 		return nil, err
 	}
 
+	vv := reflect.ValueOf(v)
 	tv := reflect.TypeOf(v)
 	if v != nil && tv != t {
-		if !tv.ConvertibleTo(t) {
+		if tv.Kind() == reflect.Slice {
+			// Slices can't be cast due to the different layouts. Instead, we make a
+			// new instance of the destination slice, and convert each value in
+			// the original to the new type.
+			tmp := reflect.MakeSlice(t, 0, vv.Len())
+			for i := 0; i < vv.Len(); i++ {
+				if !vv.Index(i).Elem().Type().ConvertibleTo(t.Elem()) {
+					return nil, fmt.Errorf("unable to convert %v to %v: %w", vv.Index(i).Interface(), t.Elem(), ErrSchemaInvalid)
+				}
+
+				tmp = reflect.Append(tmp, vv.Index(i).Elem().Convert(t.Elem()))
+			}
+			v = tmp.Interface()
+		} else if !tv.ConvertibleTo(t) {
 			return nil, fmt.Errorf("unable to convert %v to %v: %w", tv, t, ErrSchemaInvalid)
 		}
 
@@ -386,7 +420,7 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 
 	if t == ipType {
 		// Special case: IP address.
-		return &Schema{Type: "string", Format: "ipv4"}, nil
+		return &Schema{Type: TypeString, Format: "ipv4"}, nil
 	}
 
 	switch t.Kind() {
@@ -394,14 +428,14 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 		// Handle special cases.
 		switch t {
 		case timeType:
-			return &Schema{Type: "string", Format: "date-time"}, nil
+			return &Schema{Type: TypeString, Format: "date-time"}, nil
 		case uriType:
-			return &Schema{Type: "string", Format: "uri"}, nil
+			return &Schema{Type: TypeString, Format: "uri"}, nil
 		}
 
 		properties := make(map[string]*Schema)
 		required := make([]string, 0)
-		schema.Type = "object"
+		schema.Type = TypeObject
 		schema.AdditionalProperties = false
 
 		for _, f := range getFields(t) {
@@ -445,7 +479,7 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 		}
 
 	case reflect.Map:
-		schema.Type = "object"
+		schema.Type = TypeObject
 		s, err := GenerateWithMode(t.Elem(), mode, nil)
 		if err != nil {
 			return nil, err
@@ -454,10 +488,10 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 	case reflect.Slice, reflect.Array:
 		if t.Elem().Kind() == reflect.Uint8 {
 			// Special case: `[]byte` should be a Base-64 string.
-			schema.Type = "string"
+			schema.Type = TypeString
 			schema.ContentEncoding = "base64"
 		} else {
-			schema.Type = "array"
+			schema.Type = TypeArray
 			s, err := GenerateWithMode(t.Elem(), mode, nil)
 			if err != nil {
 				return nil, err
@@ -465,30 +499,30 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 			schema.Items = s
 		}
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
-		schema.Type = "integer"
+		schema.Type = TypeInteger
 		schema.Format = "int32"
 	case reflect.Int64:
-		schema.Type = "integer"
+		schema.Type = TypeInteger
 		schema.Format = "int64"
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32:
 		// Unsigned integers can't be negative.
-		schema.Type = "integer"
+		schema.Type = TypeInteger
 		schema.Format = "int32"
 		schema.Minimum = F(0.0)
 	case reflect.Uint64:
-		schema.Type = "integer"
+		schema.Type = TypeInteger
 		schema.Format = "int64"
 		schema.Minimum = F(0.0)
 	case reflect.Float32:
-		schema.Type = "number"
+		schema.Type = TypeNumber
 		schema.Format = "float"
 	case reflect.Float64:
-		schema.Type = "number"
+		schema.Type = TypeNumber
 		schema.Format = "double"
 	case reflect.Bool:
-		schema.Type = "boolean"
+		schema.Type = TypeBoolean
 	case reflect.String:
-		schema.Type = "string"
+		schema.Type = TypeString
 	case reflect.Ptr:
 		return GenerateWithMode(t.Elem(), mode, schema)
 	case reflect.Interface:
