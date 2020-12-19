@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jeffail/gabs/v2"
 	"github.com/go-chi/chi"
+	"github.com/istreamlabs/huma/schema"
 )
 
 type contextKey string
@@ -70,10 +71,16 @@ func (r *Router) OpenAPI() *gabs.Container {
 		doc.Set(r.description, "info", "description")
 	}
 
+	components := &oaComponents{
+		Schemas: map[string]*schema.Schema{},
+	}
+
 	paths, _ := doc.Object("paths")
 	for _, res := range r.resources {
-		paths.Merge(res.toOpenAPI())
+		paths.Merge(res.toOpenAPI(components))
 	}
+
+	doc.Set(components, "components")
 
 	if r.openapiHook != nil {
 		r.openapiHook(doc)

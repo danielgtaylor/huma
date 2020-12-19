@@ -43,7 +43,7 @@ func newOperation(resource *Resource, method, id, docs string, responses []Respo
 	}
 }
 
-func (o *Operation) toOpenAPI() *gabs.Container {
+func (o *Operation) toOpenAPI(components *oaComponents) *gabs.Container {
 	doc := gabs.New()
 
 	doc.Set(o.id, "operationId")
@@ -98,11 +98,8 @@ func (o *Operation) toOpenAPI() *gabs.Container {
 		}
 
 		if resp.model != nil {
-			schema, err := schema.GenerateWithMode(resp.model, schema.ModeRead, nil)
-			if err != nil {
-				panic(err)
-			}
-			doc.Set(schema, "responses", status, "content", resp.contentType, "schema")
+			ref := components.AddSchema(resp.model, schema.ModeRead, o.id)
+			doc.Set(ref, "responses", status, "content", resp.contentType, "schema", "$ref")
 		}
 	}
 
