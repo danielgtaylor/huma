@@ -33,13 +33,15 @@ type Router struct {
 	mux       *chi.Mux
 	resources []*Resource
 
-	title       string
-	version     string
-	description string
-	contact     oaContact
-	servers     []oaServer
-	// securitySchemes
-	// security
+	title           string
+	version         string
+	description     string
+	contact         oaContact
+	servers         []oaServer
+	securitySchemes map[string]oaSecurityScheme
+	security        map[string][]string
+
+	autoConfig *AutoConfig
 
 	// Documentation handler function
 	docsPrefix   string
@@ -72,7 +74,8 @@ func (r *Router) OpenAPI() *gabs.Container {
 	}
 
 	components := &oaComponents{
-		Schemas: map[string]*schema.Schema{},
+		Schemas:         map[string]*schema.Schema{},
+		SecuritySchemes: r.securitySchemes,
 	}
 
 	paths, _ := doc.Object("paths")
@@ -81,6 +84,14 @@ func (r *Router) OpenAPI() *gabs.Container {
 	}
 
 	doc.Set(components, "components")
+
+	if len(r.security) > 0 {
+		doc.Set(r.security, "security")
+	}
+
+	if r.autoConfig != nil {
+		doc.Set(r.autoConfig, "x-cli-config")
+	}
 
 	if r.openapiHook != nil {
 		r.openapiHook(doc)
@@ -102,6 +113,56 @@ func (r *Router) ServerLink(description, uri string) {
 		Description: description,
 		URL:         uri,
 	})
+}
+
+// GatewayBasicAuth documents that the API gateway handles auth using HTTP Basic.
+func (r *Router) GatewayBasicAuth(name string) {
+	r.securitySchemes[name] = oaSecurityScheme{
+		Type:   "http",
+		Scheme: "basic",
+	}
+}
+
+// GatewayClientCredentials documents that the API gateway handles auth using
+// OAuth2 client credentials (pre-shared secret).
+func (r *Router) GatewayClientCredentials(name, tokenURL string, scopes map[string]string) {
+	r.securitySchemes[name] = oaSecurityScheme{
+		Type: "oauth2",
+		Flows: oaFlows{
+			ClientCredentials: &oaFlow{
+				TokenURL: tokenURL,
+				Scopes:   scopes,
+			},
+		},
+	}
+}
+
+// GatewayAuthCode documents that the API gateway handles auth using
+// OAuth2 authorization code (user login).
+func (r *Router) GatewayAuthCode(name, authorizeURL, tokenURL string, scopes map[string]string) {
+	r.securitySchemes[name] = oaSecurityScheme{
+		Type: "oauth2",
+		Flows: oaFlows{
+			AuthorizationCode: &oaFlow{
+				AuthorizationURL: authorizeURL,
+				TokenURL:         tokenURL,
+				Scopes:           scopes,
+			},
+		},
+	}
+}
+
+// AutoConfig sets up CLI autoconfiguration via `x-cli-config` for use by CLI
+// clients, e.g. using a tool like Restish (https://rest.sh/).
+func (r *Router) AutoConfig(autoConfig AutoConfig) {
+	r.autoConfig = &autoConfig
+}
+
+// SecurityRequirement sets up a security requirement for the entire API by
+// name and with the given scopes. Use together with the other auth options
+// like GatewayAuthCode.
+func (r *Router) SecurityRequirement(name string, scopes ...string) {
+	r.security[name] = scopes
 }
 
 // Resource creates a new resource attached to this router at the given path.
@@ -256,12 +317,14 @@ func New(docs, version string) *Router {
 	title, desc := splitDocs(docs)
 
 	r := &Router{
-		mux:         chi.NewRouter(),
-		resources:   []*Resource{},
-		title:       title,
-		description: desc,
-		version:     version,
-		servers:     []oaServer{},
+		mux:             chi.NewRouter(),
+		resources:       []*Resource{},
+		title:           title,
+		description:     desc,
+		version:         version,
+		servers:         []oaServer{},
+		securitySchemes: map[string]oaSecurityScheme{},
+		security:        map[string][]string{},
 	}
 
 	r.docsHandler = RapiDocHandler(r)
