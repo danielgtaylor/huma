@@ -46,7 +46,8 @@ type oaParam struct {
 }
 
 type oaComponents struct {
-	Schemas map[string]*schema.Schema `json:"schemas,omitempty"`
+	Schemas         map[string]*schema.Schema   `json:"schemas,omitempty"`
+	SecuritySchemes map[string]oaSecurityScheme `json:"securitySchemes,omitempty"`
 }
 
 func (c *oaComponents) AddSchema(t reflect.Type, mode schema.Mode, hint string) string {
@@ -99,4 +100,21 @@ func (c *oaComponents) AddSchema(t reflect.Type, mode schema.Mode, hint string) 
 	c.Schemas[name] = s
 
 	return "#/components/schemas/" + name
+}
+
+type oaFlow struct {
+	AuthorizationURL string            `json:"authorizationUrl,omitempty"`
+	TokenURL         string            `json:"tokenUrl,omitempty"`
+	Scopes           map[string]string `json:"scopes,omitempty"`
+}
+
+type oaFlows struct {
+	ClientCredentials *oaFlow `json:"clientCredentials,omitempty"`
+	AuthorizationCode *oaFlow `json:"authorizationCode,omitempty"`
+}
+
+type oaSecurityScheme struct {
+	Type   string  `json:"type"`
+	Scheme string  `json:"scheme,omitempty"`
+	Flows  oaFlows `json:"flows,omitempty"`
 }

@@ -2,6 +2,7 @@ package huma
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -238,5 +239,101 @@ func TestInvalidPathParam(t *testing.T) {
 		).Run(func(ctx Context, input Input) {
 			// Do nothing
 		})
+	})
+}
+
+func TestRouterSecurity(t *testing.T) {
+	app := newTestRouter()
+
+	// Document that the API gateway handles auth via OAuth2 Authorization Code.
+	app.GatewayAuthCode("default", "https://example.com/authorize", "https://example.com/token", nil)
+	app.GatewayClientCredentials("m2m", "https://example.com/token", nil)
+	app.GatewayBasicAuth("basic")
+
+	// Every call must be authenticated using the default auth mechanism
+	// registered above.
+	app.SecurityRequirement("default")
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/openapi.json", nil)
+	app.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var parsed map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &parsed)
+	assert.Nil(t, err)
+
+	assert.Equal(t, parsed["security"], map[string]interface{}{
+		"default": nil,
+	})
+
+	assert.Equal(t, parsed["components"].(map[string]interface{})["securitySchemes"], map[string]interface{}{
+		"default": map[string]interface{}{
+			"type": "oauth2",
+			"flows": map[string]interface{}{
+				"authorizationCode": map[string]interface{}{
+					"authorizationUrl": "https://example.com/authorize",
+					"tokenUrl":         "https://example.com/token",
+				},
+			},
+		},
+		"m2m": map[string]interface{}{
+			"type": "oauth2",
+			"flows": map[string]interface{}{
+				"clientCredentials": map[string]interface{}{
+					"tokenUrl": "https://example.com/token",
+				},
+			},
+		},
+		"basic": map[string]interface{}{
+			"type":   "http",
+			"scheme": "basic",
+			"flows":  map[string]interface{}{},
+		},
+	})
+}
+
+// TODO: test app.AutoConfig
+func TestRouterAutoConfig(t *testing.T) {
+	app := newTestRouter()
+
+	app.GatewayAuthCode("authcode", "https://example.com/authorize", "https://example.com/token", nil)
+	app.SecurityRequirement("authcode")
+
+	app.AutoConfig(AutoConfig{
+		Security: "authcode",
+		Prompt: map[string]AutoConfigVar{
+			"extra": {
+				Description: "Some extra value",
+				Example:     "abc123",
+			},
+		},
+		Params: map[string]string{
+			"another": "https://example.com/extras/{extra}",
+		},
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/openapi.json", nil)
+	app.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var parsed map[string]interface{}
+	err := json.Unmarshal(w.Body.Bytes(), &parsed)
+	assert.Nil(t, err)
+
+	assert.Equal(t, parsed["x-cli-config"], map[string]interface{}{
+		"security": "authcode",
+		"prompt": map[string]interface{}{
+			"extra": map[string]interface{}{
+				"description": "Some extra value",
+				"example":     "abc123",
+			},
+		},
+		"params": map[string]interface{}{
+			"another": "https://example.com/extras/{extra}",
+		},
 	})
 }
