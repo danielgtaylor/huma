@@ -264,9 +264,10 @@ func TestRouterSecurity(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &parsed)
 	assert.Nil(t, err)
 
-	assert.Equal(t, parsed["security"], map[string]interface{}{
-		"default": nil,
-	})
+	assert.Equal(t, parsed["security"], []interface{}{
+		map[string]interface{}{
+			"default": []interface{}{},
+		}})
 
 	assert.Equal(t, parsed["components"].(map[string]interface{})["securitySchemes"], map[string]interface{}{
 		"default": map[string]interface{}{
