@@ -22,15 +22,15 @@ type Resource struct {
 	tags []string
 }
 
-func (r *Resource) toOpenAPI() *gabs.Container {
+func (r *Resource) toOpenAPI(components *oaComponents) *gabs.Container {
 	doc := gabs.New()
 
 	for _, sub := range r.subResources {
-		doc.Merge(sub.toOpenAPI())
+		doc.Merge(sub.toOpenAPI(components))
 	}
 
 	for _, op := range r.operations {
-		opValue := op.toOpenAPI()
+		opValue := op.toOpenAPI(components)
 
 		if len(r.tags) > 0 {
 			opValue.Set(r.tags, "tags")
