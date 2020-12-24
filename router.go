@@ -39,7 +39,7 @@ type Router struct {
 	contact         oaContact
 	servers         []oaServer
 	securitySchemes map[string]oaSecurityScheme
-	security        map[string][]string
+	security        []map[string][]string
 
 	autoConfig *AutoConfig
 
@@ -160,9 +160,16 @@ func (r *Router) AutoConfig(autoConfig AutoConfig) {
 
 // SecurityRequirement sets up a security requirement for the entire API by
 // name and with the given scopes. Use together with the other auth options
-// like GatewayAuthCode.
+// like GatewayAuthCode. Calling multiple times results in requiring one OR
+// the other schemes but not both.
 func (r *Router) SecurityRequirement(name string, scopes ...string) {
-	r.security[name] = scopes
+	if scopes == nil {
+		scopes = []string{}
+	}
+
+	r.security = append(r.security, map[string][]string{
+		name: scopes,
+	})
 }
 
 // Resource creates a new resource attached to this router at the given path.
@@ -324,7 +331,7 @@ func New(docs, version string) *Router {
 		version:         version,
 		servers:         []oaServer{},
 		securitySchemes: map[string]oaSecurityScheme{},
-		security:        map[string][]string{},
+		security:        []map[string][]string{},
 	}
 
 	r.docsHandler = RapiDocHandler(r)
