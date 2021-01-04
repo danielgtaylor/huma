@@ -7,6 +7,10 @@ type AutoConfigVar struct {
 	Example     string        `json:"example,omitempty"`
 	Default     interface{}   `json:"default,omitempty"`
 	Enum        []interface{} `json:"enum,omitempty"`
+
+	// Exclude the value from being sent to the server. This essentially makes
+	// it a value which is only used in param templates.
+	Exclude bool `json:"exclude,omitempty"`
 }
 
 // AutoConfig holds an API's automatic configuration settings for the CLI. These

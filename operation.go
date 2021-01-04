@@ -22,6 +22,7 @@ type Operation struct {
 	params             map[string]oaParam
 	requestContentType string
 	requestSchema      *schema.Schema
+	requestModel       reflect.Type
 	responses          []Response
 	maxBodyBytes       int64
 	bodyReadTimeout    time.Duration
@@ -70,7 +71,8 @@ func (o *Operation) toOpenAPI(components *oaComponents) *gabs.Container {
 		if ct == "" {
 			ct = "application/json"
 		}
-		doc.Set(o.requestSchema, "requestBody", "content", ct, "schema")
+		ref := components.AddSchema(o.requestModel, schema.ModeAll, o.id+"-request")
+		doc.Set(ref, "requestBody", "content", ct, "schema", "$ref")
 	}
 
 	// responses
@@ -98,7 +100,7 @@ func (o *Operation) toOpenAPI(components *oaComponents) *gabs.Container {
 		}
 
 		if resp.model != nil {
-			ref := components.AddSchema(resp.model, schema.ModeRead, o.id)
+			ref := components.AddSchema(resp.model, schema.ModeAll, o.id+"-response")
 			doc.Set(ref, "responses", status, "content", resp.contentType, "schema", "$ref")
 		}
 	}
@@ -179,6 +181,7 @@ func (o *Operation) Run(handler interface{}) {
 
 		// Get body if present.
 		if body, ok := input.FieldByName("Body"); ok {
+			o.requestModel = body.Type
 			o.requestSchema, err = schema.GenerateWithMode(body.Type, schema.ModeWrite, nil)
 			if err != nil {
 				panic(fmt.Errorf("unable to generate JSON schema: %w", err))
