@@ -73,6 +73,10 @@ func (r *Router) OpenAPI() *gabs.Container {
 		doc.Set(r.description, "info", "description")
 	}
 
+	if len(r.servers) > 0 {
+		doc.Set(r.servers, "servers")
+	}
+
 	components := &oaComponents{
 		Schemas:         map[string]*schema.Schema{},
 		SecuritySchemes: r.securitySchemes,

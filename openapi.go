@@ -73,9 +73,23 @@ func (c *oaComponents) AddSchema(t reflect.Type, mode schema.Mode, hint string) 
 		name = hint
 	}
 
-	s, err := schema.GenerateWithMode(t, mode, nil)
-	if err != nil {
-		panic(err)
+	var s *schema.Schema
+
+	if t.Kind() == reflect.Slice {
+		// We actually want to create two models: one for the container slice
+		// and one for the items within it.
+		ref := c.AddSchema(t.Elem(), mode, name+"Item")
+		s = &schema.Schema{
+			Type: schema.TypeArray,
+			Items: &schema.Schema{
+				Ref: ref,
+			},
+		}
+	} else {
+		var err error
+		if s, err = schema.GenerateWithMode(t, mode, nil); err != nil {
+			panic(err)
+		}
 	}
 
 	orig := name
