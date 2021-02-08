@@ -83,7 +83,7 @@ func NotFound() huma.Response {
 	return errorResponse(http.StatusNotFound)
 }
 
-// NotAcceptable HTTP 406 response with a structured error body (e.g. JSON).
+// NotAcceptable HTTP 406 response with a structured error body (e.g. JSON)
 func NotAcceptable() huma.Response {
 	return errorResponse(http.StatusNotAcceptable)
 }
