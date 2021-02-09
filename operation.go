@@ -237,6 +237,7 @@ func (o *Operation) Run(handler interface{}) {
 		input := reflect.New(inputType)
 
 		setFields(ctx, ctx.r, input, inputType)
+		resolveFields(ctx, "", input)
 		if ctx.HasError() {
 			ctx.WriteError(http.StatusBadRequest, "Error while parsing input parameters")
 			return
