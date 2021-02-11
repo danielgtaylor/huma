@@ -17,6 +17,17 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 )
 
+// Locations for input parameters. These are used in struct field tags to
+// specify the location from which the parameter value gets set. It is also
+// used to generate JSON Path locations for error reporting. For example,
+// `path.id` or `body.foo.bar[0].baz` might have validation errors.
+const (
+	locationPath   = string(inPath)
+	locationQuery  = string(inQuery)
+	locationHeader = string(inHeader)
+	locationBody   = "body"
+)
+
 var timeType = reflect.TypeOf(time.Time{})
 var readerType = reflect.TypeOf((*io.Reader)(nil)).Elem()
 
@@ -178,7 +189,7 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 			continue
 		}
 
-		if _, ok := f.Tag.Lookup("body"); ok || f.Name == "Body" {
+		if _, ok := f.Tag.Lookup(locationBody); ok || f.Name == strings.Title(locationBody) {
 			// Special case: body field is a reader for streaming
 			if f.Type == readerType {
 				inField.Set(reflect.ValueOf(req.Body))
@@ -192,7 +203,7 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 					if l > ctx.op.maxBodyBytes {
 						ctx.AddError(&ErrorDetail{
 							Message:  fmt.Sprintf("Request body too large, limit = %d bytes", ctx.op.maxBodyBytes),
-							Location: "body",
+							Location: locationBody,
 							Value:    length,
 						})
 						continue
@@ -206,12 +217,12 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 				if strings.Contains(err.Error(), "request body too large") {
 					ctx.AddError(&ErrorDetail{
 						Message:  fmt.Sprintf("Request body too large, limit = %d bytes", ctx.op.maxBodyBytes),
-						Location: "body",
+						Location: locationBody,
 					})
 				} else if e, ok := err.(net.Error); ok && e.Timeout() {
 					ctx.AddError(&ErrorDetail{
 						Message:  fmt.Sprintf("Request body took too long to read: timed out after %v", ctx.op.bodyReadTimeout),
-						Location: "body",
+						Location: locationBody,
 					})
 				} else {
 					panic(err)
@@ -220,7 +231,7 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 			}
 
 			if ctx.op.requestSchema != nil && ctx.op.requestSchema.HasValidation() {
-				if !validAgainstSchema(ctx, "body.", ctx.op.requestSchema, data) {
+				if !validAgainstSchema(ctx, locationBody+".", ctx.op.requestSchema, data) {
 					continue
 				}
 			}
@@ -240,25 +251,25 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 			pv = v
 		}
 
-		if name, ok := f.Tag.Lookup("path"); ok {
+		if name, ok := f.Tag.Lookup(locationPath); ok {
 			pname = name
-			location = "path"
+			location = locationPath
 			if v := chi.URLParam(req, name); v != "" {
 				pv = v
 			}
 		}
 
-		if name, ok := f.Tag.Lookup("query"); ok {
+		if name, ok := f.Tag.Lookup(locationQuery); ok {
 			pname = name
-			location = "query"
+			location = locationQuery
 			if v := req.URL.Query().Get(name); v != "" {
 				pv = v
 			}
 		}
 
-		if name, ok := f.Tag.Lookup("header"); ok {
+		if name, ok := f.Tag.Lookup(locationHeader); ok {
 			pname = name
-			location = "header"
+			location = locationHeader
 			// TODO: get combined rather than first header?
 			if v := req.Header.Get(name); v != "" {
 				pv = v
@@ -308,12 +319,98 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 			inField.Set(reflect.ValueOf(parsed))
 		}
 	}
+}
 
-	// Resolve after all other fields are set so the resolver can use them,
-	// and also so that any embedded structs are resolved first.
-	if input.CanInterface() {
+// A smart join for JSONPath
+func pathJoin(prefix string, parts ...string) string {
+	joined := prefix
+	if joined != "" {
+		joined += "."
+	}
+	return joined + strings.Join(parts, ".")
+}
+
+// ctxLocationWrapper wraps a context so that the error detail `location` field
+// gets sets appropriately for resolver errors. I.e. the resolver doesn't know
+// when it runs whether it is the body or deeply nested within the body of an
+// incoming request. We prefix it so the errors make sense to the end-user.
+type ctxLocationWrapper struct {
+	*hcontext
+	location string
+}
+
+func (c ctxLocationWrapper) AddError(err error) {
+	if e, ok := err.(*ErrorDetail); ok {
+		e.Location = pathJoin(c.location, e.Location)
+	}
+
+	c.hcontext.AddError(err)
+}
+
+// resolveFields recursively crawls the input struct and calls Resolve on
+// any structs it finds as fields, within slices, and as values in maps. This
+// should be called *after* all other fields are set so the resolver code can
+// use their values. It processes depth-first so structs have access to the
+// resolved fields of any contained structs when their resolver runs.
+func resolveFields(ctx *hcontext, path string, input reflect.Value) {
+	if input.Kind() == reflect.Ptr {
+		resolveFields(ctx, path, input.Elem())
+		return
+	}
+	if input.Kind() == reflect.Invalid {
+		// Some internal stuff can return invalid, e.g. time.Time fields. We just
+		// ignore those.
+		return
+	}
+
+	// First, handle any nested stuff (depth-first search)
+	switch input.Kind() {
+	case reflect.Slice:
+		for i := 0; i < input.Len(); i++ {
+			resolveFields(ctx, fmt.Sprintf("%s[%d]", path, i), input.Index(i))
+		}
+	case reflect.Map:
+		keys := input.MapKeys()
+		for i := 0; i < input.Len(); i++ {
+			resolveFields(ctx, pathJoin(path, keys[i].String()), input.MapIndex(keys[i]))
+		}
+	case reflect.Struct:
+		for i := 0; i < input.NumField(); i++ {
+			f := input.Type().Field(i)
+			n := strings.ToLower(f.Name)
+
+			if j, ok := f.Tag.Lookup("json"); ok {
+				parts := strings.Split(j, ",")
+				if parts[0] != "" {
+					n = parts[0]
+				}
+			}
+
+			if path == "" {
+				// Check what kind of top-level path there should be, if any. This
+				// will get errors where the location is e.g. query.search or
+				// header.authorization so you know where to look.
+				for _, tag := range []string{locationPath, locationQuery, locationHeader} {
+					if v, ok := f.Tag.Lookup(tag); ok {
+						n = v
+						path = tag
+					}
+				}
+			}
+
+			resolveFields(ctx, pathJoin(path, n), input.Field(i))
+		}
+	}
+
+	// Once all nested stuff has been handled, handle the resolver method if
+	// it exists.
+	if input.CanInterface() && input.CanAddr() {
 		if resolver, ok := input.Addr().Interface().(Resolver); ok {
-			resolver.Resolve(ctx, req)
+			wrapper := ctxLocationWrapper{
+				hcontext: ctx,
+				location: path,
+			}
+			resolver.Resolve(wrapper, ctx.r)
 		}
 	}
 }
@@ -343,19 +440,19 @@ func getParamInfo(t reflect.Type) map[string]oaParam {
 
 		p := oaParam{}
 
-		if name, ok := f.Tag.Lookup("path"); ok {
+		if name, ok := f.Tag.Lookup(locationPath); ok {
 			p.Name = name
 			p.In = inPath
 			p.Required = true
 		}
 
-		if name, ok := f.Tag.Lookup("query"); ok {
+		if name, ok := f.Tag.Lookup(locationQuery); ok {
 			p.Name = name
 			p.In = inQuery
 			p.Explode = new(bool)
 		}
 
-		if name, ok := f.Tag.Lookup("header"); ok {
+		if name, ok := f.Tag.Lookup(locationHeader); ok {
 			p.Name = name
 			p.In = inHeader
 		}

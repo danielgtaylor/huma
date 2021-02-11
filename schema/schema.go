@@ -70,7 +70,7 @@ func getTagValue(s *Schema, t reflect.Type, value string) (interface{}, error) {
 	}
 
 	// Special case: array of strings with comma-separated values and no quotes.
-	if s.Type == TypeArray && s.Items != nil && s.Items.Type == TypeString && value[0] != '[' {
+	if s.Type == TypeArray && s.Items != nil && s.Items.Type == TypeString && len(value) > 0 && value[0] != '[' {
 		values := []string{}
 		for _, s := range strings.Split(value, ",") {
 			values = append(values, strings.TrimSpace(s))
