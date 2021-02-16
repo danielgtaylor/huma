@@ -238,7 +238,8 @@ func TestSchemaExclusiveMinimum(t *testing.T) {
 
 	s, err := Generate(reflect.ValueOf(Example{}).Type())
 	assert.NoError(t, err)
-	assert.Equal(t, 1.0, *s.Properties["foo"].ExclusiveMinimum)
+	assert.Equal(t, 1.0, *s.Properties["foo"].Minimum)
+	assert.Equal(t, true, *s.Properties["foo"].ExclusiveMinimum)
 }
 
 func TestSchemaExclusiveMinimumError(t *testing.T) {
@@ -276,7 +277,8 @@ func TestSchemaExclusiveMaximum(t *testing.T) {
 
 	s, err := Generate(reflect.ValueOf(Example{}).Type())
 	assert.NoError(t, err)
-	assert.Equal(t, 0.0, *s.Properties["foo"].ExclusiveMaximum)
+	assert.Equal(t, 0.0, *s.Properties["foo"].Maximum)
+	assert.Equal(t, true, *s.Properties["foo"].ExclusiveMaximum)
 }
 
 func TestSchemaExclusiveMaximumError(t *testing.T) {
