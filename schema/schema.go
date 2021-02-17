@@ -123,9 +123,9 @@ type Schema struct {
 	Default              interface{}        `json:"default,omitempty"`
 	Example              interface{}        `json:"example,omitempty"`
 	Minimum              *float64           `json:"minimum,omitempty"`
-	ExclusiveMinimum     *float64           `json:"exclusiveMinimum,omitempty"`
+	ExclusiveMinimum     *bool              `json:"exclusiveMinimum,omitempty"`
 	Maximum              *float64           `json:"maximum,omitempty"`
-	ExclusiveMaximum     *float64           `json:"exclusiveMaximum,omitempty"`
+	ExclusiveMaximum     *bool              `json:"exclusiveMaximum,omitempty"`
 	MultipleOf           float64            `json:"multipleOf,omitempty"`
 	MinLength            *uint64            `json:"minLength,omitempty"`
 	MaxLength            *uint64            `json:"maxLength,omitempty"`
@@ -280,7 +280,9 @@ func GenerateFromField(f reflect.StructField, mode Mode) (string, bool, *Schema,
 		if err != nil {
 			return name, false, nil, err
 		}
-		s.ExclusiveMinimum = &min
+		s.Minimum = &min
+		t := true
+		s.ExclusiveMinimum = &t
 	}
 
 	if tag, ok := f.Tag.Lookup("maximum"); ok {
@@ -296,7 +298,9 @@ func GenerateFromField(f reflect.StructField, mode Mode) (string, bool, *Schema,
 		if err != nil {
 			return name, false, nil, err
 		}
-		s.ExclusiveMaximum = &max
+		s.Maximum = &max
+		t := true
+		s.ExclusiveMaximum = &t
 	}
 
 	if tag, ok := f.Tag.Lookup("multipleOf"); ok {
