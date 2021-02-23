@@ -116,6 +116,21 @@ func TestSchemaEnum(t *testing.T) {
 	assert.Equal(t, []interface{}{"one", "two", "three"}, s.Properties["foo"].Enum)
 }
 
+func TestSchemaArrayEnum(t *testing.T) {
+	type Example struct {
+		Foo []string `json:"foo" enum:"one,two,three"`
+	}
+
+	s, err := Generate(reflect.ValueOf(Example{}).Type())
+	assert.NoError(t, err)
+
+	// Array itself should not have an enum member set.
+	assert.Equal(t, []interface{}{}, s.Properties["foo"].Enum)
+
+	// Items in the array should be one of the allowed enum values.
+	assert.Equal(t, []interface{}{"one", "two", "three"}, s.Properties["foo"].Items.Enum)
+}
+
 func TestSchemaDefault(t *testing.T) {
 	type Example struct {
 		Foo string `json:"foo" default:"def"`
