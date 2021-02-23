@@ -240,12 +240,23 @@ func GenerateFromField(f reflect.StructField, mode Mode) (string, bool, *Schema,
 
 	if tag, ok := f.Tag.Lookup("enum"); ok {
 		s.Enum = []interface{}{}
+
+		enumType := f.Type
+		enumSchema := s
+		if s.Type == TypeArray {
+			// Enum values should be the type of the array elements, not the
+			// array itself!
+			enumType = f.Type.Elem()
+			enumSchema = s.Items
+		}
+
 		for _, v := range strings.Split(tag, ",") {
-			parsed, err := getTagValue(s, f.Type, v)
+			parsed, err := getTagValue(enumSchema, enumType, v)
 			if err != nil {
 				return name, false, nil, err
 			}
-			s.Enum = append(s.Enum, parsed)
+
+			enumSchema.Enum = append(enumSchema.Enum, parsed)
 		}
 	}
 
