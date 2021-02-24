@@ -71,8 +71,8 @@ func validAgainstSchema(ctx *hcontext, label string, schema *schema.Schema, data
 			// Note: some descriptions start with the context location so we trim
 			// those off to prevent duplicating data. (e.g. see the enum error)
 			ctx.AddError(&ErrorDetail{
-				Message:  strings.TrimLeft(desc.Description(), desc.Context().String()+" "),
-				Location: label + strings.TrimLeft(desc.Field(), "(root)"),
+				Message:  strings.TrimPrefix(desc.Description(), desc.Context().String()+" "),
+				Location: label + strings.TrimPrefix(desc.Field(), "(root)"),
 				Value:    desc.Value(),
 			})
 		}
