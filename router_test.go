@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/istreamlabs/huma/schema"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -337,4 +338,27 @@ func TestRouterAutoConfig(t *testing.T) {
 			"another": "https://example.com/extras/{extra}",
 		},
 	})
+}
+
+func TestCustomRequestSchema(t *testing.T) {
+	app := newTestRouter()
+
+	op := app.Resource("/foo").Post("id", "doc", NewResponse(http.StatusOK, "ok"))
+	op.RequestSchema(&schema.Schema{
+		Type:    schema.TypeInteger,
+		Minimum: schema.F(0),
+		Maximum: schema.F(100),
+	})
+	op.Run(func(ctx Context, input struct {
+		Body int
+	}) {
+		// Custom schema should be used so we never get here.
+		ctx.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/foo", strings.NewReader("1234"))
+	app.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Result().StatusCode)
 }

@@ -135,6 +135,12 @@ func (o *Operation) NoBodyReadTimeout() {
 	o.bodyReadTimeout = 0
 }
 
+// RequestSchema allows overriding the generated input body schema, giving you
+// more control over documentation and validation.
+func (o *Operation) RequestSchema(s *schema.Schema) {
+	o.requestSchema = s
+}
+
 // Run registers the handler function for this operation. It should be of the
 // form: `func (ctx huma.Context)` or `func (ctx huma.Context, input)` where
 // input is your input struct describing the input parameters and/or body.
@@ -182,9 +188,12 @@ func (o *Operation) Run(handler interface{}) {
 		// Get body if present.
 		if body, ok := input.FieldByName("Body"); ok {
 			o.requestModel = body.Type
-			o.requestSchema, err = schema.GenerateWithMode(body.Type, schema.ModeWrite, nil)
-			if err != nil {
-				panic(fmt.Errorf("unable to generate JSON schema: %w", err))
+
+			if o.requestSchema == nil {
+				o.requestSchema, err = schema.GenerateWithMode(body.Type, schema.ModeWrite, nil)
+				if err != nil {
+					panic(fmt.Errorf("unable to generate JSON schema: %w", err))
+				}
 			}
 		}
 
