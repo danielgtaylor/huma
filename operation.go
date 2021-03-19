@@ -14,18 +14,19 @@ import (
 // Operation represents an operation (an HTTP verb, e.g. GET / PUT) against
 // a resource attached to a router.
 type Operation struct {
-	resource           *Resource
-	method             string
-	id                 string
-	summary            string
-	description        string
-	params             map[string]oaParam
-	requestContentType string
-	requestSchema      *schema.Schema
-	requestModel       reflect.Type
-	responses          []Response
-	maxBodyBytes       int64
-	bodyReadTimeout    time.Duration
+	resource              *Resource
+	method                string
+	id                    string
+	summary               string
+	description           string
+	params                map[string]oaParam
+	requestContentType    string
+	requestSchema         *schema.Schema
+	requestSchemaOverride bool
+	requestModel          reflect.Type
+	responses             []Response
+	maxBodyBytes          int64
+	bodyReadTimeout       time.Duration
 }
 
 func newOperation(resource *Resource, method, id, docs string, responses []Response) *Operation {
@@ -71,7 +72,14 @@ func (o *Operation) toOpenAPI(components *oaComponents) *gabs.Container {
 		if ct == "" {
 			ct = "application/json"
 		}
-		ref := components.AddSchema(o.requestModel, schema.ModeAll, o.id+"-request")
+		ref := ""
+		if o.requestSchemaOverride {
+			ref = components.AddExistingSchema(o.requestSchema, o.id+"-request")
+		} else {
+			// Regenerate with ModeAll so the same model can be used for both the
+			// input and output when possible.
+			ref = components.AddSchema(o.requestModel, schema.ModeAll, o.id+"-request")
+		}
 		doc.Set(ref, "requestBody", "content", ct, "schema", "$ref")
 	}
 
@@ -139,6 +147,7 @@ func (o *Operation) NoBodyReadTimeout() {
 // more control over documentation and validation.
 func (o *Operation) RequestSchema(s *schema.Schema) {
 	o.requestSchema = s
+	o.requestSchemaOverride = true
 }
 
 // Run registers the handler function for this operation. It should be of the
