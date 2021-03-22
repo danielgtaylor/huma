@@ -50,6 +50,7 @@ type oaComponents struct {
 	SecuritySchemes map[string]oaSecurityScheme `json:"securitySchemes,omitempty"`
 }
 
+// AddSchema creates and adds a new schema from a type.
 func (c *oaComponents) AddSchema(t reflect.Type, mode schema.Mode, hint string) string {
 	// Try to determine the type's name.
 	name := t.Name()
@@ -92,6 +93,11 @@ func (c *oaComponents) AddSchema(t reflect.Type, mode schema.Mode, hint string) 
 		}
 	}
 
+	return c.AddExistingSchema(s, name)
+}
+
+// AddExistingSchema adds an existing schema instance under the given name.
+func (c *oaComponents) AddExistingSchema(s *schema.Schema, name string) string {
 	orig := name
 	num := 1
 	for {
