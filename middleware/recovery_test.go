@@ -82,3 +82,29 @@ func TestRecoveryMiddlewareLogBody(t *testing.T) {
 	assert.Equal(t, "application/problem+json", w.Result().Header.Get("content-type"))
 	assert.Contains(t, log.All()[0].ContextMap()["http.request"], `{"foo": "bar"}`)
 }
+
+func TestLogBodyWithoutPanic(t *testing.T) {
+	app, _ := newTestRouter(t)
+
+	body := ""
+
+	app.Resource("/body").Post("log-body", "doc",
+		responses.NoContent(),
+	).Run(func(ctx huma.Context, input struct {
+		Body struct {
+			Name string `json:"name"`
+		}
+	}) {
+		// Get the raw body bytes as a string, ignoring the `input` struct
+		// declared above.
+		body = string(GetBufferedBody(ctx))
+		ctx.WriteHeader(http.StatusNoContent)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/body", strings.NewReader(`{"name": "test-body"}`))
+	app.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.Equal(t, `{"name": "test-body"}`, body)
+}

@@ -17,6 +17,19 @@ import (
 	"github.com/opentracing/opentracing-go/ext"
 )
 
+var bufContextKey contextKey = "huma-middleware-body-buffer"
+
+// GetBufferedBody returns the buffered body from a request when using the
+// recovery middleware, up to MaxLogBodyBytes.
+func GetBufferedBody(ctx context.Context) []byte {
+	if val := ctx.Value(bufContextKey); val != nil {
+		buf := val.(*bytes.Buffer)
+		data, _ := ioutil.ReadAll(ioutil.NopCloser(buf))
+		return data
+	}
+	return []byte{}
+}
+
 // MaxLogBodyBytes logs at most this many bytes of any request body during a
 // panic when using the recovery middleware. Defaults to 10KiB. Changing this
 // value changes the amount of potential memory used for *each* incoming
@@ -88,6 +101,8 @@ func Recovery(onPanic PanicFunc) func(http.Handler) http.Handler {
 				defer bufPool.Put(buf)
 
 				r.Body = newBufferedReadCloser(r.Body, buf, MaxLogBodyBytes)
+
+				r = r.WithContext(context.WithValue(r.Context(), bufContextKey, buf))
 			}
 
 			// Recovering comes *after* the above so the buffer is not returned to
