@@ -2,6 +2,7 @@ package huma
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"io/ioutil"
@@ -361,4 +362,41 @@ func TestCustomRequestSchema(t *testing.T) {
 	app.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Result().StatusCode)
+}
+
+func TestGetOperationName(t *testing.T) {
+	app := newTestRouter()
+
+	var opInfo *OperationInfo
+	app.Middleware(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(w, r)
+
+			opInfo = GetOperationInfo(r.Context())
+		})
+	})
+
+	app.Resource("/").Get("test-id", "doc",
+		NewResponse(http.StatusOK, "ok"),
+	).Run(func(ctx Context) {
+		// Do nothing!
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	app.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
+	assert.Equal(t, "test-id", opInfo.ID)
+	assert.Equal(t, "/", opInfo.URITemplate)
+	assert.Equal(t, "doc", opInfo.Summary)
+	assert.Equal(t, []string{}, opInfo.Tags)
+}
+
+func TestGetOperationDoesNotCrash(t *testing.T) {
+	ctx := context.Background()
+	assert.NotPanics(t, func() {
+		info := GetOperationInfo(ctx)
+		assert.NotNil(t, info)
+	})
 }

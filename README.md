@@ -682,6 +682,24 @@ middleware.NewLogger = func() (*zap.Logger, error) {
 }
 ```
 
+### Getting Operation Info
+
+When setting up logging (or metrics, or auditing) you may want to have access to some additional information like the ID of the current operation. You can fetch this from the context **after** the handler has run.
+
+```go
+app.Middleware(func(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// First, make sure the handler function runs!
+		next.ServeHTTP(w, r)
+
+		// After that, you can get the operation info.
+		opInfo := GetOperationInfo(r.Context())
+		fmt.Println(opInfo.ID)
+		fmt.Println(opInfo.URITemplate)
+	})
+})
+```
+
 ## Lazy-loading at Server Startup
 
 You can register functions to run before the server starts, allowing for things like lazy-loading dependencies. It is safe to call this method multiple times.
