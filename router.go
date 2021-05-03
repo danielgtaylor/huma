@@ -19,6 +19,10 @@ type contextKey string
 // context value.
 var connContextKey contextKey = "huma-request-conn"
 
+// opIDContextKey is used to get the operation name after request routing
+// has finished.
+var opIDContextKey contextKey = "huma-operation-id"
+
 // GetConn gets the underlying `net.Conn` from a context.
 func GetConn(ctx context.Context) net.Conn {
 	conn := ctx.Value(connContextKey)
@@ -351,11 +355,15 @@ func New(docs, version string) *Router {
 		ctx.WriteError(http.StatusMethodNotAllowed, fmt.Sprintf("No handler for method %s", r.Method))
 	}))
 
-	// Automatically add links to OpenAPI and docs.
 	r.Middleware(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			// Inject the operation info before other middleware so that the later
+			// middleware will have access to it.
+			req = req.WithContext(context.WithValue(req.Context(), opIDContextKey, &OperationInfo{}))
+
 			next.ServeHTTP(w, req)
 
+			// Automatically add links to OpenAPI and docs.
 			if req.URL.Path == "/" {
 				link := w.Header().Get("link")
 				if link != "" {

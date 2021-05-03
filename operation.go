@@ -1,6 +1,7 @@
 package huma
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -10,6 +11,29 @@ import (
 	"github.com/Jeffail/gabs/v2"
 	"github.com/danielgtaylor/huma/schema"
 )
+
+// OperationInfo describes an operation. It contains useful information for
+// logging, metrics, auditing, etc.
+type OperationInfo struct {
+	ID          string
+	URITemplate string
+	Summary     string
+	Tags        []string
+}
+
+// GetOperationInfo returns information about the current Huma operation. This
+// will only be populated *after* routing has been handled, meaning *after*
+// `next.ServeHTTP(w, r)` has been called in your middleware.
+func GetOperationInfo(ctx context.Context) *OperationInfo {
+	if oi := ctx.Value(opIDContextKey); oi != nil {
+		return oi.(*OperationInfo)
+	}
+
+	return &OperationInfo{
+		ID:   "unknown",
+		Tags: []string{},
+	}
+}
 
 // Operation represents an operation (an HTTP verb, e.g. GET / PUT) against
 // a resource attached to a router.
@@ -235,6 +259,13 @@ func (o *Operation) Run(handler interface{}) {
 				conn.SetReadDeadline(time.Now().Add(o.bodyReadTimeout))
 			}
 		}
+
+		// Update the operation info for loggers/metrics/etc middlware to use later.
+		opInfo := GetOperationInfo(r.Context())
+		opInfo.ID = o.id
+		opInfo.URITemplate = o.resource.path
+		opInfo.Summary = o.summary
+		opInfo.Tags = append([]string{}, o.resource.tags...)
 
 		ctx := &hcontext{
 			Context:        r.Context(),
