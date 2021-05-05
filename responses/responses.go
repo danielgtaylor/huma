@@ -118,6 +118,11 @@ func InternalServerError() huma.Response {
 	return errorResponse(http.StatusInternalServerError)
 }
 
+// NotImplemented HTTP 501 response with a structured error body (e.g. JSON).
+func NotImplemented() huma.Response {
+	return errorResponse(http.StatusNotImplemented)
+}
+
 // BadGateway HTTP 502 response with a structured error body (e.g. JSON).
 func BadGateway() huma.Response {
 	return errorResponse(http.StatusBadGateway)
