@@ -241,7 +241,7 @@ func (o *Operation) Run(handler interface{}) {
 		}
 
 		if !found400 {
-			o.responses = append(o.responses, NewResponse(http.StatusBadRequest, http.StatusText(http.StatusBadRequest)).Model(&ErrorModel{}))
+			o.responses = append(o.responses, NewResponse(http.StatusBadRequest, http.StatusText(http.StatusBadRequest)).ContentType("application/problem+json").Model(&ErrorModel{}))
 		}
 	}
 
