@@ -65,7 +65,7 @@ func newOperation(resource *Resource, method, id, docs string, responses []Respo
 		// 1 MiB body limit by default
 		maxBodyBytes: 1024 * 1024,
 		// 15 second timeout by default
-		bodyReadTimeout: 15 * time.Second,
+		bodyReadTimeout: resource.router.defaultBodyReadTimeout,
 	}
 }
 

@@ -58,6 +58,10 @@ type Router struct {
 
 	// Allows modification of the generated OpenAPI.
 	openapiHook func(*gabs.Container)
+
+	// Router-global defaults
+	defaultBodyReadTimeout   time.Duration
+	defaultServerIdleTimeout time.Duration
 }
 
 // OpenAPI returns an OpenAPI 3 representation of the API, which can be
@@ -257,7 +261,7 @@ func (r *Router) listen(addr, certFile, keyFile string) error {
 		r.server = &http.Server{
 			Addr:              addr,
 			ReadHeaderTimeout: 10 * time.Second,
-			IdleTimeout:       15 * time.Second,
+			IdleTimeout:       r.defaultServerIdleTimeout,
 			Handler:           r,
 			ConnContext: func(ctx context.Context, c net.Conn) context.Context {
 				return context.WithValue(ctx, connContextKey, c)
@@ -326,20 +330,35 @@ func (r *Router) GetVersion() string {
 	return r.version
 }
 
+// DefaultBodyReadTimeout sets the amount of time an operation has to read
+// the body of the incoming request before it is aborted. Defaults to 15
+// seconds if not set.
+func (r *Router) DefaultBodyReadTimeout(timeout time.Duration) {
+	r.defaultBodyReadTimeout = timeout
+}
+
+// DefaultServerIdleTimeout sets the server's `IdleTimeout` value on startup.
+// Defaults to 15 seconds if not set.
+func (r *Router) DefaultServerIdleTimeout(timeout time.Duration) {
+	r.defaultServerIdleTimeout = timeout
+}
+
 // New creates a new Huma router to which you can attach resources,
 // operations, middleware, etc.
 func New(docs, version string) *Router {
 	title, desc := splitDocs(docs)
 
 	r := &Router{
-		mux:             chi.NewRouter(),
-		resources:       []*Resource{},
-		title:           title,
-		description:     desc,
-		version:         version,
-		servers:         []oaServer{},
-		securitySchemes: map[string]oaSecurityScheme{},
-		security:        []map[string][]string{},
+		mux:                      chi.NewRouter(),
+		resources:                []*Resource{},
+		title:                    title,
+		description:              desc,
+		version:                  version,
+		servers:                  []oaServer{},
+		securitySchemes:          map[string]oaSecurityScheme{},
+		security:                 []map[string][]string{},
+		defaultBodyReadTimeout:   15 * time.Second,
+		defaultServerIdleTimeout: 15 * time.Second,
 	}
 
 	r.docsHandler = RapiDocHandler(r)
