@@ -3,6 +3,7 @@ package huma
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"reflect"
 	"strings"
@@ -249,17 +250,6 @@ func (o *Operation) Run(handler interface{}) {
 	// on allocations if the struct has a Reset() method.
 
 	register("/", func(w http.ResponseWriter, r *http.Request) {
-		// Limit the request body size and set a read timeout.
-		if r.Body != nil {
-			if o.maxBodyBytes > 0 {
-				r.Body = http.MaxBytesReader(w, r.Body, o.maxBodyBytes)
-			}
-
-			if conn := GetConn(r.Context()); o.bodyReadTimeout > 0 && conn != nil {
-				conn.SetReadDeadline(time.Now().Add(o.bodyReadTimeout))
-			}
-		}
-
 		// Update the operation info for loggers/metrics/etc middlware to use later.
 		opInfo := GetOperationInfo(r.Context())
 		opInfo.ID = o.id
@@ -285,11 +275,34 @@ func (o *Operation) Run(handler interface{}) {
 		inputType := v.Type().In(1)
 		input := reflect.New(inputType)
 
+		// Limit the request body size.
+		if r.Body != nil {
+			if o.maxBodyBytes > 0 {
+				r.Body = http.MaxBytesReader(w, r.Body, o.maxBodyBytes)
+			}
+		}
+
+		// Set a read deadline for reading/parsing the input request body, but
+		// only for operations that have a request body model.
+		var conn net.Conn
+		if o.requestModel != nil && o.bodyReadTimeout > 0 {
+			if conn = GetConn(r.Context()); conn != nil {
+				conn.SetReadDeadline(time.Now().Add(o.bodyReadTimeout))
+			}
+		}
+
 		setFields(ctx, ctx.r, input, inputType)
 		resolveFields(ctx, "", input)
 		if ctx.HasError() {
 			ctx.WriteError(http.StatusBadRequest, "Error while parsing input parameters")
 			return
+		}
+
+		// Clear any body read deadline if one was set as the body has now been
+		// read in. The one exception is when the body is streamed in via an
+		// `io.Reader` so we don't reset the deadline for that.
+		if conn != nil && o.requestModel != readerType {
+			conn.SetReadDeadline(time.Time{})
 		}
 
 		// Call the handler with the context and newly populated input struct.
