@@ -28,6 +28,9 @@ type CLI struct {
 
 	// Functions to run before the server starts up.
 	prestart []func()
+
+	// Functions to run after parsing args
+	argsParsed []func()
 }
 
 // NewRouter creates a new router, new CLI, sets the default middlware, and
@@ -56,6 +59,11 @@ func New(router *huma.Router) *CLI {
 	app.root = &cobra.Command{
 		Use:     filepath.Base(os.Args[0]),
 		Version: app.GetVersion(),
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			for _, f := range app.argsParsed {
+				f()
+			}
+		},
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Printf("Starting %s %s on %s:%v\n", app.GetTitle(), app.GetVersion(), viper.Get("host"), viper.Get("port"))
 
@@ -158,6 +166,14 @@ func (c *CLI) Flag(name, short, description string, defaultValue interface{}) {
 // command line arguments have been parsed.
 func (c *CLI) PreStart(f func()) {
 	c.prestart = append(c.prestart, f)
+}
+
+// ArgsParsed registers a function to run after arguments have been parsed
+// but before any command handler has been run. It is similar to a PreStart
+// function but runs *before* PreStart functions and can be used for more
+// than server startup, i.e. custom commands as well.
+func (c *CLI) ArgsParsed(f func()) {
+	c.argsParsed = append(c.argsParsed, f)
 }
 
 // Run runs the CLI.
