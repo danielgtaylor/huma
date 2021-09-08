@@ -700,24 +700,6 @@ app.Middleware(func(next http.Handler) http.Handler {
 })
 ```
 
-## Lazy-loading at Server Startup
-
-You can register functions to run before the server starts, allowing for things like lazy-loading dependencies. It is safe to call this method multiple times.
-
-```go
-var db *mongo.Client
-
-app := cli.NewRouter("My API", "1.0.0")
-app.PreStart(func() {
-	// Connect to the datastore
-	var err error
-	db, err = mongo.Connect(context.Background(),
-		options.Client().ApplyURI("..."))
-})
-```
-
-> :whale: This is especially useful for external dependencies and if any custom CLI commands are set up. For example, you may not want to require a database to run `my-service openapi my-api.json`.
-
 ## Changing the Documentation Renderer
 
 You can choose between [RapiDoc](https://mrin9.github.io/RapiDoc/), [ReDoc](https://github.com/Redocly/redoc), or [SwaggerUI](https://swagger.io/tools/swagger-ui/) to auto-generate documentation. Simply set the documentation handler on the router:
@@ -744,9 +726,40 @@ app.OpenAPIHook(modify)
 
 > :whale: See the [OpenAPI 3 spec](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md) for everything that can be set.
 
-## Custom CLI Arguments
+## CLI
 
 The `cli` package provides a convenience layer to create a simple CLI for your server, which lets a user set the host, port, TLS settings, etc when running your service.
+
+```go
+app := cli.NewRouter("My API", "1.0.0")
+
+// Do resource/operation setup here...
+
+app.Run()
+```
+
+Then run the service:
+
+```sh
+$ go run yourservice.go --help
+```
+
+## CLI Runtime Arguments & Configuration
+
+The CLI can be configured in multiple ways. In order of decreasing precedence:
+
+1. Commandline arguments, e.g. `-p 8000` or `--port=8000`
+2. Environment variables prefixed with `SERVICE_`, e.g. `SERVICE_PORT=8000`
+
+It's also possible to load configured flags from config files. JSON/YAML/TOML are supported. For example, to load `some/path/my-app.json` you can do the following before calling `app.Run()`:
+
+```go
+viper.AddConfigPath("some/path")
+viper.SetConfigName("my-app")
+viper.ReadInConfig()
+```
+
+## Custom CLI Arguments
 
 You can add additional CLI arguments, e.g. for additional logging tags. Use the `Flag` method along with the `viper` module to get the parsed value.
 
@@ -770,6 +783,16 @@ Then run the service:
 $ go run yourservice.go --env=prod
 ```
 
+Note that passed flags are not parsed during application setup. They only get parsed after calling `app.Run()`, so if you need their value for some setup code you can use the `ArgsParsed` handler:
+
+```go
+app.ArgsParsed(func() {
+	fmt.Printf("Env is %s\n", viper.GetString("env"))
+})
+```
+
+See lazy loading below for more details.
+
 > :whale: Combine custom arguments with [customized logger setup](#customizing-logging) and you can easily log your cloud provider, environment, region, pod, etc with every message.
 
 ## Custom CLI Commands
@@ -777,6 +800,35 @@ $ go run yourservice.go --env=prod
 You can access the root `cobra.Command` via `app.Root()` and add new custom commands via `app.Root().AddCommand(...)`. The `openapi` sub-command is one such example in the default setup.
 
 > :whale: You can also overwite `app.Root().Run` to completely customize how you run the server. Or just ditch the `cli` package completely.
+
+## Lazy-loading at Server Startup
+
+You can register functions to run before any command handler or before the server starts, allowing for things like lazy-loading dependencies. It is safe to call these methods multiple times.
+
+```go
+var db *mongo.Client
+
+app := cli.NewRouter("My API", "1.0.0")
+
+// Add a long arg (--env), short (-e), description & default
+app.Flag("env", "e", "Environment", "local")
+
+app.ArgsParsed(func() {
+	// Arguments have been parsed now. This runs before *any* command including
+	// custom commands, not just server-startup.
+	fmt.Println(viper.GetString("env"))
+})
+
+app.PreStart(func() {
+	// Server is starting up, so connect to the datastore. This runs only
+	// before server start.
+	var err error
+	db, err = mongo.Connect(context.Background(),
+		options.Client().ApplyURI("..."))
+})
+```
+
+> :whale: This is especially useful for external dependencies and if any custom CLI commands are set up. For example, you may not want to require a database to run `my-service openapi my-api.json`.
 
 ## Testing
 
