@@ -242,3 +242,29 @@ func TestWriteAfterClose(t *testing.T) {
 		app.ServeHTTP(w, req)
 	})
 }
+
+func TestValue(t *testing.T) {
+	key := contextKey("foo")
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := ContextFromRequest(w, r)
+
+		// Create a copy with a new value attached.
+		ctx2 := ctx.WithValue(key, "bar")
+
+		assert.Equal(t, nil, ctx.Value(key))
+		assert.Equal(t, "bar", ctx2.Value(key))
+
+		// Set a value in-place in the original
+		ctx.SetValue(key, "baz")
+
+		// Make sure it was set on ctx, and that ctx2 wasn't modified since it's
+		// a copy created before the call to `SetValue(...)`.
+		assert.Equal(t, "baz", ctx.Value(key))
+		assert.Equal(t, "bar", ctx2.Value(key))
+	})
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest(http.MethodGet, "/", nil)
+	handler(w, r)
+}

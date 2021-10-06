@@ -29,6 +29,15 @@ type Context interface {
 	context.Context
 	http.ResponseWriter
 
+	// WithValue returns a shallow copy of the context with a new context value
+	// applied to it.
+	WithValue(key, value interface{}) Context
+
+	// SetValue sets a context value. The Huma context is modified in place while
+	// the underlying request context is copied. This is particularly useful for
+	// setting context values from input resolver functions.
+	SetValue(key, value interface{})
+
 	// AddError adds a new error to the list of errors for this request.
 	AddError(err error)
 
@@ -52,6 +61,23 @@ type hcontext struct {
 	errors []error
 	op     *Operation
 	closed bool
+}
+
+func (c *hcontext) WithValue(key, value interface{}) Context {
+	r := c.r.WithContext(context.WithValue(c.r.Context(), key, value))
+	return &hcontext{
+		Context:        context.WithValue(c.Context, key, value),
+		ResponseWriter: c.ResponseWriter,
+		r:              r,
+		errors:         append([]error{}, c.errors...),
+		op:             c.op,
+		closed:         c.closed,
+	}
+}
+
+func (c *hcontext) SetValue(key, value interface{}) {
+	c.r = c.r.WithContext(context.WithValue(c.r.Context(), key, value))
+	c.Context = c.r.Context()
 }
 
 func (c *hcontext) AddError(err error) {

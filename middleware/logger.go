@@ -16,8 +16,10 @@ import (
 
 type contextKey string
 
-var logContextKey contextKey = "huma-middleware-logger"
 var logConfig zap.Config
+
+// LogContextKey allows you to get/set a logger from a context.
+var LogContextKey contextKey = "huma-middleware-logger"
 
 // LogLevel sets the current Zap root logger's level when using the logging
 // middleware. This can be changed dynamically at runtime.
@@ -101,7 +103,7 @@ func Logger(next http.Handler) http.Handler {
 			}
 		}
 
-		r = r.WithContext(context.WithValue(r.Context(), logContextKey, contextLog.Sugar()))
+		r = r.WithContext(context.WithValue(r.Context(), LogContextKey, contextLog.Sugar()))
 		nw := &statusRecorder{ResponseWriter: w}
 
 		next.ServeHTTP(nw, r)
@@ -138,7 +140,7 @@ func AddLoggerOptions(app Flagger) {
 // GetLogger returns the contextual logger for the current request. If no
 // logger is present, it returns a no-op logger so no nil check is required.
 func GetLogger(ctx context.Context) *zap.SugaredLogger {
-	log := ctx.Value(logContextKey)
+	log := ctx.Value(LogContextKey)
 	if log != nil {
 		return log.(*zap.SugaredLogger)
 	}
@@ -148,5 +150,5 @@ func GetLogger(ctx context.Context) *zap.SugaredLogger {
 
 // SetLogger sets the contextual logger for the current request.
 func SetLogger(r *http.Request, logger *zap.SugaredLogger) *http.Request {
-	return r.WithContext(context.WithValue(r.Context(), logContextKey, logger))
+	return r.WithContext(context.WithValue(r.Context(), LogContextKey, logger))
 }
