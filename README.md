@@ -750,6 +750,14 @@ middleware.NewLogger = func() (*zap.Logger, error) {
 }
 ```
 
+You can also modify the logger in the current request's context from resolvers or operation handlers. This modifies the context in-place for the lifetime of the request.
+
+```go
+original := middleware.GetLogger(ctx)
+modified := original.With("my-value", 123)
+middleware.SetLoggerInContext(ctx, modified)
+```
+
 ### Getting Operation Info
 
 When setting up logging (or metrics, or auditing) you may want to have access to some additional information like the ID of the current operation. You can fetch this from the context **after** the handler has run.
