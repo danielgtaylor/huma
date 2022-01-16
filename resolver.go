@@ -294,7 +294,7 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 				s := oap.Schema
 				if s.HasValidation() {
 					data := pv
-					if s.Type == "string" {
+					if s.Type == "string" && !strings.HasPrefix(data, `"`) {
 						// Strings are special in that we don't expect users to provide them
 						// with quotes, so wrap them here for the parser that does the
 						// validation step below.
@@ -303,7 +303,13 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 						// Array type needs to have `[` and `]` added.
 						if s.Items.Type == "string" {
 							// Same as above, quote each item.
-							data = `"` + strings.Join(strings.Split(data, ","), `","`) + `"`
+							parts := strings.Split(data, ",")
+							for i, part := range parts {
+								if !strings.HasPrefix(part, `"`) {
+									parts[i] = `"` + part + `"`
+								}
+							}
+							data = strings.Join(parts, ",")
 						}
 						if len(data) > 0 && data[0] != '[' {
 							data = "[" + data + "]"
