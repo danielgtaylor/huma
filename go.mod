@@ -5,6 +5,7 @@ go 1.13
 require (
 	github.com/Jeffail/gabs/v2 v2.6.0
 	github.com/andybalholm/brotli v1.0.0
+	github.com/evanphx/json-patch/v5 v5.5.0 // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/fxamacker/cbor v1.5.1
 	github.com/fxamacker/cbor/v2 v2.2.0

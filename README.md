@@ -31,6 +31,7 @@ Features include:
 - [Content negotiation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Content_negotiation) between server and client
   - Support for gzip ([RFC 1952](https://tools.ietf.org/html/rfc1952)) & Brotli ([RFC 7932](https://tools.ietf.org/html/rfc7932)) content encoding via the `Accept-Encoding` header.
   - Support for JSON ([RFC 8259](https://tools.ietf.org/html/rfc8259)), YAML, and CBOR ([RFC 7049](https://tools.ietf.org/html/rfc7049)) content types via the `Accept` header.
+- Conditional requests support, e.g. `If-Match` or `If-Unmodified-Since` header utilities.
 - Annotated Go types for input and output models
   - Generates JSON Schema from Go types
   - Automatic input model validation & error handling
@@ -444,6 +445,73 @@ func (m *MyInput) Resolve(ctx huma.Context, r *http.Request) {
 		})
 	}
 }
+```
+
+### Conditional Requests
+
+There are built-in utilities for handling [conditional requests](https://developer.mozilla.org/en-US/docs/Web/HTTP/Conditional_requests), which serve two broad purposes:
+
+1. Sparing bandwidth on reading a document that has not changed, i.e. "only send if the version is different from what I already have"
+2. Preventing multiple writers from clobbering each other's changes, i.e. "only save if the version on the server matches what I saw last"
+
+Adding support for handling conditional requests requires four steps:
+
+1. Import the `github.com/danielgtaylor/huma/conditional` package.
+2. Add the response definition (`304 Not Modified` for reads or `412 Precondition Failed` for writes)
+3. Add `conditional.Params` to your input struct.
+4. Check if conditional params were passed and handle them. The `HasConditionalParams()` and `PreconditionFailed(...)` methods can help with this.
+
+Implementing a conditional read might look like:
+
+```go
+app.Resource("/resource").Get("get-resource", "Get a resource",
+	responses.OK(),
+	responses.NotModified(),
+).Run(func(ctx huma.Context, input struct {
+	conditional.Params
+}) {
+	if input.HasConditionalParams() {
+		// TODO: Get the ETag and last modified time from the resource.
+		etag := ""
+		modified := time.Time{}
+
+		// If preconditions fail, abort the request processing. Response status
+		// codes are already set for you, but you can optionally provide a body.
+		// Returns an HTTP 304 not modified.
+		if input.PreconditionFailed(ctx, etag, modified) {
+			return
+		}
+	}
+
+	// Otherwise do the normal request processing here...
+	// ...
+})
+```
+
+Similarly a write operation may look like:
+
+```go
+app.Resource("/resource").Put("put-resource", "Put a resource",
+	responses.OK(),
+	responses.PreconditionFailed(),
+).Run(func(ctx huma.Context, input struct {
+	conditional.Params
+}) {
+	if input.HasConditionalParams() {
+		// TODO: Get the ETag and last modified time from the resource.
+		etag := ""
+		modified := time.Time{}
+
+		// If preconditions fail, abort the request processing. Response status and
+		// errors have already been set. Returns an HTTP 412 Precondition Failed.
+		if input.PreconditionFailed(ctx, etag, modified) {
+			return
+		}
+	}
+
+	// Otherwise do the normal request processing here...
+	// ...
+})
 ```
 
 ## Validation
