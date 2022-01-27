@@ -481,6 +481,10 @@ func getParamInfo(t reflect.Type) map[string]oaParam {
 			p.Internal = internal == "true"
 		}
 
+		if cliName, ok := f.Tag.Lookup("cliName"); ok {
+			p.CLIName = cliName
+		}
+
 		_, _, s, err := schema.GenerateFromField(f, schema.ModeRead)
 		if err != nil {
 			panic(err)

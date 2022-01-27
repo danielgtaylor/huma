@@ -39,6 +39,7 @@ type oaParam struct {
 	Schema      *schema.Schema `json:"schema,omitempty"`
 	Deprecated  bool           `json:"deprecated,omitempty"`
 	Explode     *bool          `json:"explode,omitempty"`
+	CLIName     string         `json:"x-cli-name,omitempty"`
 
 	// Internal params are excluded from the OpenAPI document and can set up
 	// params sent between a load balander / proxy and the service internally.
