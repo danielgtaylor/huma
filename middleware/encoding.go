@@ -73,15 +73,17 @@ func (w *contentEncodingWriter) WriteHeader(code int) {
 	w.status = code
 }
 
-func (w *contentEncodingWriter) Close() {
-	if !w.wroteHeader {
-		w.ResponseWriter.WriteHeader(w.status)
-	}
-
+func (w *contentEncodingWriter) finish() {
 	if w.buf.Len() > 0 {
+		if !w.wroteHeader {
+			w.ResponseWriter.WriteHeader(w.status)
+		}
+
 		w.ResponseWriter.Write(w.buf.Bytes())
 	}
+}
 
+func (w *contentEncodingWriter) Close() {
 	if w.writer != nil {
 		if wc, ok := w.writer.(io.WriteCloser); ok {
 			wc.Close()
@@ -159,15 +161,20 @@ func ContentEncoding(next http.Handler) http.Handler {
 					minSize: 1400,
 				}
 
-				// Since we aren't sure if we will be compressing the response (due
-				// to size), here we trigger a call to close the writer after all
-				// writes have completed. This will send the status/headers and flush
-				// any buffers as needed.
+				// Make sure to clean up and return the buffer and encoder to their
+				// respective pools for re-use when done.
 				defer cew.Close()
 				w = cew
 			}
 		}
 
 		next.ServeHTTP(w, r)
+
+		if cew, ok := w.(*contentEncodingWriter); ok {
+			// If a content-encoding was negotiated, and we didn't panic in the
+			// handler, we want to finish by flushing any buffered writes as needed
+			// before returning.
+			cew.finish()
+		}
 	})
 }

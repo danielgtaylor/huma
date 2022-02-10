@@ -142,3 +142,45 @@ func TestContentEncodingError(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, status)
 	assert.Equal(t, http.StatusNotFound, w.Result().StatusCode)
 }
+
+func TestContentEncodingPanic(t *testing.T) {
+	app, _ := newTestRouter(t)
+	app.Resource("/").Get("root", "test",
+		responses.OK(),
+	).Run(func(ctx huma.Context) {
+		// Simulate a failure before writes or status are sent.
+		panic("error")
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Add("Accept-Encoding", "gzip")
+	app.ServeHTTP(w, req)
+
+	// This should *not* result in a forced default status being written
+	// when the content encoding writer is closed.
+	assert.Equal(t, http.StatusInternalServerError, w.Result().StatusCode)
+}
+
+func TestContentEncodingPanicBuffered(t *testing.T) {
+	app, _ := newTestRouter(t)
+	app.Resource("/").Get("root", "test",
+		responses.OK(),
+	).Run(func(ctx huma.Context) {
+		// Simulate a failure after a buffered write (less than 1400 bytes).
+		// Since it's buffered it doesn't trigger the HTTP status code to be
+		// sent until later, allowing the panic handler to override it.
+		buf := make([]byte, 100)
+		ctx.Write(buf)
+		panic("error")
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Add("Accept-Encoding", "gzip")
+	app.ServeHTTP(w, req)
+
+	// This should *not* result in a forced default status being written
+	// when the content encoding writer is closed.
+	assert.Equal(t, http.StatusInternalServerError, w.Result().StatusCode)
+}
