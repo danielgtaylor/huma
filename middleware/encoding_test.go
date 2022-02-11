@@ -115,6 +115,22 @@ func TestContentEncodingCompressedMultiWrite(t *testing.T) {
 	assert.Equal(t, 2250, len(decoded))
 }
 
+func TestContentEncodingEmptyBody(t *testing.T) {
+	app, _ := newTestRouter(t)
+	app.Resource("/").Get("root", "test",
+		responses.NotModified(),
+	).Run(func(ctx huma.Context) {
+		ctx.WriteHeader(http.StatusNotModified)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Add("Accept-Encoding", "br")
+	app.ServeHTTP(w, req)
+
+	assert.Equal(t, w.Result().StatusCode, http.StatusNotModified)
+}
+
 func TestContentEncodingError(t *testing.T) {
 	var status int
 

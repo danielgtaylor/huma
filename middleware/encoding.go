@@ -74,11 +74,10 @@ func (w *contentEncodingWriter) WriteHeader(code int) {
 }
 
 func (w *contentEncodingWriter) finish() {
+	if !w.wroteHeader {
+		w.ResponseWriter.WriteHeader(w.status)
+	}
 	if w.buf.Len() > 0 {
-		if !w.wroteHeader {
-			w.ResponseWriter.WriteHeader(w.status)
-		}
-
 		w.ResponseWriter.Write(w.buf.Bytes())
 	}
 }
