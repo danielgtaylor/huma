@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/danielgtaylor/huma"
 	"github.com/go-chi/chi"
-	"github.com/istreamlabs/huma"
 	"github.com/mattn/go-isatty"
 	"github.com/opentracing/opentracing-go"
 	"github.com/spf13/viper"

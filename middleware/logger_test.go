@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/istreamlabs/huma"
+	"github.com/danielgtaylor/huma"
 	"github.com/stretchr/testify/assert"
 )
 
