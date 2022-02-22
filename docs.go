@@ -27,7 +27,7 @@ func RapiDocHandler(router *Router) http.Handler {
 <head>
 	<title>%s</title>
   <meta charset="utf-8">
-  <script type="module" src="https://unpkg.com/rapidoc/dist/rapidoc-min.js"></script>
+  <script type="module" src="https://unpkg.com/rapidoc@9.1.4/dist/rapidoc-min.js"></script>
 </head>
 <body>
   <rapi-doc
