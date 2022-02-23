@@ -95,6 +95,7 @@ func (r *Resource) SubResource(path string) *Resource {
 	sub := &Resource{
 		path:         r.path + path,
 		mux:          r.mux.Route(path, nil),
+		router:       r.router,
 		subResources: []*Resource{},
 		operations:   []*Operation{},
 		tags:         append([]string{}, r.tags...),
