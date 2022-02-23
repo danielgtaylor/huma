@@ -400,3 +400,12 @@ func TestGetOperationDoesNotCrash(t *testing.T) {
 		assert.NotNil(t, info)
 	})
 }
+
+func TestSubResource(t *testing.T) {
+	app := newTestRouter()
+
+	// This should not crash.
+	app.Resource("/").SubResource("/foo").SubResource("/bar").Get("get-bar", "docs", NewResponse(http.StatusOK, "ok")).Run(func(ctx Context) {
+		// Do nothing
+	})
+}
