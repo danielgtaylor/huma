@@ -44,6 +44,8 @@ type oaParam struct {
 	// Internal params are excluded from the OpenAPI document and can set up
 	// params sent between a load balander / proxy and the service internally.
 	Internal bool `json:"-"`
+
+	typ reflect.Type
 }
 
 type oaComponents struct {

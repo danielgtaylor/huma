@@ -14,6 +14,7 @@ A modern, simple, fast & opinionated REST API framework for Go with batteries in
 Features include:
 
 - HTTP, HTTPS (TLS), and [HTTP/2](https://http2.github.io/) built-in
+- Optional read-only GraphQL interface built-in
 - Declarative interface on top of [Chi](https://github.com/go-chi/chi)
   - Operation & model documentation
   - Request params (path, query, or header)
@@ -818,6 +819,54 @@ Then run the service:
 
 ```sh
 $ go run yourservice.go --help
+```
+
+## GraphQL
+
+Huma includes an optional, built-in, read-only GraphQL interface that can be enabled via `app.EnableGraphQL(config)`. It is mostly automatic and will re-use all your defined resources, read operations, and their params, headers, and models. By default it is available at `/graphql`.
+
+If you want your resources to automatically fill in params, such as an item's ID from a list result, you must tell Huma how to map fields of the response to the correct parameter name. This is accomplished via the `graphParam` struct field tag. For example, given the following resources:
+
+```go
+app.Resource("/notes").Get("list-notes", "docs",
+	responses.OK().Model([]NoteSummary{}),
+).Run(func(ctx huma.Context) {
+	// Handler implementation goes here...
+})
+
+app.Resource("/notes/{note-id}").Get("get-note", "docs",
+	responses.OK().Model(Note{}),
+).Run(func(ctx huma.Context, input struct {
+	NodeID string `path:"note-id"`
+}) {
+	// Handler implementation goes here...
+})
+```
+
+You would map the `/notes` response to the `/notes/{note-id}` request with a tag on the response struct's field:
+
+```go
+type NoteSummary struct {
+	ID string `json:"id" graphParam:"note-id"`
+}
+```
+
+Whenever a list of items is returned, you can access the detailed item via the name+"Item", e.g. `notesItem` would return the `get-note` response.
+
+Then you can make requests against the service like `http://localhost:8888/graphql?query={notes{id%20notesItem{contents}}}`.
+
+See the `graphql_test.go` file for a full-fledged example.
+
+> :whale: Note that because Huma knows nothing about your database, there is no way to make efficient queries to only select the fields that were requested. This GraphQL layer works by making normal HTTP requests to your service as needed to fulfill the query. Even with that caveat it can greatly simplify and speed up frontend requests.
+
+### Enabling the GraphiQL UI
+
+You can turn on a UI for writing and making queries with schema documentation via the GraphQL config:
+
+```go
+app.EnableGraphQL(&huma.GraphQLConfig{
+	GraphiQL: true,
+})
 ```
 
 ## CLI Runtime Arguments & Configuration
