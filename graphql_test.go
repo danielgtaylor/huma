@@ -79,7 +79,7 @@ func TestGraphQL(t *testing.T) {
 	app := newTestRouter()
 
 	app.Resource("/categories").Get("get-categories", "doc",
-		NewResponse(http.StatusOK, "").Model([]CategorySummary{}),
+		NewResponse(http.StatusOK, "").Model([]CategorySummary{}).Headers("link"),
 	).Run(func(ctx Context, input struct {
 		Limit int `query:"limit" default:"10"`
 	}) {
@@ -96,6 +96,7 @@ func TestGraphQL(t *testing.T) {
 		if len(summaries) < input.Limit {
 			input.Limit = len(summaries)
 		}
+		ctx.Header().Set("Link", "</categories>; rel=\"first\"")
 		ctx.WriteModel(http.StatusOK, summaries[:input.Limit])
 	})
 
@@ -186,22 +187,31 @@ func TestGraphQL(t *testing.T) {
 
 	query := strings.Replace(strings.Replace(`{
 		categories(limit: 1) {
-			categoriesItem {
-				id
-				featured
-				products {
-					productsItem {
-						id
-						suggested_price
-						created
-						metadata{
-							key
-							value
-						}
-						stores {
-							storesItem {
+			headers {
+				link
+			}
+			edges {
+				categoriesItem {
+					id
+					featured
+					products {
+						edges {
+							productsItem {
 								id
-								url
+								suggested_price
+								created
+								metadata{
+									key
+									value
+								}
+								stores {
+									edges {
+										storesItem {
+											id
+											url
+										}
+									}
+								}
 							}
 						}
 					}
@@ -218,41 +228,48 @@ func TestGraphQL(t *testing.T) {
 	assert.YAMLEq(t, strings.Replace(`
 data:
 	categories:
-		- categoriesItem:
-				id: video_games
-				featured: true
-				products:
-					- productsItem:
-							id: nintendo_switch
-							suggested_price: 349.99
-							created: "2022-02-22T22:22:22Z"
-							metadata: null
-							stores:
-								- storesItem:
-										id: target
-										url: https://www.target.com/
-					- productsItem:
-							id: playstation_ps5
-							suggested_price: 499.99
-							created: "2022-02-22T22:22:22Z"
-							metadata: null
-							stores:
-								- storesItem:
-										id: amazon
-										url: https://www.amazon.com/
-					- productsItem:
-							id: xbox_series_x
-							suggested_price: 499.99
-							created: "2022-02-22T22:22:22Z"
-							metadata:
-								- key: foo
-									value: bar
-							stores:
-								- storesItem:
-										id: amazon
-										url: https://www.amazon.com/
-								- storesItem:
-										id: target
-										url: https://www.target.com/
+		headers:
+			link: </categories>; rel="first"
+		edges:
+			- categoriesItem:
+					id: video_games
+					featured: true
+					products:
+						edges:
+							- productsItem:
+									id: nintendo_switch
+									suggested_price: 349.99
+									created: "2022-02-22T22:22:22Z"
+									metadata: null
+									stores:
+										edges:
+											- storesItem:
+													id: target
+													url: https://www.target.com/
+							- productsItem:
+									id: playstation_ps5
+									suggested_price: 499.99
+									created: "2022-02-22T22:22:22Z"
+									metadata: null
+									stores:
+										edges:
+											- storesItem:
+													id: amazon
+													url: https://www.amazon.com/
+							- productsItem:
+									id: xbox_series_x
+									suggested_price: 499.99
+									created: "2022-02-22T22:22:22Z"
+									metadata:
+										- key: foo
+											value: bar
+									stores:
+										edges:
+											- storesItem:
+													id: amazon
+													url: https://www.amazon.com/
+											- storesItem:
+													id: target
+													url: https://www.target.com/
 `, "\t", "  ", -1), w.Body.String())
 }

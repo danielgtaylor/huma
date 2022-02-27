@@ -869,6 +869,8 @@ app.EnableGraphQL(&huma.GraphQLConfig{
 })
 ```
 
+It is [recommended](https://graphql.org/learn/serving-over-http/#graphiql) to turn GraphiQL off in production. Instead a tool like [graphqurl](https://github.com/hasura/graphqurl) can be useful for using GraphiQL in production on the client side, and it supports custom headers for e.g. auth.
+
 ## CLI Runtime Arguments & Configuration
 
 The CLI can be configured in multiple ways. In order of decreasing precedence:

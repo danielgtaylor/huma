@@ -45,6 +45,25 @@ func getFields(typ reflect.Type) []reflect.StructField {
 	return fields
 }
 
+// addHeaderFields will add a `headers` field which is an object with all
+// defined headers as string fields.
+func addHeaderFields(name string, fields graphql.Fields, headerNames []string) {
+	if len(headerNames) > 0 {
+		headerFields := graphql.Fields{}
+		for _, name := range headerNames {
+			headerFields[casing.LowerCamel(strings.ToLower(name))] = &graphql.Field{
+				Type: graphql.String,
+			}
+		}
+		fields["headers"] = &graphql.Field{
+			Type: graphql.NewObject(graphql.ObjectConfig{
+				Name:   casing.Camel(strings.Replace(name+" Headers", ".", " ", -1)),
+				Fields: headerFields,
+			}),
+		}
+	}
+}
+
 // generateGraphModel converts a Go type to GraphQL Schema.
 func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTemplate string, headerNames []string, ignoreParams map[string]bool) (graphql.Output, error) {
 	if t == ipType {
@@ -152,20 +171,7 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 			}
 		}
 
-		if len(headerNames) > 0 {
-			headerFields := graphql.Fields{}
-			for _, name := range headerNames {
-				headerFields[casing.LowerCamel(strings.ToLower(name))] = &graphql.Field{
-					Type: graphql.String,
-				}
-			}
-			fields["headers"] = &graphql.Field{
-				Type: graphql.NewObject(graphql.ObjectConfig{
-					Name:   casing.Camel(strings.Replace(t.String()+" Headers", ".", " ", -1)),
-					Fields: headerFields,
-				}),
-			}
-		}
+		addHeaderFields(t.String(), fields, headerNames)
 
 		if len(fields) == 0 {
 			fields["_"] = &graphql.Field{
@@ -225,6 +231,34 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 		if err != nil {
 			return nil, err
 		}
+
+		if headerNames != nil {
+			// The presence of headerNames implies this is an HTTP resource and
+			// not just any normal array within the response structure.
+			name := items.Name() + "Collection"
+
+			if config.known[name] != nil {
+				return config.known[name], nil
+			}
+
+			fields := graphql.Fields{
+				"edges": &graphql.Field{
+					Type: graphql.NewList(items),
+				},
+			}
+
+			addHeaderFields(name, fields, headerNames)
+
+			wrapper := graphql.NewObject(graphql.ObjectConfig{
+				Name:   name,
+				Fields: fields,
+			})
+
+			config.known[name] = wrapper
+
+			return wrapper, nil
+		}
+
 		return graphql.NewList(items), nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		return graphql.Int, nil

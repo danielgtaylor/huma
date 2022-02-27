@@ -181,10 +181,19 @@ func (r *Router) handleResource(config *GraphQLConfig, fields graphql.Fields, re
 					return nil, err
 				}
 
+				// Create a simple map of header name to header value.
+				headerMap := map[string]string{}
+				for headerName := range respHeader {
+					headerMap[casing.LowerCamel(strings.ToLower(headerName))] = respHeader.Get(headerName)
+				}
+
 				paramMap := config.paramMappings[resource.path]
 
 				if m, ok := result.(map[string]interface{}); ok {
-					// Save params for child requests to use.
+					// Save params for child requests to use. By putting this into the
+					// response object but not into the GraphQL schema it ensures that
+					// downstream resolvers can access it but it never gets sent to the
+					// client as part of a response.
 					newParams := map[string]interface{}{}
 					for k, v := range params {
 						newParams[k] = v
@@ -193,12 +202,6 @@ func (r *Router) handleResource(config *GraphQLConfig, fields graphql.Fields, re
 						newParams[paramName] = m[fieldName]
 					}
 					m["__params"] = newParams
-
-					// Set headers so they can be queried.
-					headerMap := map[string]string{}
-					for headerName := range respHeader {
-						headerMap[casing.LowerCamel(strings.ToLower(headerName))] = respHeader.Get(headerName)
-					}
 					m["headers"] = headerMap
 				} else if s, ok := result.([]interface{}); ok {
 					// Since this is a list, we set params on each item.
@@ -213,6 +216,10 @@ func (r *Router) handleResource(config *GraphQLConfig, fields graphql.Fields, re
 							}
 							m["__params"] = newParams
 						}
+					}
+					result = map[string]interface{}{
+						"edges":   s,
+						"headers": headerMap,
 					}
 				}
 				return result, nil
