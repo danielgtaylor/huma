@@ -2,19 +2,12 @@ package huma
 
 import (
 	"fmt"
-	"net"
-	"net/url"
 	"reflect"
 	"strings"
 	"time"
 
 	"github.com/danielgtaylor/casing"
 	"github.com/graphql-go/graphql"
-)
-
-var (
-	ipType  = reflect.TypeOf(net.IP{})
-	uriType = reflect.TypeOf(url.URL{})
 )
 
 // getFields performs a breadth-first search for all fields including embedded
@@ -66,18 +59,12 @@ func addHeaderFields(name string, fields graphql.Fields, headerNames []string) {
 
 // generateGraphModel converts a Go type to GraphQL Schema.
 func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTemplate string, headerNames []string, ignoreParams map[string]bool) (graphql.Output, error) {
-	if t == ipType {
-		return graphql.String, nil
-	}
-
 	switch t.Kind() {
 	case reflect.Struct:
 		// Handle special cases.
 		switch t {
 		case timeType:
 			return graphql.DateTime, nil
-		case uriType:
-			return graphql.String, nil
 		}
 
 		if config.known[t.String()] != nil {
@@ -101,10 +88,10 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 				}
 
 				out, err := r.generateGraphModel(config, f.Type, "", nil, ignoreParams)
-
 				if err != nil {
 					return nil, err
 				}
+
 				if name != "" {
 					fields[name] = &graphql.Field{
 						Name:        name,
@@ -174,6 +161,11 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 		addHeaderFields(t.String(), fields, headerNames)
 
 		if len(fields) == 0 {
+			// JSON supports empty object (e.g. for future expansion) but GraphQL
+			// does not, so here we add a dummy value that can be used in the query
+			// and will always return `null`. The presense of this field being
+			// null vs the containing object being `null` lets you know if the JSON
+			// empty object was present or not.
 			fields["_"] = &graphql.Field{
 				Type: graphql.Boolean,
 			}

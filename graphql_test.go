@@ -37,8 +37,9 @@ type ProductSummary struct {
 type Product struct {
 	ProductSummary
 	SuggestedPrice float32           `json:"suggested_price"`
-	Created        time.Time         `json:"created" doc:"When this product was created"`
+	Created        *time.Time        `json:"created,omitempty" doc:"When this product was created"`
 	Metadata       map[string]string `json:"metadata,omitempty" doc:"Additional information about the product"`
+	Empty          *struct{}         `json:"empty"`
 
 	stores map[string]*Store `json:"-"`
 }
@@ -58,9 +59,9 @@ func TestGraphQL(t *testing.T) {
 	amazon := &Store{StoreSummary: StoreSummary{ID: "amazon"}, URL: "https://www.amazon.com/"}
 	target := &Store{StoreSummary: StoreSummary{ID: "target"}, URL: "https://www.target.com/"}
 
-	xsx := &Product{ProductSummary: ProductSummary{ID: "xbox_series_x"}, SuggestedPrice: 499.99, Created: now, Metadata: map[string]string{"foo": "bar"}, stores: map[string]*Store{"amazon": amazon, "target": target}}
-	ps5 := &Product{ProductSummary: ProductSummary{ID: "playstation_ps5"}, SuggestedPrice: 499.99, Created: now, stores: map[string]*Store{"amazon": amazon}}
-	ns := &Product{ProductSummary: ProductSummary{ID: "nintendo_switch"}, SuggestedPrice: 349.99, Created: now, stores: map[string]*Store{"target": target}}
+	xsx := &Product{ProductSummary: ProductSummary{ID: "xbox_series_x"}, SuggestedPrice: 499.99, Created: &now, Metadata: map[string]string{"foo": "bar"}, stores: map[string]*Store{"amazon": amazon, "target": target}, Empty: &struct{}{}}
+	ps5 := &Product{ProductSummary: ProductSummary{ID: "playstation_ps5"}, SuggestedPrice: 499.99, Created: &now, stores: map[string]*Store{"amazon": amazon}}
+	ns := &Product{ProductSummary: ProductSummary{ID: "nintendo_switch"}, SuggestedPrice: 349.99, stores: map[string]*Store{"target": target}}
 
 	videoGames := &Category{
 		CategorySummary: CategorySummary{ID: "video_games"},
@@ -78,7 +79,8 @@ func TestGraphQL(t *testing.T) {
 
 	app := newTestRouter()
 
-	app.Resource("/categories").Get("get-categories", "doc",
+	categoriesResource := app.Resource("/categories")
+	categoriesResource.Get("get-categories", "doc",
 		NewResponse(http.StatusOK, "").Model([]CategorySummary{}).Headers("link"),
 	).Run(func(ctx Context, input struct {
 		Limit int `query:"limit" default:"10"`
@@ -98,6 +100,12 @@ func TestGraphQL(t *testing.T) {
 		}
 		ctx.Header().Set("Link", "</categories>; rel=\"first\"")
 		ctx.WriteModel(http.StatusOK, summaries[:input.Limit])
+	})
+
+	categoriesResource.Delete("delete-category", "doc",
+		NewResponse(http.StatusNoContent, ""),
+	).Run(func(ctx Context) {
+		ctx.WriteHeader(http.StatusNoContent)
 	})
 
 	app.Resource("/categories/{category-id}").Get("get-category", "doc",
@@ -204,6 +212,9 @@ func TestGraphQL(t *testing.T) {
 									key
 									value
 								}
+								empty {
+									_
+								}
 								stores {
 									edges {
 										storesItem {
@@ -239,8 +250,9 @@ data:
 							- productsItem:
 									id: nintendo_switch
 									suggested_price: 349.99
-									created: "2022-02-22T22:22:22Z"
+									created: null
 									metadata: null
+									empty: null
 									stores:
 										edges:
 											- storesItem:
@@ -251,6 +263,7 @@ data:
 									suggested_price: 499.99
 									created: "2022-02-22T22:22:22Z"
 									metadata: null
+									empty: null
 									stores:
 										edges:
 											- storesItem:
@@ -263,6 +276,8 @@ data:
 									metadata:
 										- key: foo
 											value: bar
+									empty:
+										_: null
 									stores:
 										edges:
 											- storesItem:

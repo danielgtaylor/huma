@@ -85,146 +85,151 @@ func getModel(op *Operation) (reflect.Type, []string, error) {
 	return nil, nil, fmt.Errorf("no model found for %s", op.id)
 }
 
+func (r *Router) handleOperation(config *GraphQLConfig, fields graphql.Fields, resource *Resource, op *Operation, ignoreParams map[string]bool) {
+	model, headerNames, err := getModel(op)
+	if err != nil || model == nil {
+		// This is a GET but returns nothing???
+		return
+	}
+
+	// `/things` -> `things`
+	// `/things/{thing-id}` -> `thingsItem(thingId)`
+	// `/things/{thing-id}/sub` -> `sub(thingId)`
+	parts := strings.Split(strings.Trim(resource.path, "/"), "/")
+	last := parts[len(parts)-1]
+	for i := len(parts) - 1; i >= 0; i-- {
+		if parts[i][0] == '{' {
+			if i > 0 {
+				last = parts[i-1] + "Item"
+			}
+			continue
+		}
+		break
+	}
+
+	// Setup input arguments (i.e. OpenAPI operation params).
+	args := graphql.FieldConfigArgument{}
+	argsNameMap := map[string]string{}
+	for name, param := range op.params {
+		if ignoreParams[name] || param.Internal {
+			// This will be handled automatically.
+			continue
+		}
+		jsName := casing.LowerCamel(name)
+		typ, err := r.generateGraphModel(config, param.typ, "", nil, nil)
+		if err != nil {
+			panic(err)
+		}
+		argsNameMap[jsName] = name
+		args[jsName] = &graphql.ArgumentConfig{
+			Type:        typ,
+			Description: param.Description,
+		}
+	}
+
+	// Convert the Go model to GraphQL Schema.
+	out, err := r.generateGraphModel(config, model, resource.path, headerNames, ignoreParams)
+	if err != nil {
+		panic(err)
+	}
+
+	fields[last] = &graphql.Field{
+		Type:        out,
+		Description: op.description,
+		Args:        args,
+		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+			// Fetch and populate this resource from the underlying REST API.
+			headers := p.Context.Value(graphKeyHeaders).(http.Header).Clone()
+			path := resource.path
+			queryParams := map[string]interface{}{}
+
+			// Handle pre-filled args, then passed args
+			params := map[string]interface{}{}
+			if p.Source != nil {
+				if m, ok := p.Source.(map[string]interface{}); ok {
+					if m["__params"] != nil {
+						params = m["__params"].(map[string]interface{})
+						for k, v := range params {
+							path = strings.Replace(path, "{"+k+"}", fmt.Sprintf("%v", v), 1)
+						}
+					}
+				}
+			}
+
+			for arg := range p.Args {
+				// Passed args get saved for later use.
+				params[argsNameMap[arg]] = p.Args[arg]
+
+				// Apply the arg to the request.
+				param := op.params[argsNameMap[arg]]
+				fmt.Println(arg, argsNameMap[arg], op.params, param, param.Name, param.In)
+				if param.In == inPath {
+					path = strings.Replace(path, "{"+argsNameMap[arg]+"}", fmt.Sprintf("%v", p.Args[arg]), 1)
+				} else if param.In == inQuery {
+					queryParams[argsNameMap[arg]] = p.Args[arg]
+				} else if param.In == inHeader {
+					headers.Set(argsNameMap[arg], fmt.Sprintf("%v", p.Args[arg]))
+				}
+			}
+
+			result, respHeader, err := r.fetch(headers, path, queryParams)
+			if err != nil {
+				return nil, err
+			}
+
+			// Create a simple map of header name to header value.
+			headerMap := map[string]string{}
+			for headerName := range respHeader {
+				headerMap[casing.LowerCamel(strings.ToLower(headerName))] = respHeader.Get(headerName)
+			}
+
+			paramMap := config.paramMappings[resource.path]
+
+			if m, ok := result.(map[string]interface{}); ok {
+				// Save params for child requests to use. By putting this into the
+				// response object but not into the GraphQL schema it ensures that
+				// downstream resolvers can access it but it never gets sent to the
+				// client as part of a response.
+				newParams := map[string]interface{}{}
+				for k, v := range params {
+					newParams[k] = v
+				}
+				for paramName, fieldName := range paramMap {
+					newParams[paramName] = m[fieldName]
+				}
+				m["__params"] = newParams
+				m["headers"] = headerMap
+			} else if s, ok := result.([]interface{}); ok {
+				// Since this is a list, we set params on each item.
+				for _, item := range s {
+					if m, ok := item.(map[string]interface{}); ok {
+						newParams := map[string]interface{}{}
+						for k, v := range params {
+							newParams[k] = v
+						}
+						for paramName, fieldName := range paramMap {
+							newParams[paramName] = m[fieldName]
+						}
+						m["__params"] = newParams
+					}
+				}
+				result = map[string]interface{}{
+					"edges":   s,
+					"headers": headerMap,
+				}
+			}
+			return result, nil
+		},
+	}
+}
+
 func (r *Router) handleResource(config *GraphQLConfig, fields graphql.Fields, resource *Resource, ignoreParams map[string]bool) {
 	for _, op := range resource.operations {
 		if op.method != http.MethodGet {
 			continue
 		}
 
-		model, headerNames, err := getModel(op)
-		if err != nil || model == nil {
-			// This is a GET but returns nothing???
-			continue
-		}
-
-		// `/things` -> `things`
-		// `/things/{thing-id}` -> `thingsItem(thingId)`
-		// `/things/{thing-id}/sub` -> `sub(thingId)`
-		parts := strings.Split(strings.Trim(resource.path, "/"), "/")
-		last := parts[len(parts)-1]
-		for i := len(parts) - 1; i >= 0; i-- {
-			if parts[i][0] == '{' {
-				if i > 0 {
-					last = parts[i-1] + "Item"
-				}
-				continue
-			}
-			break
-		}
-
-		// Setup input arguments (i.e. OpenAPI operation params).
-		args := graphql.FieldConfigArgument{}
-		argsNameMap := map[string]string{}
-		for name, param := range op.params {
-			if ignoreParams[name] || param.Internal {
-				// This will be handled automatically.
-				continue
-			}
-			jsName := casing.LowerCamel(name)
-			typ, err := r.generateGraphModel(config, param.typ, "", nil, nil)
-			if err != nil {
-				panic(err)
-			}
-			argsNameMap[jsName] = name
-			args[jsName] = &graphql.ArgumentConfig{
-				Type:        typ,
-				Description: param.Description,
-			}
-		}
-
-		// Convert the Go model to GraphQL Schema.
-		out, err := r.generateGraphModel(config, model, resource.path, headerNames, ignoreParams)
-		if err != nil {
-			panic(err)
-		}
-
-		fields[last] = &graphql.Field{
-			Type:        out,
-			Description: op.description,
-			Args:        args,
-			Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-				// Fetch and populate this resource from the underlying REST API.
-				headers := p.Context.Value(graphKeyHeaders).(http.Header).Clone()
-				path := resource.path
-				queryParams := map[string]interface{}{}
-
-				// Handle pre-filled args, then passed args
-				params := map[string]interface{}{}
-				if p.Source != nil {
-					if m, ok := p.Source.(map[string]interface{}); ok {
-						if m["__params"] != nil {
-							params = m["__params"].(map[string]interface{})
-							for k, v := range params {
-								path = strings.Replace(path, "{"+k+"}", fmt.Sprintf("%v", v), 1)
-							}
-						}
-					}
-				}
-
-				for arg := range p.Args {
-					// Passed args get saved for later use.
-					params[argsNameMap[arg]] = p.Args[arg]
-
-					// Apply the arg to the request.
-					param := op.params[argsNameMap[arg]]
-					if param.In == inPath {
-						path = strings.Replace(path, "{"+argsNameMap[arg]+"}", fmt.Sprintf("%v", p.Args[arg]), 1)
-					} else if param.In == inQuery {
-						queryParams[argsNameMap[arg]] = p.Args[arg]
-					} else if param.In == inHeader {
-						headers.Set(argsNameMap[arg], fmt.Sprintf("%v", p.Args[arg]))
-					}
-				}
-
-				result, respHeader, err := r.fetch(headers, path, queryParams)
-				if err != nil {
-					return nil, err
-				}
-
-				// Create a simple map of header name to header value.
-				headerMap := map[string]string{}
-				for headerName := range respHeader {
-					headerMap[casing.LowerCamel(strings.ToLower(headerName))] = respHeader.Get(headerName)
-				}
-
-				paramMap := config.paramMappings[resource.path]
-
-				if m, ok := result.(map[string]interface{}); ok {
-					// Save params for child requests to use. By putting this into the
-					// response object but not into the GraphQL schema it ensures that
-					// downstream resolvers can access it but it never gets sent to the
-					// client as part of a response.
-					newParams := map[string]interface{}{}
-					for k, v := range params {
-						newParams[k] = v
-					}
-					for paramName, fieldName := range paramMap {
-						newParams[paramName] = m[fieldName]
-					}
-					m["__params"] = newParams
-					m["headers"] = headerMap
-				} else if s, ok := result.([]interface{}); ok {
-					// Since this is a list, we set params on each item.
-					for _, item := range s {
-						if m, ok := item.(map[string]interface{}); ok {
-							newParams := map[string]interface{}{}
-							for k, v := range params {
-								newParams[k] = v
-							}
-							for paramName, fieldName := range paramMap {
-								newParams[paramName] = m[fieldName]
-							}
-							m["__params"] = newParams
-						}
-					}
-					result = map[string]interface{}{
-						"edges":   s,
-						"headers": headerMap,
-					}
-				}
-				return result, nil
-			},
-		}
+		r.handleOperation(config, fields, resource, op, ignoreParams)
 	}
 }
 
