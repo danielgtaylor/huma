@@ -843,7 +843,7 @@ app.Resource("/notes/{note-id}").Get("get-note", "docs",
 })
 ```
 
-You would map the `/notes` response to the `/notes/{note-id}` request with a tag on the response struct's field:
+You would map the `/notes` response to the `/notes/{note-id}` request with a `graphParam` tag on the response struct's field that tells Huma that the `note-id` parameter in URLs can be loaded directly from the `id` field of the response object.
 
 ```go
 type NoteSummary struct {
@@ -859,6 +859,29 @@ See the `graphql_test.go` file for a full-fledged example.
 
 > :whale: Note that because Huma knows nothing about your database, there is no way to make efficient queries to only select the fields that were requested. This GraphQL layer works by making normal HTTP requests to your service as needed to fulfill the query. Even with that caveat it can greatly simplify and speed up frontend requests.
 
+### GraphQL List Responses
+
+HTTP responses may be lists, such as the `list-notes` example operation above. Since GraphQL responses need to account for more than just the response body (i.e. headers), Huma returns this as a wrapper object similar to [Relay's Cursor Connections](https://relay.dev/graphql/connections.htm) pattern. The structure looks like:
+
+```
+{
+	"edges": [... your responses here...],
+	"headers": {
+		"headerName": "headerValue"
+	}
+}
+```
+
+### Custom GraphQL Path
+
+You can set a custom path for the GraphQL endpoint:
+
+```go
+app.EnableGraphQL(&huma.GraphQLConfig{
+	Path: "/graphql",
+})
+```
+
 ### Enabling the GraphiQL UI
 
 You can turn on a UI for writing and making queries with schema documentation via the GraphQL config:
@@ -869,7 +892,7 @@ app.EnableGraphQL(&huma.GraphQLConfig{
 })
 ```
 
-It is [recommended](https://graphql.org/learn/serving-over-http/#graphiql) to turn GraphiQL off in production. Instead a tool like [graphqurl](https://github.com/hasura/graphqurl) can be useful for using GraphiQL in production on the client side, and it supports custom headers for e.g. auth.
+It is [recommended](https://graphql.org/learn/serving-over-http/#graphiql) to turn GraphiQL off in production. Instead a tool like [graphqurl](https://github.com/hasura/graphqurl) can be useful for using GraphiQL in production on the client side, and it supports custom headers for e.g. auth. Don't forget to enable CORS via e.g. [`rs/cors`](https://github.com/rs/cors) so browsers allow access.
 
 ## CLI Runtime Arguments & Configuration
 
