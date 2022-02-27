@@ -108,7 +108,7 @@ func TestGraphQL(t *testing.T) {
 		ctx.WriteHeader(http.StatusNoContent)
 	})
 
-	app.Resource("/categories/{category-id}").Get("get-category", "doc",
+	categoriesResource.SubResource("/{category-id}").Get("get-category", "doc",
 		NewResponse(http.StatusOK, "").Model(&Category{}),
 		NewResponse(http.StatusNotFound, "").Model(&ErrorModel{}),
 	).Run(func(ctx Context, input struct {

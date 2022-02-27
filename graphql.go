@@ -45,11 +45,13 @@ type GraphQLConfig struct {
 
 // allResources recursively finds all resource and sub-resources and adds them
 // to the `result` slice.
-func allResources(result []*Resource, r *Resource) {
+func allResources(r *Resource) []*Resource {
+	result := []*Resource{}
 	for _, sub := range r.subResources {
 		result = append(result, sub)
-		allResources(result, sub)
+		result = append(result, allResources(sub)...)
 	}
+	return result
 }
 
 // fetch from a Huma router. Returns the parsed JSON.
@@ -245,7 +247,7 @@ func (r *Router) EnableGraphQL(config *GraphQLConfig) {
 	resources := []*Resource{}
 	for _, resource := range r.resources {
 		resources = append(resources, resource)
-		allResources(resources, resource)
+		resources = append(resources, allResources(resource)...)
 	}
 	sort.Slice(resources, func(i, j int) bool {
 		return len(resources[i].path) < len(resources[j].path)
