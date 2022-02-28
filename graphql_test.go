@@ -21,7 +21,8 @@ type CategorySummary struct {
 
 type Category struct {
 	CategorySummary
-	Featured bool `json:"featured" doc:"Display as featured in the app"`
+	Featured bool   `json:"featured" doc:"Display as featured in the app"`
+	Code     []byte `json:"code" doc:"Category code"`
 
 	products map[string]*Product `json:"-"`
 }
@@ -66,6 +67,7 @@ func TestGraphQL(t *testing.T) {
 	videoGames := &Category{
 		CategorySummary: CategorySummary{ID: "video_games"},
 		Featured:        true,
+		Code:            []byte{'h', 'i'},
 		products: map[string]*Product{
 			"xbox_series_x":   xsx,
 			"playstation_ps5": ps5,
@@ -202,6 +204,7 @@ func TestGraphQL(t *testing.T) {
 				categoriesItem {
 					id
 					featured
+					code
 					products {
 						edges {
 							productsItem {
@@ -245,6 +248,7 @@ data:
 			- categoriesItem:
 					id: video_games
 					featured: true
+					code: aGk=
 					products:
 						edges:
 							- productsItem:

@@ -853,7 +853,7 @@ type NoteSummary struct {
 
 Whenever a list of items is returned, you can access the detailed item via the name+"Item", e.g. `notesItem` would return the `get-note` response.
 
-Then you can make requests against the service like `http://localhost:8888/graphql?query={notes{id%20notesItem{contents}}}`.
+Then you can make requests against the service like `http://localhost:8888/graphql?query={notes{edges{id%20notesItem{contents}}}}`.
 
 See the `graphql_test.go` file for a full-fledged example.
 
@@ -871,6 +871,8 @@ HTTP responses may be lists, such as the `list-notes` example operation above. S
 	}
 }
 ```
+
+This data structure can be considered experimental and may change in the future based on feedback.
 
 ### Custom GraphQL Path
 

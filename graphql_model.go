@@ -57,7 +57,9 @@ func addHeaderFields(name string, fields graphql.Fields, headerNames []string) {
 	}
 }
 
-// generateGraphModel converts a Go type to GraphQL Schema.
+// generateGraphModel converts a Go type to GraphQL Schema. It uses reflection
+// to recursively crawl structures and can also handle sub-resources if the
+// input type is a struct representing a resource.
 func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTemplate string, headerNames []string, ignoreParams map[string]bool) (graphql.Output, error) {
 	switch t.Kind() {
 	case reflect.Struct:
@@ -132,17 +134,21 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 			}
 		}
 
+		// Store the parameter mappings for later use in resolver functions.
 		config.paramMappings[urlTemplate] = paramMap
 		for k := range paramMap {
 			ignoreParams[k] = true
 		}
 
 		if urlTemplate != "" {
+			// The presence of a template means this is a resource. Try and find
+			// all child resources.
 			for _, resource := range config.resources {
 				if len(resource.path) > len(urlTemplate) {
 					// This could be a child resource. Let's find the longest prefix match
 					// among all the resources and if that value matches the current
-					// resources's URL template then this is a direct child.
+					// resources's URL template then this is a direct child, even if
+					// it spans multiple URL path components or arguments.
 					var best *Resource
 					for _, sub := range config.resources {
 						if len(resource.path) > len(sub.path) && strings.HasPrefix(resource.path, sub.path) {
