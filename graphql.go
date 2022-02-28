@@ -174,53 +174,72 @@ func (r *Router) handleOperation(config *GraphQLConfig, fields graphql.Fields, r
 				}
 			}
 
-			result, respHeader, err := r.fetch(headers, path, queryParams)
-			if err != nil {
-				return nil, err
-			}
+			// Fire off the request but don't wait for the response. Instead, we
+			// return a "thunk" which is a function to be resolved later (like a js
+			// Promise) which GraphQL resolves *after* visiting all fields in
+			// breadth-first order. This ensures we kick off all the requests in
+			// parallel but then wait for all the results until processing deeper
+			// into the query.
+			// See also https://github.com/graphql-go/graphql/pull/388.
+			done := make(chan bool)
+			var result interface{}
+			var respHeader http.Header
+			go func() {
+				result, respHeader, err = r.fetch(headers, path, queryParams)
+				done <- true
+			}()
 
-			// Create a simple map of header name to header value.
-			headerMap := map[string]string{}
-			for headerName := range respHeader {
-				headerMap[casing.LowerCamel(strings.ToLower(headerName))] = respHeader.Get(headerName)
-			}
-
-			paramMap := config.paramMappings[resource.path]
-
-			if m, ok := result.(map[string]interface{}); ok {
-				// Save params for child requests to use. By putting this into the
-				// response object but not into the GraphQL schema it ensures that
-				// downstream resolvers can access it but it never gets sent to the
-				// client as part of a response.
-				newParams := map[string]interface{}{}
-				for k, v := range params {
-					newParams[k] = v
+			return func() (interface{}, error) {
+				// Wait for request goroutine to complete. Since it's done async we
+				// have to handle the errors here, not in the goroutine above.
+				<-done
+				if err != nil {
+					return nil, err
 				}
-				for paramName, fieldName := range paramMap {
-					newParams[paramName] = m[fieldName]
+
+				// Create a simple map of header name to header value.
+				headerMap := map[string]string{}
+				for headerName := range respHeader {
+					headerMap[casing.LowerCamel(strings.ToLower(headerName))] = respHeader.Get(headerName)
 				}
-				m["__params"] = newParams
-				m["headers"] = headerMap
-			} else if s, ok := result.([]interface{}); ok {
-				// Since this is a list, we set params on each item.
-				for _, item := range s {
-					if m, ok := item.(map[string]interface{}); ok {
-						newParams := map[string]interface{}{}
-						for k, v := range params {
-							newParams[k] = v
+
+				paramMap := config.paramMappings[resource.path]
+
+				if m, ok := result.(map[string]interface{}); ok {
+					// Save params for child requests to use. By putting this into the
+					// response object but not into the GraphQL schema it ensures that
+					// downstream resolvers can access it but it never gets sent to the
+					// client as part of a response.
+					newParams := map[string]interface{}{}
+					for k, v := range params {
+						newParams[k] = v
+					}
+					for paramName, fieldName := range paramMap {
+						newParams[paramName] = m[fieldName]
+					}
+					m["__params"] = newParams
+					m["headers"] = headerMap
+				} else if s, ok := result.([]interface{}); ok {
+					// Since this is a list, we set params on each item.
+					for _, item := range s {
+						if m, ok := item.(map[string]interface{}); ok {
+							newParams := map[string]interface{}{}
+							for k, v := range params {
+								newParams[k] = v
+							}
+							for paramName, fieldName := range paramMap {
+								newParams[paramName] = m[fieldName]
+							}
+							m["__params"] = newParams
 						}
-						for paramName, fieldName := range paramMap {
-							newParams[paramName] = m[fieldName]
-						}
-						m["__params"] = newParams
+					}
+					result = map[string]interface{}{
+						"edges":   s,
+						"headers": headerMap,
 					}
 				}
-				result = map[string]interface{}{
-					"edges":   s,
-					"headers": headerMap,
-				}
-			}
-			return result, nil
+				return result, nil
+			}, nil
 		},
 	}
 }
