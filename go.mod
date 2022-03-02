@@ -14,6 +14,7 @@ require (
 	github.com/goccy/go-yaml v1.8.1
 	github.com/graphql-go/graphql v0.8.0 // indirect
 	github.com/graphql-go/handler v0.2.3 // indirect
+	github.com/koron-go/gqlcost v0.2.2
 	github.com/magiconair/properties v1.8.2 // indirect
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mitchellh/mapstructure v1.3.3 // indirect

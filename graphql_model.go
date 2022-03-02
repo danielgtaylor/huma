@@ -73,6 +73,7 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 			return config.known[t.String()], nil
 		}
 
+		objectName := casing.Camel(strings.Replace(t.String(), ".", " ", -1))
 		fields := graphql.Fields{}
 
 		paramMap := map[string]string{}
@@ -158,7 +159,7 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 						}
 					}
 					if best != nil && best.path == urlTemplate {
-						r.handleResource(config, fields, resource, ignoreParams)
+						r.handleResource(config, objectName, fields, resource, ignoreParams)
 					}
 				}
 			}
@@ -178,7 +179,7 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 		}
 
 		out := graphql.NewObject(graphql.ObjectConfig{
-			Name:   casing.Camel(strings.Replace(t.String(), ".", " ", -1)),
+			Name:   objectName,
 			Fields: fields,
 		})
 		config.known[t.String()] = out

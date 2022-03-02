@@ -896,6 +896,59 @@ app.EnableGraphQL(&huma.GraphQLConfig{
 
 It is [recommended](https://graphql.org/learn/serving-over-http/#graphiql) to turn GraphiQL off in production. Instead a tool like [graphqurl](https://github.com/hasura/graphqurl) can be useful for using GraphiQL in production on the client side, and it supports custom headers for e.g. auth. Don't forget to enable CORS via e.g. [`rs/cors`](https://github.com/rs/cors) so browsers allow access.
 
+### GraphQL Query Complexity Limits
+
+You can limit the maximum query complexity your server allows:
+
+```go
+app.EnableGraphQL(&huma.GraphQLConfig{
+	ComplexityLimit: 250,
+})
+```
+
+Complexity is a rough measure of the request load against your service and is calculated as the following:
+
+| Field Type                       |                         Complexity |
+| -------------------------------- | ---------------------------------: |
+| Enum                             |                                  0 |
+| Scalar (e.g. int, float, string) |                                  0 |
+| Plain array / object             |                                  0 |
+| Resource object                  |                                  1 |
+| Array of resources               | count + (childComplexity \* count) |
+
+`childComplexity` is the total complexity of any child selectors and the `count` is determined by passed in parameters like `first`, `last`, `count`, `limit`, `records`, or `pageSize` with a built-in default multiplier of `10`.
+
+If a single resource is a child of a list, then the resource's complexity is also multiplied by the number of resources. This means nested queries that make list calls get very expensive fast. For example:
+
+```
+{
+	categories(first: 10) {
+		edges {
+			catgoriesItem {
+				products(first: 10) {
+					edges {
+						productsItem {
+							id
+							price
+						}
+					}
+				}
+			}
+		}
+	}
+}
+```
+
+Because you are fetching up to 10 categories, and for each of those fetching a `categoriesItem` object and up to 10 products within each category, then a `productsItem` for each product, this results in:
+
+```
+Calculation:
+(((1 producstItem * 10 products) + 10 products) + 1 categoriesItem) * 10 categories + 10 categories
+
+Result:
+220 complexity
+```
+
 ## CLI Runtime Arguments & Configuration
 
 The CLI can be configured in multiple ways. In order of decreasing precedence:

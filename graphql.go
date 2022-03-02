@@ -13,6 +13,7 @@ import (
 	"github.com/danielgtaylor/casing"
 	"github.com/graphql-go/graphql"
 	"github.com/graphql-go/handler"
+	"github.com/koron-go/gqlcost"
 )
 
 type graphContextKey string
@@ -25,6 +26,11 @@ type GraphQLConfig struct {
 
 	// GraphiQL sets whether the UI is available at the path. Defaults to off.
 	GraphiQL bool
+
+	// ComplexityLimit sets the maximum allowed complexity, which is calculated
+	// as 1 for each field and 2 + (n * child) for each array with n children
+	// created from sub-resource requests.
+	ComplexityLimit int
 
 	// known keeps track of known structs since they can only be defined once
 	// per GraphQL endpoint. If used by multiple HTTP operations, they must
@@ -41,6 +47,10 @@ type GraphQLConfig struct {
 	// `/items/{item-id}/prices`. These mappings are configured by putting a
 	// tag `graphParam` on your go struct fields.
 	paramMappings map[string]map[string]string
+
+	// costMap tracks the type name -> field cost for any fields that aren't
+	// the default cost of 1 (i.e. arrays of subresources).
+	costMap gqlcost.CostMap
 }
 
 // allResources recursively finds all resource and sub-resources and adds them
@@ -87,7 +97,56 @@ func getModel(op *Operation) (reflect.Type, []string, error) {
 	return nil, nil, fmt.Errorf("no model found for %s", op.id)
 }
 
-func (r *Router) handleOperation(config *GraphQLConfig, fields graphql.Fields, resource *Resource, op *Operation, ignoreParams map[string]bool) {
+// caluclateComplexity will populate the cost map whenever a resource request
+// is made for a field. If the request returns a list and has a count-limiting
+// argument, then that is used as a multiplier for downstream values.
+func calculateComplexity(config *GraphQLConfig, parentName string, model reflect.Type, out graphql.Output, fieldName string) {
+	if config.costMap[parentName].Fields == nil {
+		config.costMap[parentName] = gqlcost.TypeCost{
+			Fields: gqlcost.FieldsCost{},
+		}
+	}
+
+	// All resources have a cost associated with fetching them. Always set
+	// `useMultipliers` as that controls whether or not to apply parent
+	// multipliers to the current field complexity value.
+	cost := gqlcost.Cost{
+		Complexity:     1,
+		UseMultipliers: true,
+	}
+	if model.Kind() == reflect.Slice && strings.HasSuffix(out.Name(), "Collection") {
+		// This is an array and we need to multiply by the number of items requested.
+		cost.MultiplierFunc = func(m map[string]interface{}) int {
+			// Try to get the max number of items requested from various well-known
+			// argument names.
+			result := 0
+			found := false
+			for _, arg := range []string{"first", "last", "limit", "count", "pageSize", "records"} {
+				if _, ok := m[arg]; ok {
+					v := reflect.ValueOf(m[arg])
+					switch v.Kind() {
+					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+						result += int(v.Int())
+						found = true
+					case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+						result += int(v.Uint())
+						found = true
+					}
+				}
+			}
+
+			if found {
+				return result
+			}
+
+			// No idea how many items will get returned, so we default to 10.
+			return 10
+		}
+	}
+	config.costMap[parentName].Fields[fieldName] = cost
+}
+
+func (r *Router) handleOperation(config *GraphQLConfig, parentName string, fields graphql.Fields, resource *Resource, op *Operation, ignoreParams map[string]bool) {
 	model, headerNames, err := getModel(op)
 	if err != nil || model == nil {
 		// This is a GET but returns nothing???
@@ -122,10 +181,15 @@ func (r *Router) handleOperation(config *GraphQLConfig, fields graphql.Fields, r
 		if err != nil {
 			panic(err)
 		}
+		var def interface{}
+		if param.Schema != nil {
+			def = param.Schema.Default
+		}
 		argsNameMap[jsName] = name
 		args[jsName] = &graphql.ArgumentConfig{
-			Type:        typ,
-			Description: param.Description,
+			Type:         typ,
+			Description:  param.Description,
+			DefaultValue: def,
 		}
 	}
 
@@ -134,6 +198,8 @@ func (r *Router) handleOperation(config *GraphQLConfig, fields graphql.Fields, r
 	if err != nil {
 		panic(err)
 	}
+
+	calculateComplexity(config, parentName, model, out, last)
 
 	fields[last] = &graphql.Field{
 		Type:        out,
@@ -164,7 +230,6 @@ func (r *Router) handleOperation(config *GraphQLConfig, fields graphql.Fields, r
 
 				// Apply the arg to the request.
 				param := op.params[argsNameMap[arg]]
-				fmt.Println(arg, argsNameMap[arg], op.params, param, param.Name, param.In)
 				if param.In == inPath {
 					path = strings.Replace(path, "{"+argsNameMap[arg]+"}", fmt.Sprintf("%v", p.Args[arg]), 1)
 				} else if param.In == inQuery {
@@ -244,13 +309,13 @@ func (r *Router) handleOperation(config *GraphQLConfig, fields graphql.Fields, r
 	}
 }
 
-func (r *Router) handleResource(config *GraphQLConfig, fields graphql.Fields, resource *Resource, ignoreParams map[string]bool) {
+func (r *Router) handleResource(config *GraphQLConfig, parentName string, fields graphql.Fields, resource *Resource, ignoreParams map[string]bool) {
 	for _, op := range resource.operations {
 		if op.method != http.MethodGet {
 			continue
 		}
 
-		r.handleOperation(config, fields, resource, op, ignoreParams)
+		r.handleOperation(config, parentName, fields, resource, op, ignoreParams)
 	}
 }
 
@@ -278,9 +343,10 @@ func (r *Router) EnableGraphQL(config *GraphQLConfig) {
 	config.known = map[string]graphql.Output{}
 	config.resources = resources
 	config.paramMappings = map[string]map[string]string{}
+	config.costMap = gqlcost.CostMap{}
 
 	for _, resource := range resources {
-		r.handleResource(config, fields, resource, map[string]bool{})
+		r.handleResource(config, "Query", fields, resource, map[string]bool{})
 	}
 
 	root := graphql.ObjectConfig{Name: "Query", Fields: fields}
@@ -288,6 +354,13 @@ func (r *Router) EnableGraphQL(config *GraphQLConfig) {
 	schema, err := graphql.NewSchema(schemaConfig)
 	if err != nil {
 		panic(err)
+	}
+
+	if config.ComplexityLimit > 0 {
+		gqlcost.AddCostAnalysisRule(gqlcost.AnalysisOptions{
+			MaximumCost: config.ComplexityLimit,
+			CostMap:     config.costMap,
+		})
 	}
 
 	h := handler.New(&handler.Config{

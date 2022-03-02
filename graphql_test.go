@@ -193,7 +193,9 @@ func TestGraphQL(t *testing.T) {
 		ctx.WriteModel(http.StatusOK, categories[input.CategoryID].products[input.ProductID].stores[input.StoreID])
 	})
 
-	app.EnableGraphQL(nil)
+	app.EnableGraphQL(&GraphQLConfig{
+		ComplexityLimit: 250,
+	})
 
 	query := strings.Replace(strings.Replace(`{
 		categories(limit: 1) {
