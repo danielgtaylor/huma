@@ -181,6 +181,9 @@ func (r *Router) handleOperation(config *GraphQLConfig, parentName string, field
 		if err != nil {
 			panic(err)
 		}
+		if param.In == inPath {
+			typ = graphql.NewNonNull(typ)
+		}
 		var def interface{}
 		if param.Schema != nil {
 			def = param.Schema.Default
