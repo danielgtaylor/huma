@@ -13,6 +13,19 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
+// allowedHeaders is a list of built-in headers that are always allowed without
+// explicitly being documented. Mostly they are low-level HTTP headers that
+// control access or connection settings.
+var allowedHeaders = map[string]bool{
+	"access-control-allow-origin":  true,
+	"access-control-allow-methods": true,
+	"access-control-allow-headers": true,
+	"access-control-max-age":       true,
+	"connection":                   true,
+	"keep-alive":                   true,
+	"vary":                         true,
+}
+
 // ContextFromRequest returns a Huma context for a request, useful for
 // accessing high-level convenience functions from e.g. middleware.
 func ContextFromRequest(w http.ResponseWriter, r *http.Request) Context {
@@ -101,6 +114,10 @@ func (c *hcontext) WriteHeader(status int) {
 
 		// Check that all headers were allowed to be sent.
 		for name := range c.Header() {
+			if allowedHeaders[strings.ToLower(name)] {
+				continue
+			}
+
 			found := false
 
 			for _, h := range allowed {

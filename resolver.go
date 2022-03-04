@@ -491,6 +491,8 @@ func getParamInfo(t reflect.Type) map[string]oaParam {
 		}
 		p.Schema = s
 
+		p.typ = f.Type
+
 		params[p.Name] = p
 	}
 

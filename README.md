@@ -14,6 +14,7 @@ A modern, simple, fast & opinionated REST API framework for Go with batteries in
 Features include:
 
 - HTTP, HTTPS (TLS), and [HTTP/2](https://http2.github.io/) built-in
+- Optional read-only GraphQL interface built-in
 - Declarative interface on top of [Chi](https://github.com/go-chi/chi)
   - Operation & model documentation
   - Request params (path, query, or header)
@@ -818,6 +819,166 @@ Then run the service:
 
 ```sh
 $ go run yourservice.go --help
+```
+
+## GraphQL
+
+Huma includes an optional, built-in, read-only GraphQL interface that can be enabled via `app.EnableGraphQL(config)`. It is mostly automatic and will re-use all your defined resources, read operations, and their params, headers, and models. By default it is available at `/graphql`.
+
+If you want your resources to automatically fill in params, such as an item's ID from a list result, you must tell Huma how to map fields of the response to the correct parameter name. This is accomplished via the `graphParam` struct field tag. For example, given the following resources:
+
+```go
+app.Resource("/notes").Get("list-notes", "docs",
+	responses.OK().Headers("Link").Model([]NoteSummary{}),
+).Run(func(ctx huma.Context, input struct {
+	Cursor string `query:"cursor" doc:"Paginatoin cursor"`
+	Limit  int    `query:"limit" doc:"Number of items to return"`
+}) {
+	// Handler implementation goes here...
+})
+
+app.Resource("/notes/{note-id}").Get("get-note", "docs",
+	responses.OK().Model(Note{}),
+).Run(func(ctx huma.Context, input struct {
+	NodeID string `path:"note-id"`
+}) {
+	// Handler implementation goes here...
+})
+```
+
+You would map the `/notes` response to the `/notes/{note-id}` request with a `graphParam` tag on the response struct's field that tells Huma that the `note-id` parameter in URLs can be loaded directly from the `id` field of the response object.
+
+```go
+type NoteSummary struct {
+	ID string `json:"id" graphParam:"note-id"`
+}
+```
+
+Whenever a list of items is returned, you can access the detailed item via the name+"Item", e.g. `notesItem` would return the `get-note` response.
+
+Then you can make requests against the service like `http://localhost:8888/graphql?query={notes{edges{id%20notesItem{contents}}}}`.
+
+See the `graphql_test.go` file for a full-fledged example.
+
+> :whale: Note that because Huma knows nothing about your database, there is no way to make efficient queries to only select the fields that were requested. This GraphQL layer works by making normal HTTP requests to your service as needed to fulfill the query. Even with that caveat it can greatly simplify and speed up frontend requests.
+
+### GraphQL List Responses
+
+HTTP responses may be lists, such as the `list-notes` example operation above. Since GraphQL responses need to account for more than just the response body (i.e. headers), Huma returns this as a wrapper object similar to but as a more general form of [Relay's Cursor Connections](https://relay.dev/graphql/connections.htm) pattern. The structure knows how to parse link relationship headers and looks like:
+
+```
+{
+	"edges": [... your responses here...],
+	"links": {
+		"next": [
+			{"key": "param1", "value": "value1"},
+			{"key": "param2", "value": "value2"},
+			...
+		]
+	}
+	"headers": {
+		"headerName": "headerValue"
+	}
+}
+```
+
+If you want a different paginator then this can be configured by creating your own struct which includes a field of `huma.GraphQLItems` and which implements the `huma.GraphQLPaginator` interface. For example:
+
+```go
+// First, define the custom paginator. This does nothing but return the list
+// of items and ignores the headers.
+type MySimplePaginator struct {
+	Items huma.GraphQLItems `json:"items"`
+}
+
+func (m *MySimplePaginator) Load(headers map[string]string, body []interface{}) error {
+	// Huma creates a new instance of your paginator before calling `Load`, so
+	// here you populate the instance with the response data as needed.
+	m.Items = body
+	return nil
+}
+
+// Then, tell your app to use it when enabling GraphQL.
+app.EnableGraphQL(&huma.GraphQLConfig{
+	Paginator: &MySimplePaginator{},
+})
+```
+
+Using the same mechanism above you can support Relay Collections or any other pagination spec as long as your underlying HTTP API supports the inputs/outputs required for populating the paginator structs.
+
+### Custom GraphQL Path
+
+You can set a custom path for the GraphQL endpoint:
+
+```go
+app.EnableGraphQL(&huma.GraphQLConfig{
+	Path: "/graphql",
+})
+```
+
+### Enabling the GraphiQL UI
+
+You can turn on a UI for writing and making queries with schema documentation via the GraphQL config:
+
+```go
+app.EnableGraphQL(&huma.GraphQLConfig{
+	GraphiQL: true,
+})
+```
+
+It is [recommended](https://graphql.org/learn/serving-over-http/#graphiql) to turn GraphiQL off in production. Instead a tool like [graphqurl](https://github.com/hasura/graphqurl) can be useful for using GraphiQL in production on the client side, and it supports custom headers for e.g. auth. Don't forget to enable CORS via e.g. [`rs/cors`](https://github.com/rs/cors) so browsers allow access.
+
+### GraphQL Query Complexity Limits
+
+You can limit the maximum query complexity your server allows:
+
+```go
+app.EnableGraphQL(&huma.GraphQLConfig{
+	ComplexityLimit: 250,
+})
+```
+
+Complexity is a rough measure of the request load against your service and is calculated as the following:
+
+| Field Type                       |                         Complexity |
+| -------------------------------- | ---------------------------------: |
+| Enum                             |                                  0 |
+| Scalar (e.g. int, float, string) |                                  0 |
+| Plain array / object             |                                  0 |
+| Resource object                  |                                  1 |
+| Array of resources               | count + (childComplexity \* count) |
+
+`childComplexity` is the total complexity of any child selectors and the `count` is determined by passed in parameters like `first`, `last`, `count`, `limit`, `records`, or `pageSize` with a built-in default multiplier of `10`.
+
+If a single resource is a child of a list, then the resource's complexity is also multiplied by the number of resources. This means nested queries that make list calls get very expensive fast. For example:
+
+```
+{
+	categories(first: 10) {
+		edges {
+			catgoriesItem {
+				products(first: 10) {
+					edges {
+						productsItem {
+							id
+							price
+						}
+					}
+				}
+			}
+		}
+	}
+}
+```
+
+Because you are fetching up to 10 categories, and for each of those fetching a `categoriesItem` object and up to 10 products within each category, then a `productsItem` for each product, this results in:
+
+```
+Calculation:
+(((1 producstItem * 10 products) + 10 products) + 1 categoriesItem) * 10 categories + 10 categories
+
+Result:
+220 complexity
 ```
 
 ## CLI Runtime Arguments & Configuration
