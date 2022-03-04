@@ -20,6 +20,7 @@ import (
 type graphContextKey string
 
 var graphKeyHeaders graphContextKey = "headers"
+var graphKeySem graphContextKey = "sem"
 
 type GraphQLConfig struct {
 	// Path where the GraphQL endpoint is available. Defaults to `/graphql`.
@@ -252,6 +253,11 @@ func (r *Router) handleOperation(config *GraphQLConfig, parentName string, field
 				}
 			}
 
+			// Use a per-request semaphore to limit the number of concurrent
+			// goroutines used to fetch data to satisfy that request.
+			sem := p.Context.Value(graphKeySem).(chan int)
+			sem <- 1
+
 			// Fire off the request but don't wait for the response. Instead, we
 			// return a "thunk" which is a function to be resolved later (like a js
 			// Promise) which GraphQL resolves *after* visiting all fields in
@@ -259,12 +265,14 @@ func (r *Router) handleOperation(config *GraphQLConfig, parentName string, field
 			// parallel but then wait for all the results until processing deeper
 			// into the query.
 			// See also https://github.com/graphql-go/graphql/pull/388.
-			done := make(chan bool)
+			done := make(chan bool, 1)
 			var result interface{}
 			var respHeader http.Header
+			var err error
 			go func() {
-				result, respHeader, err = r.fetch(headers, path, queryParams)
+				result, respHeader, err = r.fetch(headers.Clone(), path, queryParams)
 				done <- true
+				<-sem
 			}()
 
 			return func() (interface{}, error) {
@@ -392,7 +400,9 @@ func (r *Router) EnableGraphQL(config *GraphQLConfig) {
 	r.mux.HandleFunc(config.Path, func(w http.ResponseWriter, r *http.Request) {
 		// Save the headers for future requests as they can contain important
 		// information.
-		r = r.WithContext(context.WithValue(r.Context(), graphKeyHeaders, r.Header))
+		c := context.WithValue(r.Context(), graphKeyHeaders, r.Header)
+		c = context.WithValue(c, graphKeySem, make(chan int, 10))
+		r = r.WithContext(c)
 		h.ServeHTTP(w, r)
 	})
 }
