@@ -41,7 +41,7 @@ func getFields(typ reflect.Type) []reflect.StructField {
 // addHeaderFields will add a `headers` field which is an object with all
 // defined headers as string fields.
 func addHeaderFields(name string, fields graphql.Fields, headerNames []string) {
-	if len(headerNames) > 0 {
+	if len(headerNames) > 0 && fields["headers"] == nil {
 		headerFields := graphql.Fields{}
 		for _, name := range headerNames {
 			headerFields[casing.LowerCamel(strings.ToLower(name))] = &graphql.Field{
@@ -60,7 +60,7 @@ func addHeaderFields(name string, fields graphql.Fields, headerNames []string) {
 // generateGraphModel converts a Go type to GraphQL Schema. It uses reflection
 // to recursively crawl structures and can also handle sub-resources if the
 // input type is a struct representing a resource.
-func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTemplate string, headerNames []string, ignoreParams map[string]bool) (graphql.Output, error) {
+func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTemplate string, headerNames []string, ignoreParams map[string]bool, listItems graphql.Output) (graphql.Output, error) {
 	switch t.Kind() {
 	case reflect.Struct:
 		// Handle special cases.
@@ -69,11 +69,18 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 			return graphql.DateTime, nil
 		}
 
-		if config.known[t.String()] != nil {
-			return config.known[t.String()], nil
+		objectName := casing.Camel(strings.Replace(t.String(), ".", " ", -1))
+		if _, ok := reflect.New(t).Interface().(GraphQLPaginator); ok {
+			// Special case: this is a paginator implementation, and we need to
+			// generate a paginator specific to the item types it contains. This
+			// sets the name to the item type + a suffix, e.g. `MyItemCollection`.
+			objectName = listItems.Name() + "Collection"
 		}
 
-		objectName := casing.Camel(strings.Replace(t.String(), ".", " ", -1))
+		if config.known[objectName] != nil {
+			return config.known[objectName], nil
+		}
+
 		fields := graphql.Fields{}
 
 		paramMap := map[string]string{}
@@ -90,7 +97,40 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 					paramMap[mapping] = name
 				}
 
-				out, err := r.generateGraphModel(config, f.Type, "", nil, ignoreParams)
+				if f.Type == reflect.TypeOf(GraphQLHeaders{}) {
+					// Special case: generate an object for the known headers
+					if len(headerNames) > 0 {
+						headerFields := graphql.Fields{}
+						for _, name := range headerNames {
+							headerFields[casing.LowerCamel(strings.ToLower(name))] = &graphql.Field{
+								Type: graphql.String,
+							}
+						}
+						fields[name] = &graphql.Field{
+							Name:        name,
+							Description: "HTTP response headers",
+							Type: graphql.NewObject(graphql.ObjectConfig{
+								Name:   casing.Camel(strings.Replace(objectName+" "+name, ".", " ", -1)),
+								Fields: headerFields,
+							}),
+						}
+						headerNames = []string{}
+					}
+					continue
+				}
+
+				if f.Type == reflect.TypeOf(GraphQLItems{}) {
+					// Special case: items placeholder for list responses. This should
+					// be replaced with the generated specific item schema.
+					fields[name] = &graphql.Field{
+						Name:        name,
+						Description: "List items",
+						Type:        graphql.NewList(listItems),
+					}
+					continue
+				}
+
+				out, err := r.generateGraphModel(config, f.Type, "", nil, ignoreParams, listItems)
 				if err != nil {
 					return nil, err
 				}
@@ -120,12 +160,12 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 							if p.Source == nil || p.Source.(map[string]interface{})[name] == nil {
 								return nil, nil
 							}
-							value := p.Source.(map[string]interface{})[name].(map[string]interface{})
 							entries := []interface{}{}
-							for k, v := range value {
+							m := reflect.ValueOf(p.Source.(map[string]interface{})[name])
+							for _, k := range m.MapKeys() {
 								entries = append(entries, map[string]interface{}{
-									"key":   k,
-									"value": v,
+									"key":   k.Interface(),
+									"value": m.MapIndex(k).Interface(),
 								})
 							}
 							return entries, nil
@@ -165,7 +205,7 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 			}
 		}
 
-		addHeaderFields(t.String(), fields, headerNames)
+		addHeaderFields(objectName, fields, headerNames)
 
 		if len(fields) == 0 {
 			// JSON supports empty object (e.g. for future expansion) but GraphQL
@@ -182,7 +222,7 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 			Name:   objectName,
 			Fields: fields,
 		})
-		config.known[t.String()] = out
+		config.known[objectName] = out
 		return out, nil
 	case reflect.Map:
 		// Ruh-roh... GraphQL doesn't support maps. So here we'll convert the map
@@ -195,11 +235,11 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 		// map[string]MyObject -> StringMyObjectEntry
 		name := casing.Camel(strings.Replace(t.Key().String()+" "+t.Elem().String()+" Entry", ".", " ", -1))
 
-		keyModel, err := r.generateGraphModel(config, t.Key(), "", nil, ignoreParams)
+		keyModel, err := r.generateGraphModel(config, t.Key(), "", nil, ignoreParams, listItems)
 		if err != nil {
 			return nil, err
 		}
-		valueModel, err := r.generateGraphModel(config, t.Elem(), "", nil, ignoreParams)
+		valueModel, err := r.generateGraphModel(config, t.Elem(), "", nil, ignoreParams, listItems)
 		if err != nil {
 			return nil, err
 		}
@@ -226,7 +266,7 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 			return graphql.String, nil
 		}
 
-		items, err := r.generateGraphModel(config, t.Elem(), urlTemplate, nil, ignoreParams)
+		items, err := r.generateGraphModel(config, t.Elem(), urlTemplate, headerNames, ignoreParams, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -234,28 +274,17 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 		if headerNames != nil {
 			// The presence of headerNames implies this is an HTTP resource and
 			// not just any normal array within the response structure.
-			name := items.Name() + "Collection"
-
-			if config.known[name] != nil {
-				return config.known[name], nil
+			paginator, err := r.generateGraphModel(config, reflect.TypeOf(config.Paginator), "", headerNames, ignoreParams, items)
+			if err != nil {
+				return nil, err
 			}
 
-			fields := graphql.Fields{
-				"edges": &graphql.Field{
-					Type: graphql.NewList(items),
-				},
+			if config.known[paginator.Name()] != nil {
+				return config.known[paginator.Name()], nil
 			}
 
-			addHeaderFields(name, fields, headerNames)
-
-			wrapper := graphql.NewObject(graphql.ObjectConfig{
-				Name:   name,
-				Fields: fields,
-			})
-
-			config.known[name] = wrapper
-
-			return wrapper, nil
+			config.known[paginator.Name()] = paginator
+			return paginator, nil
 		}
 
 		return graphql.NewList(items), nil
@@ -268,7 +297,7 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 	case reflect.String:
 		return graphql.String, nil
 	case reflect.Ptr:
-		return r.generateGraphModel(config, t.Elem(), urlTemplate, headerNames, ignoreParams)
+		return r.generateGraphModel(config, t.Elem(), urlTemplate, headerNames, ignoreParams, listItems)
 	}
 
 	return nil, fmt.Errorf("unsupported type %s from %s", t.Kind(), t)

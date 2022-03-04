@@ -85,7 +85,8 @@ func TestGraphQL(t *testing.T) {
 	categoriesResource.Get("get-categories", "doc",
 		NewResponse(http.StatusOK, "").Model([]CategorySummary{}).Headers("link"),
 	).Run(func(ctx Context, input struct {
-		Limit int `query:"limit" default:"10"`
+		Cursor string `query:"cursor"`
+		Limit  int    `query:"limit" default:"10"`
 	}) {
 		summaries := []CategorySummary{}
 		for _, cat := range categories {
@@ -100,7 +101,7 @@ func TestGraphQL(t *testing.T) {
 		if len(summaries) < input.Limit {
 			input.Limit = len(summaries)
 		}
-		ctx.Header().Set("Link", "</categories>; rel=\"first\"")
+		ctx.Header().Set("Link", "</categories?cursor=abc123>; rel=\"next\"")
 		ctx.WriteModel(http.StatusOK, summaries[:input.Limit])
 	})
 
@@ -202,6 +203,12 @@ func TestGraphQL(t *testing.T) {
 			headers {
 				link
 			}
+			links {
+				next {
+					key
+					value
+				}
+			}
 			edges {
 				categoriesItem {
 					id
@@ -245,7 +252,11 @@ func TestGraphQL(t *testing.T) {
 data:
 	categories:
 		headers:
-			link: </categories>; rel="first"
+			link: </categories?cursor=abc123>; rel="next"
+		links:
+			next:
+				- key: cursor
+				  value: abc123
 		edges:
 			- categoriesItem:
 					id: video_games

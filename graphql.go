@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/casing"
+	"github.com/fatih/structs"
 	"github.com/graphql-go/graphql"
 	"github.com/graphql-go/handler"
 	"github.com/koron-go/gqlcost"
@@ -32,6 +33,12 @@ type GraphQLConfig struct {
 	// created from sub-resource requests.
 	ComplexityLimit int
 
+	// Paginator defines the struct to be used for paginated responses. This
+	// can be used to conform to different pagination styles if the underlying
+	// API supports them, such as Relay. If not set, then
+	// `GraphQLDefaultPaginator` is used.
+	Paginator GraphQLPaginator
+
 	// known keeps track of known structs since they can only be defined once
 	// per GraphQL endpoint. If used by multiple HTTP operations, they must
 	// reference the same struct converted to GraphQL schema.
@@ -51,6 +58,9 @@ type GraphQLConfig struct {
 	// costMap tracks the type name -> field cost for any fields that aren't
 	// the default cost of 1 (i.e. arrays of subresources).
 	costMap gqlcost.CostMap
+
+	// paginatorType stores the type for fast calls to `reflect.New`.
+	paginatorType reflect.Type
 }
 
 // allResources recursively finds all resource and sub-resources and adds them
@@ -177,7 +187,7 @@ func (r *Router) handleOperation(config *GraphQLConfig, parentName string, field
 			continue
 		}
 		jsName := casing.LowerCamel(name)
-		typ, err := r.generateGraphModel(config, param.typ, "", nil, nil)
+		typ, err := r.generateGraphModel(config, param.typ, "", nil, nil, nil)
 		if err != nil {
 			panic(err)
 		}
@@ -197,7 +207,7 @@ func (r *Router) handleOperation(config *GraphQLConfig, parentName string, field
 	}
 
 	// Convert the Go model to GraphQL Schema.
-	out, err := r.generateGraphModel(config, model, resource.path, headerNames, ignoreParams)
+	out, err := r.generateGraphModel(config, model, resource.path, headerNames, ignoreParams, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -301,10 +311,14 @@ func (r *Router) handleOperation(config *GraphQLConfig, parentName string, field
 							m["__params"] = newParams
 						}
 					}
-					result = map[string]interface{}{
-						"edges":   s,
-						"headers": headerMap,
-					}
+					paginator := reflect.New(config.paginatorType).Interface().(GraphQLPaginator)
+					paginator.Load(headerMap, s)
+
+					// Other code expects map[string]interface{} not structs, so here we
+					// convert to a map in case there is further processing to do.
+					converter := structs.New(paginator)
+					converter.TagName = "json"
+					result = converter.Map()
 				}
 				return result, nil
 			}, nil
@@ -343,10 +357,14 @@ func (r *Router) EnableGraphQL(config *GraphQLConfig) {
 	if config.Path == "" {
 		config.Path = "/graphql"
 	}
+	if config.Paginator == nil {
+		config.Paginator = &GraphQLDefaultPaginator{}
+	}
 	config.known = map[string]graphql.Output{}
 	config.resources = resources
 	config.paramMappings = map[string]map[string]string{}
 	config.costMap = gqlcost.CostMap{}
+	config.paginatorType = reflect.TypeOf(config.Paginator).Elem()
 
 	for _, resource := range resources {
 		r.handleResource(config, "Query", fields, resource, map[string]bool{})

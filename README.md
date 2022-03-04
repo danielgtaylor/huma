@@ -829,8 +829,11 @@ If you want your resources to automatically fill in params, such as an item's ID
 
 ```go
 app.Resource("/notes").Get("list-notes", "docs",
-	responses.OK().Model([]NoteSummary{}),
-).Run(func(ctx huma.Context) {
+	responses.OK().Headers("Link").Model([]NoteSummary{}),
+).Run(func(ctx huma.Context, input struct {
+	Cursor string `query:"cursor" doc:"Paginatoin cursor"`
+	Limit  int    `query:"limit" doc:"Number of items to return"`
+}) {
 	// Handler implementation goes here...
 })
 
@@ -861,18 +864,47 @@ See the `graphql_test.go` file for a full-fledged example.
 
 ### GraphQL List Responses
 
-HTTP responses may be lists, such as the `list-notes` example operation above. Since GraphQL responses need to account for more than just the response body (i.e. headers), Huma returns this as a wrapper object similar to [Relay's Cursor Connections](https://relay.dev/graphql/connections.htm) pattern. The structure looks like:
+HTTP responses may be lists, such as the `list-notes` example operation above. Since GraphQL responses need to account for more than just the response body (i.e. headers), Huma returns this as a wrapper object similar to but as a more general form of [Relay's Cursor Connections](https://relay.dev/graphql/connections.htm) pattern. The structure knows how to parse link relationship headers and looks like:
 
 ```
 {
 	"edges": [... your responses here...],
+	"links": {
+		"next": [
+			{"key": "param1", "value": "value1"},
+			{"key": "param2", "value": "value2"},
+			...
+		]
+	}
 	"headers": {
 		"headerName": "headerValue"
 	}
 }
 ```
 
-This data structure can be considered experimental and may change in the future based on feedback.
+If you want a different paginator then this can be configured by creating your own struct which includes a field of `huma.GraphQLItems` and which implements the `huma.GraphQLPaginator` interface. For example:
+
+```go
+// First, define the custom paginator. This does nothing but return the list
+// of items and ignores the headers.
+type MySimplePaginator struct {
+	Items huma.GraphQLItems `json:"items"`
+}
+
+func (m *MySimplePaginator) Load(headers map[string]string, body []interface{}) error {
+	// Huma creates a new instance of your paginator before calling `Load`, so
+	// here you populate the instance with the response data as needed.
+	m.Items = body
+	return nil
+}
+
+// Then, tell your app to use it when enabling GraphQL.
+app.EnableGraphQL(&huma.GraphQLConfig{
+	Paginator: &MySimplePaginator{},
+})
+```
+
+Using the same mechanism above you can support Relay Collections or any other pagination spec as long as your underlying HTTP API supports the inputs/outputs required for populating the paginator structs.
 
 ### Custom GraphQL Path
 
