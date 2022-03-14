@@ -80,8 +80,10 @@ func (r *bufferedReadCloser) Close() error {
 
 // RemovedHeaders defines a list of HTTP headers that will be redacted from the
 // request in the Recovery handler--if any logging or other output occurs, these
-// headings will have value '<redacted>'.
-var RemovedHeaders []string
+// headings will have value '<redacted>'. By default, a huma service removes the
+// 'Authorization' header to avoid leaking sensitive information, but clients
+// can override this with an empty slice.
+var RemovedHeaders = []string{"Authorization"}
 
 const redacted = "<redacted>"
 
