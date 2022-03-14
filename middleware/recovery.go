@@ -78,6 +78,13 @@ func (r *bufferedReadCloser) Close() error {
 	return r.reader.Close()
 }
 
+// RemovedHeaders defines a list of HTTP headers that will be redacted from the
+// request in the Recovery handler--if any logging or other output occurs, these
+// headings will have value '<redacted>'.
+var RemovedHeaders []string
+
+const redacted = "<redacted>"
+
 // PanicFunc defines a function to run after a panic, which allows you to set
 // up custom logging, metrics, etc.
 type PanicFunc func(ctx context.Context, err error, request string)
@@ -103,6 +110,10 @@ func Recovery(onPanic PanicFunc) func(http.Handler) http.Handler {
 				r.Body = newBufferedReadCloser(r.Body, buf, MaxLogBodyBytes)
 
 				r = r.WithContext(context.WithValue(r.Context(), bufContextKey, buf))
+			}
+
+			for _, v := range RemovedHeaders {
+				r.Header.Set(v, redacted)
 			}
 
 			// Recovering comes *after* the above so the buffer is not returned to
