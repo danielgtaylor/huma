@@ -115,7 +115,9 @@ func Recovery(onPanic PanicFunc) func(http.Handler) http.Handler {
 			}
 
 			for _, v := range RemovedHeaders {
-				r.Header.Set(v, redacted)
+				if r.Header.Get(v) != "" {
+					r.Header.Set(v, redacted)
+				}
 			}
 
 			// Recovering comes *after* the above so the buffer is not returned to
