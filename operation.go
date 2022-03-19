@@ -109,7 +109,7 @@ func (o *Operation) toOpenAPI(components *oaComponents) *gabs.Container {
 	}
 
 	// responses
-	for _, resp := range o.responses {
+	for i, resp := range o.responses {
 		status := fmt.Sprintf("%v", resp.status)
 		doc.Set(resp.description, "responses", status, "description")
 
@@ -134,6 +134,7 @@ func (o *Operation) toOpenAPI(components *oaComponents) *gabs.Container {
 
 		if resp.model != nil {
 			ref := components.AddSchema(resp.model, schema.ModeAll, o.id+"-response")
+			o.responses[i].modelRef = ref
 			doc.Set(ref, "responses", status, "content", resp.contentType, "schema", "$ref")
 		}
 	}
@@ -258,10 +259,13 @@ func (o *Operation) Run(handler interface{}) {
 		opInfo.Tags = append([]string{}, o.resource.tags...)
 
 		ctx := &hcontext{
-			Context:        r.Context(),
-			ResponseWriter: w,
-			r:              r,
-			op:             o,
+			Context:               r.Context(),
+			ResponseWriter:        w,
+			r:                     r,
+			op:                    o,
+			docsPrefix:            o.resource.router.docsPrefix,
+			urlPrefix:             o.resource.router.urlPrefix,
+			disableSchemaProperty: o.resource.router.disableSchemaProperty,
 		}
 
 		// If there is no input struct (just a context), then the call is simple.

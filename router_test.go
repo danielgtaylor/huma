@@ -105,10 +105,12 @@ func TestModelInputOutput(t *testing.T) {
 	body := bytes.NewReader([]byte(`{"id": "abc123", "age": 25}`))
 	req, _ := http.NewRequest(http.MethodPost, "/players/fps?hidden=true", body)
 	req.Header.Set("Authorization", "dummy")
+	req.Host = "example.com"
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.JSONEq(t, `{
+			"$schema": "https://example.com/schemas/Response.json",
 			"category": "fps",
 			"hidden": true,
 			"auth": "dummy",
@@ -121,8 +123,19 @@ func TestModelInputOutput(t *testing.T) {
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest(http.MethodGet, "/openapi.json", nil)
 	r.ServeHTTP(w, req)
-
 	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Should be able to get model referenced by the response.
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/schemas/Response.json", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	// Missing schema should return 404
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/schemas/Missing.json", nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestTooBigBody(t *testing.T) {

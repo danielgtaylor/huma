@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/fxamacker/cbor"
+	"github.com/fxamacker/cbor/v2"
 	"github.com/goccy/go-yaml"
 	"github.com/stretchr/testify/assert"
 )

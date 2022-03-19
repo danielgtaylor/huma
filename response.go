@@ -12,6 +12,7 @@ type Response struct {
 	contentType string
 	headers     []string
 	model       reflect.Type
+	modelRef    string
 }
 
 // NewResponse creates a new response representation.
@@ -69,17 +70,23 @@ func (r Response) Model(bodyModel interface{}) Response {
 	}
 
 	// Allow the `Content-Type` header if not already allowed.
-	found := false
+	foundContentType := false
+	foundLink := false
 	for _, h := range r.headers {
 		if strings.ToLower(h) == "content-type" {
-			found = true
-			break
+			foundContentType = true
+		}
+		if strings.ToLower(h) == "link" {
+			foundLink = true
 		}
 	}
 
 	headers := r.headers
-	if !found {
+	if !foundContentType {
 		headers = append(headers, "Content-Type")
+	}
+	if !foundLink {
+		headers = append(headers, "Link")
 	}
 
 	return Response{
