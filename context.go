@@ -11,6 +11,7 @@ import (
 	"github.com/danielgtaylor/huma/negotiation"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/goccy/go-yaml"
+	"github.com/mitchellh/mapstructure"
 )
 
 // allowedHeaders is a list of built-in headers that are always allowed without
@@ -70,10 +71,13 @@ type Context interface {
 type hcontext struct {
 	context.Context
 	http.ResponseWriter
-	r      *http.Request
-	errors []error
-	op     *Operation
-	closed bool
+	r                     *http.Request
+	errors                []error
+	op                    *Operation
+	closed                bool
+	docsPrefix            string
+	urlPrefix             string
+	disableSchemaProperty bool
 }
 
 func (c *hcontext) WithValue(key, value interface{}) Context {
@@ -193,8 +197,24 @@ func (c *hcontext) WriteModel(status int, model interface{}) {
 	c.writeModel(ct, status, model)
 }
 
+// URLPrefix returns the prefix to use for non-relative URL links.
+func (c *hcontext) URLPrefix() string {
+	if c.urlPrefix != "" {
+		return c.urlPrefix
+	}
+
+	scheme := "https"
+	if strings.HasPrefix(c.r.Host, "localhost") {
+		scheme = "http"
+	}
+
+	return scheme + "://" + c.r.Host
+}
+
 func (c *hcontext) writeModel(ct string, status int, model interface{}) {
 	// Is this allowed? Find the right response.
+	modelRef := ""
+	modelType := reflect.TypeOf(model)
 	if c.op != nil {
 		responses := []Response{}
 		names := []string{}
@@ -215,14 +235,49 @@ func (c *hcontext) writeModel(ct string, status int, model interface{}) {
 
 		found := false
 		for _, r := range responses {
-			if r.model == reflect.TypeOf(model) {
+			if r.model == modelType {
 				found = true
+				modelRef = r.modelRef
 				break
 			}
 		}
 
 		if !found {
-			panic(fmt.Errorf("Invalid model %s, expecting %s for %s %s", reflect.TypeOf(model), strings.Join(names, ", "), c.r.Method, c.r.URL.Path))
+			panic(fmt.Errorf("Invalid model %s, expecting %s for %s %s", modelType, strings.Join(names, ", "), c.r.Method, c.r.URL.Path))
+		}
+	}
+
+	// If possible, insert a link relation header to the JSON Schema describing
+	// this response. If it's an object (not an array), then we can also try
+	// inserting the `$schema` key to make editing & validation easier.
+	parts := strings.Split(modelRef, "/")
+	if len(parts) > 0 {
+		id := parts[len(parts)-1]
+
+		link := c.Header().Get("Link")
+		if link != "" {
+			link += ", "
+		}
+		link += "<" + c.docsPrefix + "/schemas/" + id + ".json>; rel=\"describedby\""
+		c.Header().Set("Link", link)
+
+		if !c.disableSchemaProperty && modelType != nil && modelType.Kind() == reflect.Struct {
+			tmp := map[string]interface{}{}
+			decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+				TagName: "json",
+				Result:  &tmp,
+			})
+			if err != nil {
+				panic(fmt.Errorf("Unable to initialize struct decoder: %w", err))
+			}
+			err = decoder.Decode(model)
+			if err != nil {
+				panic(fmt.Errorf("Unable to convert struct to map: %w", err))
+			}
+			if tmp["$schema"] == nil {
+				tmp["$schema"] = c.URLPrefix() + c.docsPrefix + "/schemas/" + id + ".json"
+			}
+			model = tmp
 		}
 	}
 

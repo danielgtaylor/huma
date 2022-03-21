@@ -2,9 +2,11 @@ package huma
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -62,6 +64,10 @@ type Router struct {
 	// Router-global defaults
 	defaultBodyReadTimeout   time.Duration
 	defaultServerIdleTimeout time.Duration
+
+	// Information for creating non-relative links & schema refs.
+	urlPrefix             string
+	disableSchemaProperty bool
 }
 
 // OpenAPI returns an OpenAPI 3 representation of the API, which can be
@@ -232,18 +238,64 @@ func (r *Router) OpenAPIHook(hook func(*gabs.Container)) {
 	r.openapiHook = hook
 }
 
+// replaceRef recursively replaces refs in a JSON Schema to point to a new
+// location.
+func replaceRef(schema map[string]interface{}, from, to string) {
+	if schema["$ref"] != nil {
+		schema["$ref"] = strings.Replace(schema["$ref"].(string), from, to, -1) + ".json"
+	}
+
+	for _, v := range schema {
+		if m, ok := v.(map[string]interface{}); ok {
+			replaceRef(m, from, to)
+		} else if s, ok := v.([]interface{}); ok {
+			for _, item := range s {
+				if m, ok := item.(map[string]interface{}); ok {
+					replaceRef(m, from, to)
+				}
+			}
+		}
+	}
+}
+
 // Set up the docs & OpenAPI routes.
 func (r *Router) setupDocs() {
+	// Precompute the OpenAPI document once on startup and then serve the cached
+	// version of it.
+	spec := r.OpenAPI()
+
+	var schemas map[string]interface{}
+	b, _ := json.Marshal(spec.Search("components").Data().(*oaComponents).Schemas)
+	json.Unmarshal(b, &schemas)
+	for _, v := range schemas {
+		// Convert $ref links for standalone JSON files.
+		// #/components/schemas/MyType -> ./MyType.json
+		replaceRef(v.(map[string]interface{}), "#/components/schemas", ".")
+	}
+
 	// Register the docs handlers if needed.
 	if !r.mux.Match(chi.NewRouteContext(), http.MethodGet, r.OpenAPIPath()) {
 		r.mux.Get(r.OpenAPIPath(), func(w http.ResponseWriter, req *http.Request) {
-			spec := r.OpenAPI()
 			w.Header().Set("Content-Type", "application/vnd.oai.openapi+json")
 			w.Write(spec.Bytes())
 		})
 	}
 
-	if !r.mux.Match(chi.NewRouteContext(), http.MethodGet, "/docs") {
+	if !r.mux.Match(chi.NewRouteContext(), http.MethodGet, r.docsPrefix+"/schemas/{schema-id}.json") {
+		r.mux.Get(r.docsPrefix+"/schemas/{schema-id}.json", func(w http.ResponseWriter, req *http.Request) {
+			id := chi.URLParam(req, "schema-id")
+			schema := schemas[id]
+			if schema == nil {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			b, _ := json.Marshal(schema)
+			w.Header().Set("Content-Type", "application/schema+json")
+			w.Write(b)
+		})
+	}
+
+	if !r.mux.Match(chi.NewRouteContext(), http.MethodGet, r.docsPrefix+"/docs") {
 		r.mux.Get(r.docsPrefix+"/docs", r.docsHandler.ServeHTTP)
 	}
 
@@ -341,6 +393,22 @@ func (r *Router) DefaultBodyReadTimeout(timeout time.Duration) {
 // Defaults to 15 seconds if not set.
 func (r *Router) DefaultServerIdleTimeout(timeout time.Duration) {
 	r.defaultServerIdleTimeout = timeout
+}
+
+// URLPrefix sets the prefix to use when crafting non-relative links. If unset,
+// then the incoming requests `Host` header is used and the scheme defaults to
+// `https` unless the host starts with `localhost`. Do not include a
+// trailing slash in the prefix. Examples:
+// - https://example.com/v1
+// - http://localhost
+func (r *Router) URLPrefix(value string) {
+	r.urlPrefix = value
+}
+
+// DisableSchemaProperty disables the creation of a `$schema` property in
+// returned object response models.
+func (r *Router) DisableSchemaProperty() {
+	r.disableSchemaProperty = true
 }
 
 // New creates a new Huma router to which you can attach resources,

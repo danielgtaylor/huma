@@ -252,7 +252,7 @@ func TestGraphQL(t *testing.T) {
 data:
 	categories:
 		headers:
-			link: </categories?cursor=abc123>; rel="next"
+			link: </categories?cursor=abc123>; rel="next", </schemas/CategorySummaryList.json>; rel="describedby"
 		links:
 			next:
 				- key: cursor

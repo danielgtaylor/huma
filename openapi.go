@@ -55,6 +55,10 @@ type oaComponents struct {
 
 // AddSchema creates and adds a new schema from a type.
 func (c *oaComponents) AddSchema(t reflect.Type, mode schema.Mode, hint string) string {
+	return c.addSchema(t, mode, hint, true)
+}
+
+func (c *oaComponents) addSchema(t reflect.Type, mode schema.Mode, hint string, generateSchemaField bool) string {
 	// Try to determine the type's name.
 	name := t.Name()
 	if name == "" && t.Kind() == reflect.Ptr {
@@ -82,7 +86,7 @@ func (c *oaComponents) AddSchema(t reflect.Type, mode schema.Mode, hint string) 
 	if t.Kind() == reflect.Slice {
 		// We actually want to create two models: one for the container slice
 		// and one for the items within it.
-		ref := c.AddSchema(t.Elem(), mode, name+"Item")
+		ref := c.addSchema(t.Elem(), mode, name+"Item", false)
 		s = &schema.Schema{
 			Type: schema.TypeArray,
 			Items: &schema.Schema{
@@ -96,11 +100,28 @@ func (c *oaComponents) AddSchema(t reflect.Type, mode schema.Mode, hint string) 
 		}
 	}
 
-	return c.AddExistingSchema(s, name)
+	return c.addExistingSchema(s, name, generateSchemaField)
 }
 
 // AddExistingSchema adds an existing schema instance under the given name.
 func (c *oaComponents) AddExistingSchema(s *schema.Schema, name string) string {
+	return c.addExistingSchema(s, name, true)
+}
+
+func (c *oaComponents) addExistingSchema(s *schema.Schema, name string, generateSchemaField bool) string {
+	if generateSchemaField && s.Type == schema.TypeObject && s.Properties != nil {
+		if s.Properties["$schema"] == nil {
+			// Some editors allow you to place a $schema key which gives you rich
+			// validation and code completion support. Let's enable that by allowing
+			// a field here if it doesn't already exist in the model.
+			s.Properties["$schema"] = &schema.Schema{
+				Type:        schema.TypeString,
+				Format:      "uri",
+				Description: "An optional URL to a JSON Schema document describing this resource",
+			}
+		}
+	}
+
 	orig := name
 	num := 1
 	for {
