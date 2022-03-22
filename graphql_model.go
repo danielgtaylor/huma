@@ -32,7 +32,9 @@ func getFields(typ reflect.Type) []reflect.StructField {
 		if newTyp.Kind() == reflect.Ptr {
 			newTyp = newTyp.Elem()
 		}
-		fields = append(fields, getFields(newTyp)...)
+		if newTyp.Kind() == reflect.Struct {
+			fields = append(fields, getFields(newTyp)...)
+		}
 	}
 
 	return fields

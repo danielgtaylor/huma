@@ -200,7 +200,9 @@ func getFields(typ reflect.Type) []reflect.StructField {
 		if newTyp.Kind() == reflect.Ptr {
 			newTyp = newTyp.Elem()
 		}
-		fields = append(fields, getFields(newTyp)...)
+		if newTyp.Kind() == reflect.Struct {
+			fields = append(fields, getFields(newTyp)...)
+		}
 	}
 
 	return fields
@@ -542,6 +544,8 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 		return GenerateWithMode(t.Elem(), mode, schema)
 	case reflect.Interface:
 		// Interfaces can be any type.
+	case reflect.Uintptr, reflect.UnsafePointer, reflect.Func:
+		// Ignored...
 	default:
 		return nil, fmt.Errorf("unsupported type %s from %s", t.Kind(), t)
 	}
