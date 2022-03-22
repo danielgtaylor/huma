@@ -16,7 +16,6 @@ require (
 	github.com/koron-go/gqlcost v0.2.2
 	github.com/magiconair/properties v1.8.6 // indirect
 	github.com/mattn/go-isatty v0.0.14
-	github.com/mitchellh/mapstructure v1.4.3
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/spf13/afero v1.8.2 // indirect
 	github.com/spf13/cobra v1.4.0

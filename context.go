@@ -11,7 +11,6 @@ import (
 	"github.com/danielgtaylor/huma/negotiation"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/goccy/go-yaml"
-	"github.com/mitchellh/mapstructure"
 )
 
 // allowedHeaders is a list of built-in headers that are always allowed without
@@ -211,6 +210,52 @@ func (c *hcontext) URLPrefix() string {
 	return scheme + "://" + c.r.Host
 }
 
+// shallowStructToMap converts a struct to a map similar to how encoding/json
+// would do it, but only one level deep so that the map may be modified before
+// serialization.
+func shallowStructToMap(v reflect.Value, result map[string]interface{}) {
+	t := v.Type()
+	if t.Kind() == reflect.Ptr {
+		shallowStructToMap(v.Elem(), result)
+		return
+	}
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		name := f.Name
+		if len(name) > 0 && strings.ToUpper(name)[0] != name[0] {
+			// Private field we somehow have access to?
+			continue
+		}
+		if f.Anonymous {
+			// Anonymous embedded struct, process its fields as our own.
+			shallowStructToMap(v.Field(i), result)
+			continue
+		}
+		if json := f.Tag.Get("json"); json != "" {
+			parts := strings.Split(json, ",")
+			if parts[0] != "" {
+				name = parts[0]
+			}
+			if name == "-" {
+				continue
+			}
+			if len(parts) == 2 && parts[1] == "omitempty" && v.Field(i).IsZero() {
+				vf := v.Field(i)
+				zero := vf.IsZero()
+				if vf.Kind() == reflect.Slice || vf.Kind() == reflect.Map {
+					// Special case: omit if they have no items in them to match the
+					// JSON encoder.
+					zero = vf.Len() > 0
+				}
+				if zero {
+					continue
+				}
+			}
+		}
+		result[name] = v.Field(i).Interface()
+	}
+}
+
 func (c *hcontext) writeModel(ct string, status int, model interface{}) {
 	// Is this allowed? Find the right response.
 	modelRef := ""
@@ -261,19 +306,12 @@ func (c *hcontext) writeModel(ct string, status int, model interface{}) {
 		link += "<" + c.docsPrefix + "/schemas/" + id + ".json>; rel=\"describedby\""
 		c.Header().Set("Link", link)
 
-		if !c.disableSchemaProperty && modelType != nil && modelType.Kind() == reflect.Struct {
+		if modelType.Kind() == reflect.Ptr {
+			modelType = modelType.Elem()
+		}
+		if !c.disableSchemaProperty && modelType != nil && modelType.Kind() == reflect.Struct && modelType != timeType {
 			tmp := map[string]interface{}{}
-			decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-				TagName: "json",
-				Result:  &tmp,
-			})
-			if err != nil {
-				panic(fmt.Errorf("Unable to initialize struct decoder: %w", err))
-			}
-			err = decoder.Decode(model)
-			if err != nil {
-				panic(fmt.Errorf("Unable to convert struct to map: %w", err))
-			}
+			shallowStructToMap(reflect.ValueOf(model), tmp)
 			if tmp["$schema"] == nil {
 				tmp["$schema"] = c.URLPrefix() + c.docsPrefix + "/schemas/" + id + ".json"
 			}
