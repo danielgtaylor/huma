@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -136,6 +137,45 @@ func TestModelInputOutput(t *testing.T) {
 	req, _ = http.NewRequest(http.MethodGet, "/schemas/Missing.json", nil)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestRouterEmbeddedStructOutput(t *testing.T) {
+	type CreatedField struct {
+		Created time.Time `json:"created,omitempty"`
+	}
+
+	type Resp struct {
+		CreatedField
+		Another string `json:"another"`
+		Ignored string `json:"-"`
+	}
+
+	now := time.Now()
+
+	r := New("Test", "1.0.0")
+	r.Resource("/test").Get("test", "Test",
+		NewResponse(http.StatusOK, "test").Model(&Resp{}),
+	).Run(func(ctx Context) {
+		ctx.WriteModel(http.StatusOK, &Resp{
+			CreatedField: CreatedField{
+				Created: now,
+			},
+			Another: "foo",
+		})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+	req.Host = "example.com"
+	r.ServeHTTP(w, req)
+
+	// Assert the response is as expected.
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.JSONEq(t, fmt.Sprintf(`{
+		"$schema": "https://example.com/schemas/Resp.json",
+		"created": "%s",
+		"another": "foo"
+	}`, now.Format(time.RFC3339Nano)), w.Body.String())
 }
 
 func TestTooBigBody(t *testing.T) {
