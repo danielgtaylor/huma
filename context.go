@@ -239,13 +239,13 @@ func shallowStructToMap(v reflect.Value, result map[string]interface{}) {
 			if name == "-" {
 				continue
 			}
-			if len(parts) == 2 && parts[1] == "omitempty" && v.Field(i).IsZero() {
+			if len(parts) > 1 && parts[1] == "omitempty" {
 				vf := v.Field(i)
 				zero := vf.IsZero()
 				if vf.Kind() == reflect.Slice || vf.Kind() == reflect.Map {
 					// Special case: omit if they have no items in them to match the
 					// JSON encoder.
-					zero = vf.Len() > 0
+					zero = vf.Len() == 0
 				}
 				if zero {
 					continue
