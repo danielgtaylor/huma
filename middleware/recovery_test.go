@@ -83,6 +83,34 @@ func TestRecoveryMiddlewareLogBody(t *testing.T) {
 	assert.Contains(t, log.All()[0].ContextMap()["http.request"], `{"foo": "bar"}`)
 }
 
+func TestRecoveryMiddlewareLogBodySensitive(t *testing.T) {
+	app, log := newTestRouter(t)
+
+	app.Resource("/panic").Put("panic", "Panic recovery test",
+		responses.NoContent(),
+	).Run(func(ctx huma.Context, input struct {
+		Authorization string `header:"authorization"`
+		Body          struct {
+			Foo string `json:"foo"`
+		}
+	}) {
+		assert.Equal(t, "secrets!", input.Authorization)
+		panic(fmt.Errorf("Some error"))
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPut, "/panic", strings.NewReader(`{"foo": "bar"}`))
+	req.Header.Set("Authorization", "secrets!")
+	app.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, "application/problem+json", w.Result().Header.Get("content-type"))
+
+	logged := log.All()[0].ContextMap()["http.request"]
+	assert.Contains(t, logged, `{"foo": "bar"}`)
+	assert.Contains(t, logged, redacted)
+	assert.NotContains(t, logged, "secrets!")
+}
+
 func TestLogBodyWithoutPanic(t *testing.T) {
 	app, _ := newTestRouter(t)
 
