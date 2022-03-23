@@ -114,12 +114,6 @@ func Recovery(onPanic PanicFunc) func(http.Handler) http.Handler {
 				r = r.WithContext(context.WithValue(r.Context(), bufContextKey, buf))
 			}
 
-			for _, v := range RemovedHeaders {
-				if r.Header.Get(v) != "" {
-					r.Header.Set(v, redacted)
-				}
-			}
-
 			// Recovering comes *after* the above so the buffer is not returned to
 			// the pool until after we print out its contents. This deferred func
 			// is used to recover from panics and deliberately left in-line.
@@ -132,6 +126,12 @@ func Recovery(onPanic PanicFunc) func(http.Handler) http.Handler {
 					} else if r.Body != nil {
 						defer r.Body.Close()
 						r.Body = ioutil.NopCloser(io.LimitReader(r.Body, MaxLogBodyBytes))
+					}
+
+					for _, v := range RemovedHeaders {
+						if r.Header.Get(v) != "" {
+							r.Header.Set(v, redacted)
+						}
 					}
 
 					request, _ := httputil.DumpRequest(r, true)

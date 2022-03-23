@@ -342,7 +342,7 @@ func (c *hcontext) writeModel(ct string, status int, model interface{}) {
 		}
 		encoded, err = mode.Marshal(model)
 		if err != nil {
-			panic(fmt.Errorf("Unable to marshal JSON: %w", err))
+			panic(fmt.Errorf("Unable to marshal CBOR: %w", err))
 		}
 	}
 
