@@ -26,13 +26,13 @@ func NewRouter(t testing.TB) *huma.Router {
 func NewRouterObserver(t testing.TB) (*huma.Router, *observer.ObservedLogs) {
 	core, logs := observer.New(zapcore.DebugLevel)
 
-	router := huma.New("Test API", "1.0.0")
-	router.Middleware(middleware.DefaultChain)
-
 	middleware.NewLogger = func() (*zap.Logger, error) {
 		l := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(func(zapcore.Core) zapcore.Core { return core })))
 		return l, nil
 	}
+
+	router := huma.New("Test API", "1.0.0")
+	router.Middleware(middleware.DefaultChain)
 
 	return router, logs
 }
