@@ -38,6 +38,11 @@ func NoContent() huma.Response {
 	return response(http.StatusNoContent)
 }
 
+// PartialContent HTTP 206 response
+func PartialContent() huma.Response {
+	return response(http.StatusPartialContent)
+}
+
 // MovedPermanently HTTP 301 response.
 func MovedPermanently() huma.Response {
 	return response(http.StatusMovedPermanently)
