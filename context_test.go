@@ -312,7 +312,7 @@ func TestWriteContentRespectsRange(t *testing.T) {
 	app.ServeHTTP(w, req)
 
 	// confirms that Range is properly being forwarded to ServeContent.
-	// we'll assume more advanced range use cases like are properly tested
+	// we'll assume more advanced range use cases are properly tested
 	// in the http library.
 	assert.Equal(t, w.Result().StatusCode, 206)
 	assert.Equal(t, []byte("Test B"), w.Body.Bytes())

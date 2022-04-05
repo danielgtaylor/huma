@@ -69,13 +69,12 @@ type Context interface {
 	WriteModel(status int, model interface{})
 
 	// WriteContent wraps http.ServeContent in order to handle serving streams
-	// it will handle Range, If-Match, If-Unmodified-Since, If-None-Match,
-	// If-Modified-Since, and if-headers and set the MIME type (if not provided).
+	// it will handle Range and Modified (like If-Unmodified-Since) headers.
 	WriteContent(content io.ReadSeeker)
 
 	// SetContentLastModified sets the time the content was last modified for
-	// WriteContent requests.  If set, WriteContent will add it to the
-	// Last-Modified and will properly respond to If-Modified-Since request
+	// WriteContent requests.  If set, WriteContent will add it as the
+	// Last-Modified header and will properly respond to Modified request
 	// headers.
 	SetContentLastModified(modTime time.Time)
 }
