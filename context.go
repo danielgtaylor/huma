@@ -395,7 +395,7 @@ func (c *hcontext) WriteContent(content io.ReadSeeker) {
 
 	// name is left blank, this is used by ServeContent to automatically
 	// determine Content-Type.  Huma has opted to have handlers set Content-Type
-	// explicitly rather than\ introduce this into the method signature as name
+	// explicitly rather than introduce this into the method signature as name
 	// is not applicable to every ReadSeeker.  Leaving this blank or setting the
 	// Content-Type on the request disables this functionality anyway.
 	http.ServeContent(c.ResponseWriter, c.r, "", c.modTime, content)
