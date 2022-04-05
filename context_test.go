@@ -1,12 +1,14 @@
 package huma
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/goccy/go-yaml"
@@ -267,4 +269,79 @@ func TestValue(t *testing.T) {
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest(http.MethodGet, "/", nil)
 	handler(w, r)
+}
+
+func TestWriteContent(t *testing.T) {
+	app := newTestRouter()
+
+	b := []byte("Test Byte Data")
+
+	app.Resource("/content").Get("test", "Test",
+		NewResponse(200, "desc").Model(Response{}),
+	).Run(func(ctx Context) {
+		ctx.Header().Set("Content-Type", "application/octet-stream")
+		content := bytes.NewReader(b)
+		ctx.WriteContent(content)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/content", nil)
+	app.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Result().StatusCode)
+	assert.Equal(t, "application/octet-stream", w.Header().Get("Content-Type"))
+	assert.Equal(t, b, w.Body.Bytes())
+}
+
+func TestWriteContentRespectsRange(t *testing.T) {
+	app := newTestRouter()
+
+	b := []byte("Test Byte Data")
+
+	app.Resource("/content").Get("test", "Test",
+		NewResponse(206, "desc").Model(Response{}),
+	).Run(func(ctx Context) {
+		ctx.Header().Set("Content-Type", "application/octet-stream")
+		content := bytes.NewReader(b)
+		ctx.WriteContent(content)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/content", nil)
+	req.Header.Set("Range", "bytes=0-5")
+	app.ServeHTTP(w, req)
+
+	// confirms that Range is properly being forwarded to ServeContent.
+	// we'll assume more advanced range use cases like are properly tested
+	// in the http library.
+	assert.Equal(t, w.Result().StatusCode, 206)
+	assert.Equal(t, []byte("Test B"), w.Body.Bytes())
+}
+
+func TestWriteContentLastModified(t *testing.T) {
+	app := newTestRouter()
+
+	b := []byte("Test Byte Data")
+	modTime := time.Now()
+
+	app.Resource("/content").Get("test", "Test",
+		NewResponse(206, "desc").Model(Response{}),
+	).Run(func(ctx Context) {
+		ctx.Header().Set("Content-Type", "application/octet-stream")
+		content := bytes.NewReader(b)
+		ctx.SetContentLastModified(modTime)
+		ctx.WriteContent(content)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/content", nil)
+	app.ServeHTTP(w, req)
+
+	// confirms that modTime is properly being forwarded to ServeContent.
+	// We'll assume the more advanced modTime use cases are properly tested
+	// in http library.
+	strTime := modTime.UTC().Format(http.TimeFormat)
+
+	assert.Equal(t, strTime, w.Header().Get("Last-Modified"))
+
 }

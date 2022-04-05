@@ -276,6 +276,61 @@ app.Resource("/exhaustive").Get("exhaustive", "Exhastive errors example",
 })
 ```
 
+## WriteContent
+
+Write contents allows you to write content in the provided ReadSeeker in the response.  It will handle Range, If-Match, If-Unmodified-Since, If-None-Match, If-Modified-Since, and if-Range requests for caching and large object partial content responses.
+
+example of a partial content response sending a large video file:
+```go
+package main
+
+import (
+	"net/http"
+	"os"
+
+	"github.com/danielgtaylor/huma"
+	"github.com/danielgtaylor/huma/cli"
+	"github.com/danielgtaylor/huma/responses"
+)
+
+func main() {
+	// Create a new router & CLI with default middleware.
+	app := cli.NewRouter("Minimal Example", "1.0.0")
+
+	// Declare the root resource and a GET operation on it.
+	app.Resource("/vid").Get("get-vid", "Get video content",
+		// The only response is HTTP 200 with text/plain
+		responses.ServeContent()...,
+	).Run(func(ctx huma.Context) {
+		// This is he handler function for the operation. Write the response.
+		ctx.Header().Set("Content-Type", "video/mp4")
+		f, err := os.Open("./vid.mp4")
+		if err != nil {
+			ctx.WriteError(http.StatusInternalServerError, "Error while opening video")
+			return
+		}
+		defer f.Close()
+
+		fStat, err := os.Stat("./vid.mp4")
+		if err != nil {
+			ctx.WriteError(http.StatusInternalServerError, "Error while attempting to get Last Modified time")
+			return
+		}
+
+		// Setting last modified time is optional, if not set WriteContent will not return
+		// Last-Modified or respect If-Modified-Since headers.
+		ctx.SetContentLastModified(fStat.ModTime())
+
+		ctx.WriteContent(f)
+	})
+
+	// Run the CLI. When passed no arguments, it starts the server.
+	app.Run()
+}
+```
+
+Note that `WriteContent` does not automatically set the mime type.  You should set the `Content-Type` response header directly.  Also in order for `WriteContent` to respect the `Modified` headers you must call `SetContentLastModified`.  This is optional and if not set `WriteContent` will simply not respect the `Modified` request headers.
+
 ## Request Inputs
 
 Requests can have parameters and/or a body as input to the handler function. Like responses, inputs use standard Go structs but the tags are different. Here are the available tags:

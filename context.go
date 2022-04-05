@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/danielgtaylor/huma/negotiation"
 	"github.com/fxamacker/cbor/v2"
@@ -65,6 +67,17 @@ type Context interface {
 	// content negotiation (e.g. JSON or CBOR). This must match the registered
 	// response status code & type.
 	WriteModel(status int, model interface{})
+
+	// WriteContent wraps http.ServeContent in order to handle serving streams
+	// it will handle Range, If-Match, If-Unmodified-Since, If-None-Match,
+	// If-Modified-Since, and if-headers and set the MIME type (if not provided).
+	WriteContent(content io.ReadSeeker)
+
+	// SetContentLastModified sets the time the content was last modified for
+	// WriteContent requests.  If set, WriteContent will add it to the
+	// Last-Modified and will properly respond to If-Modified-Since request
+	// headers.
+	SetContentLastModified(modTime time.Time)
 }
 
 type hcontext struct {
@@ -77,6 +90,7 @@ type hcontext struct {
 	docsPrefix            string
 	urlPrefix             string
 	disableSchemaProperty bool
+	modTime               time.Time
 }
 
 func (c *hcontext) WithValue(key, value interface{}) Context {
@@ -141,7 +155,7 @@ func (c *hcontext) WriteHeader(status int) {
 
 func (c *hcontext) Write(data []byte) (int, error) {
 	if c.closed {
-		panic(fmt.Errorf("Trying to write to response after WriteModel or WriteError for %s %s", c.r.Method, c.r.URL.Path))
+		panic(fmt.Errorf("Trying to write to response after WriteModel, WriteError, or WriteContent for %s %s", c.r.Method, c.r.URL.Path))
 	}
 
 	return c.ResponseWriter.Write(data)
@@ -149,7 +163,7 @@ func (c *hcontext) Write(data []byte) (int, error) {
 
 func (c *hcontext) WriteError(status int, message string, errors ...error) {
 	if c.closed {
-		panic(fmt.Errorf("Trying to write to response after WriteModel or WriteError for %s %s", c.r.Method, c.r.URL.Path))
+		panic(fmt.Errorf("Trying to write to response after WriteModel, WriteError, or WriteContent for %s %s", c.r.Method, c.r.URL.Path))
 	}
 
 	details := []*ErrorDetail{}
@@ -186,7 +200,7 @@ func (c *hcontext) WriteError(status int, message string, errors ...error) {
 
 func (c *hcontext) WriteModel(status int, model interface{}) {
 	if c.closed {
-		panic(fmt.Errorf("Trying to write to response after WriteModel or WriteError for %s %s", c.r.Method, c.r.URL.Path))
+		panic(fmt.Errorf("Trying to write to response after WriteModel, WriteError, or WriteContent for %s %s", c.r.Method, c.r.URL.Path))
 	}
 
 	// Get the negotiated content type the client wants and we are willing to
@@ -372,4 +386,22 @@ func selectContentType(r *http.Request) string {
 	}
 
 	return ct
+}
+
+func (c *hcontext) WriteContent(content io.ReadSeeker) {
+	if c.closed {
+		panic(fmt.Errorf("Trying to write to response after WriteModel, WriteError, or WriteContent for %s %s", c.r.Method, c.r.URL.Path))
+	}
+
+	// name is left blank, this is used by ServeContent to automatically
+	// determine Content-Type.  Huma has opted to have handlers set Content-Type
+	// explicitly rather than\ introduce this into the method signature as name
+	// is not applicable to every ReadSeeker.  Leaving this blank or setting the
+	// Content-Type on the request disables this functionality anyway.
+	http.ServeContent(c.ResponseWriter, c.r, "", c.modTime, content)
+	c.closed = true
+}
+
+func (c *hcontext) SetContentLastModified(modTime time.Time) {
+	c.modTime = modTime
 }
