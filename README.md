@@ -317,11 +317,10 @@ func main() {
 			return
 		}
 
-		// Setting last modified time is optional, if not set WriteContent will not return
-		// Last-Modified or respect If-Modified-Since headers.
-		ctx.SetContentLastModified(fStat.ModTime())
-
-		ctx.WriteContent(f)
+		// Note that name (ex: vid.mp4) and lastModified (ex: fState.ModTime()) are both optional
+		// if name is "" Content-Type must be set by the handler
+		// if lastModified is time.Time{} Modified request headers will not be respected by WriteContent
+		ctx.WriteContent("vid.mp4", f, fStat.ModTime())
 	})
 
 	// Run the CLI. When passed no arguments, it starts the server.
