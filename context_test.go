@@ -281,7 +281,7 @@ func TestWriteContent(t *testing.T) {
 	).Run(func(ctx Context) {
 		ctx.Header().Set("Content-Type", "application/octet-stream")
 		content := bytes.NewReader(b)
-		ctx.WriteContent(content)
+		ctx.WriteContent("", content, time.Time{})
 	})
 
 	w := httptest.NewRecorder()
@@ -303,7 +303,7 @@ func TestWriteContentRespectsRange(t *testing.T) {
 	).Run(func(ctx Context) {
 		ctx.Header().Set("Content-Type", "application/octet-stream")
 		content := bytes.NewReader(b)
-		ctx.WriteContent(content)
+		ctx.WriteContent("", content, time.Time{})
 	})
 
 	w := httptest.NewRecorder()
@@ -329,8 +329,7 @@ func TestWriteContentLastModified(t *testing.T) {
 	).Run(func(ctx Context) {
 		ctx.Header().Set("Content-Type", "application/octet-stream")
 		content := bytes.NewReader(b)
-		ctx.SetContentLastModified(modTime)
-		ctx.WriteContent(content)
+		ctx.WriteContent("", content, modTime)
 	})
 
 	w := httptest.NewRecorder()
@@ -344,4 +343,27 @@ func TestWriteContentLastModified(t *testing.T) {
 
 	assert.Equal(t, strTime, w.Header().Get("Last-Modified"))
 
+}
+
+func TestWriteContentName(t *testing.T) {
+	app := newTestRouter()
+
+	b := []byte("Test Byte Data")
+
+	app.Resource("/content").Get("test", "Test",
+		NewResponse(206, "desc").Model(Response{}),
+	).Run(func(ctx Context) {
+
+		content := bytes.NewReader(b)
+		ctx.WriteContent("/path/with/content.mp4", content, time.Time{})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/content", nil)
+	app.ServeHTTP(w, req)
+
+	// confirms that name is properly being forwarded to ServeContent.
+	// We'll assume the more advanced modTime use cases are properly tested
+	// in http library.
+	assert.Equal(t, "video/mp4", w.Header().Get("Content-Type"))
 }

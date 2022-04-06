@@ -70,13 +70,7 @@ type Context interface {
 
 	// WriteContent wraps http.ServeContent in order to handle serving streams
 	// it will handle Range and Modified (like If-Unmodified-Since) headers.
-	WriteContent(content io.ReadSeeker)
-
-	// SetContentLastModified sets the time the content was last modified for
-	// WriteContent requests.  If set, WriteContent will add it as the
-	// Last-Modified header and will properly respond to Modified request
-	// headers.
-	SetContentLastModified(modTime time.Time)
+	WriteContent(name string, content io.ReadSeeker, lastModified time.Time)
 }
 
 type hcontext struct {
@@ -89,7 +83,6 @@ type hcontext struct {
 	docsPrefix            string
 	urlPrefix             string
 	disableSchemaProperty bool
-	modTime               time.Time
 }
 
 func (c *hcontext) WithValue(key, value interface{}) Context {
@@ -387,20 +380,11 @@ func selectContentType(r *http.Request) string {
 	return ct
 }
 
-func (c *hcontext) WriteContent(content io.ReadSeeker) {
+func (c *hcontext) WriteContent(name string, content io.ReadSeeker, lastModified time.Time) {
 	if c.closed {
 		panic(fmt.Errorf("Trying to write to response after WriteModel, WriteError, or WriteContent for %s %s", c.r.Method, c.r.URL.Path))
 	}
 
-	// name is left blank, this is used by ServeContent to automatically
-	// determine Content-Type.  Huma has opted to have handlers set Content-Type
-	// explicitly rather than introduce this into the method signature as name
-	// is not applicable to every ReadSeeker.  Leaving this blank or setting the
-	// Content-Type on the request disables this functionality anyway.
-	http.ServeContent(c.ResponseWriter, c.r, "", c.modTime, content)
+	http.ServeContent(c.ResponseWriter, c.r, name, lastModified, content)
 	c.closed = true
-}
-
-func (c *hcontext) SetContentLastModified(modTime time.Time) {
-	c.modTime = modTime
 }
