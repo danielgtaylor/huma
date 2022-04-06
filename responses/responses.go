@@ -38,6 +38,11 @@ func NoContent() huma.Response {
 	return response(http.StatusNoContent)
 }
 
+// PartialContent HTTP 206 response
+func PartialContent() huma.Response {
+	return response(http.StatusPartialContent)
+}
+
 // MovedPermanently HTTP 301 response.
 func MovedPermanently() huma.Response {
 	return response(http.StatusMovedPermanently)
@@ -142,4 +147,23 @@ func GatewayTimeout() huma.Response {
 // type.
 func String(status int) huma.Response {
 	return response(status).ContentType("text/plain")
+}
+
+// ServeContent returns a slice containing all valid responses for
+// context.ServeContent
+func ServeContent() []huma.Response {
+	return []huma.Response{
+		OK().Headers("Last-Modified", "Content-Type"),
+		PartialContent().Headers(
+			"Last-Modified",
+			"Content-Type",
+			"Content-Range",
+			"Content-Length",
+			"multipart/byteranges",
+			"Accept-Ranges",
+			"Content-Encoding"),
+		NotModified().Headers("Last-Modified"),
+		PreconditionFailed().Headers("Last-Modified", "Content-Type"),
+		InternalServerError(),
+	}
 }

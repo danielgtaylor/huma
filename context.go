@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/danielgtaylor/huma/negotiation"
 	"github.com/fxamacker/cbor/v2"
@@ -65,6 +67,10 @@ type Context interface {
 	// content negotiation (e.g. JSON or CBOR). This must match the registered
 	// response status code & type.
 	WriteModel(status int, model interface{})
+
+	// WriteContent wraps http.ServeContent in order to handle serving streams
+	// it will handle Range and Modified (like If-Unmodified-Since) headers.
+	WriteContent(name string, content io.ReadSeeker, lastModified time.Time)
 }
 
 type hcontext struct {
@@ -141,7 +147,7 @@ func (c *hcontext) WriteHeader(status int) {
 
 func (c *hcontext) Write(data []byte) (int, error) {
 	if c.closed {
-		panic(fmt.Errorf("Trying to write to response after WriteModel or WriteError for %s %s", c.r.Method, c.r.URL.Path))
+		panic(fmt.Errorf("Trying to write to response after WriteModel, WriteError, or WriteContent for %s %s", c.r.Method, c.r.URL.Path))
 	}
 
 	return c.ResponseWriter.Write(data)
@@ -149,7 +155,7 @@ func (c *hcontext) Write(data []byte) (int, error) {
 
 func (c *hcontext) WriteError(status int, message string, errors ...error) {
 	if c.closed {
-		panic(fmt.Errorf("Trying to write to response after WriteModel or WriteError for %s %s", c.r.Method, c.r.URL.Path))
+		panic(fmt.Errorf("Trying to write to response after WriteModel, WriteError, or WriteContent for %s %s", c.r.Method, c.r.URL.Path))
 	}
 
 	details := []*ErrorDetail{}
@@ -186,7 +192,7 @@ func (c *hcontext) WriteError(status int, message string, errors ...error) {
 
 func (c *hcontext) WriteModel(status int, model interface{}) {
 	if c.closed {
-		panic(fmt.Errorf("Trying to write to response after WriteModel or WriteError for %s %s", c.r.Method, c.r.URL.Path))
+		panic(fmt.Errorf("Trying to write to response after WriteModel, WriteError, or WriteContent for %s %s", c.r.Method, c.r.URL.Path))
 	}
 
 	// Get the negotiated content type the client wants and we are willing to
@@ -372,4 +378,13 @@ func selectContentType(r *http.Request) string {
 	}
 
 	return ct
+}
+
+func (c *hcontext) WriteContent(name string, content io.ReadSeeker, lastModified time.Time) {
+	if c.closed {
+		panic(fmt.Errorf("Trying to write to response after WriteModel, WriteError, or WriteContent for %s %s", c.r.Method, c.r.URL.Path))
+	}
+
+	http.ServeContent(c.ResponseWriter, c.r, name, lastModified, content)
+	c.closed = true
 }
