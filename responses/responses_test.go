@@ -96,3 +96,23 @@ func TestResponses(t *testing.T) {
 	String(http.StatusOK)
 	assert.Equal(t, 200, status)
 }
+
+func contains(r []huma.Response, e huma.Response) bool {
+	for _, i := range r {
+		if i.GetStatus() == e.GetStatus() {
+			return true
+		}
+	}
+	return false
+}
+
+func TestWriteContentResponses(t *testing.T) {
+	r := ServeContent()
+
+	assert.Equal(t, 5, len(r))
+	assert.True(t, contains(r, OK()))
+	assert.True(t, contains(r, PartialContent()))
+	assert.True(t, contains(r, NotModified()))
+	assert.True(t, contains(r, PreconditionFailed()))
+	assert.True(t, contains(r, InternalServerError()))
+}
