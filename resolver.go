@@ -46,7 +46,7 @@ func validAgainstSchema(ctx *hcontext, label string, schema *schema.Schema, data
 		if err := recover(); err != nil {
 			ctx.AddError(&ErrorDetail{
 				Message:  fmt.Errorf("unable to validate against schema: %w", err.(error)).Error(),
-				Location: label,
+				Location: strings.TrimSuffix(label, "."),
 				Value:    string(data),
 			})
 
@@ -72,7 +72,7 @@ func validAgainstSchema(ctx *hcontext, label string, schema *schema.Schema, data
 			// those off to prevent duplicating data. (e.g. see the enum error)
 			ctx.AddError(&ErrorDetail{
 				Message:  strings.TrimPrefix(desc.Description(), desc.Context().String()+" "),
-				Location: label + strings.TrimPrefix(desc.Field(), "(root)"),
+				Location: strings.TrimSuffix(label+strings.TrimPrefix(desc.Field(), "(root)"), "."),
 				Value:    desc.Value(),
 			})
 		}
