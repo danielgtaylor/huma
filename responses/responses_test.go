@@ -107,7 +107,7 @@ func contains(r []huma.Response, e huma.Response) bool {
 }
 
 func TestWriteContentResponses(t *testing.T) {
-	r := ServeContent()
+	r := WriteContent()
 
 	assert.Equal(t, 5, len(r))
 	assert.True(t, contains(r, OK()))

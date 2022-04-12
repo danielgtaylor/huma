@@ -299,8 +299,8 @@ func main() {
 
 	// Declare the /vid resource and a GET operation on it.
 	app.Resource("/vid").Get("get-vid", "Get video content",
-		// ServeContent returns all the responses needed for WriteContent
-		responses.ServeContent()...,
+		// responses.WriteContent returns all the responses needed for context.WriteContent
+		responses.WriteContent()...,
 	).Run(func(ctx huma.Context) {
 		// This is he handler function for the operation. Write the response.
 		ctx.Header().Set("Content-Type", "video/mp4")
