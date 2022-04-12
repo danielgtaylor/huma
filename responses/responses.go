@@ -149,9 +149,9 @@ func String(status int) huma.Response {
 	return response(status).ContentType("text/plain")
 }
 
-// ServeContent returns a slice containing all valid responses for
-// context.ServeContent
-func ServeContent() []huma.Response {
+// WriteContent returns a slice containing all valid responses for
+// context.WriteContent
+func WriteContent() []huma.Response {
 	return []huma.Response{
 		OK().Headers("Last-Modified", "Content-Type"),
 		PartialContent().Headers(
