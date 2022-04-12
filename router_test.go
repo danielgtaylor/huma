@@ -198,7 +198,7 @@ func TestTooBigBody(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPut, "/test", strings.NewReader(`{"id": "foo"}`))
 	app.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
 	assert.Contains(t, w.Body.String(), "Request body too large")
 
 	// With content length
@@ -206,7 +206,7 @@ func TestTooBigBody(t *testing.T) {
 	req, _ = http.NewRequest(http.MethodPut, "/test", strings.NewReader(`{"id": "foo"}`))
 	req.Header.Set("Content-Length", "13")
 	app.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
 	assert.Contains(t, w.Body.String(), "Request body too large")
 }
 
@@ -250,7 +250,7 @@ func TestBodySlow(t *testing.T) {
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodPut, "/test", &slowReader{})
 	app.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, http.StatusRequestTimeout, w.Code)
 	assert.Contains(t, w.Body.String(), "timed out")
 }
 
@@ -414,7 +414,7 @@ func TestCustomRequestSchema(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodPost, "/foo", strings.NewReader("1234"))
 	app.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusBadRequest, w.Result().StatusCode)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Result().StatusCode)
 }
 
 func TestGetOperationName(t *testing.T) {

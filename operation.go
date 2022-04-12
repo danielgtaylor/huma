@@ -220,9 +220,20 @@ func (o *Operation) Run(handler interface{}) {
 			}
 		}
 
+		possible := []int{http.StatusBadRequest}
+
+		if _, ok := input.FieldByName("Body"); ok || len(o.params) > 0 {
+			// Invalid parameter values or body values can cause a 422.
+			possible = append(possible, http.StatusUnprocessableEntity)
+		}
+
 		// Get body if present.
 		if body, ok := input.FieldByName("Body"); ok {
 			o.requestModel = body.Type
+			possible = append(possible,
+				http.StatusRequestEntityTooLarge,
+				http.StatusRequestTimeout,
+			)
 
 			if o.requestSchema == nil {
 				o.requestSchema, err = schema.GenerateWithMode(body.Type, schema.ModeWrite, nil)
@@ -232,18 +243,17 @@ func (o *Operation) Run(handler interface{}) {
 			}
 		}
 
-		// It's possible for the inputs to generate a 400, so add it if it wasn't
-		// explicitly defined.
-		found400 := false
+		// It's possible for the inputs to generate a few different errors, so
+		// generate them if not already present.
+		found := map[int]bool{}
 		for _, r := range o.responses {
-			if r.status == http.StatusBadRequest {
-				found400 = true
-				break
-			}
+			found[r.status] = true
 		}
 
-		if !found400 {
-			o.responses = append(o.responses, NewResponse(http.StatusBadRequest, http.StatusText(http.StatusBadRequest)).ContentType("application/problem+json").Model(&ErrorModel{}))
+		for _, s := range possible {
+			if !found[s] {
+				o.responses = append(o.responses, NewResponse(s, http.StatusText(s)).ContentType("application/problem+json").Model(&ErrorModel{}))
+			}
 		}
 	}
 
@@ -266,6 +276,7 @@ func (o *Operation) Run(handler interface{}) {
 			docsPrefix:            o.resource.router.docsPrefix,
 			urlPrefix:             o.resource.router.urlPrefix,
 			disableSchemaProperty: o.resource.router.disableSchemaProperty,
+			errorCodeHint:         http.StatusBadRequest,
 		}
 
 		// If there is no input struct (just a context), then the call is simple.
@@ -296,9 +307,14 @@ func (o *Operation) Run(handler interface{}) {
 		}
 
 		setFields(ctx, ctx.r, input, inputType)
+		if !ctx.HasError() {
+			// No errors yet, so any errors that come after should be treated as a
+			// semantic rather than structural error.
+			ctx.errorCodeHint = http.StatusUnprocessableEntity
+		}
 		resolveFields(ctx, "", input)
 		if ctx.HasError() {
-			ctx.WriteError(http.StatusBadRequest, "Error while parsing input parameters")
+			ctx.WriteError(ctx.errorCodeHint, "Error while processing input parameters")
 			return
 		}
 

@@ -276,11 +276,32 @@ app.Resource("/exhaustive").Get("exhaustive", "Exhastive errors example",
 })
 ```
 
+While every attempt is made to return exhaustive errors within Huma, each individual response can only contain a single HTTP status code. The following chart describes which codes get returned and when:
+
+```mermaid
+flowchart TD
+	Request[Request has errors?] -->|yes| Panic
+	Request -->|no| Continue[Continue to handler]
+	Panic[Panic?] -->|yes| 500
+	Panic -->|no| RequestBody[Request body too large?]
+	RequestBody -->|yes| 413
+	RequestBody -->|no| RequestTimeout[Request took too long to read?]
+	RequestTimeout -->|yes| 408
+	RequestTimeout -->|no| ParseFailure[Cannot parse input?]
+	ParseFailure -->|yes| 400
+	ParseFailure -->|no| ValidationFailure[Validation failed?]
+	ValidationFailure -->|yes| 422
+	ValidationFailure -->|no| 400
+```
+
+This means it is possible to, for example, get an HTTP `408 Request Timeout` response that _also_ contains an error detail with a validation error for one of the input headers. Since request timeout has higher priority, that will be the response status code that is returned.
+
 ## WriteContent
 
-Write contents allows you to write content in the provided ReadSeeker in the response.  It will handle Range, If-Match, If-Unmodified-Since, If-None-Match, If-Modified-Since, and if-Range requests for caching and large object partial content responses.
+Write contents allows you to write content in the provided ReadSeeker in the response. It will handle Range, If-Match, If-Unmodified-Since, If-None-Match, If-Modified-Since, and if-Range requests for caching and large object partial content responses.
 
 example of a partial content response sending a large video file:
+
 ```go
 package main
 
@@ -328,7 +349,7 @@ func main() {
 }
 ```
 
-Note that `WriteContent` does not automatically set the mime type.  You should set the `Content-Type` response header directly.  Also in order for `WriteContent` to respect the `Modified` headers you must call `SetContentLastModified`.  This is optional and if not set `WriteContent` will simply not respect the `Modified` request headers.
+Note that `WriteContent` does not automatically set the mime type. You should set the `Content-Type` response header directly. Also in order for `WriteContent` to respect the `Modified` headers you must call `SetContentLastModified`. This is optional and if not set `WriteContent` will simply not respect the `Modified` request headers.
 
 ## Request Inputs
 
