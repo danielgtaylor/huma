@@ -34,7 +34,7 @@ func TestExhaustiveErrors(t *testing.T) {
 	r.Host = "example.com"
 	app.ServeHTTP(w, r)
 
-	assert.JSONEq(t, `{"$schema": "https://example.com/schemas/ErrorModel.json", "title":"Bad Request","status":400,"detail":"Error while parsing input parameters","errors":[{"message":"cannot parse boolean","location":"query.bool","value":"bad"},{"message":"cannot parse integer","location":"query.int","value":"bad"},{"message":"cannot parse float","location":"query.float32","value":"bad"},{"message":"cannot parse float","location":"query.float64","value":"bad"},{"message":"cannot parse integer","location":"query[2].tags","value":"bad"},{"message":"unable to validate against schema: invalid character 'b' looking for beginning of value","location":"query.tags","value":"[1,2,bad]"},{"message":"cannot parse time","location":"query.time","value":"bad"},{"message":"Must be greater than or equal to 5","location":"body.test","value":1}]}`, w.Body.String())
+	assert.JSONEq(t, `{"$schema": "https://example.com/schemas/ErrorModel.json", "title":"Unprocessable Entity","status":422,"detail":"Error while processing input parameters","errors":[{"message":"cannot parse boolean","location":"query.bool","value":"bad"},{"message":"cannot parse integer","location":"query.int","value":"bad"},{"message":"cannot parse float","location":"query.float32","value":"bad"},{"message":"cannot parse float","location":"query.float64","value":"bad"},{"message":"cannot parse integer","location":"query[2].tags","value":"bad"},{"message":"unable to validate against schema: invalid character 'b' looking for beginning of value","location":"query.tags","value":"[1,2,bad]"},{"message":"cannot parse time","location":"query.time","value":"bad"},{"message":"Must be greater than or equal to 5","location":"body.test","value":1}]}`, w.Body.String())
 }
 
 type Dep1 struct {
@@ -110,9 +110,9 @@ func TestNestedResolverError(t *testing.T) {
 
 	assert.JSONEq(t, `{
 		"$schema": "https://example.com/schemas/ErrorModel.json",
-		"status": 400,
-		"title": "Bad Request",
-		"detail": "Error while parsing input parameters",
+		"status": 422,
+		"title": "Unprocessable Entity",
+		"detail": "Error while processing input parameters",
 		"errors": [
 			{
 				"message": "Only one of ['one', 'two'] is allowed.",
@@ -121,4 +121,23 @@ func TestNestedResolverError(t *testing.T) {
 			}
 		]
 	}`, w.Body.String())
+}
+
+func TestInvalidJSON(t *testing.T) {
+	app := newTestRouter()
+
+	app.Resource("/").Post("test", "Test",
+		NewResponse(http.StatusNoContent, "desc"),
+	).Run(func(ctx Context, input struct {
+		Body string
+	}) {
+		ctx.WriteHeader(http.StatusNoContent)
+	})
+
+	// Test happy case just sending ONE of the two possible fields in each struct.
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(`{.2asdf2`))
+	app.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Result().StatusCode)
 }
