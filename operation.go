@@ -276,7 +276,7 @@ func (o *Operation) Run(handler interface{}) {
 			docsPrefix:            o.resource.router.docsPrefix,
 			urlPrefix:             o.resource.router.urlPrefix,
 			disableSchemaProperty: o.resource.router.disableSchemaProperty,
-			errorCodeHint:         http.StatusBadRequest,
+			errorCode:             http.StatusBadRequest,
 		}
 
 		// If there is no input struct (just a context), then the call is simple.
@@ -310,11 +310,11 @@ func (o *Operation) Run(handler interface{}) {
 		if !ctx.HasError() {
 			// No errors yet, so any errors that come after should be treated as a
 			// semantic rather than structural error.
-			ctx.errorCodeHint = http.StatusUnprocessableEntity
+			ctx.errorCode = http.StatusUnprocessableEntity
 		}
 		resolveFields(ctx, "", input)
 		if ctx.HasError() {
-			ctx.WriteError(ctx.errorCodeHint, "Error while processing input parameters")
+			ctx.WriteError(ctx.errorCode, "Error while processing input parameters")
 			return
 		}
 

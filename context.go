@@ -78,7 +78,7 @@ type hcontext struct {
 	http.ResponseWriter
 	r                     *http.Request
 	errors                []error
-	errorCodeHint         int
+	errorCode             int
 	op                    *Operation
 	closed                bool
 	docsPrefix            string

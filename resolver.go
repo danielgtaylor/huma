@@ -70,9 +70,9 @@ func validAgainstSchema(ctx *hcontext, label string, schema *schema.Schema, data
 		for _, desc := range result.Errors() {
 			// Note: some descriptions start with the context location so we trim
 			// those off to prevent duplicating data. (e.g. see the enum error)
-			if ctx.errorCodeHint <= 400 {
+			if ctx.errorCode <= 400 {
 				// Set if a more specific code hasn't been set yet.
-				ctx.errorCodeHint = http.StatusUnprocessableEntity
+				ctx.errorCode = http.StatusUnprocessableEntity
 			}
 			ctx.AddError(&ErrorDetail{
 				Message:  strings.TrimPrefix(desc.Description(), desc.Context().String()+" "),
@@ -205,7 +205,7 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 			if length := req.Header.Get("Content-Length"); length != "" {
 				if l, err := strconv.ParseInt(length, 10, 64); err == nil {
 					if l > ctx.op.maxBodyBytes {
-						ctx.errorCodeHint = http.StatusRequestEntityTooLarge
+						ctx.errorCode = http.StatusRequestEntityTooLarge
 						ctx.AddError(&ErrorDetail{
 							Message:  fmt.Sprintf("Request body too large, limit = %d bytes", ctx.op.maxBodyBytes),
 							Location: locationBody,
@@ -220,13 +220,13 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 			data, err := ioutil.ReadAll(req.Body)
 			if err != nil {
 				if strings.Contains(err.Error(), "request body too large") {
-					ctx.errorCodeHint = http.StatusRequestEntityTooLarge
+					ctx.errorCode = http.StatusRequestEntityTooLarge
 					ctx.AddError(&ErrorDetail{
 						Message:  fmt.Sprintf("Request body too large, limit = %d bytes", ctx.op.maxBodyBytes),
 						Location: locationBody,
 					})
 				} else if e, ok := err.(net.Error); ok && e.Timeout() {
-					ctx.errorCodeHint = http.StatusRequestTimeout
+					ctx.errorCode = http.StatusRequestTimeout
 					ctx.AddError(&ErrorDetail{
 						Message:  fmt.Sprintf("Request body took too long to read: timed out after %v", ctx.op.bodyReadTimeout),
 						Location: locationBody,
