@@ -113,6 +113,11 @@ func RequestEntityTooLarge() huma.Response {
 	return errorResponse(http.StatusRequestEntityTooLarge)
 }
 
+// UnprocessableEntity HTTP 422 response with a structured error body (e.g. JSON).
+func UnprocessableEntity() huma.Response {
+	return errorResponse(http.StatusUnprocessableEntity)
+}
+
 // PreconditionRequired HTTP 428 response with a structured error body (e.g. JSON).
 func PreconditionRequired() huma.Response {
 	return errorResponse(http.StatusPreconditionRequired)
