@@ -141,3 +141,7 @@ func TestInvalidJSON(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Result().StatusCode)
 }
+
+func TestBooleanQueryParam(t *testing.T) {
+
+}
