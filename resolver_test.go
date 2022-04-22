@@ -255,3 +255,39 @@ func TestBooleanQueryParamTrailingExplicitSet(t *testing.T) {
 	assert.Equal(t, o.BooleanParam, true)
 	assert.Equal(t, o.OtherParam, "test")
 }
+
+func TestBooleanQueryParamTrailingNotSet(t *testing.T) {
+	app := newTestRouter()
+
+	app.Resource("/").Get("test", "Test",
+		NewResponse(http.StatusOK, "desc"),
+	).Run(func(ctx Context, input QueryParamTestModel) {
+		out := &QueryParamTestModel{
+			BooleanParam: input.BooleanParam,
+			OtherParam:   input.OtherParam,
+		}
+		j, err := json.Marshal(out)
+		if err == nil {
+			ctx.Write(j)
+		} else {
+			ctx.WriteError(http.StatusBadRequest, "error marshaling to json", err)
+		}
+
+	})
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest(http.MethodGet, "/?s=test&b=true", nil)
+	app.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
+	decoder := json.NewDecoder(w.Body)
+	var o QueryParamTestModel
+
+	err := decoder.Decode(&o)
+	if err != nil {
+		assert.Fail(t, "Unable to decode json response")
+	}
+
+	assert.Equal(t, o.BooleanParam, true)
+	assert.Equal(t, o.OtherParam, "test")
+}
