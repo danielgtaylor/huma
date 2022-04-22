@@ -276,7 +276,7 @@ func TestBooleanQueryParamTrailingNotSet(t *testing.T) {
 	})
 
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest(http.MethodGet, "/?s=test&b=true", nil)
+	r, _ := http.NewRequest(http.MethodGet, "/?s=test", nil)
 	app.ServeHTTP(w, r)
 
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
@@ -288,6 +288,6 @@ func TestBooleanQueryParamTrailingNotSet(t *testing.T) {
 		assert.Fail(t, "Unable to decode json response")
 	}
 
-	assert.Equal(t, o.BooleanParam, true)
+	assert.Equal(t, o.BooleanParam, false)
 	assert.Equal(t, o.OtherParam, "test")
 }
