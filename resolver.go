@@ -275,6 +275,9 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 			location = locationQuery
 			if v := req.URL.Query().Get(name); v != "" {
 				pv = v
+			} else if req.URL.Query().Has(name) {
+				// name has no associated value, but exists in the map of QueryParams.  This is a boolean value
+				pv = "true"
 			}
 		}
 
