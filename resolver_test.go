@@ -142,6 +142,22 @@ func TestInvalidJSON(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Result().StatusCode)
 }
 
-func TestBooleanQueryParam(t *testing.T) {
+func TestBooleanQueryParamNoVal(t *testing.T) {
+	app := newTestRouter()
+
+	app.Resource("/").Get("test", "Test",
+		NewResponse(http.StatusOK, "desc"),
+	).Run(func(ctx Context, input struct {
+		BooleanParam bool   `query:"b"`
+		OtherParam   string `query:"s"`
+	}) {
+		ctx.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest(http.MethodGet, "/?s=test&e", nil)
+	app.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 
 }
