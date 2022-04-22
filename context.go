@@ -115,7 +115,7 @@ func (c *hcontext) WriteHeader(status int) {
 	if c.op != nil {
 		allowed := []string{}
 		for _, r := range c.op.responses {
-			if r.status == status {
+			if r.status == status || r.status == 0 {
 				for _, h := range r.headers {
 					allowed = append(allowed, h)
 				}
@@ -273,7 +273,7 @@ func (c *hcontext) writeModel(ct string, status int, model interface{}) {
 		statuses := []string{}
 		for _, r := range c.op.responses {
 			statuses = append(statuses, fmt.Sprintf("%d", r.status))
-			if r.status == status {
+			if r.status == status || r.status == 0 {
 				responses = append(responses, r)
 				if r.model != nil {
 					names = append(names, r.model.Name())

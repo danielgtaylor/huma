@@ -111,6 +111,9 @@ func (o *Operation) toOpenAPI(components *oaComponents) *gabs.Container {
 	// responses
 	for i, resp := range o.responses {
 		status := fmt.Sprintf("%v", resp.status)
+		if resp.status == 0 {
+			status = "default"
+		}
 		doc.Set(resp.description, "responses", status, "description")
 
 		headers := resp.headers

@@ -462,3 +462,19 @@ func TestSubResource(t *testing.T) {
 		// Do nothing
 	})
 }
+
+func TestDefaultResponse(t *testing.T) {
+	app := newTestRouter()
+
+	// This should not crash.
+	app.Resource("/").Get("get-root", "docs", NewResponse(0, "Default repsonse")).Run(func(ctx Context) {
+		ctx.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	app.ServeHTTP(w, req)
+
+	// This should not panic and should return the 200 OK
+	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
+}
