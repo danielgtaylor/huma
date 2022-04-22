@@ -277,7 +277,10 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 				pv = v
 			} else if req.URL.Query().Has(name) && f.Type.Kind() == reflect.Bool {
 				// name has no associated value, but exists in the map of QueryParams.  This is a boolean value
-				pv = "true"
+				_, vok := req.URL.Query()[name]
+				if vok {
+					pv = "true"
+				}
 			}
 		}
 
