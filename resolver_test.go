@@ -220,7 +220,7 @@ func TestBooleanQueryParamTrailingEqual(t *testing.T) {
 	assert.Equal(t, o.OtherParam, "test")
 }
 
-func TestBooleanQueryParamTrailingExplicitSet(t *testing.T) {
+func TestBooleanQueryParamExplicitSet(t *testing.T) {
 	app := newTestRouter()
 
 	app.Resource("/").Get("test", "Test",
@@ -256,7 +256,7 @@ func TestBooleanQueryParamTrailingExplicitSet(t *testing.T) {
 	assert.Equal(t, o.OtherParam, "test")
 }
 
-func TestBooleanQueryParamTrailingNotSet(t *testing.T) {
+func TestBooleanQueryParamNotSet(t *testing.T) {
 	app := newTestRouter()
 
 	app.Resource("/").Get("test", "Test",
