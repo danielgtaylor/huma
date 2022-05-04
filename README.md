@@ -859,7 +859,7 @@ You can choose between [RapiDoc](https://mrin9.github.io/RapiDoc/), [ReDoc](http
 
 ```go
 app := cli.NewRouter("My API", "1.0.0")
-app.DocsHandler(huma.ReDocHandler("My API"))
+app.DocsHandler(huma.ReDocHandler(app.Router))
 ```
 
 > :whale: Pass a custom handler function to have even more control for branding or browser authentication.
