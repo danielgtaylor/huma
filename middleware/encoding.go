@@ -38,6 +38,11 @@ func (w *contentEncodingWriter) Write(data []byte) (int, error) {
 		return w.writer.Write(data)
 	}
 
+	if w.Header().Get("Content-Encoding") != "" {
+		// Content encoding was already set, so we should ignore this!
+		return w.ResponseWriter.Write(data)
+	}
+
 	// Buffer the data until we can decide whether to compress it or not.
 	w.buf.Write(data)
 

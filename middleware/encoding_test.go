@@ -1,7 +1,9 @@
 package middleware
 
 import (
+	"bytes"
 	"compress/gzip"
+	"crypto/rand"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -199,4 +201,35 @@ func TestContentEncodingPanicBuffered(t *testing.T) {
 	// This should *not* result in a forced default status being written
 	// when the content encoding writer is closed.
 	assert.Equal(t, http.StatusInternalServerError, w.Result().StatusCode)
+}
+
+func TestContentEncodingIgnore(t *testing.T) {
+	app, _ := newTestRouter(t)
+	app.Resource("/").Get("test", "test",
+		responses.OK(),
+	).Run(func(ctx huma.Context) {
+		ctx.Header().Set("Content-Encoding", "br")
+		buf := make([]byte, 2500)
+		// Randomize so it can't compress well, which keeps the response
+		// large enough to potentially double-compress.
+		rand.Read(buf)
+		buf[0] = 'H'
+		buf[1] = 'e'
+		buf[2] = 'l'
+		buf[3] = 'l'
+		buf[4] = 'o'
+		w := brotli.NewWriter(ctx)
+		w.Write(buf)
+		w.Close()
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Add("Accept-Encoding", "br")
+	app.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
+	out := make([]byte, 2500)
+	_, err := brotli.NewReader(bytes.NewReader(w.Body.Bytes())).Read(out)
+	assert.NoError(t, err)
+	assert.Equal(t, []byte{'H', 'e', 'l', 'l', 'o'}, out[:5])
 }
