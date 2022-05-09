@@ -20,9 +20,15 @@ type Resource struct {
 	operations   []*Operation
 
 	tags []string
+
+	hidden bool
 }
 
 func (r *Resource) toOpenAPI(components *oaComponents) *gabs.Container {
+	if r.hidden {
+		return nil
+	}
+
 	doc := gabs.New()
 
 	for _, sub := range r.subResources {
@@ -109,4 +115,10 @@ func (r *Resource) SubResource(path string) *Resource {
 // Tags appends to the list of tags, used for documentation.
 func (r *Resource) Tags(names ...string) {
 	r.tags = append(r.tags, names...)
+}
+
+// Hidden removes this resource from the OpenAPI spec and documentation. It
+// is intended to be used for things like health check endpoints.
+func (r *Resource) Hidden() {
+	r.hidden = true
 }
