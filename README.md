@@ -374,7 +374,7 @@ The following types are supported out of the box:
 
 For example, if the parameter is a query param and the type is `[]string` it might look like `?tags=tag1,tag2` in the URI.
 
-The special struct field `Body` will be treated as the input request body and can refer to another struct or you can embed a struct inline.
+The special struct field `Body` will be treated as the input request body and can refer to another struct or you can embed a struct inline. `RawBody` can also be used to provide access to the `[]byte` used to validate & load `Body`.
 
 Here is an example:
 
@@ -470,6 +470,18 @@ op := app.Resource("/streaming").Post("post-stream", "Write streamed data",
 )
 op.NoBodyReadTimeout()
 op.Run(...)
+```
+
+If you just need access to the input body bytes and still want to use the built-in JSON Schema validation, then you can instead use the `RawBody` input struct field.
+
+```go
+type MyBody struct {
+	// This will generate JSON Schema, validate the input, and parse it.
+	Body MyStruct
+
+	// This will contain the raw bytes used to load the above.
+	RawBody []byte
+}
 ```
 
 ### Resolvers

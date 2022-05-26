@@ -113,6 +113,11 @@ func RequestEntityTooLarge() huma.Response {
 	return errorResponse(http.StatusRequestEntityTooLarge)
 }
 
+// UnsupportedMediaType HTTP 415 response with a structured error body (e.g. JSON).
+func UnsupportedMediaType() huma.Response {
+	return errorResponse(http.StatusUnsupportedMediaType)
+}
+
 // UnprocessableEntity HTTP 422 response with a structured error body (e.g. JSON).
 func UnprocessableEntity() huma.Response {
 	return errorResponse(http.StatusUnprocessableEntity)
