@@ -327,3 +327,36 @@ func TestStringQueryEmpty(t *testing.T) {
 	assert.Equal(t, o.BooleanParam, true)
 	assert.Equal(t, o.OtherParam, "")
 }
+
+func TestRawBody(t *testing.T) {
+	app := newTestRouter()
+
+	app.Resource("/").Get("test", "Test",
+		NewResponse(http.StatusOK, "desc"),
+	).Run(func(ctx Context, input struct {
+		Body struct {
+			Name string   `json:"name"`
+			Tags []string `json:"tags"`
+		}
+		RawBody []byte
+	}) {
+		ctx.Write(input.RawBody)
+	})
+
+	// Note the weird formatting
+	body := `{  "name" : "Huma","tags": [ "one"  ,"two"]}`
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest(http.MethodGet, "/", strings.NewReader(body))
+	app.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
+	assert.Equal(t, body, w.Body.String())
+
+	// Invalid input should still fail validation!
+	w = httptest.NewRecorder()
+	r, _ = http.NewRequest(http.MethodGet, "/", strings.NewReader("{}"))
+	app.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Result().StatusCode)
+}

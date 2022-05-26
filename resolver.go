@@ -251,6 +251,12 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 					Value:    string(data),
 				})
 			}
+
+			// If requested, also provide access to the raw body bytes.
+			if _, ok := t.FieldByName("RawBody"); ok {
+				input.FieldByName("RawBody").Set(reflect.ValueOf(data))
+			}
+
 			continue
 		}
 
