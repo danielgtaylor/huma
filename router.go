@@ -250,7 +250,7 @@ func (r *Router) DocsSuffix(suffix string) {
 // are hosted. When not specified, the default value of `schemas` is appended
 // to the DocsPrefix.
 func (r *Router) SchemasSuffix(suffix string) {
-	r.specSuffix = suffix
+	r.schemasSuffix = suffix
 }
 
 // SpecSuffix sets the final path suffix for where the OpenAPI spec is hosted.
