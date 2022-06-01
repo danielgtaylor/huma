@@ -49,10 +49,13 @@ type Router struct {
 
 	autoConfig *AutoConfig
 
-	// Documentation handler function
-	docsPrefix   string
-	docsHandler  http.Handler
-	docsAreSetup bool
+	// Documentation, OpenAPI spec, and schemas routing handlers
+	docsPrefix    string
+	docsSuffix    string
+	schemasSuffix string
+	specSuffix    string
+	docsHandler   http.Handler
+	docsAreSetup  bool
 
 	// Tracks the currently running server for graceful shutdown.
 	server     *http.Server
@@ -215,15 +218,46 @@ func (r *Router) Middleware(middlewares ...func(next http.Handler) http.Handler)
 	r.mux.Use(middlewares...)
 }
 
-// OpenAPIPath returns the server path to the OpenAPI JSON.
-func (r *Router) OpenAPIPath() string {
-	return r.docsPrefix + "/openapi.json"
+// DocsPath returns the server path to the OpenAPI docs.
+func (r *Router) DocsPath() string {
+	return fmt.Sprintf("%s/%s", r.docsPrefix, r.docsSuffix)
 }
 
-// DocsPrefix sets the path prefix for where the OpenAPI JSON and documentation
-// are hosted.
+// SchemasPath returns the server path to the OpenAPI Schemas.
+func (r *Router) SchemasPath() string {
+	return fmt.Sprintf("%s/%s", r.docsPrefix, r.schemasSuffix)
+}
+
+// OpenAPIPath returns the server path to the OpenAPI JSON.
+func (r *Router) OpenAPIPath() string {
+	return fmt.Sprintf("%s/%s.json", r.docsPrefix, r.specSuffix)
+}
+
+// DocsPrefix sets the path prefix for where the OpenAPI JSON, schemas,
+// and documentation are hosted.
 func (r *Router) DocsPrefix(path string) {
 	r.docsPrefix = path
+}
+
+// DocsSuffix sets the final path suffix for where the OpenAPI documentation
+// is hosted. When not specified, the default value of `docs` is appended to the
+// DocsPrefix.
+func (r *Router) DocsSuffix(suffix string) {
+	r.docsSuffix = suffix
+}
+
+// SchemasSuffix sets the final path suffix for where the OpenAPI schemas
+// are hosted. When not specified, the default value of `schemas` is appended
+// to the DocsPrefix.
+func (r *Router) SchemasSuffix(suffix string) {
+	r.specSuffix = suffix
+}
+
+// SpecSuffix sets the final path suffix for where the OpenAPI spec is hosted.
+// When not specified, the default value of `openapi` is appended to the
+// DocsPrefix.
+func (r *Router) SpecSuffix(suffix string) {
+	r.specSuffix = suffix
 }
 
 // DocsHandler sets the http.Handler to render documentation. It defaults to
@@ -281,8 +315,8 @@ func (r *Router) setupDocs() {
 		})
 	}
 
-	if !r.mux.Match(chi.NewRouteContext(), http.MethodGet, r.docsPrefix+"/schemas/{schema-id}.json") {
-		r.mux.Get(r.docsPrefix+"/schemas/{schema-id}.json", func(w http.ResponseWriter, req *http.Request) {
+	if !r.mux.Match(chi.NewRouteContext(), http.MethodGet, r.SchemasPath()+"/{schema-id}.json") {
+		r.mux.Get(r.SchemasPath()+"/{schema-id}.json", func(w http.ResponseWriter, req *http.Request) {
 			id := chi.URLParam(req, "schema-id")
 			schema := schemas[id]
 			if schema == nil {
@@ -295,8 +329,8 @@ func (r *Router) setupDocs() {
 		})
 	}
 
-	if !r.mux.Match(chi.NewRouteContext(), http.MethodGet, r.docsPrefix+"/docs") {
-		r.mux.Get(r.docsPrefix+"/docs", r.docsHandler.ServeHTTP)
+	if !r.mux.Match(chi.NewRouteContext(), http.MethodGet, r.DocsPath()) {
+		r.mux.Get(r.DocsPath(), r.docsHandler.ServeHTTP)
 	}
 
 	r.docsAreSetup = true
@@ -411,6 +445,12 @@ func (r *Router) DisableSchemaProperty() {
 	r.disableSchemaProperty = true
 }
 
+const (
+	DefaultDocsSuffix    = "docs"
+	DefaultSchemasSuffix = "schemas"
+	DefaultSpecSuffix    = "openapi"
+)
+
 // New creates a new Huma router to which you can attach resources,
 // operations, middleware, etc.
 func New(docs, version string) *Router {
@@ -427,6 +467,9 @@ func New(docs, version string) *Router {
 		security:                 []map[string][]string{},
 		defaultBodyReadTimeout:   15 * time.Second,
 		defaultServerIdleTimeout: 15 * time.Second,
+		docsSuffix:               DefaultDocsSuffix,
+		schemasSuffix:            DefaultSchemasSuffix,
+		specSuffix:               DefaultSpecSuffix,
 	}
 
 	r.docsHandler = RapiDocHandler(r)
@@ -456,7 +499,7 @@ func New(docs, version string) *Router {
 				if link != "" {
 					link += ", "
 				}
-				link += `<` + r.OpenAPIPath() + `>; rel="service-desc", <` + r.docsPrefix + `/docs>; rel="service-doc"`
+				link += `<` + r.OpenAPIPath() + `>; rel="service-desc", <` + r.DocsPath() + `>; rel="service-doc"`
 				w.Header().Set("link", link)
 			}
 		})
