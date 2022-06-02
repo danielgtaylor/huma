@@ -81,7 +81,9 @@ type hcontext struct {
 	errorCode             int
 	op                    *Operation
 	closed                bool
-	docsPrefix            string
+	docsPath              string
+	schemasPath           string
+	specPath              string
 	urlPrefix             string
 	disableSchemaProperty bool
 }
@@ -310,7 +312,7 @@ func (c *hcontext) writeModel(ct string, status int, model interface{}) {
 		if link != "" {
 			link += ", "
 		}
-		link += "<" + c.docsPrefix + "/schemas/" + id + ".json>; rel=\"describedby\""
+		link += "<" + c.schemasPath + "/" + id + ".json>; rel=\"describedby\""
 		c.Header().Set("Link", link)
 
 		if modelType.Kind() == reflect.Ptr {
@@ -320,7 +322,7 @@ func (c *hcontext) writeModel(ct string, status int, model interface{}) {
 			tmp := map[string]interface{}{}
 			shallowStructToMap(reflect.ValueOf(model), tmp)
 			if tmp["$schema"] == nil {
-				tmp["$schema"] = c.URLPrefix() + c.docsPrefix + "/schemas/" + id + ".json"
+				tmp["$schema"] = c.URLPrefix() + c.schemasPath + "/" + id + ".json"
 			}
 			model = tmp
 		}
