@@ -115,7 +115,13 @@ See the examples directory for more complete examples.
 ```sh
 # after: go mod init ...
 go get -u github.com/danielgtaylor/huma@latest
-# now try: import "github.com/danielgtaylor/huma"
+
+# and to taste:
+go get -u github.com/danielgtaylor/huma/cli
+go get -u github.com/danielgtaylor/huma/humatest
+go get -u github.com/danielgtaylor/huma/middleware
+go get -u github.com/danielgtaylor/huma/responses
+# for example
 ```
 
 # Documentation
