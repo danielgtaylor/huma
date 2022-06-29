@@ -2,6 +2,13 @@
 
 [![HUMA Powered](https://img.shields.io/badge/Powered%20By-HUMA-f40273)](https://huma.rocks/) [![CI](https://github.com/danielgtaylor/huma/workflows/CI/badge.svg?branch=master)](https://github.com/danielgtaylor/huma/actions?query=workflow%3ACI+branch%3Amaster++) [![codecov](https://codecov.io/gh/danielgtaylor/huma/branch/master/graph/badge.svg)](https://codecov.io/gh/danielgtaylor/huma) [![Docs](https://godoc.org/github.com/danielgtaylor/huma?status.svg)](https://pkg.go.dev/github.com/danielgtaylor/huma?tab=doc) [![Go Report Card](https://goreportcard.com/badge/github.com/danielgtaylor/huma)](https://goreportcard.com/report/github.com/danielgtaylor/huma)
 
+- [What is huma?](#intro)
+- [Example](#example)
+- [Install](#install)
+- [Documentation](#documentation)
+- [Design](#design)
+
+<a name="intro"></a>
 A modern, simple, fast & opinionated REST API framework for Go with batteries included. Pronounced IPA: [/'hjuːmɑ/](https://en.wiktionary.org/wiki/Wiktionary:International_Phonetic_Alphabet). The goals of this project are to provide:
 
 - A modern REST API backend framework for Go developers
@@ -102,6 +109,20 @@ See the examples directory for more complete examples.
 - [Notes](./examples/notes/notes.go) (note-taking API)
 - [Timeout](./examples/timeout/timeout.go) (show third-party request timing out)
 - [Test](./examples/test/service.go) (how to write a test)
+
+# Install
+
+```sh
+# after: go mod init ...
+go get -u github.com/danielgtaylor/huma@latest
+
+# and to taste:
+go get -u github.com/danielgtaylor/huma/cli
+go get -u github.com/danielgtaylor/huma/humatest
+go get -u github.com/danielgtaylor/huma/middleware
+go get -u github.com/danielgtaylor/huma/responses
+# for example
+```
 
 # Documentation
 
