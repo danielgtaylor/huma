@@ -139,8 +139,37 @@ func (r *Router) ServerLink(description, uri string) {
 // GatewayBasicAuth documents that the API gateway handles auth using HTTP Basic.
 func (r *Router) GatewayBasicAuth(name string) {
 	r.securitySchemes[name] = oaSecurityScheme{
-		Type:   "http",
+		Type:   SecuritySchemeHTTP,
 		Scheme: "basic",
+	}
+}
+
+// GatewayBearerFormat documents that the API gateway handles auth using HTTP Bearer.
+func (r *Router) GatewayBearerFormat(name string, description string, format string) {
+	r.securitySchemes[name] = oaSecurityScheme{
+		Type:         SecuritySchemeHTTP,
+		Description:  description,
+		Scheme:       "bearer",
+		BearerFormat: format,
+	}
+}
+
+// GatewayAPIKey documents that the API gateway handles auth using API Key.
+func (r *Router) GatewayAPIKey(name string, description string, keyName string, in APIKeyLocation) {
+	r.securitySchemes[name] = oaSecurityScheme{
+		Type:        SecuritySchemeApiKey,
+		Description: description,
+		Name:        keyName,
+		In:          in,
+	}
+}
+
+// GatewayOpenIDConnect documents that the API gateway handles auth using openIdConnect.
+func (r *Router) GatewayOpenIDConnect(name string, description string, url string) {
+	r.securitySchemes[name] = oaSecurityScheme{
+		Type:             SecuritySchemeOpenIdConnect,
+		Description:      description,
+		OpenIdConnectUrl: url,
 	}
 }
 
@@ -149,7 +178,7 @@ func (r *Router) GatewayBasicAuth(name string) {
 func (r *Router) GatewayClientCredentials(name, tokenURL string, scopes map[string]string) {
 	r.securitySchemes[name] = oaSecurityScheme{
 		Type: "oauth2",
-		Flows: oaFlows{
+		Flows: &oaFlows{
 			ClientCredentials: &oaFlow{
 				TokenURL: tokenURL,
 				Scopes:   scopes,
@@ -163,7 +192,7 @@ func (r *Router) GatewayClientCredentials(name, tokenURL string, scopes map[stri
 func (r *Router) GatewayAuthCode(name, authorizeURL, tokenURL string, scopes map[string]string) {
 	r.securitySchemes[name] = oaSecurityScheme{
 		Type: "oauth2",
-		Flows: oaFlows{
+		Flows: &oaFlows{
 			AuthorizationCode: &oaFlow{
 				AuthorizationURL: authorizeURL,
 				TokenURL:         tokenURL,

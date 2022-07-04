@@ -304,6 +304,9 @@ func TestRouterSecurity(t *testing.T) {
 	app.GatewayAuthCode("default", "https://example.com/authorize", "https://example.com/token", nil)
 	app.GatewayClientCredentials("m2m", "https://example.com/token", nil)
 	app.GatewayBasicAuth("basic")
+	app.GatewayBearerFormat("bearer", "JWT bearer description", "JWT")
+	app.GatewayAPIKey("apikey", "api key", "key", keyInHeader)
+	app.GatewayOpenIDConnect("openid", "Open ID", "https://example.com/OpenID")
 
 	// Every call must be authenticated using the default auth mechanism
 	// registered above.
@@ -345,7 +348,23 @@ func TestRouterSecurity(t *testing.T) {
 		"basic": map[string]interface{}{
 			"type":   "http",
 			"scheme": "basic",
-			"flows":  map[string]interface{}{},
+		},
+		"bearer": map[string]interface{}{
+			"type":         "http",
+			"scheme":       "bearer",
+			"description":  "JWT bearer description",
+			"bearerFormat": "JWT",
+		},
+		"apikey": map[string]interface{}{
+			"type":        "apiKey",
+			"name":        "key",
+			"in":          "header",
+			"description": "api key",
+		},
+		"openid": map[string]interface{}{
+			"type":             "openIdConnect",
+			"description":      "Open ID",
+			"openIdConnectUrl": "https://example.com/OpenID",
 		},
 	})
 }

@@ -157,8 +157,32 @@ type oaFlows struct {
 	AuthorizationCode *oaFlow `json:"authorizationCode,omitempty"`
 }
 
+type SecurityScheme string
+
+const (
+	SecuritySchemeApiKey        SecurityScheme = "apiKey"
+	SecuritySchemeHTTP          SecurityScheme = "http"
+	SecuritySchemeOauth2        SecurityScheme = "oauth2"
+	SecuritySchemeOpenIdConnect SecurityScheme = "openIdConnect"
+)
+
+// paramLocation describes where in the HTTP request the parameter comes from.
+type APIKeyLocation string
+
+// Parameter locations supported by OpenAPI 3
+const (
+	keyInQuery  APIKeyLocation = "query"
+	keyInHeader APIKeyLocation = "header"
+	keyInCookie APIKeyLocation = "cookie"
+)
+
 type oaSecurityScheme struct {
-	Type   string  `json:"type"`
-	Scheme string  `json:"scheme,omitempty"`
-	Flows  oaFlows `json:"flows,omitempty"`
+	Type             SecurityScheme `json:"type"`
+	Description      string         `json:"description,omitempty"`
+	Name             string         `json:"name,omitempty"`
+	In               APIKeyLocation `json:"in,omitempty"`
+	Scheme           string         `json:"scheme,omitempty"`
+	BearerFormat     string         `json:"bearerFormat,omitempty"`
+	Flows            *oaFlows       `json:"flows,omitempty"`
+	OpenIdConnectUrl string         `json:"openIdConnectUrl,omitempty"`
 }
