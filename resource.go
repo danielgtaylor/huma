@@ -122,3 +122,8 @@ func (r *Resource) Tags(names ...string) {
 func (r *Resource) Hidden() {
 	r.hidden = true
 }
+
+// GetMux gets the Chi router for this resource.
+func (r *Resource) GetMux() chi.Router {
+	return r.mux
+}
