@@ -40,6 +40,10 @@ type GraphQLConfig struct {
 	// `GraphQLDefaultPaginator` is used.
 	Paginator GraphQLPaginator
 
+	// IgnorePrefixes defines path prefixes which should be ignored by the
+	// GraphQL model generator.
+	IgnorePrefixes []string
+
 	// known keeps track of known structs since they can only be defined once
 	// per GraphQL endpoint. If used by multiple HTTP operations, they must
 	// reference the same struct converted to GraphQL schema.
@@ -374,7 +378,13 @@ func (r *Router) EnableGraphQL(config *GraphQLConfig) {
 	config.costMap = gqlcost.CostMap{}
 	config.paginatorType = reflect.TypeOf(config.Paginator).Elem()
 
+outer:
 	for _, resource := range resources {
+		for _, prefix := range config.IgnorePrefixes {
+			if strings.HasPrefix(resource.path, prefix) {
+				continue outer
+			}
+		}
 		r.handleResource(config, "Query", fields, resource, map[string]bool{})
 	}
 
