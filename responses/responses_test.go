@@ -37,6 +37,7 @@ var funcs = struct {
 		RequestEntityTooLarge,
 		UnprocessableEntity,
 		PreconditionRequired,
+		ClientClosedRequest,
 		InternalServerError,
 		NotImplemented,
 		BadGateway,
@@ -76,6 +77,8 @@ func TestResponses(t *testing.T) {
 		http.StatusUnsupportedMediaType,
 		http.StatusUnprocessableEntity,
 		http.StatusPreconditionRequired,
+		// 499 not yet supported by net/http lib
+		499,
 		http.StatusInternalServerError,
 		http.StatusNotImplemented,
 		http.StatusBadGateway,
