@@ -46,7 +46,7 @@ var funcs = struct {
 	},
 }
 
-func TestResponses(t *testing.T) {
+func TestNesResponses(t *testing.T) {
 	var status int
 	response = func(s int) huma.Response {
 		status = s
@@ -85,7 +85,11 @@ func TestResponses(t *testing.T) {
 		http.StatusServiceUnavailable,
 		http.StatusGatewayTimeout,
 	} {
-		table[strings.Replace(http.StatusText(s), " ", "", -1)] = s
+		if s == 499 {
+			table["ClientClosedRequest"] = s
+		} else {
+			table[strings.Replace(http.StatusText(s), " ", "", -1)] = s
+		}
 	}
 
 	for _, f := range funcs.Responses {
