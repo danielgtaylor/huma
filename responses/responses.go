@@ -128,6 +128,13 @@ func PreconditionRequired() huma.Response {
 	return errorResponse(http.StatusPreconditionRequired)
 }
 
+// ClientClosedRequest HTTP 499 response with a structured error body (e.g. JSON).
+// 499 is not currently registered with IANA and is unavailable in the net/http lib.
+// See: https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml
+func ClientClosedRequest() huma.Response {
+	return errorResponse(499)
+}
+
 // InternalServerError HTTP 500 response with a structured error body (e.g. JSON).
 func InternalServerError() huma.Response {
 	return errorResponse(http.StatusInternalServerError)

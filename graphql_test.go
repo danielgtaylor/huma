@@ -194,8 +194,15 @@ func TestGraphQL(t *testing.T) {
 		ctx.WriteModel(http.StatusOK, categories[input.CategoryID].products[input.ProductID].stores[input.StoreID])
 	})
 
+	app.Resource("/ignored").Get("get-ignored", "doc",
+		NewResponse(http.StatusOK, "").Model(struct{ ID string }{}),
+	).Run(func(ctx Context) {
+		ctx.WriteHeader(http.StatusOK)
+	})
+
 	app.EnableGraphQL(&GraphQLConfig{
 		ComplexityLimit: 250,
+		IgnorePrefixes:  []string{"/ignored"},
 	})
 
 	query := strings.Replace(strings.Replace(`{
@@ -303,5 +310,23 @@ data:
 											- storesItem:
 													id: target
 													url: https://www.target.com/
+`, "\t", "  ", -1), w.Body.String())
+
+	// Confirm expected top-level fields in the query API.
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodGet, "/graphql?query={__schema{queryType{fields{name}}}}", nil)
+	app.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.YAMLEq(t, strings.Replace(`data:
+	__schema:
+		queryType:
+			fields:
+			- name: categories
+			- name: categoriesItem
+			- name: products
+			- name: productsItem
+			- name: stores
+			- name: storesItem
 `, "\t", "  ", -1), w.Body.String())
 }
