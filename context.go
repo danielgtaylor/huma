@@ -28,6 +28,16 @@ var allowedHeaders = map[string]bool{
 	"vary":                         true,
 }
 
+// AddAllowedHeader adds a header to the list of allowed headers for the response.
+// This is useful for common headers that might be sent due to middleware
+// or other frameworks
+func AddAllowedHeaders(name ...string) {
+	for _, h := range name {
+		allowedHeaders[strings.ToLower(h)] = true
+	}
+}
+
+
 // ContextFromRequest returns a Huma context for a request, useful for
 // accessing high-level convenience functions from e.g. middleware.
 func ContextFromRequest(w http.ResponseWriter, r *http.Request) Context {
