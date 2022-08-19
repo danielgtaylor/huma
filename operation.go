@@ -99,11 +99,11 @@ func (o *Operation) toOpenAPI(components *oaComponents) *gabs.Container {
 		}
 		ref := ""
 		if o.requestSchemaOverride {
-			ref = components.AddExistingSchema(o.requestSchema, o.id+"-request")
+			ref = components.AddExistingSchema(o.requestSchema, o.id+"-request", !o.resource.router.disableSchemaProperty)
 		} else {
 			// Regenerate with ModeAll so the same model can be used for both the
 			// input and output when possible.
-			ref = components.AddSchema(o.requestModel, schema.ModeAll, o.id+"-request")
+			ref = components.AddSchema(o.requestModel, schema.ModeAll, o.id+"-request", !o.resource.router.disableSchemaProperty)
 		}
 		doc.Set(ref, "requestBody", "content", ct, "schema", "$ref")
 	}
@@ -136,7 +136,7 @@ func (o *Operation) toOpenAPI(components *oaComponents) *gabs.Container {
 		}
 
 		if resp.model != nil {
-			ref := components.AddSchema(resp.model, schema.ModeAll, o.id+"-response")
+			ref := components.AddSchema(resp.model, schema.ModeAll, o.id+"-response", !o.resource.router.disableSchemaProperty)
 			o.responses[i].modelRef = ref
 			doc.Set(ref, "responses", status, "content", resp.contentType, "schema", "$ref")
 		}
