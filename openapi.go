@@ -54,8 +54,8 @@ type oaComponents struct {
 }
 
 // AddSchema creates and adds a new schema from a type.
-func (c *oaComponents) AddSchema(t reflect.Type, mode schema.Mode, hint string) string {
-	return c.addSchema(t, mode, hint, true)
+func (c *oaComponents) AddSchema(t reflect.Type, mode schema.Mode, hint string, generateSchemaField bool) string {
+	return c.addSchema(t, mode, hint, generateSchemaField)
 }
 
 func (c *oaComponents) addSchema(t reflect.Type, mode schema.Mode, hint string, generateSchemaField bool) string {
@@ -103,9 +103,9 @@ func (c *oaComponents) addSchema(t reflect.Type, mode schema.Mode, hint string, 
 	return c.addExistingSchema(s, name, generateSchemaField)
 }
 
-// AddExistingSchema adds an existing schema instance under the given name.
-func (c *oaComponents) AddExistingSchema(s *schema.Schema, name string) string {
-	return c.addExistingSchema(s, name, true)
+ //AddExistingSchema adds an existing schema instance under the given name.
+func (c *oaComponents) AddExistingSchema(s *schema.Schema, name string, generateSchemaField bool) string {
+	return c.addExistingSchema(s, name, generateSchemaField)
 }
 
 func (c *oaComponents) addExistingSchema(s *schema.Schema, name string, generateSchemaField bool) string {

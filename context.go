@@ -91,12 +91,13 @@ type hcontext struct {
 func (c *hcontext) WithValue(key, value interface{}) Context {
 	r := c.r.WithContext(context.WithValue(c.r.Context(), key, value))
 	return &hcontext{
-		Context:        context.WithValue(c.Context, key, value),
-		ResponseWriter: c.ResponseWriter,
-		r:              r,
-		errors:         append([]error{}, c.errors...),
-		op:             c.op,
-		closed:         c.closed,
+		Context:               context.WithValue(c.Context, key, value),
+		ResponseWriter:        c.ResponseWriter,
+		r:                     r,
+		errors:                append([]error{}, c.errors...),
+		op:                    c.op,
+		closed:                c.closed,
+		disableSchemaProperty: c.disableSchemaProperty,
 	}
 }
 
