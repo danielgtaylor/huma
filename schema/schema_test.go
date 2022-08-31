@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Example() {
@@ -620,4 +621,12 @@ func TestExampleBadJSON(t *testing.T) {
 
 	_, err := Generate(reflect.TypeOf(Foo{}))
 	assert.Error(t, err)
+}
+
+func TestAddSchemaField(t *testing.T) {
+	dummy := struct{ Name string }{Name: "test"}
+	s, err := Generate(reflect.TypeOf(dummy))
+	require.NoError(t, err)
+	s.AddSchemaField()
+	assert.NotNil(t, s.Properties["$schema"])
 }

@@ -103,23 +103,14 @@ func (c *oaComponents) addSchema(t reflect.Type, mode schema.Mode, hint string, 
 	return c.addExistingSchema(s, name, generateSchemaField)
 }
 
- //AddExistingSchema adds an existing schema instance under the given name.
+// AddExistingSchema adds an existing schema instance under the given name.
 func (c *oaComponents) AddExistingSchema(s *schema.Schema, name string, generateSchemaField bool) string {
 	return c.addExistingSchema(s, name, generateSchemaField)
 }
 
 func (c *oaComponents) addExistingSchema(s *schema.Schema, name string, generateSchemaField bool) string {
-	if generateSchemaField && s.Type == schema.TypeObject && s.Properties != nil {
-		if s.Properties["$schema"] == nil {
-			// Some editors allow you to place a $schema key which gives you rich
-			// validation and code completion support. Let's enable that by allowing
-			// a field here if it doesn't already exist in the model.
-			s.Properties["$schema"] = &schema.Schema{
-				Type:        schema.TypeString,
-				Format:      "uri",
-				Description: "An optional URL to a JSON Schema document describing this resource",
-			}
-		}
+	if generateSchemaField {
+		s.AddSchemaField()
 	}
 
 	orig := name

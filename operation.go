@@ -240,6 +240,9 @@ func (o *Operation) Run(handler interface{}) {
 
 			if o.requestSchema == nil {
 				o.requestSchema, err = schema.GenerateWithMode(body.Type, schema.ModeWrite, nil)
+				if o.resource != nil && o.resource.router != nil && !o.resource.router.disableSchemaProperty {
+					o.requestSchema.AddSchemaField()
+				}
 				if err != nil {
 					panic(fmt.Errorf("unable to generate JSON schema: %w", err))
 				}
