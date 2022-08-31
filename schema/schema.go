@@ -171,6 +171,24 @@ func (s *Schema) RemoveProperty(name string) {
 	}
 }
 
+// AddSchemaField adds a $schema field if none is present, allowing the
+// resource to be self-descriptive and enabling editor features like
+// code completion / suggestions as you type & inline linting / validation.
+func (s *Schema) AddSchemaField() {
+	if s.Type == TypeObject && s.Properties != nil {
+		if s.Properties["$schema"] == nil {
+			// Some editors allow you to place a $schema key which gives you rich
+			// validation and code completion support. Let's enable that by allowing
+			// a field here if it doesn't already exist in the model.
+			s.Properties["$schema"] = &Schema{
+				Type:        TypeString,
+				Format:      "uri",
+				Description: "An optional URL to a JSON Schema document describing this resource",
+			}
+		}
+	}
+}
+
 // Generate creates a JSON schema for a Go type. Struct field tags
 // can be used to provide additional metadata such as descriptions and
 // validation.

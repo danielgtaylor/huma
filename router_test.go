@@ -497,3 +497,52 @@ func TestDefaultResponse(t *testing.T) {
 	// This should not panic and should return the 200 OK
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 }
+
+func TestRoundTrip(t *testing.T) {
+	app := newTestRouter()
+
+	// This should not crash.
+	resource := app.Resource("/")
+
+	type Thing struct {
+		Name string `json:"name"`
+	}
+
+	resource.Get("get-root", "docs", NewResponse(0, "").Model(Thing{})).Run(func(ctx Context) {
+		ctx.WriteModel(http.StatusOK, Thing{Name: "Test"})
+	})
+
+	resource.Put("put-root", "", NewResponse(200, "")).Run(func(ctx Context, input struct {
+		Body Thing
+	}) {
+		// If we get here then all the validation passed okay!
+		assert.Equal(t, "Test", input.Body.Name)
+	})
+
+	w1 := httptest.NewRecorder()
+	req1, _ := http.NewRequest(http.MethodGet, "/openapi.json", nil)
+	app.ServeHTTP(w1, req1)
+	t.Log(w1.Body.String())
+
+	w1 = httptest.NewRecorder()
+	req1, _ = http.NewRequest(http.MethodGet, "/schemas/Thing.json", nil)
+	app.ServeHTTP(w1, req1)
+	t.Log(w1.Body.String())
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/", nil)
+	app.ServeHTTP(w, req)
+
+	// This should not panic and should return the 200 OK
+	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
+
+	thing := w.Body
+
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodPut, "/", thing)
+	app.ServeHTTP(w, req)
+
+	t.Log(w.Body.String())
+
+	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
+}
