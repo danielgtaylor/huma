@@ -43,6 +43,7 @@ Features include:
 - Annotated Go types for input and output models
   - Generates JSON Schema from Go types
   - Automatic input model validation & error handling
+- Customizable round-trip behavior for read-only fields
 - Documentation generation using [RapiDoc](https://mrin9.github.io/RapiDoc/), [ReDoc](https://github.com/Redocly/redoc), or [SwaggerUI](https://swagger.io/tools/swagger-ui/)
 - CLI built-in, configured via arguments or environment variables
   - Set via e.g. `-p 8000`, `--port=8000`, or `SERVICE_PORT=8000`
@@ -660,6 +661,16 @@ Parameters have some additional validation tags:
 | Tag        | Description                    | Example           |
 | ---------- | ------------------------------ | ----------------- |
 | `internal` | Internal-only (not documented) | `internal:"true"` |
+
+### Round Trip Behavior
+
+Since validation allows for read-only fields there is an interesting case of round trip complications when you `GET` a resource and then try to `PUT` or `POST` with those read-only fields intact. Huma's behavior is configurable:
+
+1. `huma.RoundTripRemove` (default): read-only fields are allowed but removed from the request by being set to their zero value.
+2. `huma.RoundTripReject`: read-only fields are not allowed to be set to anything but their zero value. Round trips will generally fail if read-only fields were present in the response.
+3. `huma.RoundTripIgnore`: read-only fields are allowed and completely ignored by Huma, allowing the implementer to provide additional logic (e.g. allow if and only if they are zero _or_ the same as the value currently on the server).
+
+> :whale: Using `RoundTripIgnore` is faster than removal (no additional processing of request bodies) but has implications for writing/overwriting read-only fields into your data store, so be careful with this option.
 
 ## Middleware
 

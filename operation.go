@@ -239,7 +239,11 @@ func (o *Operation) Run(handler interface{}) {
 			)
 
 			if o.requestSchema == nil {
-				o.requestSchema, err = schema.GenerateWithMode(body.Type, schema.ModeWrite, nil)
+				mode := schema.ModeWrite
+				if o.resource != nil && o.resource.router != nil && o.resource.router.roundTripBehavior != RoundTripReject {
+					mode = schema.ModeAll
+				}
+				o.requestSchema, err = schema.GenerateWithMode(body.Type, mode, nil)
 				if o.resource != nil && o.resource.router != nil && !o.resource.router.disableSchemaProperty {
 					o.requestSchema.AddSchemaField()
 				}
@@ -314,7 +318,12 @@ func (o *Operation) Run(handler interface{}) {
 			}
 		}
 
-		setFields(ctx, ctx.r, input, inputType)
+		removeReadOnly := false
+		if o.resource != nil && o.resource.router != nil && o.resource.router.roundTripBehavior == RoundTripRemove {
+			removeReadOnly = true
+		}
+
+		setFields(ctx, ctx.r, input, inputType, removeReadOnly)
 		if !ctx.HasError() {
 			// No errors yet, so any errors that come after should be treated as a
 			// semantic rather than structural error.

@@ -25,6 +25,23 @@ var connContextKey contextKey = "huma-request-conn"
 // has finished.
 var opIDContextKey contextKey = "huma-operation-id"
 
+// RoundTripBehavior defines how the server handles a request which has
+// fields set from a response that were read-only, for example the created
+// date/time for the resource. These fields are not writeable, but you can
+// choose to reject, or allow them.
+type RoundTripBehavior int
+
+const (
+	// RoundTripRemove will cause request validation to succeed and any read-only fields will be set to their zero value before calling the operation's handler function. This is the default behavior.
+	RoundTripRemove RoundTripBehavior = 0
+
+	// RoundTripReject will cause request validation to fail when read-only fields are present.
+	RoundTripReject RoundTripBehavior = 1
+
+	// RoundTripIgnore will cause request validation to succeed and any read-only fields will be ignored. This enables service implementers to use custom logic, such as rejecting read-only fields if they do not match the value stored on the server.
+	RoundTripIgnore RoundTripBehavior = 2
+)
+
 // GetConn gets the underlying `net.Conn` from a context.
 func GetConn(ctx context.Context) net.Conn {
 	conn := ctx.Value(connContextKey)
@@ -69,8 +86,13 @@ type Router struct {
 	defaultServerIdleTimeout time.Duration
 
 	// Information for creating non-relative links & schema refs.
-	urlPrefix             string
+	urlPrefix string
+
+	// Disable the auto-generated `$schema` property in requests/responses.
 	disableSchemaProperty bool
+
+	// Specify whether resources with read-only fields can be round-tripped (i.e. GET then PUT, or POSTed with a read-only `created` field).
+	roundTripBehavior RoundTripBehavior
 }
 
 // OpenAPI returns an OpenAPI 3 representation of the API, which can be
@@ -472,6 +494,11 @@ func (r *Router) URLPrefix(value string) {
 // returned object response models.
 func (r *Router) DisableSchemaProperty() {
 	r.disableSchemaProperty = true
+}
+
+// RoundTripBehavior controls how the server handles resources which
+func (r *Router) RoundTripBehavior(behavior RoundTripBehavior) {
+	r.roundTripBehavior = behavior
 }
 
 const (

@@ -170,7 +170,7 @@ func parseParamValue(ctx Context, location string, name string, typ reflect.Type
 	return pv
 }
 
-func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.Type) {
+func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.Type, removeReadOnly bool) {
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
@@ -189,7 +189,7 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 
 		if f.Anonymous {
 			// Embedded struct
-			setFields(ctx, req, inField, f.Type)
+			setFields(ctx, req, inField, f.Type, removeReadOnly)
 			continue
 		}
 
@@ -250,6 +250,10 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 					Location: locationBody,
 					Value:    string(data),
 				})
+			}
+
+			if removeReadOnly {
+				removeReadOnlyFields(inField)
 			}
 
 			// If requested, also provide access to the raw body bytes.
@@ -346,6 +350,31 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 			}
 
 			inField.Set(reflect.ValueOf(parsed))
+		}
+	}
+}
+
+func removeReadOnlyFields(v reflect.Value) {
+	switch v.Kind() {
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			f := v.Field(i)
+			ro := v.Type().Field(i).Tag.Get("readOnly")
+			if ro == "true" {
+				// Set the field to its zero value!
+				f.Set(reflect.Zero(f.Type()))
+			} else {
+				removeReadOnlyFields(f)
+			}
+		}
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < v.Len(); i++ {
+			removeReadOnlyFields(v.Index(i))
+		}
+	case reflect.Map:
+		iter := v.MapRange()
+		for iter.Next() {
+			removeReadOnlyFields(iter.Value())
 		}
 	}
 }

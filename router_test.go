@@ -501,13 +501,11 @@ func TestDefaultResponse(t *testing.T) {
 func TestRoundTrip(t *testing.T) {
 	app := newTestRouter()
 
-	// This should not crash.
-	resource := app.Resource("/")
-
 	type Thing struct {
 		Name string `json:"name"`
 	}
 
+	resource := app.Resource("/")
 	resource.Get("get-root", "docs", NewResponse(0, "").Model(Thing{})).Run(func(ctx Context) {
 		ctx.WriteModel(http.StatusOK, Thing{Name: "Test"})
 	})
@@ -518,16 +516,6 @@ func TestRoundTrip(t *testing.T) {
 		// If we get here then all the validation passed okay!
 		assert.Equal(t, "Test", input.Body.Name)
 	})
-
-	w1 := httptest.NewRecorder()
-	req1, _ := http.NewRequest(http.MethodGet, "/openapi.json", nil)
-	app.ServeHTTP(w1, req1)
-	t.Log(w1.Body.String())
-
-	w1 = httptest.NewRecorder()
-	req1, _ = http.NewRequest(http.MethodGet, "/schemas/Thing.json", nil)
-	app.ServeHTTP(w1, req1)
-	t.Log(w1.Body.String())
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/", nil)
@@ -542,7 +530,76 @@ func TestRoundTrip(t *testing.T) {
 	req, _ = http.NewRequest(http.MethodPut, "/", thing)
 	app.ServeHTTP(w, req)
 
-	t.Log(w.Body.String())
-
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
+}
+
+func TestRoundTripReadOnlyReject(t *testing.T) {
+	type Item struct {
+		Value string `json:"value" readOnly:"true"`
+	}
+
+	type Thing struct {
+		Name    string            `json:"name"`
+		Created time.Time         `json:"created" readOnly:"true"`
+		Nested  map[string][]Item `json:"nested"`
+	}
+
+	created := time.Date(2022, 01, 01, 00, 00, 00, 0, time.UTC)
+
+	tests := []struct {
+		Name     string
+		Behavior RoundTripBehavior
+		Response int
+		Handler  func(thing Thing)
+	}{
+		{"Reject", RoundTripReject, http.StatusUnprocessableEntity, func(thing Thing) { t.Fail() }},
+		{"Ignore", RoundTripIgnore, http.StatusOK, func(thing Thing) {
+			assert.Equal(t, created, thing.Created)
+			assert.Equal(t, "value", thing.Nested["test"][0].Value)
+		}},
+		{"Remove", RoundTripRemove, http.StatusOK, func(thing Thing) {
+			assert.True(t, thing.Created.IsZero())
+			assert.Equal(t, "", thing.Nested["test"][0].Value)
+		}},
+	}
+
+	for _, example := range tests {
+		t.Run(example.Name, func(t *testing.T) {
+			app := newTestRouter()
+			app.RoundTripBehavior(example.Behavior)
+
+			resource := app.Resource("/")
+			resource.Get("get-root", "docs", NewResponse(0, "").Model(Thing{})).Run(func(ctx Context) {
+				ctx.WriteModel(http.StatusOK, Thing{
+					Name:    "Test",
+					Created: created,
+					Nested: map[string][]Item{
+						"test": {{Value: "value"}},
+					},
+				})
+			})
+
+			resource.Put("put-root", "", NewResponse(200, "")).Run(func(ctx Context, input struct {
+				Body Thing
+			}) {
+				example.Handler(input.Body)
+			})
+
+			w := httptest.NewRecorder()
+			req, _ := http.NewRequest(http.MethodGet, "/", nil)
+			app.ServeHTTP(w, req)
+
+			// This should not panic and should return the 200 OK
+			assert.Equal(t, http.StatusOK, w.Result().StatusCode)
+
+			thing := w.Body
+			t.Logf("Sending %s", w.Body.String())
+
+			w = httptest.NewRecorder()
+			req, _ = http.NewRequest(http.MethodPut, "/", thing)
+			app.ServeHTTP(w, req)
+
+			assert.Equal(t, example.Response, w.Result().StatusCode, w.Body.String())
+		})
+	}
 }
