@@ -546,3 +546,62 @@ func TestRoundTrip(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
 }
+
+func TestRequestContentTypes(t *testing.T) {
+	app := newTestRouter()
+	app.DisableSchemaProperty()
+	resource := app.Resource("/")
+
+	type ThingV1 struct {
+		First string `json:"first"`
+		Last  string `json:"last"`
+	}
+
+	type ThingV2 struct {
+		Name string `json:"name"`
+	}
+
+	resource.Post("post-root", "docs",
+		NewResponse(http.StatusOK, "").Model(&ThingV2{}),
+	).Run(func(ctx Context, input struct {
+		BodyV2 *ThingV2 `body:"application/thingv2+json"`
+		BodyV1 *ThingV1 `body:"application/thingv1+json"`
+	}) {
+		var thing *ThingV2
+		if input.BodyV2 != nil {
+			thing = input.BodyV2
+		} else if input.BodyV1 != nil {
+			thing = &ThingV2{
+				Name: input.BodyV1.First + " " + input.BodyV1.Last,
+			}
+		}
+		ctx.WriteModel(http.StatusOK, thing)
+	})
+
+	// Version 1 should work
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPost, "/", strings.NewReader(`{"first": "one", "last": "two"}`))
+	req.Header.Set("Content-Type", "application/thingv1+json")
+	app.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.JSONEq(t, `{"name": "one two"}`, w.Body.String())
+
+	// Version 2 (explicit) should work
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name": "one two"}`))
+	req.Header.Set("Content-Type", "application/thingv2+json")
+	app.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.JSONEq(t, `{"name": "one two"}`, w.Body.String())
+
+	// Version 2 (implicit, missing content type) should work by selecting the
+	// first defined body (ThingV2).
+	w = httptest.NewRecorder()
+	req, _ = http.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name": "one two"}`))
+	app.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.JSONEq(t, `{"name": "one two"}`, w.Body.String())
+}

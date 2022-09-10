@@ -7,6 +7,7 @@ require (
 	github.com/andybalholm/brotli v1.0.4
 	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/danielgtaylor/casing v0.0.0-20210126043903-4e55e6373ac3
+	github.com/evanphx/json-patch/v5 v5.6.0
 	github.com/fatih/structs v1.1.0
 	github.com/fxamacker/cbor/v2 v2.4.0
 	github.com/go-chi/chi v4.1.2+incompatible

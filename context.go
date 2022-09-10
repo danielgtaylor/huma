@@ -37,7 +37,6 @@ func AddAllowedHeaders(name ...string) {
 	}
 }
 
-
 // ContextFromRequest returns a Huma context for a request, useful for
 // accessing high-level convenience functions from e.g. middleware.
 func ContextFromRequest(w http.ResponseWriter, r *http.Request) Context {
@@ -309,6 +308,12 @@ func (c *hcontext) writeModel(ct string, status int, model interface{}) {
 
 		if !found {
 			panic(fmt.Errorf("Invalid model %s, expecting %s for %s %s", modelType, strings.Join(names, ", "), c.r.Method, c.r.URL.Path))
+		}
+	} else {
+		// Some automatic responses won't be registered but will have an error model
+		// returned. We should support these as well.
+		if modelType == reflect.TypeOf(&ErrorModel{}) {
+			modelRef = "/" + modelType.Elem().Name()
 		}
 	}
 
