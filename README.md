@@ -40,6 +40,9 @@ Features include:
   - Support for gzip ([RFC 1952](https://tools.ietf.org/html/rfc1952)) & Brotli ([RFC 7932](https://tools.ietf.org/html/rfc7932)) content encoding via the `Accept-Encoding` header.
   - Support for JSON ([RFC 8259](https://tools.ietf.org/html/rfc8259)), YAML, and CBOR ([RFC 7049](https://tools.ietf.org/html/rfc7049)) content types via the `Accept` header.
 - Conditional requests support, e.g. `If-Match` or `If-Unmodified-Since` header utilities.
+- Optional automatic generation of `PATCH` operations that support:
+  - [RFC 7386](https://www.rfc-editor.org/rfc/rfc7386) JSON Merge Patch
+  - [RFC 6902](https://www.rfc-editor.org/rfc/rfc6902) JSON Patch
 - Annotated Go types for input and output models
   - Generates JSON Schema from Go types
   - Automatic input model validation & error handling
@@ -435,6 +438,19 @@ Try a request against the service like:
 $ restish :8888/things/abc123?q=3 -H "Foo: bar" name: Kari
 ```
 
+### Multiple Request Bodies
+
+Request input structs can support multiple body types based on the content type of the request, with an unknown content type defaulting to the first-defined body. This can be used for things like versioned inputs or to support wildly different input types (e.g. JSON Merge Patch vs. JSON Patch). Example:
+
+```go
+type MyInput struct {
+	BodyV2 *MyInputBodyV1 `body:"application/my-type-v2+json"`
+	BodyV1 *MyInputBodyV1 `body:"application/my-type-v1+json"`
+}
+```
+
+It's your responsibility to check which one is non-`nil` in the operation handler. If not using pointers, you'll need to check a known field to determine which was actually sent by the client.
+
 ### Parameter & Body Validation
 
 All supported JSON Schema tags work for parameters and body fields. Validation happens before the request handler is called, and if needed an error response is returned. For example:
@@ -623,6 +639,14 @@ app.Resource("/resource").Put("put-resource", "Put a resource",
 	// ...
 })
 ```
+
+### Automatic PATCH Support
+
+If a `GET` and a `PUT` exist for the same resource, but no `PATCH` exists at server start up, then by default a `PATCH` operation will be generated for you to make editing more convenient for clients. This behavior can be disabled via `app.DisableAutoPatch()`.
+
+If the `GET` returns an `ETag` or `Last-Modified` header, then these will be used to make conditional requests on the `PUT` operation to prevent distributed write conflicts that might otherwise overwrite someone else's changes.
+
+If the `PATCH` request has no `Content-Type` header, or uses `application/json` or a variant thereof, then JSON Merge Patch is assumed.
 
 ## Validation
 

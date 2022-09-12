@@ -170,7 +170,7 @@ func parseParamValue(ctx Context, location string, name string, typ reflect.Type
 	return pv
 }
 
-func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.Type) {
+func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.Type, ct string, reqDef *request) {
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
@@ -189,11 +189,11 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 
 		if f.Anonymous {
 			// Embedded struct
-			setFields(ctx, req, inField, f.Type)
+			setFields(ctx, req, inField, f.Type, ct, reqDef)
 			continue
 		}
 
-		if _, ok := f.Tag.Lookup(locationBody); ok || f.Name == strings.Title(locationBody) {
+		if fct, ok := f.Tag.Lookup(locationBody); (ok && (fct == ct || fct == "true")) || f.Name == strings.Title(locationBody) {
 			// Special case: body field is a reader for streaming
 			if f.Type == readerType {
 				inField.Set(reflect.ValueOf(req.Body))
@@ -237,8 +237,8 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 				continue
 			}
 
-			if ctx.op.requestSchema != nil && ctx.op.requestSchema.HasValidation() {
-				if !validAgainstSchema(ctx, locationBody+".", ctx.op.requestSchema, data) {
+			if reqDef.schema != nil && reqDef.schema.HasValidation() {
+				if !validAgainstSchema(ctx, locationBody+".", reqDef.schema, data) {
 					continue
 				}
 			}
