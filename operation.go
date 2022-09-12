@@ -36,22 +36,26 @@ func GetOperationInfo(ctx context.Context) *OperationInfo {
 	}
 }
 
+type request struct {
+	override bool
+	model    reflect.Type
+	schema   *schema.Schema
+}
+
 // Operation represents an operation (an HTTP verb, e.g. GET / PUT) against
 // a resource attached to a router.
 type Operation struct {
-	resource              *Resource
-	method                string
-	id                    string
-	summary               string
-	description           string
-	params                map[string]oaParam
-	requestContentType    string
-	requestSchema         *schema.Schema
-	requestSchemaOverride bool
-	requestModel          reflect.Type
-	responses             []Response
-	maxBodyBytes          int64
-	bodyReadTimeout       time.Duration
+	resource           *Resource
+	method             string
+	id                 string
+	summary            string
+	description        string
+	params             map[string]oaParam
+	defaultContentType string
+	requests           map[string]*request
+	responses          []Response
+	maxBodyBytes       int64
+	bodyReadTimeout    time.Duration
 }
 
 func newOperation(resource *Resource, method, id, docs string, responses []Response) *Operation {
@@ -62,6 +66,7 @@ func newOperation(resource *Resource, method, id, docs string, responses []Respo
 		id:          id,
 		summary:     summary,
 		description: desc,
+		requests:    map[string]*request{},
 		responses:   responses,
 		// 1 MiB body limit by default
 		maxBodyBytes: 1024 * 1024,
@@ -92,18 +97,14 @@ func (o *Operation) toOpenAPI(components *oaComponents) *gabs.Container {
 	}
 
 	// Request body
-	if o.requestSchema != nil {
-		ct := o.requestContentType
-		if ct == "" {
-			ct = "application/json"
-		}
+	for ct, request := range o.requests {
 		ref := ""
-		if o.requestSchemaOverride {
-			ref = components.AddExistingSchema(o.requestSchema, o.id+"-request", !o.resource.router.disableSchemaProperty)
+		if request.override {
+			ref = components.AddExistingSchema(request.schema, o.id+"-request", !o.resource.router.disableSchemaProperty)
 		} else {
 			// Regenerate with ModeAll so the same model can be used for both the
 			// input and output when possible.
-			ref = components.AddSchema(o.requestModel, schema.ModeAll, o.id+"-request", !o.resource.router.disableSchemaProperty)
+			ref = components.AddSchema(request.model, schema.ModeAll, o.id+"-request", !o.resource.router.disableSchemaProperty)
 		}
 		doc.Set(ref, "requestBody", "content", ct, "schema", "$ref")
 	}
@@ -145,6 +146,15 @@ func (o *Operation) toOpenAPI(components *oaComponents) *gabs.Container {
 	return doc
 }
 
+func (o *Operation) requestForContentType(ct string) (string, *request) {
+	req := o.requests[ct]
+	if req == nil {
+		ct = o.defaultContentType
+		req = o.requests[ct]
+	}
+	return ct, req
+}
+
 // MaxBodyBytes sets the max number of bytes that the request body size may be
 // before the request is cancelled. The default is 1MiB.
 func (o *Operation) MaxBodyBytes(size int64) {
@@ -175,8 +185,15 @@ func (o *Operation) NoBodyReadTimeout() {
 // RequestSchema allows overriding the generated input body schema, giving you
 // more control over documentation and validation.
 func (o *Operation) RequestSchema(s *schema.Schema) {
-	o.requestSchema = s
-	o.requestSchemaOverride = true
+	o.RequestSchemaForContentType("application/json", s)
+}
+
+func (o *Operation) RequestSchemaForContentType(ct string, s *schema.Schema) {
+	if o.requests[ct] == nil {
+		o.requests[ct] = &request{}
+	}
+	o.requests[ct].override = true
+	o.requests[ct].schema = s
 }
 
 // Run registers the handler function for this operation. It should be of the
@@ -208,7 +225,6 @@ func (o *Operation) Run(handler interface{}) {
 
 	t := reflect.TypeOf(handler)
 	if t.Kind() == reflect.Func && t.NumIn() > 1 {
-		var err error
 		input := t.In(1)
 
 		// Get parameters
@@ -224,33 +240,55 @@ func (o *Operation) Run(handler interface{}) {
 		}
 
 		possible := []int{http.StatusBadRequest}
+		foundBody := false
 
-		if _, ok := input.FieldByName("Body"); ok || len(o.params) > 0 {
+		for i := 0; i < input.NumField(); i++ {
+			f := input.Field(i)
+			if ct, ok := f.Tag.Lookup(locationBody); ok || f.Name == strings.Title(locationBody) {
+				foundBody = true
+
+				if ct == "" || ct == "true" {
+					// Default to JSON
+					ct = "application/json"
+				}
+
+				if o.defaultContentType == "" {
+					o.defaultContentType = ct
+				}
+
+				if o.requests[ct] == nil {
+					o.requests[ct] = &request{}
+				}
+
+				o.requests[ct].model = f.Type
+
+				if !o.requests[ct].override {
+					mode := schema.ModeWrite
+					if o.resource != nil && o.resource.router != nil && o.resource.router.roundTripBehavior != RoundTripReject {
+						mode = schema.ModeAll
+					}
+					s, err := schema.GenerateWithMode(f.Type, mode, nil)
+					if o.resource != nil && o.resource.router != nil && !o.resource.router.disableSchemaProperty {
+						s.AddSchemaField()
+					}
+					if err != nil {
+						panic(fmt.Errorf("unable to generate JSON schema: %w", err))
+					}
+					o.requests[ct].schema = s
+				}
+			}
+		}
+
+		if foundBody || len(o.params) > 0 {
 			// Invalid parameter values or body values can cause a 422.
 			possible = append(possible, http.StatusUnprocessableEntity)
 		}
 
-		// Get body if present.
-		if body, ok := input.FieldByName("Body"); ok {
-			o.requestModel = body.Type
+		if foundBody {
 			possible = append(possible,
 				http.StatusRequestEntityTooLarge,
 				http.StatusRequestTimeout,
 			)
-
-			if o.requestSchema == nil {
-				mode := schema.ModeWrite
-				if o.resource != nil && o.resource.router != nil && o.resource.router.roundTripBehavior != RoundTripReject {
-					mode = schema.ModeAll
-				}
-				o.requestSchema, err = schema.GenerateWithMode(body.Type, mode, nil)
-				if o.resource != nil && o.resource.router != nil && !o.resource.router.disableSchemaProperty {
-					o.requestSchema.AddSchemaField()
-				}
-				if err != nil {
-					panic(fmt.Errorf("unable to generate JSON schema: %w", err))
-				}
-			}
 		}
 
 		// It's possible for the inputs to generate a few different errors, so
@@ -309,10 +347,12 @@ func (o *Operation) Run(handler interface{}) {
 			}
 		}
 
+		ct, reqDef := o.requestForContentType(r.Header.Get("Content-Type"))
+
 		// Set a read deadline for reading/parsing the input request body, but
 		// only for operations that have a request body model.
 		var conn net.Conn
-		if o.requestModel != nil && o.bodyReadTimeout > 0 {
+		if reqDef != nil && reqDef.model != nil && o.bodyReadTimeout > 0 {
 			if conn = GetConn(r.Context()); conn != nil {
 				conn.SetReadDeadline(time.Now().Add(o.bodyReadTimeout))
 			}
@@ -323,7 +363,8 @@ func (o *Operation) Run(handler interface{}) {
 			removeReadOnly = true
 		}
 
-		setFields(ctx, ctx.r, input, inputType, removeReadOnly)
+		setFields(ctx, ctx.r, input, inputType, ct, reqDef, removeReadOnly)
+
 		if !ctx.HasError() {
 			// No errors yet, so any errors that come after should be treated as a
 			// semantic rather than structural error.
@@ -338,7 +379,7 @@ func (o *Operation) Run(handler interface{}) {
 		// Clear any body read deadline if one was set as the body has now been
 		// read in. The one exception is when the body is streamed in via an
 		// `io.Reader` so we don't reset the deadline for that.
-		if conn != nil && o.requestModel != readerType {
+		if conn != nil && reqDef != nil && reqDef.model != readerType {
 			conn.SetReadDeadline(time.Time{})
 		}
 

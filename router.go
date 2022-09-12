@@ -93,6 +93,9 @@ type Router struct {
 
 	// Specify whether resources with read-only fields can be round-tripped (i.e. GET then PUT, or POSTed with a read-only `created` field).
 	roundTripBehavior RoundTripBehavior
+
+	// Turn off auto-generation of HTTP PATCH operations
+	disableAutoPatch bool
 }
 
 // OpenAPI returns an OpenAPI 3 representation of the API, which can be
@@ -345,6 +348,11 @@ func replaceRef(schema map[string]interface{}, from, to string) {
 
 // Set up the docs & OpenAPI routes.
 func (r *Router) setupDocs() {
+	if !r.disableAutoPatch {
+		// Generate PATCH methods before generating the OpenAPI or docs.
+		r.AutoPatch()
+	}
+
 	// Precompute the OpenAPI document once on startup and then serve the cached
 	// version of it.
 	spec := r.OpenAPI()
@@ -499,6 +507,12 @@ func (r *Router) DisableSchemaProperty() {
 // RoundTripBehavior controls how the server handles resources which
 func (r *Router) RoundTripBehavior(behavior RoundTripBehavior) {
 	r.roundTripBehavior = behavior
+}
+
+// DisableAutoPatch disables the automatic generation of HTTP PATCH operations
+// whenever a GET/PUT combo exists without a pre-existing PATCH.
+func (r *Router) DisableAutoPatch() {
+	r.disableAutoPatch = true
 }
 
 const (
