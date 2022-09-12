@@ -172,8 +172,6 @@ func (r *Router) handleOperation(config *GraphQLConfig, parentName string, field
 	// `/things/{thing-id}` -> `thingsItem(thingId)`
 	// `/things/{thing-id}/sub` -> `sub(thingId)`
 	parts := strings.Split(strings.Trim(resource.path, "/"), "/")
-	// v2, {org}, channels, {channel-id}, preview-streams
-	// last = preview-streams
 	last := parts[len(parts)-1]
 	for i := len(parts) - 1; i >= 0; i-- {
 		if parts[i][0] == '{' {
