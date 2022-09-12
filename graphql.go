@@ -182,6 +182,7 @@ func (r *Router) handleOperation(config *GraphQLConfig, parentName string, field
 		}
 		break
 	}
+	last = casing.LowerCamel(last)
 
 	// Setup input arguments (i.e. OpenAPI operation params).
 	args := graphql.FieldConfigArgument{}
