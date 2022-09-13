@@ -49,7 +49,12 @@ type StoreSummary struct {
 	ID string `json:"id" graphParam:"store-id" doc:"Store ID"`
 }
 
+type StoreName struct {
+	Name string `json:"name" graphParam:"store-name" doc:"Store Name"`
+}
+
 type Store struct {
+	StoreName
 	StoreSummary
 	URL string `json:"url" doc:"Web link to buy product"`
 }
@@ -57,8 +62,8 @@ type Store struct {
 func TestGraphQL(t *testing.T) {
 	now, _ := time.Parse(time.RFC3339, "2022-02-22T22:22:22Z")
 
-	amazon := &Store{StoreSummary: StoreSummary{ID: "amazon"}, URL: "https://www.amazon.com/"}
-	target := &Store{StoreSummary: StoreSummary{ID: "target"}, URL: "https://www.target.com/"}
+	amazon := &Store{StoreSummary: StoreSummary{ID: "amazon"}, URL: "https://www.amazon.com/", StoreName: StoreName{"amazon"}}
+	target := &Store{StoreSummary: StoreSummary{ID: "target"}, URL: "https://www.target.com/", StoreName: StoreName{"target"}}
 
 	xsx := &Product{ProductSummary: ProductSummary{ID: "xbox_series_x"}, SuggestedPrice: 499.99, Created: &now, Metadata: map[string]string{"foo": "bar"}, stores: map[string]*Store{"amazon": amazon, "target": target}, Empty: &struct{}{}}
 	ps5 := &Product{ProductSummary: ProductSummary{ID: "playstation_ps5"}, SuggestedPrice: 499.99, Created: &now, stores: map[string]*Store{"amazon": amazon}}
@@ -194,6 +199,21 @@ func TestGraphQL(t *testing.T) {
 		ctx.WriteModel(http.StatusOK, categories[input.CategoryID].products[input.ProductID].stores[input.StoreID])
 	})
 
+	app.Resource("/categories/{category-id}/products/{product-id}/stores/{store-id}/store-name").Get("get-store-name", "doc",
+		NewResponse(http.StatusOK, "").Model(&StoreName{}),
+		NewResponse(http.StatusNotFound, "").Model(&ErrorModel{}),
+	).Run(func(ctx Context, input struct {
+		CategoryParam
+		ProductParam
+		StoreID string `path:"store-id" doc:"Store ID"`
+	}) {
+		if categories[input.CategoryID] == nil || categories[input.CategoryID].products[input.ProductID] == nil {
+			ctx.WriteError(http.StatusNotFound, "Not found")
+			return
+		}
+		ctx.WriteModel(http.StatusOK, categories[input.CategoryID].products[input.ProductID].stores[input.StoreID].StoreName)
+	})
+
 	app.Resource("/ignored").Get("get-ignored", "doc",
 		NewResponse(http.StatusOK, "").Model(struct{ ID string }{}),
 	).Run(func(ctx Context) {
@@ -326,6 +346,7 @@ data:
 			- name: categoriesItem
 			- name: products
 			- name: productsItem
+			- name: storeName
 			- name: stores
 			- name: storesItem
 `, "\t", "  ", -1), w.Body.String())

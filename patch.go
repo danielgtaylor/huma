@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/danielgtaylor/casing"
 	"github.com/danielgtaylor/huma/schema"
 	jsonpatch "github.com/evanphx/json-patch/v5"
 )
@@ -116,14 +117,13 @@ func generatePatch(resource *Resource, get *Operation, put *Operation) {
 	s, _ := schema.Generate(reqDef.model)
 	makeAllOptional(s)
 
-	// Guess a name for this patch operation based on the model.
+	// Guess a name for this patch operation based on the GET operation.
 	name := ""
-	if reqDef.model.Kind() == reflect.Struct {
-		name = reqDef.model.Name()
+	parts := casing.Split(get.id)
+	if len(parts) > 1 && (strings.ToLower(parts[0]) == "get" || strings.ToLower(parts[0]) == "fetch") {
+		parts = parts[1:]
 	}
-	if reqDef.model.Kind() == reflect.Ptr {
-		name = reqDef.model.Elem().Name()
-	}
+	name = casing.Join(parts, "-")
 
 	// Augment the response list with ones we may return from the PATCH.
 	responses := append([]Response{}, put.responses...)
@@ -141,17 +141,21 @@ func generatePatch(resource *Resource, get *Operation, put *Operation) {
 			}
 		}
 		if !found {
-			responses = append(responses, NewResponse(code, http.StatusText(code)).Model(&ErrorModel{}))
+			responses = append(responses, NewResponse(code, http.StatusText(code)).
+				ContentType("application/problem+json").
+				Model(&ErrorModel{}),
+			)
 		}
 	}
 
 	// Manually register the operation so it shows up in the generated OpenAPI.
 	resource.operations = append(resource.operations, &Operation{
-		resource: resource,
-		method:   http.MethodPatch,
-		id:       "patch-" + name,
-		summary:  "Patch " + name,
-		params:   get.params,
+		resource:    resource,
+		method:      http.MethodPatch,
+		id:          "patch-" + name,
+		summary:     "Patch " + name,
+		description: "Partial update operation supporting both JSON Merge Patch & JSON Patch updates.",
+		params:      get.params,
 		requests: map[string]*request{
 			"application/merge-patch+json": {
 				override: true,
