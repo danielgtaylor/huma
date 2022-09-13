@@ -237,7 +237,7 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 				continue
 			}
 
-			if reqDef.schema != nil && reqDef.schema.HasValidation() {
+			if reqDef != nil && reqDef.schema != nil && reqDef.schema.HasValidation() {
 				if !validAgainstSchema(ctx, locationBody+".", reqDef.schema, data) {
 					continue
 				}

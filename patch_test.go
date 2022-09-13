@@ -170,3 +170,33 @@ func TestPatch(t *testing.T) {
 	app.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnsupportedMediaType, w.Code, w.Body.String())
 }
+
+func TestPatchPutNoBody(t *testing.T) {
+	app := newTestRouter()
+
+	things := app.Resource("/things/{thing-id}")
+
+	things.Get("get-thing", "docs",
+		NewResponse(http.StatusOK, "OK").Model(&ThingModel{}),
+	).Run(func(ctx Context, input struct {
+		ThingIDParam
+	}) {
+		ctx.WriteModel(http.StatusOK, &ThingModel{})
+	})
+
+	things.Put("put-thing", "docs",
+		NewResponse(http.StatusNoContent, "No Content"),
+	).Run(func(ctx Context, input struct {
+		ThingIDParam
+		// Note: no body!
+	}) {
+		ctx.WriteHeader(http.StatusNoContent)
+	})
+
+	// There should be no generated PATCH since there is nothing to
+	// write in the PUT!
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodPatch, "/things/test", nil)
+	app.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code, w.Body.String())
+}
