@@ -81,7 +81,7 @@ func (r *Router) AutoPatch() {
 			case http.MethodPut:
 				put = op
 				_, reqDef := put.requestForContentType("application/json")
-				if reqDef.model != nil {
+				if reqDef != nil && reqDef.model != nil {
 					kind = reqDef.model.Kind()
 					if kind == reflect.Ptr {
 						kind = reqDef.model.Elem().Kind()
