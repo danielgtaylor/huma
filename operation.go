@@ -56,6 +56,7 @@ type Operation struct {
 	responses          []Response
 	maxBodyBytes       int64
 	bodyReadTimeout    time.Duration
+	deprecated         bool
 }
 
 func newOperation(resource *Resource, method, id, docs string, responses []Response) *Operation {
@@ -72,6 +73,7 @@ func newOperation(resource *Resource, method, id, docs string, responses []Respo
 		maxBodyBytes: 1024 * 1024,
 		// 15 second timeout by default
 		bodyReadTimeout: resource.router.defaultBodyReadTimeout,
+		deprecated:      false,
 	}
 }
 
@@ -84,6 +86,9 @@ func (o *Operation) toOpenAPI(components *oaComponents) *gabs.Container {
 	}
 	if o.description != "" {
 		doc.Set(o.description, "description")
+	}
+	if o.deprecated {
+		doc.Set(o.deprecated, "deprecated")
 	}
 
 	// Request params
@@ -186,6 +191,12 @@ func (o *Operation) NoBodyReadTimeout() {
 // more control over documentation and validation.
 func (o *Operation) RequestSchema(s *schema.Schema) {
 	o.RequestSchemaForContentType("application/json", s)
+}
+
+// Deprecated marks the operation is deprecated, warning consumers should
+// refrain from using this.
+func (o *Operation) Deprecated() {
+	o.deprecated = true
 }
 
 func (o *Operation) RequestSchemaForContentType(ct string, s *schema.Schema) {
