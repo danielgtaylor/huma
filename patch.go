@@ -168,7 +168,8 @@ func generatePatch(resource *Resource, get *Operation, put *Operation) {
 				model:    jsonPatchType,
 			},
 		},
-		responses: responses,
+		responses:  responses,
+		deprecated: put.deprecated,
 	})
 
 	// Manually register the handler with the router. This bypasses the normal
