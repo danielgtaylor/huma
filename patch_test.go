@@ -200,3 +200,30 @@ func TestPatchPutNoBody(t *testing.T) {
 	app.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusMethodNotAllowed, w.Code, w.Body.String())
 }
+
+func TestDeprecatedPatch(t *testing.T) {
+	app := newTestRouter()
+	things := app.Resource("/things/{thing-id}")
+
+	things.Get("get-thing", "docs",
+		NewResponse(http.StatusOK, "OK").Model(&ThingModel{}),
+	).Run(func(ctx Context, input struct {
+		ThingIDParam
+	}) {
+		ctx.WriteModel(http.StatusOK, &ThingModel{})
+	})
+
+	put := things.Put("put-thing", "docs",
+		NewResponse(http.StatusOK, "OK").Model(&ThingModel{}),
+	)
+	put.Deprecated()
+	put.Run(func(ctx Context, input struct {
+		ThingIDParam
+		Body ThingModel
+	}) {
+		ctx.WriteModel(http.StatusOK, &ThingModel{})
+	})
+
+	app.setupDocs()
+	assert.Contains(t, app.OpenAPI().Search("paths", "/things/{thing-id}", "patch").String(), "deprecated")
+}
