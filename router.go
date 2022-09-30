@@ -348,7 +348,6 @@ func (r *Router) setupDocs() {
 	if !r.mux.Match(chi.NewRouteContext(), http.MethodGet, r.OpenAPIPath()) {
 		r.mux.Get(r.OpenAPIPath(), func(w http.ResponseWriter, req *http.Request) {
 			w.Header().Set("Content-Type", "application/vnd.oai.openapi+json")
-
 			w.Write(spec.Bytes())
 		})
 	}
