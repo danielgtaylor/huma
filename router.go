@@ -349,9 +349,7 @@ func (r *Router) setupDocs() {
 		r.mux.Get(r.OpenAPIPath(), func(w http.ResponseWriter, req *http.Request) {
 			w.Header().Set("Content-Type", "application/vnd.oai.openapi+json")
 
-			// Convert to JSON to take advantage of keys being sorted lexicographically
-			sBytes, _ := json.Marshal(spec)
-			w.Write(sBytes)
+			w.Write(spec.Bytes())
 		})
 	}
 
