@@ -51,6 +51,7 @@ type Operation struct {
 	summary            string
 	description        string
 	params             map[string]oaParam
+	paramsOrder        []string
 	defaultContentType string
 	requests           map[string]*request
 	responses          []Response
@@ -92,7 +93,8 @@ func (o *Operation) toOpenAPI(components *oaComponents) *gabs.Container {
 	}
 
 	// Request params
-	for _, param := range o.params {
+	for _, paramKey := range o.paramsOrder {
+		param := o.params[paramKey]
 		if param.Internal {
 			// Skip documenting internal-only params.
 			continue
@@ -239,8 +241,9 @@ func (o *Operation) Run(handler interface{}) {
 		input := t.In(1)
 
 		// Get parameters
-		o.params = getParamInfo(input)
-		for k, v := range o.params {
+		o.params, o.paramsOrder = getParamInfo(input)
+		for _, k := range o.paramsOrder {
+			v := o.params[k]
 			if v.In == inPath {
 				// Confirm each declared input struct path parameter is actually a part
 				// of the declared resource path.

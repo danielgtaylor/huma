@@ -605,3 +605,53 @@ func TestRequestContentTypes(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.JSONEq(t, `{"name": "one two"}`, w.Body.String())
 }
+
+func TestOpenAPIOrdering(t *testing.T) {
+	app := newTestRouter()
+
+	type Response struct {
+		Description string `json:"description"`
+		Category    string `json:"category"`
+		ID          string `json:"id"`
+		Name        string `json:"name"`
+	}
+
+	app.Resource("/menu/{menu-category}/item/{item-id}").Get("cafe menu", "ISP Cafe",
+		NewResponse(http.StatusOK, "test").Model(Response{}),
+	).Run(func(ctx Context, input struct {
+		Category string `path:"menu-category"`
+		ItemID   string `path:"item-id"`
+	}) {
+		ctx.WriteModel(http.StatusOK, Response{
+			Category:    input.Category,
+			ID:          input.ItemID,
+			Name:        "Apple Tea",
+			Description: "Green tea with apples",
+		})
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest(http.MethodGet, "/menu/drinks/item/apple-tea", nil)
+	req.Header.Set("Authorization", "dummy")
+	req.Host = "example.com"
+	app.ServeHTTP(w, req)
+
+	// JSON response should be lexicographically sorted
+	assert.Equal(t, http.StatusOK, w.Code)
+	expectedResp := `{"$schema":"https://example.com/schemas/Response.json","category":"drinks","description":"Green tea with apples","id":"apple-tea","name":"Apple Tea"}`
+	assert.Equal(t, expectedResp, w.Body.String())
+
+	// Parameters should match insertion order
+	openapi := app.OpenAPI().Search("paths", "/menu/{menu-category}/item/{item-id}", "get").Bytes()
+	type parameters struct {
+		Name string `json:"name"`
+	}
+
+	type opschema struct {
+		Parameters []parameters `json:"parameters"`
+	}
+
+	var p opschema
+	json.Unmarshal(openapi, &p)
+	assert.Equal(t, p.Parameters, []parameters{{Name: "menu-category"}, {Name: "item-id"}})
+}

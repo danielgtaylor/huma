@@ -155,7 +155,8 @@ func generatePatch(resource *Resource, get *Operation, put *Operation) {
 		id:          "patch-" + name,
 		summary:     "Patch " + name,
 		description: "Partial update operation supporting both JSON Merge Patch & JSON Patch updates.",
-		params:      get.params,
+		params:      put.params,
+		paramsOrder: put.paramsOrder,
 		requests: map[string]*request{
 			"application/merge-patch+json": {
 				override: true,
