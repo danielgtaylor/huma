@@ -445,8 +445,9 @@ func resolveFields(ctx *hcontext, path string, input reflect.Value) {
 }
 
 // getParamInfo recursively gets info about params from an input struct. It
-// returns a map of parameter name => parameter object.
-func getParamInfo(t reflect.Type) map[string]oaParam {
+// returns a map of parameter name => parameter object and the order the
+// parameters were received.
+func getParamInfo(t reflect.Type) (map[string]oaParam, []string) {
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
@@ -456,13 +457,17 @@ func getParamInfo(t reflect.Type) map[string]oaParam {
 	}
 
 	params := map[string]oaParam{}
+	paramOrder := []string{}
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 
 		if f.Anonymous {
 			// Embedded struct
-			for k, v := range getParamInfo(f.Type) {
+			embedded, eOrder := getParamInfo(f.Type)
+			for _, k := range eOrder {
+				v := embedded[k]
 				params[k] = v
+				paramOrder = append(paramOrder, k)
 			}
 			continue
 		}
@@ -517,7 +522,8 @@ func getParamInfo(t reflect.Type) map[string]oaParam {
 		p.typ = f.Type
 
 		params[p.Name] = p
+		paramOrder = append(paramOrder, p.Name)
 	}
 
-	return params
+	return params, paramOrder
 }
