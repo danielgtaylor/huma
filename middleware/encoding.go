@@ -61,7 +61,7 @@ func (w *contentEncodingWriter) Write(data []byte) (int, error) {
 			w.writer = br
 		}
 		w.Header().Set("Content-Encoding", w.encoding)
-		w.Header().Set("Vary", "Accept-Encoding")
+		w.Header().Add("Vary", "Accept-Encoding")
 		w.ResponseWriter.WriteHeader(w.status)
 		w.wroteHeader = true
 		bufData := w.buf.Bytes()
