@@ -476,7 +476,7 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema, definedRefs map
 			if exists {
 				return &Schema{Ref: ref}, nil
 			} else {
-				definedRefs[tname] = fmt.Sprintf("./schemas/%s", tname)
+				definedRefs[tname] = fmt.Sprintf("#/components/schemas/%s", tname)
 			}
 		}
 
