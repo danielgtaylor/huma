@@ -277,7 +277,7 @@ func (o *Operation) Run(handler interface{}) {
 				o.requests[ct].model = f.Type
 
 				if !o.requests[ct].override {
-					s, err := schema.GenerateWithMode(f.Type, schema.ModeWrite, nil)
+					s, err := schema.GenerateWithMode(f.Type, schema.ModeWrite, nil, map[string]string{})
 					if o.resource != nil && o.resource.router != nil && !o.resource.router.disableSchemaProperty {
 						s.AddSchemaField()
 					}

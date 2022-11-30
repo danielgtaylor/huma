@@ -513,7 +513,7 @@ func getParamInfo(t reflect.Type) (map[string]oaParam, []string) {
 			p.CLIName = cliName
 		}
 
-		_, _, s, err := schema.GenerateFromField(f, schema.ModeRead)
+		_, _, s, err := schema.GenerateFromField(f, schema.ModeRead, map[string]string{})
 		if err != nil {
 			panic(err)
 		}

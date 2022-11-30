@@ -193,7 +193,8 @@ func (s *Schema) AddSchemaField() {
 // can be used to provide additional metadata such as descriptions and
 // validation.
 func Generate(t reflect.Type) (*Schema, error) {
-	return GenerateWithMode(t, ModeAll, nil)
+	// TODO: Create a template of typename -> $ref url
+	return GenerateWithMode(t, ModeAll, nil, map[string]string{})
 }
 
 // getFields performs a breadth-first search for all fields including embedded
@@ -229,7 +230,7 @@ func getFields(typ reflect.Type) []reflect.StructField {
 // GenerateFromField generates a schema for a single struct field. It returns
 // the computed field name, whether it is optional, its schema, and any error
 // which may have occurred.
-func GenerateFromField(f reflect.StructField, mode Mode) (string, bool, *Schema, error) {
+func GenerateFromField(f reflect.StructField, mode Mode, definedRefs map[string]string) (string, bool, *Schema, error) {
 	jsonTags := strings.Split(f.Tag.Get("json"), ",")
 	name := strings.ToLower(f.Name)
 	if len(jsonTags) > 0 && jsonTags[0] != "" {
@@ -241,7 +242,7 @@ func GenerateFromField(f reflect.StructField, mode Mode) (string, bool, *Schema,
 		return name, false, nil, nil
 	}
 
-	s, err := GenerateWithMode(f.Type, mode, nil)
+	s, err := GenerateWithMode(f.Type, mode, nil, definedRefs)
 	if err != nil {
 		return name, false, nil, err
 	}
@@ -449,7 +450,7 @@ func GenerateFromField(f reflect.StructField, mode Mode) (string, bool, *Schema,
 // any field that is marked as the opposite will be excluded, e.g. a
 // write-only field would not be included in read mode. If a schema is given
 // as input, add to it, otherwise creates a new schema.
-func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error) {
+func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema, definedRefs map[string]string) (*Schema, error) {
 	if schema == nil {
 		schema = &Schema{}
 	}
@@ -469,13 +470,27 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 			return &Schema{Type: TypeString, Format: "uri"}, nil
 		}
 
+		tname := t.Name()
+		if tname != "" {
+			ref, exists := definedRefs[tname]
+			if exists {
+				return &Schema{Ref: ref}, nil
+			} else {
+				definedRefs[tname] = fmt.Sprintf("./schemas/%s", tname)
+			}
+		}
+
 		properties := make(map[string]*Schema)
 		required := make([]string, 0)
 		schema.Type = TypeObject
 		schema.AdditionalProperties = false
 
 		for _, f := range getFields(t) {
-			name, optional, s, err := GenerateFromField(f, mode)
+			fname := f.Type.Name()
+			if fname == tname {
+				return nil, fmt.Errorf("Recursion detected")
+			}
+			name, optional, s, err := GenerateFromField(f, mode, definedRefs)
 			if err != nil {
 				return nil, err
 			}
@@ -516,7 +531,7 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 
 	case reflect.Map:
 		schema.Type = TypeObject
-		s, err := GenerateWithMode(t.Elem(), mode, nil)
+		s, err := GenerateWithMode(t.Elem(), mode, nil, definedRefs)
 		if err != nil {
 			return nil, err
 		}
@@ -527,7 +542,7 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 			schema.Type = TypeString
 		} else {
 			schema.Type = TypeArray
-			s, err := GenerateWithMode(t.Elem(), mode, nil)
+			s, err := GenerateWithMode(t.Elem(), mode, nil, definedRefs)
 			if err != nil {
 				return nil, err
 			}
@@ -559,7 +574,7 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema) (*Schema, error
 	case reflect.String:
 		schema.Type = TypeString
 	case reflect.Ptr:
-		return GenerateWithMode(t.Elem(), mode, schema)
+		return GenerateWithMode(t.Elem(), mode, schema, definedRefs)
 	case reflect.Interface:
 		// Interfaces can be any type.
 	case reflect.Uintptr, reflect.UnsafePointer, reflect.Func:
