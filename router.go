@@ -600,14 +600,15 @@ func New(docs, version string) *Router {
 
 	r.docsHandler = RapiDocHandler(r)
 
+	router := r
 	// Error handlers
 	r.mux.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := ContextFromRequest(w, r)
+		ctx := ContextFromRequest(router, w, r)
 		ctx.WriteError(http.StatusNotFound, fmt.Sprintf("Cannot find %s", r.URL.String()))
 	}))
 
 	r.mux.MethodNotAllowed(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := ContextFromRequest(w, r)
+		ctx := ContextFromRequest(router, w, r)
 		ctx.WriteError(http.StatusMethodNotAllowed, fmt.Sprintf("No handler for method %s", r.Method))
 	}))
 

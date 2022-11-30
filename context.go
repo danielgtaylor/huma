@@ -39,11 +39,29 @@ func AddAllowedHeaders(name ...string) {
 
 // ContextFromRequest returns a Huma context for a request, useful for
 // accessing high-level convenience functions from e.g. middleware.
-func ContextFromRequest(w http.ResponseWriter, r *http.Request) Context {
+func ContextFromRequest(router *Router, w http.ResponseWriter, r *http.Request) Context {
+	schemasPath := ""
+	docsPath := ""
+	specPath := ""
+	urlPrefix := ""
+	disableSchemaProperty := false
+	if router != nil {
+		docsPath = router.DocsPath()
+		schemasPath = router.SchemasPath()
+		specPath = router.OpenAPIPath()
+		urlPrefix = router.urlPrefix
+		disableSchemaProperty = router.disableSchemaProperty
+	}
+
 	return &hcontext{
-		Context:        r.Context(),
-		ResponseWriter: w,
-		r:              r,
+		Context:               r.Context(),
+		ResponseWriter:        w,
+		r:                     r,
+		docsPath:              docsPath,
+		schemasPath:           schemasPath,
+		specPath:              specPath,
+		urlPrefix:             urlPrefix,
+		disableSchemaProperty: disableSchemaProperty,
 	}
 }
 
@@ -106,6 +124,10 @@ func (c *hcontext) WithValue(key, value interface{}) Context {
 		errors:                append([]error{}, c.errors...),
 		op:                    c.op,
 		closed:                c.closed,
+		docsPath:              c.docsPath,
+		schemasPath:           c.schemasPath,
+		specPath:              c.specPath,
+		urlPrefix:             c.urlPrefix,
 		disableSchemaProperty: c.disableSchemaProperty,
 	}
 }
@@ -313,7 +335,7 @@ func (c *hcontext) writeModel(ct string, status int, model interface{}) {
 		// Some automatic responses won't be registered but will have an error model
 		// returned. We should support these as well.
 		if modelType == reflect.TypeOf(&ErrorModel{}) {
-			modelRef = "/" + modelType.Elem().Name()
+			modelRef = c.schemasPath + "/" + modelType.Elem().Name()
 		}
 	}
 

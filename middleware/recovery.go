@@ -152,7 +152,8 @@ func Recovery(onPanic PanicFunc) func(http.Handler) http.Handler {
 						span.SetTag(string(ext.Error), err)
 					}
 
-					ctx := huma.ContextFromRequest(w, r)
+					// TODO: Inject router somehow?
+					ctx := huma.ContextFromRequest(nil, w, r)
 					ctx.WriteError(http.StatusInternalServerError, "Unrecoverable internal server error")
 				}
 			}()
