@@ -64,6 +64,15 @@ func TestStreamingInput(t *testing.T) {
 		ctx.WriteHeader(http.StatusNoContent)
 	})
 
+	stream := r.GetOperation("stream")
+	assert.NotNil(t, stream)
+	assert.Equal(t, *stream, OperationInfo{
+		ID:          "stream",
+		URITemplate: "/stream",
+		Summary:     "Stream test",
+		Tags:        []string{},
+	})
+
 	w := httptest.NewRecorder()
 	body := bytes.NewReader(make([]byte, 1024))
 	req, _ := http.NewRequest(http.MethodPost, "/stream", body)

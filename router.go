@@ -25,11 +25,23 @@ var connContextKey contextKey = "huma-request-conn"
 // has finished.
 var opIDContextKey contextKey = "huma-operation-id"
 
+// routerContextKey is used to get the router associated with the API
+var routerContextKey contextKey = "huma-router"
+
 // GetConn gets the underlying `net.Conn` from a context.
 func GetConn(ctx context.Context) net.Conn {
 	conn := ctx.Value(connContextKey)
 	if conn != nil {
 		return conn.(net.Conn)
+	}
+	return nil
+}
+
+// GetRouter gets the `*Router` handling API requests
+func GetRouter(ctx context.Context) *Router {
+	router := ctx.Value(routerContextKey)
+	if router != nil {
+		return router.(*Router)
 	}
 	return nil
 }
@@ -241,6 +253,43 @@ func (r *Router) Resource(path string) *Resource {
 	r.resources = append(r.resources, res)
 
 	return res
+}
+
+// GetOperation returns the path and
+func (r *Router) GetOperation(id string) *OperationInfo {
+	// Loop over all router resources looking for the specified operation
+	for _, res := range r.resources {
+		result := getOperation(id, res)
+		if result != nil {
+			return result
+		}
+	}
+	return nil
+}
+
+func getOperation(id string, res *Resource) *OperationInfo {
+	// First, search in this resource
+	for _, op := range res.operations {
+		if op.id == id {
+			return &OperationInfo{
+				ID:          op.id,
+				URITemplate: op.resource.path,
+				Summary:     op.summary,
+				Tags:        append([]string{}, op.resource.tags...),
+			}
+		}
+	}
+	// If we still haven't found anything, look in subresources
+	if res.subResources != nil {
+		for _, sub := range res.subResources {
+			result := getOperation(id, sub)
+			if result != nil {
+				return result
+			}
+		}
+	}
+	// If we get here, nothing in this part of the tree
+	return nil
 }
 
 // Middleware adds a new standard middleware to this router at the root,
@@ -532,7 +581,10 @@ func New(docs, version string) *Router {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 			// Inject the operation info before other middleware so that the later
 			// middleware will have access to it.
-			req = req.WithContext(context.WithValue(req.Context(), opIDContextKey, &OperationInfo{}))
+			reqContext := req.Context()
+			withOpenID := context.WithValue(reqContext, opIDContextKey, &OperationInfo{})
+			withRouter := context.WithValue(withOpenID, routerContextKey, r)
+			req = req.WithContext(withRouter)
 
 			next.ServeHTTP(w, req)
 
