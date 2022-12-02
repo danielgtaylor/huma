@@ -582,8 +582,8 @@ func New(docs, version string) *Router {
 			// Inject the operation info before other middleware so that the later
 			// middleware will have access to it.
 			reqContext := req.Context()
-			withOpenID := context.WithValue(reqContext, opIDContextKey, &OperationInfo{})
-			withRouter := context.WithValue(withOpenID, routerContextKey, r)
+			withOpID := context.WithValue(reqContext, opIDContextKey, &OperationInfo{})
+			withRouter := context.WithValue(withOpID, routerContextKey, r)
 			req = req.WithContext(withRouter)
 
 			next.ServeHTTP(w, req)
