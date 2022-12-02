@@ -249,7 +249,7 @@ func TestValue(t *testing.T) {
 	key := contextKey("foo")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := ContextFromRequest(w, r)
+		ctx := ContextFromRequest(nil, w, r)
 
 		// Create a copy with a new value attached.
 		ctx2 := ctx.WithValue(key, "bar")

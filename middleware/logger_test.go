@@ -19,7 +19,7 @@ func TestNewLogger(t *testing.T) {
 func TestSetLoggerInContext(t *testing.T) {
 	r, _ := http.NewRequest(http.MethodGet, "https://example.com", nil)
 	w := httptest.NewRecorder()
-	ctx := huma.ContextFromRequest(w, r)
+	ctx := huma.ContextFromRequest(nil, w, r)
 
 	logger := GetLogger(ctx)
 
