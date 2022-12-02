@@ -94,8 +94,10 @@ func (c *oaComponents) addSchema(t reflect.Type, mode schema.Mode, hint string, 
 			},
 		}
 	} else {
+		// TODO: See if this type has a predefined schema associated with it
+		// via a predefined map, a callback or an interface.
 		var err error
-		if s, err = schema.GenerateWithMode(t, mode, nil); err != nil {
+		if s, err = schema.GenerateWithMode(t, mode, nil, map[string]string{}); err != nil {
 			panic(err)
 		}
 	}
