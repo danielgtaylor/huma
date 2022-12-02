@@ -352,12 +352,33 @@ func (r *Router) setupDocs() {
 		})
 	}
 
-	if !r.mux.Match(chi.NewRouteContext(), http.MethodGet, r.SchemasPath()+"/{schema-id}.json") {
-		r.mux.Get(r.SchemasPath()+"/{schema-id}.json", func(w http.ResponseWriter, req *http.Request) {
-			id := chi.URLParam(req, "schema-id")
+	if !r.mux.Match(chi.NewRouteContext(), http.MethodGet, r.SchemasPath()+"/*") {
+		r.mux.Get(r.SchemasPath()+"/*", func(w http.ResponseWriter, req *http.Request) {
+			wild := chi.URLParam(req, "*")
+			if !strings.HasSuffix(wild, ".json") {
+				model := ErrorModel{
+					Title:  http.StatusText(http.StatusBadRequest),
+					Status: http.StatusBadRequest,
+					Detail: "Schema files must end with a .json suffix",
+					Errors: []*ErrorDetail{},
+				}
+				writeProblem(w, model)
+				return
+			}
+			id := strings.TrimSuffix(wild, ".json")
 			schema := schemas[id]
 			if schema == nil {
-				w.WriteHeader(http.StatusNotFound)
+				known := []string{}
+				for k := range schemas {
+					known = append(known, fmt.Sprintf("'%s'", k))
+				}
+				model := ErrorModel{
+					Title:  http.StatusText(http.StatusNotFound),
+					Status: http.StatusNotFound,
+					Detail: fmt.Sprintf("No schema found for '%s', must be one of: %s", id, strings.Join(known, ", ")),
+					Errors: []*ErrorDetail{},
+				}
+				writeProblem(w, model)
 				return
 			}
 			b, _ := json.Marshal(schema)
@@ -371,6 +392,17 @@ func (r *Router) setupDocs() {
 	}
 
 	r.docsAreSetup = true
+}
+
+func writeProblem(w http.ResponseWriter, e ErrorModel) {
+	b, err := json.Marshal(e)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(e.Status)
+	w.Write(b)
 }
 
 func (r *Router) listen(addr, certFile, keyFile string) error {
