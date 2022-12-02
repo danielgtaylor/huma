@@ -255,7 +255,9 @@ func (r *Router) Resource(path string) *Resource {
 	return res
 }
 
-// GetOperation returns the path and
+// GetOperation returns an `OperationInfo` struct for the operation named by the
+// `id` argument.  The `OperationInfo` struct provides the URL template and a
+// summary of the operation along with any tags associated with the operation.
 func (r *Router) GetOperation(id string) *OperationInfo {
 	// Loop over all router resources looking for the specified operation
 	for _, res := range r.resources {
