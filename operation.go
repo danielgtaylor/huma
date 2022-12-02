@@ -278,11 +278,11 @@ func (o *Operation) Run(handler interface{}) {
 
 				if !o.requests[ct].override {
 					s, err := schema.GenerateWithMode(f.Type, schema.ModeWrite, nil, map[string]string{})
-					if o.resource != nil && o.resource.router != nil && !o.resource.router.disableSchemaProperty {
-						s.AddSchemaField()
-					}
 					if err != nil {
 						panic(fmt.Errorf("unable to generate JSON schema: %w", err))
+					}
+					if o.resource != nil && o.resource.router != nil && !o.resource.router.disableSchemaProperty {
+						s.AddSchemaField()
 					}
 					o.requests[ct].schema = s
 				}
