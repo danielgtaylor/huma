@@ -486,10 +486,6 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema, definedRefs map
 		schema.AdditionalProperties = false
 
 		for _, f := range getFields(t) {
-			fname := f.Type.Name()
-			if fname == tname {
-				return nil, fmt.Errorf("Recursion detected")
-			}
 			name, optional, s, err := GenerateFromField(f, mode, definedRefs)
 			if err != nil {
 				return nil, err
