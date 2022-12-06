@@ -600,28 +600,31 @@ func New(docs, version string) *Router {
 
 	r.docsHandler = RapiDocHandler(r)
 
-	router := r
+	updateReq := func(req *http.Request) *http.Request {
+		reqContext := req.Context()
+		// Inject the operation info before other middleware so that the later
+		// middleware will have access to it.
+		withOpID := context.WithValue(reqContext, opIDContextKey, &OperationInfo{})
+		// Add the router so we can query the router for information in
+		// request handlers
+		withRouter := context.WithValue(withOpID, routerContextKey, r)
+		return req.WithContext(withRouter)
+	}
+
 	// Error handlers
 	r.mux.NotFound(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := ContextFromRequest(router, w, r)
+		ctx := ContextFromRequest(w, updateReq(r))
 		ctx.WriteError(http.StatusNotFound, fmt.Sprintf("Cannot find %s", r.URL.String()))
 	}))
 
 	r.mux.MethodNotAllowed(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := ContextFromRequest(router, w, r)
+		ctx := ContextFromRequest(w, updateReq(r))
 		ctx.WriteError(http.StatusMethodNotAllowed, fmt.Sprintf("No handler for method %s", r.Method))
 	}))
 
 	r.Middleware(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			// Inject the operation info before other middleware so that the later
-			// middleware will have access to it.
-			reqContext := req.Context()
-			withOpID := context.WithValue(reqContext, opIDContextKey, &OperationInfo{})
-			withRouter := context.WithValue(withOpID, routerContextKey, r)
-			req = req.WithContext(withRouter)
-
-			next.ServeHTTP(w, req)
+			next.ServeHTTP(w, updateReq(req))
 
 			// Automatically add links to OpenAPI and docs.
 			if req.URL.Path == "/" {

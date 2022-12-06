@@ -39,12 +39,14 @@ func AddAllowedHeaders(name ...string) {
 
 // ContextFromRequest returns a Huma context for a request, useful for
 // accessing high-level convenience functions from e.g. middleware.
-func ContextFromRequest(router *Router, w http.ResponseWriter, r *http.Request) Context {
+func ContextFromRequest(w http.ResponseWriter, r *http.Request) Context {
 	schemasPath := ""
 	docsPath := ""
 	specPath := ""
 	urlPrefix := ""
 	disableSchemaProperty := false
+
+	router := GetRouter(r.Context())
 	if router != nil {
 		docsPath = router.DocsPath()
 		schemasPath = router.SchemasPath()

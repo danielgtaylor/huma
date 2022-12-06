@@ -33,7 +33,7 @@ func TestIfMatch(t *testing.T) {
 	// Read request
 	r, _ := http.NewRequest(http.MethodGet, "https://example.com/resource", nil)
 	w := httptest.NewRecorder()
-	ctx := huma.ContextFromRequest(nil, w, r)
+	ctx := huma.ContextFromRequest(w, r)
 
 	p.IfMatch = []string{`"abc123"`, `W/"def456"`}
 	p.Resolve(ctx, r)
@@ -48,7 +48,7 @@ func TestIfMatch(t *testing.T) {
 	// Write request
 	r, _ = http.NewRequest(http.MethodPut, "https://example.com/resource", nil)
 	w = httptest.NewRecorder()
-	ctx = huma.ContextFromRequest(nil, w, r)
+	ctx = huma.ContextFromRequest(w, r)
 
 	p.IfMatch = []string{`"abc123"`, `W/"def456"`}
 	p.Resolve(ctx, r)
@@ -66,7 +66,7 @@ func TestIfNoneMatch(t *testing.T) {
 	// Read request
 	r, _ := http.NewRequest(http.MethodGet, "https://example.com/resource", nil)
 	w := httptest.NewRecorder()
-	ctx := huma.ContextFromRequest(nil, w, r)
+	ctx := huma.ContextFromRequest(w, r)
 
 	p.IfNoneMatch = []string{`"abc123"`, `W/"def456"`}
 	p.Resolve(ctx, r)
@@ -81,20 +81,20 @@ func TestIfNoneMatch(t *testing.T) {
 	// Write request
 	r, _ = http.NewRequest(http.MethodPut, "https://example.com/resource", nil)
 	w = httptest.NewRecorder()
-	ctx = huma.ContextFromRequest(nil, w, r)
+	ctx = huma.ContextFromRequest(w, r)
 
 	p.IfNoneMatch = []string{`"abc123"`, `W/"def456"`}
 	p.Resolve(ctx, r)
 	assert.True(t, p.PreconditionFailed(ctx, "abc123", time.Time{}))
 	assert.True(t, ctx.HasError())
 
-	ctx = huma.ContextFromRequest(nil, w, r)
+	ctx = huma.ContextFromRequest(w, r)
 	assert.False(t, p.PreconditionFailed(ctx, "bad", time.Time{}))
 	assert.False(t, ctx.HasError())
 
 	// Write with special `*` syntax to match any.
 	p.IfNoneMatch = []string{"*"}
-	ctx = huma.ContextFromRequest(nil, w, r)
+	ctx = huma.ContextFromRequest(w, r)
 	assert.False(t, p.PreconditionFailed(ctx, "", time.Time{}))
 	assert.False(t, ctx.HasError())
 
@@ -118,7 +118,7 @@ func TestIfModifiedSince(t *testing.T) {
 	// Read request
 	r, _ := http.NewRequest(http.MethodGet, "https://example.com/resource", nil)
 	w := httptest.NewRecorder()
-	ctx := huma.ContextFromRequest(nil, w, r)
+	ctx := huma.ContextFromRequest(w, r)
 
 	p.IfModifiedSince = now
 
@@ -132,7 +132,7 @@ func TestIfModifiedSince(t *testing.T) {
 	// Write request
 	r, _ = http.NewRequest(http.MethodPut, "https://example.com/resource", nil)
 	w = httptest.NewRecorder()
-	ctx = huma.ContextFromRequest(nil, w, r)
+	ctx = huma.ContextFromRequest(w, r)
 
 	p.IfModifiedSince = now
 
@@ -157,7 +157,7 @@ func TestIfUnmodifiedSince(t *testing.T) {
 	// Read request
 	r, _ := http.NewRequest(http.MethodGet, "https://example.com/resource", nil)
 	w := httptest.NewRecorder()
-	ctx := huma.ContextFromRequest(nil, w, r)
+	ctx := huma.ContextFromRequest(w, r)
 
 	p.IfUnmodifiedSince = now
 
@@ -171,7 +171,7 @@ func TestIfUnmodifiedSince(t *testing.T) {
 	// Write request
 	r, _ = http.NewRequest(http.MethodPut, "https://example.com/resource", nil)
 	w = httptest.NewRecorder()
-	ctx = huma.ContextFromRequest(nil, w, r)
+	ctx = huma.ContextFromRequest(w, r)
 
 	p.IfUnmodifiedSince = now
 

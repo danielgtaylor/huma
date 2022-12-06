@@ -18,7 +18,7 @@ import (
 func TestGetContextFromRequest(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r = r.WithContext(context.WithValue(r.Context(), contextKey("foo"), "bar"))
-		ctx := ContextFromRequest(nil, w, r)
+		ctx := ContextFromRequest(w, r)
 		assert.Equal(t, "bar", ctx.Value(contextKey("foo")))
 	})
 
@@ -249,7 +249,7 @@ func TestValue(t *testing.T) {
 	key := contextKey("foo")
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := ContextFromRequest(nil, w, r)
+		ctx := ContextFromRequest(w, r)
 
 		// Create a copy with a new value attached.
 		ctx2 := ctx.WithValue(key, "bar")
