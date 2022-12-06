@@ -177,7 +177,6 @@ func generatePatch(resource *Resource, get *Operation, put *Operation) {
 	// Huma API since this is easier and we are just calling the other pre-existing
 	// operations.
 	resource.router.mux.Patch(resource.path, func(w http.ResponseWriter, r *http.Request) {
-
 		ctx := ContextFromRequest(w, r)
 
 		patchData, err := ioutil.ReadAll(r.Body)
