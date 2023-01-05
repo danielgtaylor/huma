@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -405,7 +406,18 @@ func (r *Router) setupDocs() {
 
 	if !r.mux.Match(chi.NewRouteContext(), http.MethodGet, r.SchemasPath()+"/*") {
 		r.mux.Get(r.SchemasPath()+"/*", func(w http.ResponseWriter, req *http.Request) {
-			wild := chi.URLParam(req, "*")
+			wpath := chi.URLParam(req, "*")
+			wild, err := url.QueryUnescape(wpath)
+			if err != nil {
+				model := ErrorModel{
+					Title:  http.StatusText(http.StatusNotFound),
+					Status: http.StatusNotFound,
+					Detail: fmt.Sprintf("Unable to decode url path '%s'", wpath),
+					Errors: []*ErrorDetail{},
+				}
+				writeProblem(w, model)
+				return
+			}
 			if !strings.HasSuffix(wild, ".json") {
 				model := ErrorModel{
 					Title:  http.StatusText(http.StatusBadRequest),
