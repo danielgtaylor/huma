@@ -277,7 +277,8 @@ func (o *Operation) Run(handler interface{}) {
 				o.requests[ct].model = f.Type
 
 				if !o.requests[ct].override {
-					s, err := schema.GenerateWithMode(f.Type, schema.ModeWrite, nil, map[string]string{})
+					nestedSchemas := map[string]schema.NestedSchemaReference{}
+					s, err := schema.GenerateWithMode(f.Type, schema.ModeWrite, nil, nestedSchemas)
 					if err != nil {
 						panic(fmt.Errorf("unable to generate JSON schema: %w", err))
 					}

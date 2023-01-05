@@ -97,8 +97,27 @@ func (c *oaComponents) addSchema(t reflect.Type, mode schema.Mode, hint string, 
 		// TODO: See if this type has a predefined schema associated with it
 		// via a predefined map, a callback or an interface.
 		var err error
-		if s, err = schema.GenerateWithMode(t, mode, nil, map[string]string{}); err != nil {
+		nestedSchemas := map[string]schema.NestedSchemaReference{}
+		if s, err = schema.GenerateWithMode(t, mode, nil, nestedSchemas); err != nil {
 			panic(err)
+		}
+		// Iterate over any nested schemas that are referenced by the schema
+		// we just generated
+		for k, v := range nestedSchemas {
+			// Check to see if this component already has a definition for that
+			// type in its schema collection
+			_, exists := c.Schemas[k]
+			if !exists {
+				// If not, generate the schema for the nested schema.
+				predefined := map[string]schema.NestedSchemaReference{}
+				s, err := schema.GenerateWithMode(v.Type, mode, nil, predefined)
+				if err != nil {
+					panic(err)
+				}
+				// Add the generated schema to the list of schemas associatd
+				// with this component.
+				c.Schemas[k] = s
+			}
 		}
 	}
 
