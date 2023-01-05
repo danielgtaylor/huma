@@ -986,7 +986,7 @@ If you want your resources to automatically fill in params, such as an item's ID
 app.Resource("/notes").Get("list-notes", "docs",
 	responses.OK().Headers("Link").Model([]NoteSummary{}),
 ).Run(func(ctx huma.Context, input struct {
-	Cursor string `query:"cursor" doc:"Paginatoin cursor"`
+	Cursor string `query:"cursor" doc:"Pagination cursor"`
 	Limit  int    `query:"limit" doc:"Number of items to return"`
 }) {
 	// Handler implementation goes here...
