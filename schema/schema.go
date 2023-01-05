@@ -193,8 +193,9 @@ func (s *Schema) AddSchemaField() {
 // can be used to provide additional metadata such as descriptions and
 // validation.
 func Generate(t reflect.Type) (*Schema, error) {
+	nestedSchemas := map[string]NestedSchemaReference{}
 	// TODO: Create a template of typename -> $ref url
-	return GenerateWithMode(t, ModeAll, nil, map[string]string{})
+	return GenerateWithMode(t, ModeAll, nil, nestedSchemas)
 }
 
 // getFields performs a breadth-first search for all fields including embedded
@@ -230,7 +231,7 @@ func getFields(typ reflect.Type) []reflect.StructField {
 // GenerateFromField generates a schema for a single struct field. It returns
 // the computed field name, whether it is optional, its schema, and any error
 // which may have occurred.
-func GenerateFromField(f reflect.StructField, mode Mode, definedRefs map[string]string) (string, bool, *Schema, error) {
+func GenerateFromField(f reflect.StructField, mode Mode, definedRefs map[string]NestedSchemaReference) (string, bool, *Schema, error) {
 	jsonTags := strings.Split(f.Tag.Get("json"), ",")
 	name := strings.ToLower(f.Name)
 	if len(jsonTags) > 0 && jsonTags[0] != "" {
@@ -444,13 +445,19 @@ func GenerateFromField(f reflect.StructField, mode Mode, definedRefs map[string]
 	return name, optional, s, nil
 }
 
+type NestedSchemaReference struct {
+	Name string
+	Ref  string
+	Type reflect.Type
+}
+
 // GenerateWithMode creates a JSON schema for a Go type. Struct field
 // tags can be used to provide additional metadata such as descriptions and
 // validation. The mode can be all, read, or write. In read or write mode
 // any field that is marked as the opposite will be excluded, e.g. a
 // write-only field would not be included in read mode. If a schema is given
 // as input, add to it, otherwise creates a new schema.
-func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema, definedRefs map[string]string) (*Schema, error) {
+func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema, definedRefs map[string]NestedSchemaReference) (*Schema, error) {
 	if schema == nil {
 		schema = &Schema{}
 	}
@@ -474,9 +481,13 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema, definedRefs map
 		if tname != "" {
 			ref, exists := definedRefs[tname]
 			if exists {
-				return &Schema{Ref: ref}, nil
+				return &Schema{Ref: ref.Ref}, nil
 			} else {
-				definedRefs[tname] = fmt.Sprintf("#/components/schemas/%s", tname)
+				definedRefs[tname] = NestedSchemaReference{
+					Name: tname,
+					Ref:  fmt.Sprintf("#/components/schemas/%s", tname),
+					Type: t,
+				}
 			}
 		}
 
