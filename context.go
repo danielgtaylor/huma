@@ -19,13 +19,15 @@ import (
 // explicitly being documented. Mostly they are low-level HTTP headers that
 // control access or connection settings.
 var allowedHeaders = map[string]bool{
-	"access-control-allow-origin":  true,
-	"access-control-allow-methods": true,
-	"access-control-allow-headers": true,
-	"access-control-max-age":       true,
-	"connection":                   true,
-	"keep-alive":                   true,
-	"vary":                         true,
+	"access-control-allow-origin":      true,
+	"access-control-expose-headers":    true,
+	"access-control-allow-methods":     true,
+	"access-control-allow-headers":     true,
+	"access-control-allow-credentials": true,
+	"access-control-max-age":           true,
+	"connection":                       true,
+	"keep-alive":                       true,
+	"vary":                             true,
 }
 
 // AddAllowedHeader adds a header to the list of allowed headers for the response.
