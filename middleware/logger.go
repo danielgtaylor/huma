@@ -70,6 +70,14 @@ func (r *statusRecorder) WriteHeader(statusCode int) {
 	r.ResponseWriter.WriteHeader(statusCode)
 }
 
+// `statusRecorder` implements the Flusher interface if the
+// underlying `ResponseWriter` does
+func (r *statusRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // Logger creates a new middleware to set a tagged `*zap.SugarLogger` in the
 // request context. It debug logs request info. If the current terminal is a
 // TTY, it will try to use colored output automatically.

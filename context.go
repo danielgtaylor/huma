@@ -100,6 +100,9 @@ type Context interface {
 	// WriteContent wraps http.ServeContent in order to handle serving streams
 	// it will handle Range and Modified (like If-Unmodified-Since) headers.
 	WriteContent(name string, content io.ReadSeeker, lastModified time.Time)
+
+	// Implement the http.Flusher interface
+	Flush()
 }
 
 type hcontext struct {
@@ -430,4 +433,10 @@ func (c *hcontext) WriteContent(name string, content io.ReadSeeker, lastModified
 
 	http.ServeContent(c.ResponseWriter, c.r, name, lastModified, content)
 	c.closed = true
+}
+
+func (c *hcontext) Flush() {
+	if f, ok := c.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
