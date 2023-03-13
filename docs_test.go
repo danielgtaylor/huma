@@ -15,6 +15,7 @@ var handlers = []struct {
 	{"RapiDoc", RapiDocHandler(New("Test API", "1.0.0"))},
 	{"ReDoc", ReDocHandler(New("Test API", "1.0.0"))},
 	{"SwaggerUI", SwaggerUIHandler(New("Test API", "1.0.0"))},
+	{"StoplightElements", StoplightElementsHandler(New("Test API", "1.0.0"))},
 }
 
 func TestDocHandlers(outer *testing.T) {

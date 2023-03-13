@@ -127,3 +127,31 @@ func SwaggerUIHandler(router *Router) http.Handler {
 </html>`, router.GetTitle(), router.OpenAPIPath())))
 	})
 }
+
+// StoplightElementsHandler renders documentation using Stoplight Elements.
+func StoplightElementsHandler(router *Router) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(fmt.Sprintf(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>%s</title>
+    <!-- Embed elements Elements via Web Component -->
+    <script src="https://unpkg.com/@stoplight/elements/web-components.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements/styles.min.css">
+  </head>
+  <body>
+
+    <elements-api
+      apiDescriptionUrl="%s"
+      router="hash"
+      layout="sidebar"
+      style="display:flex;flex-direction:column;height:100vh;"
+    />
+
+  </body>
+</html>`, router.GetTitle(), router.OpenAPIPath())))
+	})
+}
