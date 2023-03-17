@@ -7,7 +7,7 @@ import (
 	link "github.com/tent/http-link-go"
 )
 
-// GraphQLPaginator defines how to to turn list responses from the HTTP API to
+// GraphQLPaginator defines how to turn list responses from the HTTP API to
 // GraphQL response objects.
 type GraphQLPaginator interface {
 	// Load the paginated response from the given headers and body. After this

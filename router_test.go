@@ -495,7 +495,7 @@ func TestDefaultResponse(t *testing.T) {
 	app := newTestRouter()
 
 	// This should not crash.
-	app.Resource("/").Get("get-root", "docs", NewResponse(0, "Default repsonse")).Run(func(ctx Context) {
+	app.Resource("/").Get("get-root", "docs", NewResponse(0, "Default response")).Run(func(ctx Context) {
 		ctx.WriteHeader(http.StatusOK)
 	})
 

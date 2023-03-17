@@ -212,7 +212,7 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 		if len(fields) == 0 {
 			// JSON supports empty object (e.g. for future expansion) but GraphQL
 			// does not, so here we add a dummy value that can be used in the query
-			// and will always return `null`. The presense of this field being
+			// and will always return `null`. The presence of this field being
 			// null vs the containing object being `null` lets you know if the JSON
 			// empty object was present or not.
 			fields["_"] = &graphql.Field{
