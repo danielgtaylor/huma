@@ -11,14 +11,19 @@ import (
 	"sync"
 
 	"github.com/andybalholm/brotli"
+
 	"github.com/danielgtaylor/huma/negotiation"
 )
 
-const gzipEncoding = "gzip"
-const brotliEncoding = "br"
+const (
+	gzipEncoding   = "gzip"
+	brotliEncoding = "br"
+)
 
-var supportedEncodings []string = []string{brotliEncoding, gzipEncoding}
-var compressDenyList []string = []string{".gif", ".png", ".jpg", ".jpeg", ".zip", ".gz", ".bz2"}
+var (
+	supportedEncodings = []string{brotliEncoding, gzipEncoding}
+	compressDenyList   = []string{".gif", ".png", ".jpg", ".jpeg", ".zip", ".gz", ".bz2"}
+)
 
 type contentEncodingWriter struct {
 	http.ResponseWriter

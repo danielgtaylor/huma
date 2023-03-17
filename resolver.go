@@ -30,8 +30,10 @@ const (
 	locationBody   = "body"
 )
 
-var timeType = reflect.TypeOf(time.Time{})
-var readerType = reflect.TypeOf((*io.Reader)(nil)).Elem()
+var (
+	timeType   = reflect.TypeOf(time.Time{})
+	readerType = reflect.TypeOf((*io.Reader)(nil)).Elem()
+)
 
 // Resolver provides a way to resolve input values from a request or to post-
 // process input values in some way, including additional validation beyond

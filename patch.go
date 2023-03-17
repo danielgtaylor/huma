@@ -9,8 +9,9 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/casing"
-	"github.com/danielgtaylor/huma/schema"
 	jsonpatch "github.com/evanphx/json-patch/v5"
+
+	"github.com/danielgtaylor/huma/schema"
 )
 
 // jsonPatchOp describes an RFC 6902 JSON Patch operation. See also:
@@ -22,8 +23,10 @@ type jsonPatchOp struct {
 	Value interface{} `json:"value,omitempty" doc:"The value to set"`
 }
 
-var jsonPatchType = reflect.TypeOf([]jsonPatchOp{})
-var jsonPatchSchema, _ = schema.Generate(jsonPatchType)
+var (
+	jsonPatchType      = reflect.TypeOf([]jsonPatchOp{})
+	jsonPatchSchema, _ = schema.Generate(jsonPatchType)
+)
 
 // allResources recursively collects and returns all resources/sub-resources
 // attached to a router.

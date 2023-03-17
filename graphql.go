@@ -19,8 +19,10 @@ import (
 
 type graphContextKey string
 
-var graphKeyHeaders graphContextKey = "headers"
-var graphKeySem graphContextKey = "sem"
+var (
+	graphKeyHeaders graphContextKey = "headers"
+	graphKeySem     graphContextKey = "sem"
+)
 
 type GraphQLConfig struct {
 	// Path where the GraphQL endpoint is available. Defaults to `/graphql`.
