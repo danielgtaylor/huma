@@ -60,7 +60,7 @@ var memoryDB = sync.Map{}
 func main() {
 	// Create a new router and give our API a title and version.
 	app := cli.NewRouter("BookStore API", "1.0.0")
-	app.ServerLink("Development server", "http://localhost:8888")
+	app.ServerLink("Development server", "http://localhost:8888", map[string]huma.CaServerVariable{})
 
 	genres := app.Resource("/v1/genres")
 	genres.Get("list-genres", "Returns a list of all genres",

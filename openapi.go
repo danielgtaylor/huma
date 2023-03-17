@@ -16,8 +16,16 @@ type oaContact struct {
 
 // oaServer describes an OpenAPI 3 API server location
 type oaServer struct {
-	URL         string `json:"url"`
-	Description string `json:"description,omitempty"`
+	URL         string                      `json:"url"`
+	Description string                      `json:"description,omitempty"`
+	Variables   map[string]CaServerVariable `json:"variables,omitempty"`
+}
+
+// CaServerVariable describe a server variable for server URL template substitution.
+type CaServerVariable struct {
+	Enum        []string `json:"enum,omitempty"`
+	Default     string   `json:"default,omitempty"`
+	Description string   `json:"description,omitempty"`
 }
 
 // paramLocation describes where in the HTTP request the parameter comes from.
