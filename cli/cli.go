@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -13,10 +14,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/danielgtaylor/huma"
-	"github.com/danielgtaylor/huma/middleware"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/danielgtaylor/huma"
+	"github.com/danielgtaylor/huma/middleware"
 )
 
 // CLI provides a command line interface to a Huma router.
@@ -79,14 +81,14 @@ func New(router *huma.Router) *CLI {
 				cert := viper.GetString("cert")
 				key := viper.GetString("key")
 				if cert == "" && key == "" {
-					if err := app.Listen(fmt.Sprintf("%s:%v", viper.Get("host"), viper.Get("port"))); err != nil && err != http.ErrServerClosed {
+					if err := app.Listen(fmt.Sprintf("%s:%v", viper.Get("host"), viper.Get("port"))); err != nil && !errors.Is(err, http.ErrServerClosed) {
 						panic(err)
 					}
 					return
 				}
 
 				if cert != "" && key != "" {
-					if err := app.ListenTLS(fmt.Sprintf("%s:%v", viper.Get("host"), viper.Get("port")), cert, key); err != nil && err != http.ErrServerClosed {
+					if err := app.ListenTLS(fmt.Sprintf("%s:%v", viper.Get("host"), viper.Get("port")), cert, key); err != nil && !errors.Is(err, http.ErrServerClosed) {
 						panic(err)
 					}
 					return

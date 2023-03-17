@@ -2,6 +2,7 @@ package huma
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -12,9 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/danielgtaylor/huma/schema"
 	"github.com/go-chi/chi"
 	"github.com/xeipuuv/gojsonschema"
+
+	"github.com/danielgtaylor/huma/schema"
 )
 
 // Locations for input parameters. These are used in struct field tags to
@@ -369,7 +371,8 @@ type ctxLocationWrapper struct {
 }
 
 func (c ctxLocationWrapper) AddError(err error) {
-	if e, ok := err.(*ErrorDetail); ok {
+	var e *ErrorDetail
+	if ok := errors.Is(err, e); ok {
 		e.Location = pathJoin(c.location, e.Location)
 	}
 

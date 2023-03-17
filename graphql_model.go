@@ -52,7 +52,7 @@ func addHeaderFields(name string, fields graphql.Fields, headerNames []string) {
 		}
 		fields["headers"] = &graphql.Field{
 			Type: graphql.NewObject(graphql.ObjectConfig{
-				Name:   casing.Camel(strings.Replace(name+" Headers", ".", " ", -1)),
+				Name:   casing.Camel(strings.ReplaceAll(name+" Headers", ".", " ")),
 				Fields: headerFields,
 			}),
 		}
@@ -71,7 +71,7 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 			return graphql.DateTime, nil
 		}
 
-		objectName := casing.Camel(strings.Replace(t.String(), ".", " ", -1))
+		objectName := casing.Camel(strings.ReplaceAll(t.String(), ".", " "))
 		if _, ok := reflect.New(t).Interface().(GraphQLPaginator); ok {
 			// Special case: this is a paginator implementation, and we need to
 			// generate a paginator specific to the item types it contains. This
@@ -112,7 +112,7 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 							Name:        name,
 							Description: "HTTP response headers",
 							Type: graphql.NewObject(graphql.ObjectConfig{
-								Name:   casing.Camel(strings.Replace(objectName+" "+name, ".", " ", -1)),
+								Name:   casing.Camel(strings.ReplaceAll(objectName+" "+name, ".", " ")),
 								Fields: headerFields,
 							}),
 						}
@@ -235,7 +235,7 @@ func (r *Router) generateGraphModel(config *GraphQLConfig, t reflect.Type, urlTe
 		}
 
 		// map[string]MyObject -> StringMyObjectEntry
-		name := casing.Camel(strings.Replace(t.Key().String()+" "+t.Elem().String()+" Entry", ".", " ", -1))
+		name := casing.Camel(strings.ReplaceAll(t.Key().String()+" "+t.Elem().String()+" Entry", ".", " "))
 
 		keyModel, err := r.generateGraphModel(config, t.Key(), "", nil, ignoreParams, listItems)
 		if err != nil {

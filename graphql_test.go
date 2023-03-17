@@ -225,7 +225,7 @@ func TestGraphQL(t *testing.T) {
 		IgnorePrefixes:  []string{"/ignored"},
 	})
 
-	query := strings.Replace(strings.Replace(`{
+	query := strings.ReplaceAll(strings.ReplaceAll(`{
 		categories(limit: 1) {
 			headers {
 				link
@@ -268,7 +268,7 @@ func TestGraphQL(t *testing.T) {
 				}
 			}
 		}
-	}`, "\n", " ", -1), "\t", "", -1)
+	}`, "\n", " "), "\t", "")
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest(http.MethodGet, "/graphql?query="+query, nil)
@@ -338,7 +338,7 @@ data:
 	app.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.YAMLEq(t, strings.Replace(`data:
+	assert.YAMLEq(t, strings.ReplaceAll(`data:
 	__schema:
 		queryType:
 			fields:
@@ -349,5 +349,5 @@ data:
 			- name: storeName
 			- name: stores
 			- name: storesItem
-`, "\t", "  ", -1), w.Body.String())
+`, "\t", "  "), w.Body.String())
 }

@@ -360,7 +360,7 @@ func (r *Router) OpenAPIHook(hook func(*gabs.Container)) {
 // location.
 func replaceRef(schema map[string]interface{}, from, to string) {
 	if schema["$ref"] != nil {
-		schema["$ref"] = strings.Replace(schema["$ref"].(string), from, to, -1) + ".json"
+		schema["$ref"] = strings.ReplaceAll(schema["$ref"].(string), from, to) + ".json"
 	}
 
 	for _, v := range schema {

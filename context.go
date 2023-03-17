@@ -157,9 +157,7 @@ func (c *hcontext) WriteHeader(status int) {
 		allowed := []string{}
 		for _, r := range c.op.responses {
 			if r.status == status || r.status == 0 {
-				for _, h := range r.headers {
-					allowed = append(allowed, h)
-				}
+				allowed = append(allowed, r.headers...)
 			}
 		}
 
@@ -172,7 +170,7 @@ func (c *hcontext) WriteHeader(status int) {
 			found := false
 
 			for _, h := range allowed {
-				if strings.ToLower(name) == strings.ToLower(h) {
+				if strings.EqualFold(name, h) {
 					found = true
 					break
 				}

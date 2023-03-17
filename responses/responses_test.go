@@ -7,8 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/danielgtaylor/huma"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/danielgtaylor/huma"
 )
 
 var funcs = struct {
@@ -88,7 +89,7 @@ func TestNesResponses(t *testing.T) {
 		if s == 499 {
 			table["ClientClosedRequest"] = s
 		} else {
-			table[strings.Replace(http.StatusText(s), " ", "", -1)] = s
+			table[strings.ReplaceAll(http.StatusText(s), " ", "")] = s
 		}
 	}
 

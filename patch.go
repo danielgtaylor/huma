@@ -240,7 +240,7 @@ func generatePatch(resource *Resource, get *Operation, put *Operation) {
 			return
 		}
 
-		if bytes.Compare(patched, origWriter.Body.Bytes()) == 0 {
+		if bytes.Equal(patched, origWriter.Body.Bytes()) {
 			ctx.WriteHeader(http.StatusNotModified)
 			return
 		}
