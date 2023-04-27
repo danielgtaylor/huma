@@ -15,6 +15,12 @@ import (
 	"time"
 )
 
+// GenerateInline controls whether schemas are generated inline or as references
+// to components. Inline schemas are the existing default behavior, but do not
+// support recursive schemas. If you need recursive schemas, set this to false
+// before generating any schemas.
+var GenerateInline bool = true
+
 // ErrSchemaInvalid is sent when there is a problem building the schema.
 var ErrSchemaInvalid = errors.New("schema is invalid")
 
@@ -477,16 +483,18 @@ func GenerateWithMode(t reflect.Type, mode Mode, schema *Schema, definedRefs map
 			return &Schema{Type: TypeString, Format: "uri"}, nil
 		}
 
-		tname := t.Name()
-		if tname != "" {
-			ref, exists := definedRefs[tname]
-			if exists {
-				return &Schema{Ref: ref.Ref}, nil
-			} else {
-				definedRefs[tname] = NestedSchemaReference{
-					Name: tname,
-					Ref:  fmt.Sprintf("#/components/schemas/%s", tname),
-					Type: t,
+		if !GenerateInline {
+			tname := t.Name()
+			if tname != "" {
+				ref, exists := definedRefs[tname]
+				if exists {
+					return &Schema{Ref: ref.Ref}, nil
+				} else {
+					definedRefs[tname] = NestedSchemaReference{
+						Name: tname,
+						Ref:  fmt.Sprintf("#/components/schemas/%s", tname),
+						Type: t,
+					}
 				}
 			}
 		}

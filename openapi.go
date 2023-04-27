@@ -116,7 +116,7 @@ func (c *oaComponents) addSchema(t reflect.Type, mode schema.Mode, hint string, 
 				}
 				// Add the generated schema to the list of schemas associatd
 				// with this component.
-				c.Schemas[k] = s
+				c.addExistingSchema(s, k, generateSchemaField)
 			}
 		}
 	}
