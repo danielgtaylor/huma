@@ -685,6 +685,18 @@ Parameters have some additional validation tags:
 | ---------- | ------------------------------ | ----------------- |
 | `internal` | Internal-only (not documented) | `internal:"true"` |
 
+## Recursion
+
+Recursive inputs or outputs are supported by setting a special field in the schema generator (this is to support backward-compatibility):
+
+```go
+	// Set to false to generate references to each struct that are shared between
+	// the various operation inputs/outputs, enabling support for recursion.
+	schema.GenerateInline = false
+```
+
+The default behavior is to generate everything inline. Note that switching between the two styles is likely to break generated SDKs, so plan for a major version bump if/when you make the change.
+
 ## Middleware
 
 Standard [Go HTTP middleware](https://justinas.org/writing-http-middleware-in-go) is supported. It can be attached to the main router/app or to individual resources, but **must** be added _before_ operation handlers are added.
