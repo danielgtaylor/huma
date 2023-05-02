@@ -1,0 +1,15 @@
+syntax = "proto3";
+package demo;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "./protodemo";
+
+message User {
+	string id = 1;
+	string name = 2;
+	string email = 3;
+	string password = 4;
+	google.protobuf.Timestamp updated = 5;
+	repeated string roles = 6;
+}

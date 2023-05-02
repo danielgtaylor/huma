@@ -1,0 +1,104 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"reflect"
+
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/humafiber"
+	"github.com/danielgtaylor/huma/v2/protodemo/protodemo"
+	"github.com/gofiber/fiber/v2"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+/*
+Create:
+
+restish put :3000/users/daniel -H "Accept:application/protobuf" name: Daniel Taylor, email: dt@example.com, roles[]: admin >user.pb
+
+Conver to JSON:
+
+cat user.pb | restish put :3000/users/daniel -H "Content-Type: application/protobuf" -H "Accept: application/json"
+
+*/
+
+type PutUserInput struct {
+	ID   string `path:"id"`
+	Body *protodemo.User
+}
+
+type PutUserOutput struct {
+	Body *protodemo.User
+}
+
+func main() {
+	r := fiber.New()
+
+	api := humafiber.New(r, huma.Config{
+		OpenAPI: &huma.OpenAPI{
+			Info: &huma.Info{
+				Title:   "My API",
+				Version: "1.0.0",
+			},
+		},
+		DisableSchemaField: true,
+	})
+
+	api.AddFormat("application/json", "json", func(w io.Writer, v any) error {
+		b, err := protojson.Marshal(v.(proto.Message))
+		if err != nil {
+			panic(err)
+		}
+		_, err = w.Write(b)
+		return err
+	}, func(data []byte, v any) error {
+		// v = any as **proto.Message, we need to create a new instance and
+		// then let the unmarshaler do its thing.
+		vv := reflect.New(reflect.TypeOf(v).Elem().Elem())
+		reflect.ValueOf(v).Elem().Set(vv)
+		return protojson.Unmarshal(data, vv.Interface().(proto.Message))
+	})
+
+	api.AddFormat("application/protobuf", "proto", func(w io.Writer, v any) error {
+		if m, ok := v.(proto.Message); ok {
+			b, err := proto.Marshal(m)
+			if err != nil {
+				return err
+			}
+			_, err = w.Write(b)
+			return err
+		}
+
+		return fmt.Errorf("not a proto message: %T, %+v", v, v)
+	}, func(data []byte, v any) error {
+		// v = any as **proto.Message, we need to create a new instance and
+		// then let the unmarshaler do its thing.
+		vv := reflect.New(reflect.TypeOf(v).Elem().Elem())
+		reflect.ValueOf(v).Elem().Set(vv)
+		return proto.Unmarshal(data, vv.Interface().(proto.Message))
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:      "put-user",
+		Method:           http.MethodPut,
+		Path:             "/users/{id}",
+		SkipValidateBody: true,
+	}, func(ctx context.Context, input *PutUserInput) (*PutUserOutput, error) {
+		return &PutUserOutput{
+			Body: &protodemo.User{
+				Id:      input.ID,
+				Name:    input.Body.Name,
+				Email:   input.Body.Email,
+				Roles:   input.Body.Roles,
+				Updated: timestamppb.Now(),
+			},
+		}, nil
+	})
+
+	r.Listen(":3000")
+}
