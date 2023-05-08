@@ -79,7 +79,7 @@ type GreetingOutput struct {
 	}
 }
 
-func RegisterRoutes(api humafiber.API) {
+func RegisterRoutes(api huma.API) {
 	huma.Register(api, huma.Operation{
 		OperationID: "greet",
 		Method:      http.MethodPost,
@@ -124,7 +124,7 @@ func RegisterRoutes(api humafiber.API) {
 }
 
 func main() {
-	var api humafiber.API
+	var api huma.API
 
 	cli := huma.NewCLI(func(cli huma.CLI, opts *Options) {
 		// r := chi.NewMux()
@@ -150,20 +150,21 @@ func main() {
 			return c.SendString("OK")
 		})
 
-		api = humafiber.New(r, huma.Config{
-			OpenAPI: &huma.OpenAPI{
-				Info: &huma.Info{
-					Title:   "My API",
-					Version: "1.0.0",
-				},
-				Servers: []*huma.Server{
-					{URL: "http://localhost:3001"},
-				},
-				Extensions: map[string]interface{}{
-					"x-foo": "bar",
-				},
-			},
-		})
+		api = humafiber.New(r, huma.DefaultConfig("My API", "1.0.0"))
+		// api = humafiber.New(r, huma.Config{
+		// 	OpenAPI: &huma.OpenAPI{
+		// 		Info: &huma.Info{
+		// 			Title:   "My API",
+		// 			Version: "1.0.0",
+		// 		},
+		// 		Servers: []*huma.Server{
+		// 			{URL: "http://localhost:3001"},
+		// 		},
+		// 		Extensions: map[string]interface{}{
+		// 			"x-foo": "bar",
+		// 		},
+		// 	},
+		// })
 
 		// huma.AutoRegister(api, Things{...})
 		// huma.Register(api, http.MethodGet, "/foo/{id}", func(ctx context.Context, input *GreetingInput) (*GreetingOutput, error) {
@@ -186,12 +187,15 @@ func main() {
 	cli.Root().AddCommand(&cobra.Command{
 		Use:   "openapi",
 		Short: "Print the OpenAPI spec",
-		Run: func(cmd *cobra.Command, args []string) {
-			b, _ := yaml.Marshal(api.OpenAPI())
-			fmt.Println(string(b))
-			// b, _ = json.Marshal(api.OpenAPI())
-			// fmt.Println(string(b))
-		},
+		Run: huma.WithOptions(
+			func(cmd *cobra.Command, args []string, options *Options) {
+				if options.Debug {
+					fmt.Println("Debug mode enabled")
+				}
+				b, _ := yaml.Marshal(api.OpenAPI())
+				fmt.Println(string(b))
+			},
+		),
 	})
 
 	cli.Run()

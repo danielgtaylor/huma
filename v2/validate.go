@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/mail"
 	"net/url"
+	"reflect"
 	"regexp"
 	"strconv"
 	"time"
@@ -14,10 +15,25 @@ import (
 	"golang.org/x/net/idna"
 )
 
+type ValidateMode int
+
+const (
+	// ModeReadFromServer is a read mode (response output) that may ignore or
+	// reject write-only fields that are non-zero, as these write-only fields
+	// are meant to be sent by the client.
+	ModeReadFromServer ValidateMode = iota
+
+	// ModeWriteToServer is a write mode (request input) that may ignore or
+	// reject read-only fields that are non-zero, as these are owned by the
+	// server and the client should not try to modify them.
+	ModeWriteToServer
+)
+
 var rxHostname = regexp.MustCompile(`^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$`)
 var rxURITemplate = regexp.MustCompile("^([^{]*({[^}]*})?)*$")
 var rxJSONPointer = regexp.MustCompile("^(?:/(?:[^~/]|~0|~1)*)*$")
 var rxRelJSONPointer = regexp.MustCompile("^(?:0|[1-9][0-9]*)(?:#|(?:/(?:[^~/]|~0|~1)*)*)$")
+var rxBase64 = regexp.MustCompile(`^[a-zA-Z0-9+/_-]+=*$`)
 
 func mapTo[A, B any](s []A, f func(A) B) []B {
 	r := make([]B, len(s))
@@ -27,6 +43,10 @@ func mapTo[A, B any](s []A, f func(A) B) []B {
 	return r
 }
 
+// PathBuffer is a low-allocation helper for building a path string like
+// `foo.bar.baz`. It is not thread-safe. Combined with `sync.Pool` it can
+// result in zero allocations, and is used for validation. It is significantly
+// better than `strings.Builder` and `bytes.Buffer` for this use case.
 type PathBuffer struct {
 	buf []byte
 	off int
@@ -73,6 +93,7 @@ func NewPathBuffer(buf []byte, offset int) *PathBuffer {
 	return &PathBuffer{buf: buf, off: offset}
 }
 
+// ValidateResult tracks validation errors.
 type ValidateResult struct {
 	Errors []error
 }
@@ -173,7 +194,11 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 	}
 }
 
-func Validate(r Registry, s *Schema, path *PathBuffer, v any, res *ValidateResult) {
+// Validate an input value against a schema, collecting errors in the validation
+// result object. If successful, `res.Errors` will be empty. It is suggested
+// to use a `sync.Pool` to reuse the PathBuffer and ValidateResult objects,
+// making sure to call `Reset()` on them before returning them to the pool.
+func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any, res *ValidateResult) {
 	// Get the actual schema if this is a reference.
 	for s.Ref != "" {
 		s = r.SchemaFromRef(s.Ref)
@@ -251,6 +276,12 @@ func Validate(r Registry, s *Schema, path *PathBuffer, v any, res *ValidateResul
 		if s.Format != "" {
 			validateFormat(path, str, s, res)
 		}
+
+		if s.ContentEncoding == "base64" {
+			if !rxBase64.MatchString(str) {
+				res.Add(path, str, "expected string to be base64 encoded")
+			}
+		}
 	case TypeArray:
 		arr, ok := v.([]any)
 		if !ok {
@@ -281,12 +312,12 @@ func Validate(r Registry, s *Schema, path *PathBuffer, v any, res *ValidateResul
 
 		for i, item := range arr {
 			path.Push(strconv.Itoa(i))
-			Validate(r, s.Items, path, item, res)
+			Validate(r, s.Items, path, mode, item, res)
 			path.Pop()
 		}
 	case TypeObject:
 		if vv, ok := v.(map[string]any); ok {
-			handleMapString(r, s, path, vv, res)
+			handleMapString(r, s, path, mode, vv, res)
 			// TODO: handle map[any]any
 		} else {
 			res.Add(path, v, "expected object")
@@ -308,7 +339,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, v any, res *ValidateResul
 	}
 }
 
-func handleMapString(r Registry, s *Schema, path *PathBuffer, m map[string]any, res *ValidateResult) {
+func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m map[string]any, res *ValidateResult) {
 	if s.MinProperties != nil {
 		if len(m) < *s.MinProperties {
 			res.Add(path, m, s.msgMinProperties)
@@ -325,10 +356,26 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, m map[string]any, 
 			v = r.SchemaFromRef(v.Ref)
 		}
 
-		// TODO: handle readOnly / writeOnly
+		// We should be permissive by default to enable easy round-trips for the
+		// client without needing to remove read-only values.
+		// TODO: should we make this configurable?
+		// if mode == ModeWriteToServer && s.ReadOnly && m[k] != nil && !reflect.ValueOf(m[k]).IsZero() {
+		// 	res.Add(path, m[k], "read only property is non-zero")
+		// 	continue
+		// }
+
+		if mode == ModeReadFromServer && s.WriteOnly && m[k] == nil && !reflect.ValueOf(m[k]).IsZero() {
+			res.Add(path, m[k], "write only property is non-zero")
+			continue
+		}
 
 		if m[k] == nil {
 			if !s.requiredMap[k] {
+				continue
+			}
+			if (mode == ModeWriteToServer && s.ReadOnly) ||
+				(mode == ModeReadFromServer && s.WriteOnly) {
+				// These are not required for the current mode.
 				continue
 			}
 			res.Add(path, m, s.msgRequired[k])
@@ -336,7 +383,7 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, m map[string]any, 
 		}
 
 		path.Push(k)
-		Validate(r, v, path, m[k], res)
+		Validate(r, v, path, mode, m[k], res)
 		path.Pop()
 	}
 
@@ -359,7 +406,7 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, m map[string]any, 
 			}
 
 			path.Push(k)
-			Validate(r, addl, path, v, res)
+			Validate(r, addl, path, mode, v, res)
 			path.Pop()
 		}
 	}

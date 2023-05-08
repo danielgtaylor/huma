@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"reflect"
@@ -39,6 +38,44 @@ type PutUserOutput struct {
 func main() {
 	r := fiber.New()
 
+	// Define our custom formats.
+	jsonFormat := huma.Format{
+		Marshal: func(w io.Writer, v any) error {
+			b, err := protojson.Marshal(v.(proto.Message))
+			if err != nil {
+				panic(err)
+			}
+			_, err = w.Write(b)
+			return err
+		},
+		Unmarshal: func(data []byte, v any) error {
+			// v = any as **proto.Message, we need to create a new instance and
+			// then let the unmarshaler do its thing.
+			vv := reflect.New(reflect.TypeOf(v).Elem().Elem())
+			reflect.ValueOf(v).Elem().Set(vv)
+			return protojson.Unmarshal(data, vv.Interface().(proto.Message))
+		},
+	}
+
+	protoFormat := huma.Format{
+		Marshal: func(w io.Writer, v any) error {
+			b, err := proto.Marshal(v.(proto.Message))
+			if err != nil {
+				panic(err)
+			}
+			_, err = w.Write(b)
+			return err
+		},
+		Unmarshal: func(data []byte, v any) error {
+			// v = any as **proto.Message, we need to create a new instance and
+			// then let the unmarshaler do its thing.
+			vv := reflect.New(reflect.TypeOf(v).Elem().Elem())
+			reflect.ValueOf(v).Elem().Set(vv)
+			return proto.Unmarshal(data, vv.Interface().(proto.Message))
+		},
+	}
+
+	// Create the API with those formats.
 	api := humafiber.New(r, huma.Config{
 		OpenAPI: &huma.OpenAPI{
 			Info: &huma.Info{
@@ -46,41 +83,12 @@ func main() {
 				Version: "1.0.0",
 			},
 		},
-		DisableSchemaField: true,
-	})
-
-	api.AddFormat("application/json", "json", func(w io.Writer, v any) error {
-		b, err := protojson.Marshal(v.(proto.Message))
-		if err != nil {
-			panic(err)
-		}
-		_, err = w.Write(b)
-		return err
-	}, func(data []byte, v any) error {
-		// v = any as **proto.Message, we need to create a new instance and
-		// then let the unmarshaler do its thing.
-		vv := reflect.New(reflect.TypeOf(v).Elem().Elem())
-		reflect.ValueOf(v).Elem().Set(vv)
-		return protojson.Unmarshal(data, vv.Interface().(proto.Message))
-	})
-
-	api.AddFormat("application/protobuf", "proto", func(w io.Writer, v any) error {
-		if m, ok := v.(proto.Message); ok {
-			b, err := proto.Marshal(m)
-			if err != nil {
-				return err
-			}
-			_, err = w.Write(b)
-			return err
-		}
-
-		return fmt.Errorf("not a proto message: %T, %+v", v, v)
-	}, func(data []byte, v any) error {
-		// v = any as **proto.Message, we need to create a new instance and
-		// then let the unmarshaler do its thing.
-		vv := reflect.New(reflect.TypeOf(v).Elem().Elem())
-		reflect.ValueOf(v).Elem().Set(vv)
-		return proto.Unmarshal(data, vv.Interface().(proto.Message))
+		Formats: map[string]huma.Format{
+			"application/json":     jsonFormat,
+			"json":                 jsonFormat,
+			"application/protobuf": protoFormat,
+			"proto":                protoFormat,
+		},
 	})
 
 	huma.Register(api, huma.Operation{

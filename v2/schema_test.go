@@ -25,9 +25,7 @@ type RecursiveInput struct {
 }
 
 func TestSchema(t *testing.T) {
-	r := NewMapRegistry("#/components/schemas/", func(t reflect.Type, hint string) string {
-		return t.Name()
-	})
+	r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
 
 	s := r.Schema(reflect.TypeOf(GreetingInput{}), false, "")
 	// fmt.Printf("%+v\n", s)
@@ -40,7 +38,7 @@ func TestSchema(t *testing.T) {
 	s2 := r.Schema(reflect.TypeOf(TestInput{}), false, "")
 	pb := NewPathBuffer(make([]byte, 0, 128), 0)
 	res := ValidateResult{}
-	Validate(r, s2, pb, map[string]any{
+	Validate(r, s2, pb, ModeReadFromServer, map[string]any{
 		"name": "foo",
 		"sub": map[string]any{
 			"num": 1.0,
@@ -74,9 +72,7 @@ type BenchStruct struct {
 }
 
 func BenchmarkSchema(b *testing.B) {
-	r := NewMapRegistry("#/components/schemas/", func(t reflect.Type, hint string) string {
-		return t.Name()
-	})
+	r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
 
 	s2 := r.Schema(reflect.TypeOf(BenchStruct{}), false, "")
 
@@ -97,7 +93,7 @@ func BenchmarkSchema(b *testing.B) {
 	}
 	pb := NewPathBuffer(make([]byte, 0, 128), 0)
 	res := ValidateResult{}
-	Validate(r, s2, pb, input, &res)
+	Validate(r, s2, pb, ModeReadFromServer, input, &res)
 	assert.Empty(b, res.Errors)
 
 	b.ResetTimer()
@@ -105,7 +101,7 @@ func BenchmarkSchema(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		pb.Reset()
 		res.Reset()
-		Validate(r, s2, pb, input, &res)
+		Validate(r, s2, pb, ModeReadFromServer, input, &res)
 		if len(res.Errors) > 0 {
 			b.Fatal(res.Errors)
 		}
@@ -113,9 +109,7 @@ func BenchmarkSchema(b *testing.B) {
 }
 
 func BenchmarkSchemaErrors(b *testing.B) {
-	r := NewMapRegistry("#/components/schemas/", func(t reflect.Type, hint string) string {
-		return t.Name()
-	})
+	r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
 
 	s2 := r.Schema(reflect.TypeOf(BenchStruct{}), false, "")
 
@@ -133,7 +127,7 @@ func BenchmarkSchemaErrors(b *testing.B) {
 	}
 	pb := NewPathBuffer(make([]byte, 0, 128), 0)
 	res := ValidateResult{}
-	Validate(r, s2, pb, input, &res)
+	Validate(r, s2, pb, ModeReadFromServer, input, &res)
 	assert.NotEmpty(b, res.Errors)
 
 	b.ResetTimer()
@@ -141,6 +135,6 @@ func BenchmarkSchemaErrors(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		pb.Reset()
 		res.Reset()
-		Validate(r, s2, pb, input, &res)
+		Validate(r, s2, pb, ModeReadFromServer, input, &res)
 	}
 }

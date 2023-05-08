@@ -13,8 +13,9 @@ import (
 // like only inline objects (no refs) or always using refs for structs.
 type Registry interface {
 	Schema(t reflect.Type, allowRef bool, hint string) *Schema
-	Map() map[string]*Schema
 	SchemaFromRef(ref string) *Schema
+	TypeFromRef(ref string) reflect.Type
+	Map() map[string]*Schema
 	MarshalJSON() ([]byte, error)
 	MarshalYAML() (interface{}, error)
 }
@@ -36,6 +37,7 @@ func DefaultSchemaNamer(t reflect.Type, hint string) string {
 type mapRegistry struct {
 	prefix  string
 	schemas map[string]*Schema
+	types   map[string]reflect.Type
 	seen    map[reflect.Type]bool
 	namer   func(reflect.Type, string) string
 }
@@ -62,6 +64,7 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 	// First, register the type so refs can be created above for recursive types.
 	if getsRef {
 		r.schemas[name] = &Schema{}
+		r.types[name] = t
 		r.seen[t] = true
 	}
 	s := SchemaFromType(r, t)
@@ -75,12 +78,16 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 	return s
 }
 
-func (r *mapRegistry) Map() map[string]*Schema {
-	return r.schemas
-}
-
 func (r *mapRegistry) SchemaFromRef(ref string) *Schema {
 	return r.schemas[ref[len(r.prefix):]]
+}
+
+func (r *mapRegistry) TypeFromRef(ref string) reflect.Type {
+	return r.types[ref[len(r.prefix):]]
+}
+
+func (r *mapRegistry) Map() map[string]*Schema {
+	return r.schemas
 }
 
 func (r *mapRegistry) MarshalJSON() ([]byte, error) {
@@ -97,6 +104,7 @@ func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) strin
 	return &mapRegistry{
 		prefix:  prefix,
 		schemas: map[string]*Schema{},
+		types:   map[string]reflect.Type{},
 		seen:    map[reflect.Type]bool{},
 		namer:   namer,
 	}

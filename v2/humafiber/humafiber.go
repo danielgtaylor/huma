@@ -9,62 +9,65 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-type API = huma.API[*fiber.Ctx, *fiber.Ctx]
+type fiberCtx struct {
+	orig *fiber.Ctx
+}
+
+func (c *fiberCtx) GetMatched() string {
+	return c.orig.Route().Path
+}
+
+func (c *fiberCtx) GetContext() context.Context {
+	return c.orig.Context()
+}
+
+func (c *fiberCtx) GetParam(name string) string {
+	return c.orig.Params(name)
+}
+
+func (c *fiberCtx) GetQuery(name string) string {
+	return c.orig.Query(name)
+}
+
+func (c *fiberCtx) GetHeader(name string) string {
+	return c.orig.Get(name)
+}
+
+func (c *fiberCtx) GetBody() ([]byte, error) {
+	return c.orig.Body(), nil
+}
+
+func (c *fiberCtx) WriteStatus(code int) {
+	c.orig.Status(code)
+}
+
+func (c *fiberCtx) AppendHeader(name string, value string) {
+	c.orig.Append(name, value)
+}
+
+func (c *fiberCtx) WriteHeader(name string, value string) {
+	c.orig.Set(name, value)
+}
+
+func (c *fiberCtx) BodyWriter() io.Writer {
+	return c.orig
+}
 
 type fiberAdapter struct {
 	router fiber.Router
 }
 
-func (a *fiberAdapter) Handle(method, path string, handler func(w *fiber.Ctx, r *fiber.Ctx)) {
+func (a *fiberAdapter) Handle(method, path string, handler func(huma.Context)) {
 	// Convert {param} to :param
 	path = strings.ReplaceAll(path, "{", ":")
 	path = strings.ReplaceAll(path, "}", "")
 	a.router.Add(method, path, func(c *fiber.Ctx) error {
-		handler(c, c)
+		ctx := &fiberCtx{orig: c}
+		handler(ctx)
 		return nil
 	})
 }
 
-func (a *fiberAdapter) GetMatched(r *fiber.Ctx) string {
-	return r.Route().Path
-}
-
-func (a *fiberAdapter) GetContext(r *fiber.Ctx) context.Context {
-	return r.Context()
-}
-
-func (a *fiberAdapter) GetParam(r *fiber.Ctx, name string) string {
-	return r.Params(name)
-}
-
-func (a *fiberAdapter) GetQuery(r *fiber.Ctx, name string) string {
-	return r.Query(name)
-}
-
-func (a *fiberAdapter) GetHeader(r *fiber.Ctx, name string) string {
-	return r.Get(name)
-}
-
-func (a *fiberAdapter) GetBody(r *fiber.Ctx) ([]byte, error) {
-	return r.Body(), nil
-}
-
-func (a *fiberAdapter) WriteStatus(w *fiber.Ctx, code int) {
-	w.Status(code)
-}
-
-func (a *fiberAdapter) AppendHeader(w *fiber.Ctx, name string, value string) {
-	w.Append(name, value)
-}
-
-func (a *fiberAdapter) WriteHeader(w *fiber.Ctx, name string, value string) {
-	w.Set(name, value)
-}
-
-func (a *fiberAdapter) BodyWriter(w *fiber.Ctx) io.Writer {
-	return w
-}
-
-func New(r fiber.Router, config huma.Config) API {
-	return huma.NewAPI[*fiber.Ctx, *fiber.Ctx](config, &fiberAdapter{router: r})
+func New(r fiber.Router, config huma.Config) huma.API {
+	return huma.NewAPI(config, &fiberAdapter{router: r})
 }

@@ -9,55 +9,62 @@ import (
 	"github.com/go-chi/chi"
 )
 
+type chiContext struct {
+	r *http.Request
+	w http.ResponseWriter
+}
+
+func (ctx *chiContext) GetMatched() string {
+	return chi.RouteContext(ctx.r.Context()).RoutePattern()
+}
+
+func (ctx *chiContext) GetContext() context.Context {
+	return ctx.r.Context()
+}
+
+func (ctx *chiContext) GetParam(name string) string {
+	return chi.URLParam(ctx.r, name)
+}
+
+func (ctx *chiContext) GetQuery(name string) string {
+	// TODO: figure out some way to not parse the query params each time...
+	return ctx.r.URL.Query().Get(name)
+}
+
+func (ctx *chiContext) GetHeader(name string) string {
+	return ctx.r.Header.Get(name)
+}
+
+func (ctx *chiContext) GetBody() ([]byte, error) {
+	return io.ReadAll(ctx.r.Body)
+}
+
+func (ctx *chiContext) WriteStatus(code int) {
+	ctx.w.WriteHeader(code)
+}
+
+func (ctx *chiContext) AppendHeader(name string, value string) {
+	ctx.w.Header().Add(name, value)
+}
+
+func (ctx *chiContext) WriteHeader(name string, value string) {
+	ctx.w.Header().Set(name, value)
+}
+
+func (ctx *chiContext) BodyWriter() io.Writer {
+	return ctx.w
+}
+
 type chiAdapter struct {
 	router chi.Router
 }
 
-func (a *chiAdapter) Handle(method, path string, handler func(http.ResponseWriter, *http.Request)) {
-	a.router.MethodFunc(method, path, handler)
+func (a *chiAdapter) Handle(method, path string, handler func(huma.Context)) {
+	a.router.MethodFunc(method, path, func(w http.ResponseWriter, r *http.Request) {
+		handler(&chiContext{r: r, w: w})
+	})
 }
 
-func (a *chiAdapter) GetMatched(r *http.Request) string {
-	return chi.RouteContext(r.Context()).RoutePattern()
-}
-
-func (a *chiAdapter) GetContext(r *http.Request) context.Context {
-	return r.Context()
-}
-
-func (a *chiAdapter) GetParam(r *http.Request, name string) string {
-	return chi.URLParam(r, name)
-}
-
-func (a *chiAdapter) GetQuery(r *http.Request, name string) string {
-	// TODO: figure out some way to not parse the query params each time...
-	return r.URL.Query().Get(name)
-}
-
-func (a *chiAdapter) GetHeader(r *http.Request, name string) string {
-	return r.Header.Get(name)
-}
-
-func (a *chiAdapter) GetBody(r *http.Request) ([]byte, error) {
-	return io.ReadAll(r.Body)
-}
-
-func (a *chiAdapter) WriteStatus(w http.ResponseWriter, code int) {
-	w.WriteHeader(code)
-}
-
-func (a *chiAdapter) AppendHeader(w http.ResponseWriter, name string, value string) {
-	w.Header().Add(name, value)
-}
-
-func (a *chiAdapter) WriteHeader(w http.ResponseWriter, name string, value string) {
-	w.Header().Set(name, value)
-}
-
-func (a *chiAdapter) BodyWriter(w http.ResponseWriter) io.Writer {
-	return w
-}
-
-func NewChi(r chi.Router, config huma.Config) huma.StdAPI {
-	return huma.NewAPI[*http.Request, http.ResponseWriter](config, &chiAdapter{router: r})
+func NewChi(r chi.Router, config huma.Config) huma.API {
+	return huma.NewAPI(config, &chiAdapter{router: r})
 }

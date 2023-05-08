@@ -59,10 +59,7 @@ func BenchmarkSecondDecode(b *testing.B) {
 
 	pb := NewPathBuffer([]byte{}, 0)
 	res := &ValidateResult{}
-	registry := NewMapRegistry("#/components/schemas/",
-		func(t reflect.Type, hint string) string {
-			return t.Name()
-		})
+	registry := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
 	fmt.Println("name", reflect.TypeOf(MediumSized{}).Name())
 	schema := registry.Schema(reflect.TypeOf(MediumSized{}), false, "")
 
@@ -74,7 +71,7 @@ func BenchmarkSecondDecode(b *testing.B) {
 				panic(err)
 			}
 
-			Validate(registry, schema, pb, tmp, res)
+			Validate(registry, schema, pb, ModeReadFromServer, tmp, res)
 
 			var out MediumSized
 			if err := json.Unmarshal(data, &out); err != nil {
@@ -91,7 +88,7 @@ func BenchmarkSecondDecode(b *testing.B) {
 				panic(err)
 			}
 
-			Validate(registry, schema, pb, tmp, res)
+			Validate(registry, schema, pb, ModeReadFromServer, tmp, res)
 
 			var out MediumSized
 			if err := mapstructure.Decode(tmp, &out); err != nil {

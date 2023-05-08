@@ -42,11 +42,17 @@ func deref(t reflect.Type) reflect.Type {
 	return t
 }
 
+// Schema represents a JSON Schema compatible with OpenAPI 3.1. It is extensible
+// with your own custom properties. It supports a subset of the full JSON Schema
+// spec, designed specifically for use with Go structs and to enable fast zero
+// or near-zero allocation happy-path validation for incoming requests.
 type Schema struct {
 	Type                 string             `yaml:"type,omitempty"`
+	Title                string             `yaml:"title,omitempty"`
 	Description          string             `yaml:"description,omitempty"`
 	Ref                  string             `yaml:"$ref,omitempty"`
 	Format               string             `yaml:"format,omitempty"`
+	ContentEncoding      string             `yaml:"contentEncoding,omitempty"`
 	Default              any                `yaml:"default,omitempty"`
 	Example              any                `yaml:"example,omitempty"`
 	Items                *Schema            `yaml:"items,omitempty"`
@@ -67,12 +73,15 @@ type Schema struct {
 	Required             []string           `yaml:"required,omitempty"`
 	MinProperties        *int               `yaml:"minProperties,omitempty"`
 	MaxProperties        *int               `yaml:"maxProperties,omitempty"`
+	ReadOnly             bool               `yaml:"readOnly,omitempty"`
+	WriteOnly            bool               `yaml:"writeOnly,omitempty"`
 	Extensions           map[string]any     `yaml:",inline"`
 
 	patternRe   *regexp.Regexp  `yaml:"-"`
 	requiredMap map[string]bool `yaml:"-"`
 
-	// Precomputed validation messages
+	// Precomputed validation messages. These prevent allocations during
+	// validation and are known at schema creation time.
 	msgEnum             string            `yaml:"-"`
 	msgMinimum          string            `yaml:"-"`
 	msgExclusiveMinimum string            `yaml:"-"`
@@ -89,8 +98,73 @@ type Schema struct {
 	msgRequired         map[string]string `yaml:"-"`
 }
 
+func (s *Schema) PrecomputeMessages() {
+	s.msgEnum = "expected string to be one of \"" + strings.Join(mapTo(s.Enum, func(v any) string {
+		return fmt.Sprintf("%v", v)
+	}), ", ") + "\""
+	if s.Minimum != nil {
+		s.msgMinimum = fmt.Sprintf("expected number >= %f", *s.Minimum)
+	}
+	if s.ExclusiveMinimum != nil {
+		s.msgExclusiveMinimum = fmt.Sprintf("expected number < %f", *s.ExclusiveMinimum)
+	}
+	if s.Maximum != nil {
+		s.msgMaximum = fmt.Sprintf("expected number <= %f", *s.Maximum)
+	}
+	if s.ExclusiveMaximum != nil {
+		s.msgExclusiveMaximum = fmt.Sprintf("expected number < %f", *s.ExclusiveMaximum)
+	}
+	if s.MultipleOf != nil {
+		s.msgMultipleOf = fmt.Sprintf("expected number to be a multiple of %f", *s.MultipleOf)
+	}
+	if s.MinLength != nil {
+		s.msgMinLength = fmt.Sprintf("expected length >= %d", *s.MinLength)
+	}
+	if s.MaxLength != nil {
+		s.msgMaxLength = fmt.Sprintf("expected length <= %d", *s.MaxLength)
+	}
+	if s.Pattern != nil {
+		s.patternRe = regexp.MustCompile(*s.Pattern)
+		s.msgPattern = "expected string to match pattern " + *s.Pattern
+	}
+	if s.MinItems != nil {
+		s.msgMinItems = fmt.Sprintf("expected array with at least %d items", *s.MinItems)
+	}
+	if s.MaxItems != nil {
+		s.msgMaxItems = fmt.Sprintf("expected array with at most %d items", *s.MaxItems)
+	}
+	if s.MinProperties != nil {
+		s.msgMinProperties = fmt.Sprintf("expected object with at least %d properties", *s.MinProperties)
+	}
+	if s.MaxProperties != nil {
+		s.msgMaxProperties = fmt.Sprintf("expected object with at most %d properties", *s.MaxProperties)
+	}
+
+	if s.Required != nil {
+		if s.msgRequired == nil {
+			s.msgRequired = map[string]string{}
+		}
+		for _, name := range s.Required {
+			s.msgRequired[name] = "expected required property " + name + " to be present"
+		}
+	}
+}
+
 func (s *Schema) MarshalJSON() ([]byte, error) {
 	return yaml.MarshalWithOptions(s, yaml.JSON())
+}
+
+func boolTag(f reflect.StructField, tag string) bool {
+	if v := f.Tag.Get(tag); v != "" {
+		if v == "true" {
+			return true
+		} else if v == "false" {
+			return false
+		} else {
+			panic("invalid bool tag")
+		}
+	}
+	return false
 }
 
 func intTag(f reflect.StructField, tag string) *int {
@@ -185,65 +259,38 @@ func SchemaFromField(registry Registry, parent reflect.Type, f reflect.StructFie
 	}
 	fs := registry.Schema(f.Type, true, parentName+f.Name+"Struct")
 	fs.Description = f.Tag.Get("doc")
+	fs.Format = f.Tag.Get("format")
+	fs.ContentEncoding = f.Tag.Get("encoding")
 	fs.Default = jsonTag(f, "default", false)
 	fs.Example = jsonTag(f, "example", false)
+
 	if enum := f.Tag.Get("enum"); enum != "" {
+		enumValues := []any{}
 		for _, e := range strings.Split(enum, ",") {
-			fs.Enum = append(fs.Enum, jsonTagValue(f.Type, e))
+			enumValues = append(enumValues, jsonTagValue(f.Type, e))
 		}
-		fs.msgEnum = "expected string to be one of \"" + strings.Join(mapTo(fs.Enum, func(v any) string {
-			return fmt.Sprintf("%v", v)
-		}), ", ") + "\""
+		if fs.Type == TypeArray {
+			fs.Items.Enum = enumValues
+		} else {
+			fs.Enum = enumValues
+		}
 	}
 	fs.Minimum = floatTag(f, "minimum")
-	if fs.Minimum != nil {
-		fs.msgMinimum = fmt.Sprintf("expected number >= %f", *fs.Minimum)
-	}
 	fs.ExclusiveMinimum = floatTag(f, "exclusiveMinimum")
-	if fs.ExclusiveMaximum != nil {
-		fs.msgExclusiveMinimum = fmt.Sprintf("expected number < %f", *fs.ExclusiveMaximum)
-	}
 	fs.Maximum = floatTag(f, "maximum")
-	if fs.Maximum != nil {
-		fs.msgMaximum = fmt.Sprintf("expected number <= %f", *fs.Maximum)
-	}
 	fs.ExclusiveMaximum = floatTag(f, "exclusiveMaximum")
-	if fs.ExclusiveMaximum != nil {
-		fs.msgExclusiveMaximum = fmt.Sprintf("expected number < %f", *fs.ExclusiveMaximum)
-	}
 	fs.MultipleOf = floatTag(f, "multipleOf")
-	if fs.MultipleOf != nil {
-		fs.msgMultipleOf = fmt.Sprintf("expected number to be a multiple of %f", *fs.MultipleOf)
-	}
 	fs.MinLength = intTag(f, "minLength")
-	if fs.MinLength != nil {
-		fs.msgMinLength = fmt.Sprintf("expected length >= %d", *fs.MinLength)
-	}
 	fs.MaxLength = intTag(f, "maxLength")
-	if fs.MaxLength != nil {
-		fs.msgMaxLength = fmt.Sprintf("expected length <= %d", *fs.MaxLength)
-	}
 	fs.Pattern = stringTag(f, "pattern")
-	if fs.Pattern != nil {
-		fs.patternRe = regexp.MustCompile(*fs.Pattern)
-		fs.msgPattern = "expected string to match pattern " + *fs.Pattern
-	}
 	fs.MinItems = intTag(f, "minItems")
-	if fs.MinItems != nil {
-		fs.msgMinItems = fmt.Sprintf("expected array with at least %d items", *fs.MinItems)
-	}
 	fs.MaxItems = intTag(f, "maxItems")
-	if fs.MaxItems != nil {
-		fs.msgMaxItems = fmt.Sprintf("expected array with at most %d items", *fs.MaxItems)
-	}
+	fs.UniqueItems = boolTag(f, "uniqueItems")
 	fs.MinProperties = intTag(f, "minProperties")
-	if fs.MinProperties != nil {
-		fs.msgMinProperties = fmt.Sprintf("expected object with at least %d properties", *fs.MinProperties)
-	}
 	fs.MaxProperties = intTag(f, "maxProperties")
-	if fs.MaxProperties != nil {
-		fs.msgMaxProperties = fmt.Sprintf("expected object with at most %d properties", *fs.MaxProperties)
-	}
+	fs.ReadOnly = boolTag(f, "readOnly")
+	fs.WriteOnly = boolTag(f, "writeOnly")
+	fs.PrecomputeMessages()
 
 	return fs
 }
@@ -294,7 +341,9 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		s.Type = TypeString
 	case reflect.Slice, reflect.Array:
 		if t.Elem().Kind() == reflect.Uint8 {
+			// Special case: []byte will be serialized as a base64 string.
 			s.Type = TypeString
+			s.ContentEncoding = "base64"
 		} else {
 			s.Type = TypeArray
 			s.Items = r.Schema(t.Elem(), true, t.Name()+"Item")
@@ -332,10 +381,6 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 			if !omit {
 				required = append(required, name)
 				requiredMap[name] = true
-				if s.msgRequired == nil {
-					s.msgRequired = map[string]string{}
-				}
-				s.msgRequired[name] = "expected required property " + name + " to be present"
 			}
 
 			fs := SchemaFromField(r, t, f)
@@ -346,6 +391,7 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		s.Properties = props
 		s.Required = required
 		s.requiredMap = requiredMap
+		s.PrecomputeMessages()
 	}
 
 	return &s

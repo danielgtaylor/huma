@@ -1,6 +1,7 @@
 package huma
 
 import (
+	"bytes"
 	"path"
 	"reflect"
 	"sync"
@@ -10,81 +11,127 @@ type schemaField struct {
 	Schema string `json:"$schema"`
 }
 
-// TransformAddSchemaField adds a $schema field to the top level of the response
-// body that points to the schema for the response.
-func TransformAddSchemaField(prefix string) func(op *Operation, status string, v any) (any, error) {
-	// Keep a cache of types we've seen to make this much faster after the first
-	// one comes through.
-	mu := sync.RWMutex{}
-	types := map[any]struct {
-		t   reflect.Type
-		ref reflect.Value
-	}{}
-	return func(op *Operation, status string, v any) (any, error) {
-		if v == nil {
-			return v, nil
-		}
+type SchemaLinkTransformer struct {
+	prefix      string
+	schemasPath string
+	types       map[any]struct {
+		t      reflect.Type
+		ref    string
+		header string
+	}
+	bufPool sync.Pool
+}
 
-		if deref(reflect.TypeOf(v)).Kind() != reflect.Struct {
-			return v, nil
-		}
+func NewSchemaLinkTransformer(prefix, schemasPath string) *SchemaLinkTransformer {
+	return &SchemaLinkTransformer{
+		prefix:      prefix,
+		schemasPath: schemasPath,
+		types: map[any]struct {
+			t      reflect.Type
+			ref    string
+			header string
+		}{},
+		bufPool: sync.Pool{
+			New: func() any {
+				return bytes.NewBuffer(make([]byte, 0, 128))
+			},
+		},
+	}
+}
 
-		mu.RLock()
-		info, ok := types[v]
-		mu.RUnlock()
-		if !ok {
-			// TODO: ignore if it already has a $schema field...
-
-			resp := op.Responses[status]
-			if resp == nil {
-				resp = op.Responses["default"]
-				if resp == nil {
-					return v, nil
-				}
+func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
+	// Update registry to be able to get the type from a schema ref.
+	// Register the type in t.types with the generated ref
+	registry := oapi.Components.Schemas
+	for _, resp := range op.Responses {
+		for _, content := range resp.Content {
+			if content.Schema.Ref == "" {
+				continue
 			}
-			mt := resp.Content["application/json"]
-			if mt.Schema == nil || mt.Schema.Ref == "" {
-				return v, nil
+
+			schema := registry.SchemaFromRef(content.Schema.Ref)
+			if schema.Type != TypeObject || (schema.Properties != nil && schema.Properties["$schema"] != nil) {
+				continue
 			}
+
+			// First, modify the schema to have the $schema field.
+			schema.Properties["$schema"] = &Schema{
+				Type:        TypeString,
+				Format:      "uri",
+				Description: "A URL to the JSON Schema for this object.",
+				ReadOnly:    true,
+			}
+
+			// Then, create the wrapper Go type that has the $schema field.
+			typ := deref(registry.TypeFromRef(content.Schema.Ref))
 
 			extra := schemaField{
-				Schema: prefix + "/" + path.Base(mt.Schema.Ref) + ".json",
+				Schema: t.schemasPath + "/" + path.Base(content.Schema.Ref) + ".json",
 			}
 
-			t := deref(reflect.TypeOf(v))
 			fields := []reflect.StructField{
 				reflect.TypeOf(extra).Field(0),
 			}
-			for i := 0; i < t.NumField(); i++ {
-				f := t.Field(i)
+			for i := 0; i < typ.NumField(); i++ {
+				f := typ.Field(i)
 				if !f.IsExported() {
 					continue
 				}
 				fields = append(fields, f)
 			}
 
-			typ := reflect.StructOf(fields)
-			info.t = typ
-			info.ref = reflect.ValueOf(extra).Field(0)
-			mu.Lock()
-			types[v] = info
-			mu.Unlock()
+			newType := reflect.StructOf(fields)
+			info := t.types[typ]
+			info.t = newType
+			info.ref = extra.Schema
+			info.header = "<" + extra.Schema + ">; rel=\"describedBy\""
+			t.types[typ] = info
 		}
-
-		vv := reflect.Indirect(reflect.ValueOf(v))
-		tmp := reflect.New(info.t).Elem()
-		for i := 0; i < tmp.NumField(); i++ {
-			f := tmp.Field(i)
-			if !f.CanSet() {
-				continue
-			}
-			if i == 0 {
-				tmp.Field(i).Set(info.ref)
-			} else {
-				tmp.Field(i).Set(vv.Field(i - 1))
-			}
-		}
-
-		return tmp.Addr().Interface(), nil
 	}
+}
+
+func (t *SchemaLinkTransformer) Transform(ctx Context, op *Operation, status string, v any) (any, error) {
+	if v == nil {
+		return v, nil
+	}
+
+	typ := deref(reflect.TypeOf(v))
+
+	if typ.Kind() != reflect.Struct {
+		return v, nil
+	}
+
+	info := t.types[typ]
+	if info.t == nil {
+		return v, nil
+	}
+
+	host := ctx.GetHeader("Host")
+	ctx.AppendHeader("Link", info.header)
+
+	vv := reflect.Indirect(reflect.ValueOf(v))
+	tmp := reflect.New(info.t).Elem()
+	for i := 0; i < tmp.NumField(); i++ {
+		f := tmp.Field(i)
+		if !f.CanSet() {
+			continue
+		}
+		if i == 0 {
+			buf := t.bufPool.Get().(*bytes.Buffer)
+			if len(host) >= 9 && host[:9] == "localhost" {
+				buf.WriteString("http://")
+			} else {
+				buf.WriteString("https://")
+			}
+			buf.WriteString(host)
+			buf.WriteString(info.ref)
+			tmp.Field(i).SetString(buf.String())
+			buf.Reset()
+			t.bufPool.Put(buf)
+		} else {
+			tmp.Field(i).Set(vv.Field(i - 1))
+		}
+	}
+
+	return tmp.Addr().Interface(), nil
 }

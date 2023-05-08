@@ -1,6 +1,7 @@
 package huma
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -40,6 +41,18 @@ type CLI interface {
 	// should take whatever steps are necessary to stop the server, such as
 	// `httpServer.Shutdown(...)`.
 	OnStop(func())
+}
+
+type contextKey string
+
+var optionsKey contextKey = "huma/cli/options"
+
+// WithOptions is a helper for custom commands that need to access the options.
+func WithOptions[Options any](f func(cmd *cobra.Command, args []string, options *Options)) func(*cobra.Command, []string) {
+	return func(cmd *cobra.Command, s []string) {
+		var options *Options = cmd.Context().Value(optionsKey).(*Options)
+		f(cmd, s, options)
+	}
 }
 
 type option struct {
@@ -85,6 +98,9 @@ func (c *cli[Options]) Run() {
 		if existing != nil {
 			existing(cmd, args)
 		}
+
+		// Set options in context, so custom commands can access it.
+		cmd.SetContext(context.WithValue(cmd.Context(), optionsKey, &o))
 	}
 
 	// Run the command!

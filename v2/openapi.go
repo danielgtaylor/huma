@@ -1,6 +1,8 @@
 package huma
 
 import (
+	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/goccy/go-yaml"
@@ -240,6 +242,8 @@ type Tag struct {
 	Extensions   map[string]any `yaml:",inline"`
 }
 
+type AddOpFunc func(oapi *OpenAPI, op *Operation)
+
 type OpenAPI struct {
 	OpenAPI           string                `yaml:"openapi"`
 	Info              *Info                 `yaml:"info"`
@@ -252,6 +256,48 @@ type OpenAPI struct {
 	Tags              []*Tag                `yaml:"tags,omitempty"`
 	ExternalDocs      *ExternalDocs         `yaml:"externalDocs,omitempty"`
 	Extensions        map[string]any        `yaml:",inline"`
+
+	// OnAddOperation is called when an operation is added to the OpenAPI via
+	// `AddOperation`. You may bypass this by directly writing to the `Paths`
+	// map instead.
+	OnAddOperation []AddOpFunc `yaml:"-"`
+}
+
+func (o *OpenAPI) AddOperation(op *Operation) {
+	if o.Paths == nil {
+		o.Paths = map[string]*PathItem{}
+	}
+
+	item := o.Paths[op.Path]
+	if item == nil {
+		item = &PathItem{}
+		o.Paths[op.Path] = item
+	}
+
+	switch op.Method {
+	case http.MethodGet:
+		item.Get = op
+	case http.MethodPost:
+		item.Post = op
+	case http.MethodPut:
+		item.Put = op
+	case http.MethodPatch:
+		item.Patch = op
+	case http.MethodDelete:
+		item.Delete = op
+	case http.MethodHead:
+		item.Head = op
+	case http.MethodOptions:
+		item.Options = op
+	case http.MethodTrace:
+		item.Trace = op
+	default:
+		panic(fmt.Sprintf("unknown method %s", op.Method))
+	}
+
+	for _, f := range o.OnAddOperation {
+		f(o, op)
+	}
 }
 
 func (o *OpenAPI) MarshalJSON() ([]byte, error) {

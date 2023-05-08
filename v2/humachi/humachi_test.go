@@ -43,9 +43,7 @@ func BenchmarkHumaV2ChiNormal(b *testing.B) {
 	}
 
 	r := chi.NewMux()
-	app := NewChi(r, huma.Config{
-		OpenAPI: &huma.OpenAPI{},
-	})
+	app := NewChi(r, huma.DefaultConfig("Test", "1.0.0"))
 
 	huma.Register(app, huma.Operation{
 		OperationID: "greet",
@@ -115,7 +113,7 @@ func BenchmarkRawChi(b *testing.B) {
 
 		pb := huma.NewPathBuffer([]byte{}, 0)
 		res := &huma.ValidateResult{}
-		huma.Validate(registry, schema, pb, tmp, res)
+		huma.Validate(registry, schema, pb, huma.ModeWriteToServer, tmp, res)
 		if len(res.Errors) > 0 {
 			panic(res.Errors)
 		}
@@ -181,9 +179,10 @@ func BenchmarkHumaV2ChiFast(b *testing.B) {
 
 	r := chi.NewMux()
 	app := NewChi(r, huma.Config{
-		OpenAPI:            &huma.OpenAPI{},
-		DisableSchemaField: true,
-		DisableSchemaLink:  true,
+		OpenAPI: &huma.OpenAPI{},
+		Formats: map[string]huma.Format{
+			"application/json": huma.DefaultJSONFormat,
+		},
 	})
 
 	huma.Register(app, huma.Operation{
