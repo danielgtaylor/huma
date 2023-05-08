@@ -445,7 +445,6 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					res.Errors = append(res.Errors, errs...)
 				}
 			}
-			fmt.Println("Reminder: resolvers disabled... fix me!")
 		}
 
 		if len(res.Errors) > 0 {

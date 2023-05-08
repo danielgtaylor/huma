@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -65,4 +66,29 @@ func TestCLIHelp(t *testing.T) {
 	cli.Run()
 
 	assert.Equal(t, "Usage:\n  myapp [flags]\n\nFlags:\n      --debug         \n  -h, --help          help for myapp\n      --host string   \n      --port int\n", buf.String())
+}
+
+func TestCLICommandWithOptions(t *testing.T) {
+	type Options struct {
+		Debug bool
+	}
+
+	cli := NewCLI(func(cli CLI, options *Options) {
+		// Do nothing
+	})
+
+	wasSet := false
+	cli.Root().AddCommand(&cobra.Command{
+		Use: "custom",
+		Run: WithOptions(func(cmd *cobra.Command, args []string, options *Options) {
+			if options.Debug {
+				wasSet = true
+			}
+		}),
+	})
+
+	cli.Root().SetArgs([]string{"custom", "--debug"})
+	cli.Run()
+
+	assert.True(t, wasSet)
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 
@@ -31,8 +32,11 @@ type Adapter interface {
 	Handle(method, path string, handler func(ctx Context))
 }
 
+// Context is the current request/response context. It provides a generic
+// interface to get request information and write responses.
 type Context interface {
 	GetContext() context.Context
+	GetURL() url.URL
 	GetParam(name string) string
 	GetQuery(name string) string
 	GetHeader(name string) string

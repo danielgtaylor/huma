@@ -61,11 +61,11 @@ func BenchmarkHumaV2ChiNormal(b *testing.B) {
 		return resp, nil
 	})
 
-	b.ResetTimer()
-	b.ReportAllocs()
 	reqBody := strings.NewReader(`{"suffix": "!"}`)
 	req, _ := http.NewRequest(http.MethodPost, "/foo/123?num=5", reqBody)
 	req.Header.Set("Content-Type", "application/json")
+	b.ResetTimer()
+	b.ReportAllocs()
 	w := httptest.NewRecorder()
 	for i := 0; i < b.N; i++ {
 		reqBody.Seek(0, 0)
@@ -142,73 +142,12 @@ func BenchmarkRawChi(b *testing.B) {
 		w.Write(data)
 	})
 
-	b.ResetTimer()
-	b.ReportAllocs()
 	reqBody := strings.NewReader(`{"suffix": "!"}`)
 	req, _ := http.NewRequest(http.MethodPost, "/foo/123?num=5", reqBody)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	for i := 0; i < b.N; i++ {
-		reqBody.Seek(0, 0)
-		w.Body.Reset()
-		r.ServeHTTP(w, req)
-	}
-}
-
-func BenchmarkHumaV2ChiFast(b *testing.B) {
-	type GreetingInput struct {
-		ID          string `path:"id"`
-		ContentType string `header:"Content-Type"`
-		Num         int    `query:"num"`
-		Body        struct {
-			Suffix string `json:"suffix" maxLength:"5"`
-		}
-	}
-
-	type GreetingOutput struct {
-		ETag         string    `header:"ETag"`
-		LastModified time.Time `header:"Last-Modified"`
-		Body         struct {
-			Greeting    string `json:"greeting"`
-			Suffix      string `json:"suffix"`
-			Length      int    `json:"length"`
-			ContentType string `json:"content_type"`
-			Num         int    `json:"num"`
-		}
-	}
-
-	r := chi.NewMux()
-	app := NewChi(r, huma.Config{
-		OpenAPI: &huma.OpenAPI{},
-		Formats: map[string]huma.Format{
-			"application/json": huma.DefaultJSONFormat,
-		},
-	})
-
-	huma.Register(app, huma.Operation{
-		OperationID:        "greet",
-		Method:             http.MethodPost,
-		Path:               "/foo/{id}",
-		SkipValidateParams: true,
-		SkipValidateBody:   true,
-	}, func(ctx context.Context, input *GreetingInput) (*GreetingOutput, error) {
-		resp := &GreetingOutput{}
-		resp.ETag = "abc123"
-		resp.LastModified = lastModified
-		resp.Body.Greeting = "Hello, " + input.ID + input.Body.Suffix
-		resp.Body.Suffix = input.Body.Suffix
-		resp.Body.Length = len(resp.Body.Greeting)
-		resp.Body.ContentType = input.ContentType
-		resp.Body.Num = input.Num
-		return resp, nil
-	})
-
 	b.ResetTimer()
 	b.ReportAllocs()
-	reqBody := strings.NewReader(`{"suffix": "!"}`)
-	req, _ := http.NewRequest(http.MethodPost, "/foo/123?num=5", reqBody)
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
 	for i := 0; i < b.N; i++ {
 		reqBody.Seek(0, 0)
 		w.Body.Reset()
@@ -260,12 +199,12 @@ func BenchmarkRawChiFast(b *testing.B) {
 		w.Write(data)
 	})
 
-	b.ResetTimer()
-	b.ReportAllocs()
 	reqBody := strings.NewReader(`{"suffix": "!"}`)
 	req, _ := http.NewRequest(http.MethodPost, "/foo/123?num=5", reqBody)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
+	b.ResetTimer()
+	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		reqBody.Seek(0, 0)
 		w.Body.Reset()
@@ -307,12 +246,12 @@ func BenchmarkHumaV1Chi(t *testing.B) {
 		ctx.WriteModel(http.StatusOK, resp)
 	})
 
-	t.ResetTimer()
-	t.ReportAllocs()
 	reqBody := strings.NewReader(`{"suffix": "!"}`)
 	req, _ := http.NewRequest(http.MethodPost, "/foo/123?num=5", reqBody)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
+	t.ResetTimer()
+	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
 		reqBody.Seek(0, 0)
 		w.Body.Reset()

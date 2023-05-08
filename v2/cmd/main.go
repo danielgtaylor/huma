@@ -28,7 +28,7 @@ type GreetingInputBody struct {
 	Optional int    `json:"optional,omitempty" default:"2"`
 }
 
-func (b *GreetingInputBody) Resolve(ctx *fiber.Ctx) []error {
+func (b *GreetingInputBody) Resolve(ctx huma.Context) []error {
 	if strings.Contains(b.Suffix, "err") {
 		return []error{&huma.ErrorDetail{
 			Location: "body.suffix",
@@ -48,7 +48,7 @@ type GreetingInput struct {
 	// }
 }
 
-func (i *GreetingInput) Resolve(ctx *fiber.Ctx) []error {
+func (i *GreetingInput) Resolve(huma.Context) []error {
 	if i.Body.Suffix == "reserr" {
 		return []error{&huma.ErrorDetail{
 			Location: "body.suffix",

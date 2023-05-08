@@ -3,6 +3,7 @@ package humafiber
 import (
 	"context"
 	"io"
+	"net/url"
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -19,6 +20,11 @@ func (c *fiberCtx) GetMatched() string {
 
 func (c *fiberCtx) GetContext() context.Context {
 	return c.orig.Context()
+}
+
+func (c *fiberCtx) GetURL() url.URL {
+	u, _ := url.Parse(string(c.orig.Request().RequestURI()))
+	return *u
 }
 
 func (c *fiberCtx) GetParam(name string) string {

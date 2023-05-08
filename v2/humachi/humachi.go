@@ -4,14 +4,16 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-chi/chi"
 )
 
 type chiContext struct {
-	r *http.Request
-	w http.ResponseWriter
+	r     *http.Request
+	w     http.ResponseWriter
+	query url.Values
 }
 
 func (ctx *chiContext) GetMatched() string {
@@ -22,13 +24,21 @@ func (ctx *chiContext) GetContext() context.Context {
 	return ctx.r.Context()
 }
 
+func (ctx *chiContext) GetURL() url.URL {
+	return *ctx.r.URL
+}
+
 func (ctx *chiContext) GetParam(name string) string {
 	return chi.URLParam(ctx.r, name)
 }
 
 func (ctx *chiContext) GetQuery(name string) string {
-	// TODO: figure out some way to not parse the query params each time...
-	return ctx.r.URL.Query().Get(name)
+	// Query is parsed on each request, so cache it.
+	if ctx.query == nil {
+		ctx.query = ctx.r.URL.Query()
+	}
+
+	return ctx.query.Get(name)
 }
 
 func (ctx *chiContext) GetHeader(name string) string {
