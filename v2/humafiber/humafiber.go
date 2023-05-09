@@ -1,6 +1,7 @@
 package humafiber
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net/url"
@@ -39,8 +40,8 @@ func (c *fiberCtx) GetHeader(name string) string {
 	return c.orig.Get(name)
 }
 
-func (c *fiberCtx) GetBody() ([]byte, error) {
-	return c.orig.Body(), nil
+func (c *fiberCtx) GetBodyReader() io.Reader {
+	return bytes.NewReader(c.orig.Body())
 }
 
 func (c *fiberCtx) WriteStatus(code int) {

@@ -66,7 +66,7 @@ type Schema struct {
 	MultipleOf           *float64           `yaml:"multipleOf,omitempty"`
 	MinLength            *int               `yaml:"minLength,omitempty"`
 	MaxLength            *int               `yaml:"maxLength,omitempty"`
-	Pattern              *string            `yaml:"pattern,omitempty"`
+	Pattern              string             `yaml:"pattern,omitempty"`
 	MinItems             *int               `yaml:"minItems,omitempty"`
 	MaxItems             *int               `yaml:"maxItems,omitempty"`
 	UniqueItems          bool               `yaml:"uniqueItems,omitempty"`
@@ -123,9 +123,9 @@ func (s *Schema) PrecomputeMessages() {
 	if s.MaxLength != nil {
 		s.msgMaxLength = fmt.Sprintf("expected length <= %d", *s.MaxLength)
 	}
-	if s.Pattern != nil {
-		s.patternRe = regexp.MustCompile(*s.Pattern)
-		s.msgPattern = "expected string to match pattern " + *s.Pattern
+	if s.Pattern != "" {
+		s.patternRe = regexp.MustCompile(s.Pattern)
+		s.msgPattern = "expected string to match pattern " + s.Pattern
 	}
 	if s.MinItems != nil {
 		s.msgMinItems = fmt.Sprintf("expected array with at least %d items", *s.MinItems)
@@ -185,13 +185,6 @@ func floatTag(f reflect.StructField, tag string) *float64 {
 		} else {
 			panic(err)
 		}
-	}
-	return nil
-}
-
-func stringTag(f reflect.StructField, tag string) *string {
-	if v := f.Tag.Get(tag); v != "" {
-		return &v
 	}
 	return nil
 }
@@ -282,7 +275,7 @@ func SchemaFromField(registry Registry, parent reflect.Type, f reflect.StructFie
 	fs.MultipleOf = floatTag(f, "multipleOf")
 	fs.MinLength = intTag(f, "minLength")
 	fs.MaxLength = intTag(f, "maxLength")
-	fs.Pattern = stringTag(f, "pattern")
+	fs.Pattern = f.Tag.Get("pattern")
 	fs.MinItems = intTag(f, "minItems")
 	fs.MaxItems = intTag(f, "maxItems")
 	fs.UniqueItems = boolTag(f, "uniqueItems")
@@ -395,42 +388,4 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 	}
 
 	return &s
-}
-
-// TODO: this is slow. huma.Register should cache and only try to set fields
-// with actual default values defined, and we should never parse the field name
-// more than once or in hot paths if we can avoid it.
-func (s *Schema) SetDefaults(registry Registry, v reflect.Value) {
-	if s.Ref != "" {
-		s = registry.SchemaFromRef(s.Ref)
-	}
-
-	switch v.Kind() {
-	case reflect.Struct:
-		for i := 0; i < v.NumField(); i++ {
-			f := v.Field(i)
-			if f.CanSet() {
-				name := v.Type().Field(i).Name
-				if j := v.Type().Field(i).Tag.Get("json"); j != "" && j != "-" {
-					name = strings.Split(j, ",")[0]
-				}
-
-				fs := s.Properties[name]
-
-				if fs != nil && fs.Default != nil && f.IsZero() {
-					f.Set(reflect.ValueOf(fs.Default))
-				}
-
-				fs.SetDefaults(registry, f)
-			}
-		}
-	case reflect.Slice, reflect.Array:
-		for i := 0; i < v.Len(); i++ {
-			s.Items.SetDefaults(registry, v.Index(i))
-		}
-	case reflect.Map:
-		for _, k := range v.MapKeys() {
-			s.AdditionalProperties.(*Schema).SetDefaults(registry, v.MapIndex(k))
-		}
-	}
 }

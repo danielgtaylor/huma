@@ -49,6 +49,10 @@ func (ctx *chiContext) GetBody() ([]byte, error) {
 	return io.ReadAll(ctx.r.Body)
 }
 
+func (ctx *chiContext) GetBodyReader() io.Reader {
+	return ctx.r.Body
+}
+
 func (ctx *chiContext) WriteStatus(code int) {
 	ctx.w.WriteHeader(code)
 }

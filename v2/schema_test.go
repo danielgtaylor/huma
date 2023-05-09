@@ -50,12 +50,6 @@ func TestSchema(t *testing.T) {
 	// fmt.Println(string(b))
 }
 
-/*
-BenchmarkSchemaSB-10         	 7117623	       154.7 ns/op	     128 B/op	       1 allocs/op
-BenchmarkSchemaBuffer-10    	 9186157	       130.8 ns/op	       0 B/op	       0 allocs/op
-BenchmarkPathBuf-10         	 9646777	       109.7 ns/op	       0 B/op	       0 allocs/op
-*/
-
 type BenchSub struct {
 	Visible bool      `json:"visible" default:"true"`
 	Metrics []float64 `json:"metrics" maxItems:"31"`
@@ -136,5 +130,8 @@ func BenchmarkSchemaErrors(b *testing.B) {
 		pb.Reset()
 		res.Reset()
 		Validate(r, s2, pb, ModeReadFromServer, input, &res)
+		if len(res.Errors) == 0 {
+			b.Fatal("expected error")
+		}
 	}
 }

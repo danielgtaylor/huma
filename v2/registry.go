@@ -109,29 +109,3 @@ func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) strin
 		namer:   namer,
 	}
 }
-
-// type identityRegistry struct{}
-
-// func (r *identityRegistry) Schema(t reflect.Type, parent reflect.Type, allowRef bool, hint string) *Schema {
-// 	return SchemaFromType(r, t)
-// }
-
-// func (r *identityRegistry) Map() map[string]*Schema {
-// 	return nil
-// }
-
-// func (r *identityRegistry) SchemaFromRef(ref string) *Schema {
-// 	return nil
-// }
-
-// func (r *identityRegistry) MarshalJSON() ([]byte, error) {
-// 	return nil, fmt.Errorf("unsupported")
-// }
-
-// func (r *identityRegistry) MarshalYAML() (interface{}, error) {
-// 	return nil, fmt.Errorf("unsupported")
-// }
-
-// // IdentityRegistry is a registry that returns the schema for the type as-is,
-// // without support for references or recursive types. Use with caution!
-// var IdentityRegistry = &identityRegistry{}

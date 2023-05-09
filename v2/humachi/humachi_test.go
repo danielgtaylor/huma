@@ -97,9 +97,29 @@ func BenchmarkRawChi(b *testing.B) {
 		})
 	schema := registry.Schema(reflect.TypeOf(GreetingInput{}), false, "")
 
+	strSchema := registry.Schema(reflect.TypeOf(""), false, "")
+	numSchema := registry.Schema(reflect.TypeOf(0), false, "")
+
 	r := chi.NewMux()
 
 	r.Post("/foo/{id}", func(w http.ResponseWriter, r *http.Request) {
+		pb := huma.NewPathBuffer([]byte{}, 0)
+		res := &huma.ValidateResult{}
+
+		// Read and validate params
+		id := chi.URLParam(r, "id")
+		huma.Validate(registry, strSchema, pb, huma.ModeReadFromServer, id, res)
+
+		ct := r.Header.Get("Content-Type")
+		huma.Validate(registry, strSchema, pb, huma.ModeReadFromServer, ct, res)
+
+		num, err := strconv.Atoi(r.URL.Query().Get("num"))
+		if err != nil {
+			panic(err)
+		}
+		huma.Validate(registry, numSchema, pb, huma.ModeReadFromServer, num, res)
+
+		// Read and validate body
 		defer r.Body.Close()
 		data, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -111,8 +131,6 @@ func BenchmarkRawChi(b *testing.B) {
 			panic(err)
 		}
 
-		pb := huma.NewPathBuffer([]byte{}, 0)
-		res := &huma.ValidateResult{}
 		huma.Validate(registry, schema, pb, huma.ModeWriteToServer, tmp, res)
 		if len(res.Errors) > 0 {
 			panic(res.Errors)
@@ -123,6 +141,7 @@ func BenchmarkRawChi(b *testing.B) {
 			panic(err)
 		}
 
+		// Set up and write the response
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("ETag", "abc123")
 		w.Header().Set("Last-Modified", lastModified.Format(http.TimeFormat))
@@ -130,11 +149,11 @@ func BenchmarkRawChi(b *testing.B) {
 		w.WriteHeader(http.StatusOK)
 		resp := &GreetingOutput{}
 		resp.Schema = "/schemas/GreetingOutput.json"
-		resp.Greeting = "Hello, " + chi.URLParam(r, "id") + input.Suffix
+		resp.Greeting = "Hello, " + id + input.Suffix
 		resp.Suffix = input.Suffix
 		resp.Length = len(resp.Greeting)
-		resp.ContentType = r.Header.Get("Content-Type")
-		resp.Num, _ = strconv.Atoi(r.URL.Query().Get("num"))
+		resp.ContentType = ct
+		resp.Num = num
 		data, err = json.Marshal(resp)
 		if err != nil {
 			panic(err)

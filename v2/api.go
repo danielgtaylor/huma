@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"regexp"
 	"strings"
 
@@ -22,6 +23,8 @@ var rxSchema = regexp.MustCompile(`#/components/schemas/([^"]+)`)
 type Resolver interface {
 	Resolve(ctx Context) []error
 }
+
+var resolverType = reflect.TypeOf((*Resolver)(nil)).Elem()
 
 // Adapter is an interface that allows the API to be used with different HTTP
 // routers and frameworks. It is designed to work with the standard library
@@ -40,7 +43,7 @@ type Context interface {
 	GetParam(name string) string
 	GetQuery(name string) string
 	GetHeader(name string) string
-	GetBody() ([]byte, error)
+	GetBodyReader() io.Reader
 	WriteStatus(code int)
 	AppendHeader(name, value string)
 	WriteHeader(name, value string)
@@ -192,6 +195,9 @@ func NewAPI(config Config, a Adapter) API {
 		config.OpenAPI.Components.Schemas = NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
 	}
 
+	if config.DefaultFormat != "" {
+		newAPI.formatKeys = append(newAPI.formatKeys, config.DefaultFormat)
+	}
 	for k, v := range config.Formats {
 		newAPI.formats[k] = v
 		newAPI.formatKeys = append(newAPI.formatKeys, k)

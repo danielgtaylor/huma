@@ -1,8 +1,10 @@
 package huma
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -14,6 +16,7 @@ type paramFieldInfo struct {
 	Type      reflect.Type
 	IndexPath []int
 	Loc       string
+	Default   string
 	Schema    *Schema
 }
 
@@ -41,6 +44,10 @@ func getParamFields(registry Registry, op *Operation, adapter Adapter, path []in
 		var example any
 		if e := f.Tag.Get("example"); e != "" {
 			example = jsonTagValue(f.Type, f.Tag.Get("example"))
+		}
+
+		if def := f.Tag.Get("default"); def != "" {
+			pfi.Default = def
 		}
 
 		name := ""
@@ -74,16 +81,75 @@ func getParamFields(registry Registry, op *Operation, adapter Adapter, path []in
 	}
 }
 
-type resolverInfo struct {
-	Paths [][]int
+func findResolvers(resolverType, t reflect.Type) *findResult {
+	return findInType(t, func(t reflect.Type, path []int) any {
+		if reflect.PtrTo(t).Implements(resolverType) {
+			return true
+		}
+		return nil
+	}, nil)
 }
 
-func findResolvers(resolverType reflect.Type, t reflect.Type, path []int, info *resolverInfo) {
-	// fmt.Println("finding", t)
+func findDefaults(t reflect.Type) *findResult {
+	return findInType(t, nil, func(sf reflect.StructField, i []int) any {
+		if d := sf.Tag.Get("default"); d != "" {
+			return jsonTagValue(sf.Type, d)
+		}
+		return nil
+	})
+}
+
+type findResult struct {
+	Paths []struct {
+		Path  []int
+		Value any
+	}
+}
+
+func (r *findResult) every(current reflect.Value, path []int, v any, f func(reflect.Value, any)) {
+	if len(path) == 0 {
+		f(current, v)
+		return
+	}
+
+	switch current.Kind() {
+	case reflect.Struct:
+		r.every(reflect.Indirect(current.Field(path[0])), path[1:], v, f)
+	case reflect.Slice:
+		for j := 0; j < current.Len(); j++ {
+			r.every(reflect.Indirect(current.Index(j)), path, v, f)
+		}
+	case reflect.Map:
+		for _, k := range current.MapKeys() {
+			r.every(reflect.Indirect(current.MapIndex(k)), path, v, f)
+		}
+	default:
+		panic("unsupported")
+	}
+}
+
+func (r *findResult) Every(v reflect.Value, f func(reflect.Value, any)) {
+	for _, p := range r.Paths {
+		r.every(v, p.Path, &p.Value, f)
+	}
+}
+
+func findInType(t reflect.Type, onType func(reflect.Type, []int) any, onField func(reflect.StructField, []int) any) *findResult {
+	result := &findResult{}
+	_findInType(t, []int{}, result, onType, onField)
+	return result
+}
+
+func _findInType(t reflect.Type, path []int, result *findResult, onType func(reflect.Type, []int) any, onField func(reflect.StructField, []int) any) {
 	t = deref(t)
 
-	if reflect.PtrTo(t).Implements(resolverType) {
-		info.Paths = append(info.Paths, path)
+	if onType != nil {
+		if v := onType(t, path); v != nil {
+			result.Paths = append(result.Paths, struct {
+				Path  []int
+				Value any
+			}{path, v})
+		}
 	}
 
 	switch t.Kind() {
@@ -95,14 +161,20 @@ func findResolvers(resolverType reflect.Type, t reflect.Type, path []int, info *
 			}
 			fi := append([]int{}, path...)
 			fi = append(fi, i)
-			findResolvers(resolverType, f.Type, fi, info)
+			if onField != nil {
+				if v := onField(f, fi); v != nil {
+					result.Paths = append(result.Paths, struct {
+						Path  []int
+						Value any
+					}{fi, v})
+				}
+			}
+			_findInType(f.Type, fi, result, onType, onField)
 		}
 	case reflect.Slice:
-		// TODO: signal some way to indicate it's not a field index...
-		findResolvers(resolverType, t.Elem(), path, info)
+		_findInType(t.Elem(), path, result, onType, onField)
 	case reflect.Map:
-		// TODO...
-		findResolvers(resolverType, t.Elem(), path, info)
+		_findInType(t.Elem(), path, result, onType, onField)
 	}
 }
 
@@ -141,6 +213,12 @@ var validatePool = sync.Pool{
 	},
 }
 
+var bufPool = sync.Pool{
+	New: func() any {
+		return bytes.NewBuffer(make([]byte, 0, 128))
+	},
+}
+
 func Register[I, O any](api API, op Operation, handler func(context.Context, *I) (*O, error)) {
 	oapi := api.OpenAPI()
 	registry := oapi.Components.Schemas
@@ -171,10 +249,8 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			break
 		}
 	}
-	// fmt.Println("get resolvers")
-	var resolvers resolverInfo
-	findResolvers(reflect.TypeOf((*Resolver)(nil)).Elem(), inputType, []int{}, &resolvers)
-	// fmt.Printf("%+v\n", resolvers)
+	resolvers := findResolvers(resolverType, inputType)
+	defaults := findDefaults(inputType)
 
 	if op.Responses == nil {
 		op.Responses = map[string]*Response{}
@@ -296,6 +372,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			pb.Push(p.Loc)
 			pb.Push(name)
 
+			if value == "" && p.Default != "" {
+				value = p.Default
+			}
+
 			if p.Loc == "path" && value == "" {
 				// Path params are always required.
 				res.Add(pb, "", "required path parameter is missing")
@@ -376,11 +456,15 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 		// Read input body if defined.
 		if inputBodyIndex != -1 {
-			body, err := ctx.GetBody()
+			buf := bufPool.Get().(*bytes.Buffer)
+			_, err := io.Copy(buf, ctx.GetBodyReader())
 			if err != nil {
+				buf.Reset()
+				bufPool.Put(buf)
 				writeErr(api, &op, ctx, http.StatusInternalServerError, "cannot read request body", err)
 				return
 			}
+			body := buf.Bytes()
 
 			parseErrCount := 0
 			if !op.SkipValidateBody {
@@ -426,26 +510,24 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				}
 			} else {
 				// Set defaults for any fields that were not in the input.
-				// TODO: cache whether there are defaults to set, otherwise skip
-				// This is too slow and allocates... boo.
-				inSchema.SetDefaults(registry, f)
+				defaults.Every(v, func(item reflect.Value, def any) {
+					if item.IsZero() {
+						item.Set(reflect.ValueOf(def).Elem().Elem())
+					}
+				})
 			}
+
+			buf.Reset()
+			bufPool.Put(buf)
 		}
 
-		for _, path := range resolvers.Paths {
-			f := v
-			for _, i := range path {
-				// TODO: slices, maybe use -1 index?
-				f = reflect.Indirect(f).Field(i)
-			}
-			// TODO: compare interface with reflect.call perf
-			//f.Method(0).Call([]reflect.Value{reflect.ValueOf(ctx)}
-			if resolver, ok := f.Addr().Interface().(Resolver); ok {
+		resolvers.Every(v, func(item reflect.Value, _ any) {
+			if resolver, ok := item.Addr().Interface().(Resolver); ok {
 				if errs := resolver.Resolve(ctx); len(errs) > 0 {
 					res.Errors = append(res.Errors, errs...)
 				}
 			}
-		}
+		})
 
 		if len(res.Errors) > 0 {
 			writeErr(api, &op, ctx, errStatus, "validation failed", res.Errors...)

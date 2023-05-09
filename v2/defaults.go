@@ -68,6 +68,7 @@ func DefaultConfig(title, version string) Config {
 			"application/cbor": DefaultCBORFormat,
 			"cbor":             DefaultCBORFormat,
 		},
+		DefaultFormat: "application/json",
 		Transformers: []Transformer{
 			linkTransformer.Transform,
 		},

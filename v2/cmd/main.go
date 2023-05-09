@@ -41,7 +41,7 @@ func (b *GreetingInputBody) Resolve(ctx huma.Context) []error {
 
 type GreetingInput struct {
 	ID   string `path:"id" example:"abc123" maxLength:"10"`
-	Num  int    `query:"num" minimum:"0"`
+	Num  int    `query:"num" minimum:"0" default:"7"`
 	Body GreetingInputBody
 	// Body struct {
 	// 	Suffix string `json:"suffix" default:"!" maxLength:"5"`
@@ -60,7 +60,7 @@ func (i *GreetingInput) Resolve(huma.Context) []error {
 }
 
 type GreetingOutputSub struct {
-	Foo  string `json:"foo"`
+	Foo  int `json:"foo"`
 	Sub2 struct {
 		ThisFails string `json:"this_fails"`
 	}
@@ -119,6 +119,7 @@ func RegisterRoutes(api huma.API) {
 		resp.Body.Greeting = "Hello, " + input.ID + input.Body.Suffix
 		resp.Body.Suffix = input.Body.Suffix
 		resp.Body.Total = len(resp.Body.Greeting)
+		resp.Body.Sub.Foo = input.Num
 		return resp, nil
 	})
 }
