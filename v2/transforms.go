@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"path"
 	"reflect"
-	"sync"
 )
 
 type schemaField struct {
@@ -19,7 +18,6 @@ type SchemaLinkTransformer struct {
 		ref    string
 		header string
 	}
-	bufPool sync.Pool
 }
 
 func NewSchemaLinkTransformer(prefix, schemasPath string) *SchemaLinkTransformer {
@@ -31,11 +29,6 @@ func NewSchemaLinkTransformer(prefix, schemasPath string) *SchemaLinkTransformer
 			ref    string
 			header string
 		}{},
-		bufPool: sync.Pool{
-			New: func() any {
-				return bytes.NewBuffer(make([]byte, 0, 128))
-			},
-		},
 	}
 }
 
@@ -117,7 +110,7 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, op *Operation, status str
 			continue
 		}
 		if i == 0 {
-			buf := t.bufPool.Get().(*bytes.Buffer)
+			buf := bufPool.Get().(*bytes.Buffer)
 			if len(host) >= 9 && host[:9] == "localhost" {
 				buf.WriteString("http://")
 			} else {
@@ -127,7 +120,7 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, op *Operation, status str
 			buf.WriteString(info.ref)
 			tmp.Field(i).SetString(buf.String())
 			buf.Reset()
-			t.bufPool.Put(buf)
+			bufPool.Put(buf)
 		} else {
 			tmp.Field(i).Set(vv.Field(i - 1))
 		}

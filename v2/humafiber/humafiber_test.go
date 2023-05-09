@@ -21,9 +21,7 @@ func BenchmarkHumaFiber(b *testing.B) {
 	}
 
 	r := fiber.New()
-	api := New(r, huma.Config{
-		OpenAPI: &huma.OpenAPI{},
-	})
+	api := New(r, huma.DefaultConfig("Test API", "1.0.0"))
 
 	huma.Register(api, huma.Operation{
 		OperationID: "greet",

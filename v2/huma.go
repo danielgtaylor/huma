@@ -129,8 +129,8 @@ func (r *findResult) every(current reflect.Value, path []int, v any, f func(refl
 }
 
 func (r *findResult) Every(v reflect.Value, f func(reflect.Value, any)) {
-	for _, p := range r.Paths {
-		r.every(v, p.Path, &p.Value, f)
+	for i := range r.Paths {
+		r.every(v, r.Paths[i].Path, &r.Paths[i].Value, f)
 	}
 }
 
