@@ -201,6 +201,10 @@ func BenchmarkRawChiFast(b *testing.B) {
 			panic(err)
 		}
 
+		if len(input.Suffix) > 5 {
+			panic("suffix too long")
+		}
+
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("ETag", "abc123")
 		w.Header().Set("Last-Modified", lastModified.Format(http.TimeFormat))

@@ -20,7 +20,7 @@ Create:
 
 restish put :3000/users/daniel -H "Accept:application/protobuf" name: Daniel Taylor, email: dt@example.com, roles[]: admin >user.pb
 
-Conver to JSON:
+Convert to JSON:
 
 cat user.pb | restish put :3000/users/daniel -H "Content-Type: application/protobuf" -H "Accept: application/json"
 

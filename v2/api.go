@@ -195,6 +195,9 @@ func NewAPI(config Config, a Adapter) API {
 		config.OpenAPI.Components.Schemas = NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
 	}
 
+	if config.DefaultFormat == "" && config.Formats["application/json"].Marshal != nil {
+		config.DefaultFormat = "application/json"
+	}
 	if config.DefaultFormat != "" {
 		newAPI.formatKeys = append(newAPI.formatKeys, config.DefaultFormat)
 	}

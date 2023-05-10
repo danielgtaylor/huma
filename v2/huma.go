@@ -246,6 +246,12 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					},
 				},
 			}
+
+			if op.MaxBodyBytes == 0 {
+				// 1 MB default
+				op.MaxBodyBytes = 1024 * 1024
+			}
+
 			break
 		}
 	}
@@ -332,11 +338,12 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	}
 	// TODO: if no op.Errors, set a default response as the error type
 
-	oapi.AddOperation(&op)
+	if !op.Hidden {
+		oapi.AddOperation(&op)
+	}
 
 	a := api.Adapter()
 
-	// a.Handle(op.Method, op.Path, func(w W, r R) {
 	a.Handle(op.Method, op.Path, func(ctx Context) {
 		var input I
 
@@ -457,7 +464,22 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		// Read input body if defined.
 		if inputBodyIndex != -1 {
 			buf := bufPool.Get().(*bytes.Buffer)
-			_, err := io.Copy(buf, ctx.GetBodyReader())
+			reader := ctx.GetBodyReader()
+			if closer, ok := reader.(io.Closer); ok {
+				defer closer.Close()
+			}
+			if op.MaxBodyBytes > 0 {
+				reader = io.LimitReader(reader, op.MaxBodyBytes)
+			}
+			count, err := io.Copy(buf, reader)
+			if op.MaxBodyBytes > 0 {
+				if count == op.MaxBodyBytes {
+					buf.Reset()
+					bufPool.Put(buf)
+					writeErr(api, &op, ctx, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body is too large limit=%d bytes", op.MaxBodyBytes))
+					return
+				}
+			}
 			if err != nil {
 				buf.Reset()
 				bufPool.Put(buf)

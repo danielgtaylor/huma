@@ -3,7 +3,6 @@ package huma
 import (
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/goccy/go-yaml"
 )
@@ -132,12 +131,9 @@ type Operation struct {
 	// returns a response body.
 	DefaultStatus int `yaml:"-"`
 
-	// BodyReadTimeout is the maximum duration to wait for the request body to
-	// be read. If not specified, the default is 5 seconds.
-	BodyReadTimeout time.Duration `yaml:"-"`
-
 	// MaxBodyBytes is the maximum number of bytes to read from the request
-	// body. If not specified, the default is 1MB.
+	// body. If not specified, the default is 1MB. Use -1 for unlimited. If
+	// the limit is reached, then an HTTP 413 error is returned.
 	MaxBodyBytes int64 `yaml:"-"`
 
 	// Errors is a list of HTTP status codes that the handler may return. If
@@ -153,6 +149,11 @@ type Operation struct {
 	// up request processing if you want to handle your own validation. Use with
 	// caution!
 	SkipValidateBody bool `yaml:"-"`
+
+	// Hidden will skip documenting this operation in the OpenAPI. This is
+	// useful for operations that are not intended to be used by clients but
+	// you'd still like the benefits of using Huma. Generally not recommended.
+	Hidden bool `yaml:"-"`
 
 	// OpenAPI fields
 	Tags         []string              `yaml:"tags,omitempty"`

@@ -41,6 +41,7 @@ func (c *fiberCtx) GetHeader(name string) string {
 }
 
 func (c *fiberCtx) GetBodyReader() io.Reader {
+	// return c.orig.Context().RequestBodyStream()
 	return bytes.NewReader(c.orig.Body())
 }
 
