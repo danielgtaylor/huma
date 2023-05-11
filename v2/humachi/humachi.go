@@ -7,13 +7,13 @@ import (
 	"net/url"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/queryparam"
 	"github.com/go-chi/chi"
 )
 
 type chiContext struct {
-	r     *http.Request
-	w     http.ResponseWriter
-	query url.Values
+	r *http.Request
+	w http.ResponseWriter
 }
 
 func (ctx *chiContext) GetMatched() string {
@@ -33,12 +33,7 @@ func (ctx *chiContext) GetParam(name string) string {
 }
 
 func (ctx *chiContext) GetQuery(name string) string {
-	// Query is parsed on each request, so cache it.
-	if ctx.query == nil {
-		ctx.query = ctx.r.URL.Query()
-	}
-
-	return ctx.query.Get(name)
+	return queryparam.Get(ctx.r.URL.RawQuery, name)
 }
 
 func (ctx *chiContext) GetHeader(name string) string {

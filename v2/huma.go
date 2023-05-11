@@ -20,14 +20,14 @@ type paramFieldInfo struct {
 	Schema    *Schema
 }
 
-func getParamFields(registry Registry, op *Operation, adapter Adapter, path []int, t reflect.Type, m map[string]*paramFieldInfo) {
+func findParamFields(registry Registry, op *Operation, adapter Adapter, path []int, t reflect.Type, m map[string]*paramFieldInfo) {
 	for i := 0; i < t.NumField(); i++ {
 		f := t.Field(i)
 		fi := append([]int{}, path...)
 		fi = append(fi, i)
 
 		if f.Anonymous {
-			getParamFields(registry, op, adapter, path, deref(f.Type), m)
+			findParamFields(registry, op, adapter, path, deref(f.Type), m)
 			continue
 		}
 
@@ -219,6 +219,12 @@ var bufPool = sync.Pool{
 	},
 }
 
+// Register an operation handler for an API. The handler must be a function that
+// takes a context and a pointer to the input struct and returns a pointer to the
+// output struct and an error. The input struct must be a struct with fields
+// for the request path/query/header parameters and/or body. The output struct
+// must be a  struct with fields for the output headers and body of the
+// operation, if any.
 func Register[I, O any](api API, op Operation, handler func(context.Context, *I) (*O, error)) {
 	oapi := api.OpenAPI()
 	registry := oapi.Components.Schemas
@@ -229,7 +235,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		panic("input must be a struct")
 	}
 	inputParams := map[string]*paramFieldInfo{}
-	getParamFields(registry, &op, api.Adapter(), []int{}, inputType, inputParams)
+	findParamFields(registry, &op, api.Adapter(), []int{}, inputType, inputParams)
 	inputBodyIndex := -1
 	var inSchema *Schema
 	for i := 0; i < inputType.NumField(); i++ {
@@ -556,13 +562,13 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			return
 		}
 
-		var output any
-		var err error
-		output, err = handler(ctx.GetContext(), &input)
+		output, err := handler(ctx.GetContext(), &input)
 		if err != nil {
 			status := http.StatusInternalServerError
 			if se, ok := err.(StatusError); ok {
 				status = se.GetStatus()
+			} else {
+				err = NewError(http.StatusInternalServerError, err.Error())
 			}
 
 			ct, _ := api.Negotiate(ctx.GetHeader("Accept"))

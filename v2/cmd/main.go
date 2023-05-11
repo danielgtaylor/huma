@@ -112,6 +112,10 @@ func RegisterRoutes(api huma.API) {
 			}, fmt.Errorf("plain error"))
 		}
 
+		if input.ID == "plain" {
+			return nil, fmt.Errorf("plain error")
+		}
+
 		// fmt.Println("optional", input.Body.Optional)
 
 		resp := &GreetingOutput{}

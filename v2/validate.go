@@ -359,10 +359,9 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		// We should be permissive by default to enable easy round-trips for the
 		// client without needing to remove read-only values.
 		// TODO: should we make this configurable?
-		// if mode == ModeWriteToServer && s.ReadOnly && m[k] != nil && !reflect.ValueOf(m[k]).IsZero() {
-		// 	res.Add(path, m[k], "read only property is non-zero")
-		// 	continue
-		// }
+		if mode == ModeWriteToServer && s.ReadOnly {
+			continue
+		}
 
 		if mode == ModeReadFromServer && s.WriteOnly && m[k] == nil && !reflect.ValueOf(m[k]).IsZero() {
 			res.Add(path, m[k], "write only property is non-zero")
