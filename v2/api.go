@@ -50,29 +50,33 @@ type Context interface {
 	BodyWriter() io.Writer
 }
 
+// Transformer is a function that can modify a response body before it is
+// serialized. The `status` is the HTTP status code for the response and `v` is
+// the value to be serialized. The return value is the new value to be
+// serialized or an error.
 type Transformer func(ctx Context, op *Operation, status string, v any) (any, error)
 
-// Config represents a configuration for a new API.
+// Config represents a configuration for a new API. See `huma.DefaultConfig()`
+// as a starting point.
 type Config struct {
 	// OpenAPI spec for the API. You should set at least the `Info.Title` and
 	// `Info.Version` fields.
 	*OpenAPI
 
-	// OpenAPIPath is the path to the OpenAPI spec without extension. Defaults
-	// to `/openapi` which allows clients to get `/openapi.json` or
-	// `/openapi.yaml`.
+	// OpenAPIPath is the path to the OpenAPI spec without extension. If set
+	// to `/openapi` it will allow clients to get `/openapi.json` or
+	// `/openapi.yaml`, for example.
 	OpenAPIPath string
 	DocsPath    string
 	SchemasPath string
 
 	// Formats defines the supported request/response formats by content type or
-	// extension (e.g. `+json`). If not set, this defaults to supporting JSON
-	// and CBOR with associated `+json` and `+cbor` extensions.
+	// extension (e.g. `json` for `application/my-format+json`).
 	Formats map[string]Format
 
 	// DefaultFormat specifies the default content type to use when the client
-	// does not specify one. Defaults to `application/json` if present in the
-	// `Formats` map, otherwise panics on startup if empty.
+	// does not specify one. If unset, the default type will be randomly
+	// chosen from the keys of `Formats`.
 	DefaultFormat string
 
 	// Transformers are a way to modify a response body before it is serialized.
@@ -103,8 +107,13 @@ type API interface {
 	Unmarshal(contentType string, data []byte, v any) error
 }
 
+// Format represents a request / response format. It is used to marshal and
+// unmarshal data.
 type Format struct {
-	Marshal   func(writer io.Writer, v any) error
+	// Marshal a value to a given writer (e.g. response body).
+	Marshal func(writer io.Writer, v any) error
+
+	// Unmarshal a value into `v` from the given bytes (e.g. request body).
 	Unmarshal func(data []byte, v any) error
 }
 

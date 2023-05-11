@@ -400,6 +400,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 				switch p.Type.Kind() {
 				case reflect.String:
+					f.SetString(value)
 					pv = value
 				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 					v, err := strconv.ParseInt(value, 10, 64)
@@ -407,6 +408,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						res.Add(pb, value, "invalid integer")
 						continue
 					}
+					f.SetInt(v)
 					pv = v
 				case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 					v, err := strconv.ParseUint(value, 10, 64)
@@ -414,6 +416,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						res.Add(pb, value, "invalid integer")
 						continue
 					}
+					f.SetUint(v)
 					pv = v
 				case reflect.Float32, reflect.Float64:
 					v, err := strconv.ParseFloat(value, 64)
@@ -421,6 +424,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						res.Add(pb, value, "invalid float")
 						continue
 					}
+					f.SetFloat(v)
 					pv = v
 				case reflect.Bool:
 					v, err := strconv.ParseBool(value)
@@ -428,6 +432,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						res.Add(pb, value, "invalid boolean")
 						continue
 					}
+					f.SetBool(v)
 					pv = v
 				default:
 					if f.Type() == timeType {
@@ -436,6 +441,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							res.Add(pb, value, "invalid time")
 							continue
 						}
+						f.Set(reflect.ValueOf(t))
 						pv = t
 						break
 					}
@@ -443,26 +449,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				}
 
 				if !op.SkipValidateParams {
-					count := len(res.Errors)
 					Validate(oapi.Components.Schemas, p.Schema, pb, ModeWriteToServer, pv, res)
-					if len(res.Errors) > count {
-						continue
-					}
-				}
-
-				switch p.Type.Kind() {
-				case reflect.String:
-					f.SetString(value)
-				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-					f.SetInt(pv.(int64))
-				case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-					f.SetUint(pv.(uint64))
-				case reflect.Float32, reflect.Float64:
-					f.SetFloat(pv.(float64))
-				case reflect.Bool:
-					f.SetBool(pv.(bool))
-				default:
-					f.Set(reflect.ValueOf(pv))
 				}
 			}
 		}
