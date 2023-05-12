@@ -2,8 +2,11 @@ package huma
 
 import (
 	"bytes"
+	"encoding/json"
 	"path"
 	"reflect"
+
+	"github.com/danielgtaylor/shorthand/v2"
 )
 
 type schemaField struct {
@@ -127,4 +130,19 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, op *Operation, status str
 	}
 
 	return tmp.Addr().Interface(), nil
+}
+
+// FieldSelectTransform is an example of a transform that can use an input
+// header value to modify the response on the server, providing a GraphQL-like
+// way to send only the fields that the client wants over the wire.
+func FieldSelectTransform(ctx Context, op *Operation, status string, v any) (any, error) {
+	if fields := ctx.GetHeader("Fields"); fields != "" {
+		// Ugh this is inefficient... consider other ways of doing this :-(
+		var tmp any
+		b, _ := json.Marshal(v)
+		json.Unmarshal(b, &tmp)
+		result, _, err := shorthand.GetPath(fields, tmp, shorthand.GetOptions{})
+		return result, err
+	}
+	return v, nil
 }

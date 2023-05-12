@@ -49,6 +49,8 @@ func SelectQValue(header string, allowed []string) string {
 	return best
 }
 
+// SelectQValueFast is a faster version of SelectQValue that does not
+// need any dynamic memory allocations.
 func SelectQValueFast(header string, allowed []string) string {
 	best := ""
 	bestQ := 0.0

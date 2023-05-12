@@ -219,6 +219,11 @@ var bufPool = sync.Pool{
 	},
 }
 
+type headerInfo struct {
+	Index      int
+	TimeFormat string
+}
+
 // Register an operation handler for an API. The handler must be a function that
 // takes a context and a pointer to the input struct and returns a pointer to the
 // output struct and an error. The input struct must be a struct with fields
@@ -273,7 +278,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		panic("output must be a struct")
 	}
 
-	outHeaders := map[string]int{}
+	outHeaders := map[string]headerInfo{}
 	outBodyIndex := -1
 	for i := 0; i < outputType.NumField(); i++ {
 		f := outputType.Field(i)
@@ -308,7 +313,14 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		if header == "" {
 			header = f.Name
 		}
-		outHeaders[header] = i
+		timeFormat := ""
+		if f.Type == timeType {
+			timeFormat = http.TimeFormat
+			if f := f.Tag.Get("timeFormat"); f != "" {
+				timeFormat = f
+			}
+		}
+		outHeaders[header] = headerInfo{Index: i, TimeFormat: timeFormat}
 	}
 	if op.DefaultStatus == 0 {
 		if outBodyIndex != -1 {
@@ -317,9 +329,14 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			op.DefaultStatus = http.StatusNoContent
 		}
 	}
+	if op.Responses[fmt.Sprintf("%d", op.DefaultStatus)] == nil {
+		op.Responses[fmt.Sprintf("%d", op.DefaultStatus)] = &Response{
+			Description: http.StatusText(op.DefaultStatus),
+		}
+	}
 	for name := range outHeaders {
 		op.Responses[fmt.Sprintf("%d", op.DefaultStatus)].Headers[name] = &Param{
-			Schema: registry.Schema(outputType.Field(outHeaders[name]).Type, true, getHint(outputType, name, op.OperationID+"Response")),
+			Schema: registry.Schema(outputType.Field(outHeaders[name].Index).Type, true, getHint(outputType, name, op.OperationID+"Response")),
 		}
 	}
 
@@ -330,19 +347,34 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		op.Errors = append(op.Errors, http.StatusInternalServerError)
 	}
 
-	errType := reflect.TypeOf(NewError(0, ""))
+	exampleErr := NewError(0, "")
+	errContentType := "application/json"
+	if ctf, ok := exampleErr.(ContentTypeFilter); ok {
+		errContentType = ctf.ContentType(errContentType)
+	}
+	errType := reflect.TypeOf(exampleErr)
 	errSchema := registry.Schema(errType, true, getHint(errType, "", "Error"))
 	for _, code := range op.Errors {
 		op.Responses[fmt.Sprintf("%d", code)] = &Response{
 			Description: http.StatusText(code),
 			Content: map[string]*MediaType{
-				"application/json": {
+				errContentType: {
 					Schema: errSchema,
 				},
 			},
 		}
 	}
-	// TODO: if no op.Errors, set a default response as the error type
+	if len(op.Responses) <= 1 && len(op.Errors) == 0 {
+		// No errors are defined, so set a default response.
+		op.Responses["default"] = &Response{
+			Description: "Error",
+			Content: map[string]*MediaType{
+				errContentType: {
+					Schema: errSchema,
+				},
+			},
+		}
+	}
 
 	if !op.Hidden {
 		oapi.AddOperation(&op)
@@ -571,8 +603,8 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 		// Serialize output headers
 		vo := reflect.ValueOf(output).Elem()
-		for header, index := range outHeaders {
-			f := vo.Field(index)
+		for header, info := range outHeaders {
+			f := vo.Field(info.Index)
 
 			switch f.Kind() {
 			case reflect.String:
@@ -587,8 +619,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				ctx.WriteHeader(header, strconv.FormatBool(f.Bool()))
 			default:
 				if f.Type() == timeType {
-					// TODO: enable custom serialization via struct tag.
-					ctx.WriteHeader(header, f.Interface().(time.Time).Format(http.TimeFormat))
+					ctx.WriteHeader(header, f.Interface().(time.Time).Format(info.TimeFormat))
 					continue
 				}
 

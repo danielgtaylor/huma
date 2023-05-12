@@ -126,6 +126,14 @@ func RegisterRoutes(api huma.API) {
 		resp.Body.Sub.Foo = input.Num
 		return resp, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "no-body",
+		Method:      http.MethodGet,
+		Path:        "/no-body",
+	}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+		return nil, nil
+	})
 }
 
 func main() {
@@ -155,7 +163,9 @@ func main() {
 			return c.SendString("OK")
 		})
 
-		api = humafiber.New(r, huma.DefaultConfig("My API", "1.0.0"))
+		config := huma.DefaultConfig("My API", "1.0.0")
+		config.Transformers = append(config.Transformers, huma.FieldSelectTransform)
+		api = humafiber.New(r, config)
 		// api = humafiber.New(r, huma.Config{
 		// 	OpenAPI: &huma.OpenAPI{
 		// 		Info: &huma.Info{

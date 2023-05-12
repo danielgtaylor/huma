@@ -133,12 +133,12 @@ func TestQuery(t *testing.T) {
 	}
 }
 
-var result string
+var Result string
 
 func BenchmarkNewQuery(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		result = Get("foo=bar&baz=123&bool", "baz")
+		Result = Get("foo=bar&baz=123&bool", "baz")
 	}
 }
 
@@ -146,32 +146,32 @@ func BenchmarkStdQuery(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		values, _ := url.ParseQuery("foo=bar&baz=123&bool")
-		result = values.Get("baz")
+		Result = values.Get("baz")
 	}
 }
 
-var foo, baz, num, float, boolean string
-var values url.Values
+var Foo, Baz, Num, Float, Boolean string
+var Values url.Values
 
 func BenchmarkNewQueryMulti(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		foo = Get("foo=bar&baz=123&num=5&float=1.0&bool", "foo")
-		baz = Get("foo=bar&baz=123&num=5&float=1.0&bool", "baz")
-		num = Get("foo=bar&baz=123&num=5&float=1.0&bool", "num")
-		float = Get("foo=bar&baz=123&num=5&float=1.0&bool", "float")
-		boolean = Get("foo=bar&baz=123&num=5&float=1.0&bool", "bool")
+		Foo = Get("foo=bar&baz=123&num=5&float=1.0&bool", "foo")
+		Baz = Get("foo=bar&baz=123&num=5&float=1.0&bool", "baz")
+		Num = Get("foo=bar&baz=123&num=5&float=1.0&bool", "num")
+		Float = Get("foo=bar&baz=123&num=5&float=1.0&bool", "float")
+		Boolean = Get("foo=bar&baz=123&num=5&float=1.0&bool", "bool")
 	}
 }
 
 func BenchmarkStdQueryMulti(b *testing.B) {
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		values, _ = url.ParseQuery("foo=bar&baz=123&bool")
-		foo = values.Get("foo")
-		baz = values.Get("baz")
-		num = values.Get("num")
-		float = values.Get("float")
-		boolean = values.Get("bool")
+		Values, _ = url.ParseQuery("foo=bar&baz=123&bool")
+		Foo = Values.Get("foo")
+		Baz = Values.Get("baz")
+		Num = Values.Get("num")
+		Float = Values.Get("float")
+		Boolean = Values.Get("bool")
 	}
 }
