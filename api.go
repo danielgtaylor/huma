@@ -11,7 +11,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/danielgtaylor/huma/negotiation"
+	"github.com/danielgtaylor/huma/v2/negotiation"
 	"gopkg.in/yaml.v2"
 )
 

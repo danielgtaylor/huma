@@ -2,199 +2,311 @@ package huma
 
 import (
 	"fmt"
-	"reflect"
+	"net/http"
 
-	"github.com/danielgtaylor/huma/schema"
+	"github.com/goccy/go-yaml"
 )
 
-// oaContact describes contact information for this API.
-type oaContact struct {
-	Name  string `json:"name,omitempty"`
-	URL   string `json:"url,omitempty"`
-	Email string `json:"email,omitempty"`
+type Contact struct {
+	Name       string         `yaml:"name,omitempty"`
+	URL        string         `yaml:"url,omitempty"`
+	Email      string         `yaml:"email,omitempty"`
+	Extensions map[string]any `yaml:",inline"`
 }
 
-// oaServer describes an OpenAPI 3 API server location
-type oaServer struct {
-	URL         string `json:"url"`
-	Description string `json:"description,omitempty"`
+type License struct {
+	Name       string         `yaml:"name"`
+	Identifier string         `yaml:"identifier,omitempty"`
+	URL        string         `yaml:"url,omitempty"`
+	Extensions map[string]any `yaml:",inline"`
 }
 
-// paramLocation describes where in the HTTP request the parameter comes from.
-type paramLocation string
-
-// Parameter locations supported by OpenAPI 3
-const (
-	inPath   paramLocation = "path"
-	inQuery  paramLocation = "query"
-	inHeader paramLocation = "header"
-)
-
-// oaParam describes an OpenAPI 3 parameter
-type oaParam struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description,omitempty"`
-	In          paramLocation  `json:"in"`
-	Required    bool           `json:"required,omitempty"`
-	Schema      *schema.Schema `json:"schema,omitempty"`
-	Deprecated  bool           `json:"deprecated,omitempty"`
-	Explode     *bool          `json:"explode,omitempty"`
-	CLIName     string         `json:"x-cli-name,omitempty"`
-
-	// Internal params are excluded from the OpenAPI document and can set up
-	// params sent between a load balander / proxy and the service internally.
-	Internal bool `json:"-"`
-
-	typ reflect.Type
+type Info struct {
+	Title          string         `yaml:"title"`
+	Description    string         `yaml:"description,omitempty"`
+	TermsOfService string         `yaml:"termsOfService,omitempty"`
+	Contact        *Contact       `yaml:"contact,omitempty"`
+	License        *License       `yaml:"license,omitempty"`
+	Version        string         `yaml:"version"`
+	Extensions     map[string]any `yaml:",inline"`
 }
 
-type oaComponents struct {
-	Schemas         map[string]*schema.Schema   `json:"schemas,omitempty"`
-	SecuritySchemes map[string]oaSecurityScheme `json:"securitySchemes,omitempty"`
+type ServerVariable struct {
+	Enum        []string       `yaml:"enum,omitempty"`
+	Default     string         `yaml:"default"`
+	Description string         `yaml:"description,omitempty"`
+	Extensions  map[string]any `yaml:",inline"`
 }
 
-// AddSchema creates and adds a new schema from a type.
-func (c *oaComponents) AddSchema(t reflect.Type, mode schema.Mode, hint string, generateSchemaField bool) string {
-	return c.addSchema(t, mode, hint, generateSchemaField)
+type Server struct {
+	URL         string                     `yaml:"url"`
+	Description string                     `yaml:"description,omitempty"`
+	Variables   map[string]*ServerVariable `yaml:"variables,omitempty"`
+	Extensions  map[string]any             `yaml:",inline"`
 }
 
-func (c *oaComponents) addSchema(t reflect.Type, mode schema.Mode, hint string, generateSchemaField bool) string {
-	// Try to determine the type's name.
-	name := t.Name()
-	if name == "" && t.Kind() == reflect.Ptr {
-		// Take the name of the pointed-to type.
-		name = t.Elem().Name()
+type Example struct {
+	Ref           string         `yaml:"$ref,omitempty"`
+	Summary       string         `yaml:"summary,omitempty"`
+	Description   string         `yaml:"description,omitempty"`
+	Value         any            `yaml:"value,omitempty"`
+	ExternalValue string         `yaml:"externalValue,omitempty"`
+	Extensions    map[string]any `yaml:",inline"`
+}
+
+type Encoding struct {
+	ContentType   string             `yaml:"contentType,omitempty"`
+	Headers       map[string]*Header `yaml:"headers,omitempty"`
+	Style         string             `yaml:"style,omitempty"`
+	Explode       *bool              `yaml:"explode,omitempty"`
+	AllowReserved bool               `yaml:"allowReserved,omitempty"`
+	Extensions    map[string]any     `yaml:",inline"`
+}
+
+type MediaType struct {
+	Schema     *Schema              `yaml:"schema,omitempty"`
+	Example    any                  `yaml:"example,omitempty"`
+	Examples   map[string]*Example  `yaml:"examples,omitempty"`
+	Encoding   map[string]*Encoding `yaml:"encoding,omitempty"`
+	Extensions map[string]any       `yaml:",inline"`
+}
+
+type Param struct {
+	Ref           string              `yaml:"$ref,omitempty"`
+	Name          string              `yaml:"name,omitempty"`
+	In            string              `yaml:"in,omitempty"`
+	Description   string              `yaml:"description,omitempty"`
+	Required      bool                `yaml:"required,omitempty"`
+	Deprecated    bool                `yaml:"deprecated,omitempty"`
+	Style         string              `yaml:"style,omitempty"`
+	Explode       *bool               `yaml:"explode,omitempty"`
+	AllowReserved bool                `yaml:"allowReserved,omitempty"`
+	Schema        *Schema             `yaml:"schema,omitempty"`
+	Example       any                 `yaml:"example,omitempty"`
+	Examples      map[string]*Example `yaml:"examples,omitempty"`
+	Extensions    map[string]any      `yaml:",inline"`
+}
+
+type Header = Param
+
+type RequestBody struct {
+	Ref         string                `yaml:"$ref,omitempty"`
+	Description string                `yaml:"description,omitempty"`
+	Content     map[string]*MediaType `yaml:"content"`
+	Required    bool                  `yaml:"required,omitempty"`
+	Extensions  map[string]any        `yaml:",inline"`
+}
+
+type Link struct {
+	Ref          string         `yaml:"$ref,omitempty"`
+	OperationRef string         `yaml:"operationRef,omitempty"`
+	OperationID  string         `yaml:"operationId,omitempty"`
+	Parameters   map[string]any `yaml:"parameters,omitempty"`
+	RequestBody  any            `yaml:"requestBody,omitempty"`
+	Description  string         `yaml:"description,omitempty"`
+	Server       *Server        `yaml:"server,omitempty"`
+	Extensions   map[string]any `yaml:",inline"`
+}
+
+type Response struct {
+	Ref         string                `yaml:"$ref,omitempty"`
+	Description string                `yaml:"description,omitempty"`
+	Headers     map[string]*Param     `yaml:"headers,omitempty"`
+	Content     map[string]*MediaType `yaml:"content,omitempty"`
+	Links       map[string]*Link      `yaml:"links,omitempty"`
+	Extensions  map[string]any        `yaml:",inline"`
+}
+
+type Operation struct {
+	// Huma-specific fields
+
+	// Method is the HTTP method for this operation
+	Method string `yaml:"-"`
+
+	// Path is the URL path for this operation
+	Path string `yaml:"-"`
+
+	// DefaultStatus is the default HTTP status code for this operation. It will
+	// be set to 200 or 204 if not specified, depending on whether the handler
+	// returns a response body.
+	DefaultStatus int `yaml:"-"`
+
+	// MaxBodyBytes is the maximum number of bytes to read from the request
+	// body. If not specified, the default is 1MB. Use -1 for unlimited. If
+	// the limit is reached, then an HTTP 413 error is returned.
+	MaxBodyBytes int64 `yaml:"-"`
+
+	// Errors is a list of HTTP status codes that the handler may return. If
+	// not specified, then a default error response is added to the OpenAPI.
+	Errors []int `yaml:"-"`
+
+	// SkipValidateParams disables validation of path, query, and header
+	// parameters. This can speed up request processing if you want to handle
+	// your own validation. Use with caution!
+	SkipValidateParams bool `yaml:"-"`
+
+	// SkipValidateBody disables validation of the request body. This can speed
+	// up request processing if you want to handle your own validation. Use with
+	// caution!
+	SkipValidateBody bool `yaml:"-"`
+
+	// Hidden will skip documenting this operation in the OpenAPI. This is
+	// useful for operations that are not intended to be used by clients but
+	// you'd still like the benefits of using Huma. Generally not recommended.
+	Hidden bool `yaml:"-"`
+
+	// OpenAPI fields
+	Tags         []string              `yaml:"tags,omitempty"`
+	Summary      string                `yaml:"summary,omitempty"`
+	Description  string                `yaml:"description,omitempty"`
+	ExternalDocs *ExternalDocs         `yaml:"externalDocs,omitempty"`
+	OperationID  string                `yaml:"operationId,omitempty"`
+	Parameters   []*Param              `yaml:"parameters,omitempty"`
+	RequestBody  *RequestBody          `yaml:"requestBody,omitempty"`
+	Responses    map[string]*Response  `yaml:"responses,omitempty"`
+	Callbacks    map[string]*PathItem  `yaml:"callbacks,omitempty"`
+	Deprecated   bool                  `yaml:"deprecated,omitempty"`
+	Security     []map[string][]string `yaml:"security,omitempty"`
+	Servers      []*Server             `yaml:"servers,omitempty"`
+	Extensions   map[string]any        `yaml:",inline"`
+}
+
+type PathItem struct {
+	Ref         string         `yaml:"$ref,omitempty"`
+	Summary     string         `yaml:"summary,omitempty"`
+	Description string         `yaml:"description,omitempty"`
+	Get         *Operation     `yaml:"get,omitempty"`
+	Put         *Operation     `yaml:"put,omitempty"`
+	Post        *Operation     `yaml:"post,omitempty"`
+	Delete      *Operation     `yaml:"delete,omitempty"`
+	Options     *Operation     `yaml:"options,omitempty"`
+	Head        *Operation     `yaml:"head,omitempty"`
+	Patch       *Operation     `yaml:"patch,omitempty"`
+	Trace       *Operation     `yaml:"trace,omitempty"`
+	Servers     []*Server      `yaml:"servers,omitempty"`
+	Parameters  []*Param       `yaml:"parameters,omitempty"`
+	Extensions  map[string]any `yaml:",inline"`
+}
+
+type OAuthFlow struct {
+	AuthorizationURL string            `yaml:"authorizationUrl"`
+	TokenURL         string            `yaml:"tokenUrl"`
+	RefreshURL       string            `yaml:"refreshUrl,omitempty"`
+	Scopes           map[string]string `yaml:"scopes"`
+	Extensions       map[string]any    `yaml:",inline"`
+}
+
+type OAuthFlows struct {
+	Implicit          *OAuthFlow     `yaml:"implicit,omitempty"`
+	Password          *OAuthFlow     `yaml:"password,omitempty"`
+	ClientCredentials *OAuthFlow     `yaml:"clientCredentials,omitempty"`
+	AuthorizationCode *OAuthFlow     `yaml:"authorizationCode,omitempty"`
+	Extensions        map[string]any `yaml:",inline"`
+}
+
+type SecurityScheme struct {
+	Type             string         `yaml:"type"`
+	Description      string         `yaml:"description,omitempty"`
+	Name             string         `yaml:"name,omitempty"`
+	In               string         `yaml:"in,omitempty"`
+	Scheme           string         `yaml:"scheme,omitempty"`
+	BearerFormat     string         `yaml:"bearerFormat,omitempty"`
+	Flows            *OAuthFlows    `yaml:"flows,omitempty"`
+	OpenIDConnectURL string         `yaml:"openIdConnectUrl,omitempty"`
+	Extensions       map[string]any `yaml:",inline"`
+}
+
+type Components struct {
+	Schemas         Registry                   `yaml:"schemas,omitempty"`
+	Responses       map[string]*Response       `yaml:"responses,omitempty"`
+	Parameters      map[string]*Param          `yaml:"parameters,omitempty"`
+	Examples        map[string]*Example        `yaml:"examples,omitempty"`
+	RequestBodies   map[string]*RequestBody    `yaml:"requestBodies,omitempty"`
+	Headers         map[string]*Header         `yaml:"headers,omitempty"`
+	SecuritySchemes map[string]*SecurityScheme `yaml:"securitySchemes,omitempty"`
+	Links           map[string]*Link           `yaml:"links,omitempty"`
+	Callbacks       map[string]*PathItem       `yaml:"callbacks,omitempty"`
+	PathItems       map[string]*PathItem       `yaml:"pathItems,omitempty"`
+	Extensions      map[string]any             `yaml:",inline"`
+}
+
+type ExternalDocs struct {
+	Description string         `yaml:"description,omitempty"`
+	URL         string         `yaml:"url"`
+	Extensions  map[string]any `yaml:",inline"`
+}
+
+type Tag struct {
+	Name         string         `yaml:"name"`
+	Description  string         `yaml:"description,omitempty"`
+	ExternalDocs *ExternalDocs  `yaml:"externalDocs,omitempty"`
+	Extensions   map[string]any `yaml:",inline"`
+}
+
+type AddOpFunc func(oapi *OpenAPI, op *Operation)
+
+type OpenAPI struct {
+	OpenAPI           string                `yaml:"openapi"`
+	Info              *Info                 `yaml:"info"`
+	Servers           []*Server             `yaml:"servers,omitempty"`
+	JSONSchemaDialect string                `yaml:"jsonSchemaDialect,omitempty"`
+	Paths             map[string]*PathItem  `yaml:"paths,omitempty"`
+	Webhooks          map[string]*PathItem  `yaml:"webhooks,omitempty"`
+	Components        *Components           `yaml:"components,omitempty"`
+	Security          []map[string][]string `yaml:"security,omitempty"`
+	Tags              []*Tag                `yaml:"tags,omitempty"`
+	ExternalDocs      *ExternalDocs         `yaml:"externalDocs,omitempty"`
+	Extensions        map[string]any        `yaml:",inline"`
+
+	// OnAddOperation is called when an operation is added to the OpenAPI via
+	// `AddOperation`. You may bypass this by directly writing to the `Paths`
+	// map instead.
+	OnAddOperation []AddOpFunc `yaml:"-"`
+}
+
+func (o *OpenAPI) AddOperation(op *Operation) {
+	if o.Paths == nil {
+		o.Paths = map[string]*PathItem{}
 	}
-	if name == "" && t.Kind() == reflect.Slice {
-		// Take the name of the type in the array and append "List" to it.
-		tmp := t.Elem()
-		if tmp.Kind() == reflect.Ptr {
-			tmp = tmp.Elem()
-		}
-		name = tmp.Name()
-		if name != "" {
-			name += "List"
-		}
-	}
-	if name == "" {
-		// No luck, fall back to the passed-in hint. Better than nothing.
-		name = hint
+
+	item := o.Paths[op.Path]
+	if item == nil {
+		item = &PathItem{}
+		o.Paths[op.Path] = item
 	}
 
-	var s *schema.Schema
-
-	if t.Kind() == reflect.Slice {
-		// We actually want to create two models: one for the container slice
-		// and one for the items within it.
-		ref := c.addSchema(t.Elem(), mode, name+"Item", false)
-		s = &schema.Schema{
-			Type: schema.TypeArray,
-			Items: &schema.Schema{
-				Ref: ref,
-			},
-		}
-	} else {
-		// TODO: See if this type has a predefined schema associated with it
-		// via a predefined map, a callback or an interface.
-		var err error
-		nestedSchemas := map[string]schema.NestedSchemaReference{}
-		if s, err = schema.GenerateWithMode(t, mode, nil, nestedSchemas); err != nil {
-			panic(err)
-		}
-		// Iterate over any nested schemas that are referenced by the schema
-		// we just generated
-		for k, v := range nestedSchemas {
-			// Check to see if this component already has a definition for that
-			// type in its schema collection
-			_, exists := c.Schemas[k]
-			if !exists {
-				// If not, generate the schema for the nested schema.
-				predefined := map[string]schema.NestedSchemaReference{}
-				s, err := schema.GenerateWithMode(v.Type, mode, nil, predefined)
-				if err != nil {
-					panic(err)
-				}
-				// Add the generated schema to the list of schemas associatd
-				// with this component.
-				c.addExistingSchema(s, k, generateSchemaField)
-			}
-		}
+	switch op.Method {
+	case http.MethodGet:
+		item.Get = op
+	case http.MethodPost:
+		item.Post = op
+	case http.MethodPut:
+		item.Put = op
+	case http.MethodPatch:
+		item.Patch = op
+	case http.MethodDelete:
+		item.Delete = op
+	case http.MethodHead:
+		item.Head = op
+	case http.MethodOptions:
+		item.Options = op
+	case http.MethodTrace:
+		item.Trace = op
+	default:
+		panic(fmt.Sprintf("unknown method %s", op.Method))
 	}
 
-	return c.addExistingSchema(s, name, generateSchemaField)
-}
-
-// AddExistingSchema adds an existing schema instance under the given name.
-func (c *oaComponents) AddExistingSchema(s *schema.Schema, name string, generateSchemaField bool) string {
-	return c.addExistingSchema(s, name, generateSchemaField)
-}
-
-func (c *oaComponents) addExistingSchema(s *schema.Schema, name string, generateSchemaField bool) string {
-	if generateSchemaField {
-		s.AddSchemaField()
+	for _, f := range o.OnAddOperation {
+		f(o, op)
 	}
-
-	orig := name
-	num := 1
-	for {
-		if c.Schemas[name] == nil {
-			// No existing schema, we are the first!
-			break
-		}
-
-		if reflect.DeepEqual(c.Schemas[name], s) {
-			// Existing schema matches!
-			break
-		}
-
-		// If we are here, then an existing schema doesn't match and this is a new
-		// type. So we will rename it in a deterministic fashion.
-		num++
-		name = fmt.Sprintf("%s%d", orig, num)
-	}
-
-	c.Schemas[name] = s
-
-	return "#/components/schemas/" + name
 }
 
-type oaFlow struct {
-	AuthorizationURL string            `json:"authorizationUrl,omitempty"`
-	TokenURL         string            `json:"tokenUrl,omitempty"`
-	Scopes           map[string]string `json:"scopes,omitempty"`
-}
-
-type oaFlows struct {
-	ClientCredentials *oaFlow `json:"clientCredentials,omitempty"`
-	AuthorizationCode *oaFlow `json:"authorizationCode,omitempty"`
-}
-
-type SecurityScheme string
-
-const (
-	SecuritySchemeApiKey        SecurityScheme = "apiKey"
-	SecuritySchemeHTTP          SecurityScheme = "http"
-	SecuritySchemeOauth2        SecurityScheme = "oauth2"
-	SecuritySchemeOpenIdConnect SecurityScheme = "openIdConnect"
-)
-
-// paramLocation describes where in the HTTP request the parameter comes from.
-type APIKeyLocation string
-
-// Parameter locations supported by OpenAPI 3
-const (
-	keyInQuery  APIKeyLocation = "query"
-	keyInHeader APIKeyLocation = "header"
-	keyInCookie APIKeyLocation = "cookie"
-)
-
-type oaSecurityScheme struct {
-	Type             SecurityScheme `json:"type"`
-	Description      string         `json:"description,omitempty"`
-	Name             string         `json:"name,omitempty"`
-	In               APIKeyLocation `json:"in,omitempty"`
-	Scheme           string         `json:"scheme,omitempty"`
-	BearerFormat     string         `json:"bearerFormat,omitempty"`
-	Flows            *oaFlows       `json:"flows,omitempty"`
-	OpenIdConnectUrl string         `json:"openIdConnectUrl,omitempty"`
+func (o *OpenAPI) MarshalJSON() ([]byte, error) {
+	// JSON doesn't support the `,inline` field tag, so we go through the YAML
+	// marshaller instead. It's not quite as fast, but this operation should
+	// only happen once on server load.
+	// Note: it does mean the individual structs above cannot be marshalled
+	// directly to JSON - you must marshal the entire OpenAPI struct with the
+	// exception of individual schemas.
+	return yaml.MarshalWithOptions(o, yaml.JSON())
 }
