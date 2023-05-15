@@ -271,7 +271,14 @@ func setFields(ctx *hcontext, req *http.Request, input reflect.Value, t reflect.
 		if name, ok := f.Tag.Lookup(locationPath); ok {
 			pname = name
 			location = locationPath
-			if v := chi.URLParam(req, name); v != "" {
+			v := chi.URLParam(req, name)
+			if v == "" {
+				ctx.AddError(&ErrorDetail{
+					Message:  fmt.Sprintf("%s is required", name),
+					Location: location + "." + name,
+					Value:    v,
+				})
+			} else {
 				pv = v
 			}
 		}
