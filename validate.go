@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"time"
+	"unsafe"
 
 	"github.com/google/uuid"
 	"golang.org/x/net/idna"
@@ -129,63 +130,64 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 			}
 		}
 		if !found {
-			res.Add(path, str, "expected string to be RFC3339 date-time")
+			res.Add(path, str, "expected string to be RFC 3339 date-time")
 		}
 	case "date":
 		if _, err := time.Parse("2006-01-02", str); err != nil {
-			res.Add(path, str, "expected string to be RFC3339 date")
+			res.Add(path, str, "expected string to be RFC 3339 date")
 		}
 	case "time":
 		if _, err := time.Parse("15:04:05", str); err != nil {
 			if _, err := time.Parse("15:04:05Z07:00", str); err != nil {
-				res.Add(path, str, "expected string to be RFC3339 time")
+				res.Add(path, str, "expected string to be RFC 3339 time")
 			}
 		}
 		// TODO: duration
 	case "email", "idn-email":
 		if _, err := mail.ParseAddress(str); err != nil {
-			res.Addf(path, str, "expected string to be RFC5322 email: %v", err)
+			res.Addf(path, str, "expected string to be RFC 5322 email: %v", err)
 		}
 	case "hostname":
 		if !(rxHostname.MatchString(str) && len(str) < 256) {
-			res.Add(path, str, "expected string to be RFC5890 hostname")
+			res.Add(path, str, "expected string to be RFC 5890 hostname")
 		}
 	case "idn-hostname":
 		if _, err := idna.ToASCII(str); err != nil {
-			res.Addf(path, str, "expected string to be RFC5890 hostname: %v", err)
+			res.Addf(path, str, "expected string to be RFC 5890 hostname: %v", err)
 		}
 	case "ipv4":
 		if ip := net.ParseIP(str); ip == nil || ip.To4() == nil {
-			res.Add(path, str, "expected string to be RFC2673 ipv4")
+			res.Add(path, str, "expected string to be RFC 2673 ipv4")
 		}
 	case "ipv6":
 		if ip := net.ParseIP(str); ip == nil || ip.To16() == nil {
-			res.Add(path, str, "expected string to be RFC2373 ipv6")
+			res.Add(path, str, "expected string to be RFC 2373 ipv6")
 		}
 	case "uri", "uri-reference", "iri", "iri-reference":
 		if _, err := url.Parse(str); err != nil {
-			res.Addf(path, str, "expected string to be RFC3986 uri: %v", err)
+			res.Addf(path, str, "expected string to be RFC 3986 uri: %v", err)
 		}
+		// TODO: check if it's actually a reference?
 	case "uuid":
 		if _, err := uuid.Parse(str); err != nil {
-			res.Addf(path, str, "expected string to be RFC4122 uuid: %v", err)
+			res.Addf(path, str, "expected string to be RFC 4122 uuid: %v", err)
 		}
 	case "uri-template":
 		u, err := url.Parse(str)
 		if err != nil {
-			res.Addf(path, str, "expected string to be RFC3986 uri: %v", err)
+			res.Addf(path, str, "expected string to be RFC 3986 uri: %v", err)
 			return
 		}
 		if !rxURITemplate.MatchString(u.Path) {
-			res.Add(path, str, "expected string to be RFC6570 uri-template")
+			res.Add(path, str, "expected string to be RFC 6570 uri-template")
 		}
 	case "json-pointer":
 		if !rxJSONPointer.MatchString(str) {
-			res.Add(path, str, "expected string to be RFC6901 json-pointee")
+			res.Add(path, str, "expected string to be RFC 6901 json-pointer")
 		}
 	case "relative-json-pointer":
 		if !rxRelJSONPointer.MatchString(str) {
-			res.Add(path, str, "expected string to be RFC6901 relative-json-pointer")
+			res.Add(path, str, "expected string to be RFC 6901 relative-json-pointer")
 		}
 	case "regex":
 		if _, err := regexp.Compile(str); err != nil {
@@ -253,8 +255,12 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 	case TypeString:
 		str, ok := v.(string)
 		if !ok {
-			res.Add(path, v, "expected string")
-			return
+			if b, ok := v.([]byte); ok {
+				str = *(*string)(unsafe.Pointer(&b))
+			} else {
+				res.Add(path, v, "expected string")
+				return
+			}
 		}
 
 		if s.MinLength != nil {
@@ -301,7 +307,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		}
 
 		if s.UniqueItems {
-			seen := make(map[any]struct{})
+			seen := make(map[any]struct{}, len(arr))
 			for _, item := range arr {
 				if _, ok := seen[item]; ok {
 					res.Add(path, v, "expected array items to be unique")
@@ -359,11 +365,9 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		// We should be permissive by default to enable easy round-trips for the
 		// client without needing to remove read-only values.
 		// TODO: should we make this configurable?
-		if mode == ModeWriteToServer && s.ReadOnly {
-			continue
-		}
 
-		if mode == ModeReadFromServer && s.WriteOnly && m[k] == nil && !reflect.ValueOf(m[k]).IsZero() {
+		// Be stricter for responses, enabling validation of the server if desired.
+		if mode == ModeReadFromServer && v.WriteOnly && m[k] != nil && !reflect.ValueOf(m[k]).IsZero() {
 			res.Add(path, m[k], "write only property is non-zero")
 			continue
 		}
@@ -372,8 +376,8 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 			if !s.requiredMap[k] {
 				continue
 			}
-			if (mode == ModeWriteToServer && s.ReadOnly) ||
-				(mode == ModeReadFromServer && s.WriteOnly) {
+			if (mode == ModeWriteToServer && v.ReadOnly) ||
+				(mode == ModeReadFromServer && v.WriteOnly) {
 				// These are not required for the current mode.
 				continue
 			}

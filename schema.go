@@ -99,23 +99,23 @@ type Schema struct {
 }
 
 func (s *Schema) PrecomputeMessages() {
-	s.msgEnum = "expected string to be one of \"" + strings.Join(mapTo(s.Enum, func(v any) string {
+	s.msgEnum = "expected value to be one of \"" + strings.Join(mapTo(s.Enum, func(v any) string {
 		return fmt.Sprintf("%v", v)
 	}), ", ") + "\""
 	if s.Minimum != nil {
-		s.msgMinimum = fmt.Sprintf("expected number >= %f", *s.Minimum)
+		s.msgMinimum = fmt.Sprintf("expected number >= %v", *s.Minimum)
 	}
 	if s.ExclusiveMinimum != nil {
-		s.msgExclusiveMinimum = fmt.Sprintf("expected number < %f", *s.ExclusiveMinimum)
+		s.msgExclusiveMinimum = fmt.Sprintf("expected number > %v", *s.ExclusiveMinimum)
 	}
 	if s.Maximum != nil {
-		s.msgMaximum = fmt.Sprintf("expected number <= %f", *s.Maximum)
+		s.msgMaximum = fmt.Sprintf("expected number <= %v", *s.Maximum)
 	}
 	if s.ExclusiveMaximum != nil {
-		s.msgExclusiveMaximum = fmt.Sprintf("expected number < %f", *s.ExclusiveMaximum)
+		s.msgExclusiveMaximum = fmt.Sprintf("expected number < %v", *s.ExclusiveMaximum)
 	}
 	if s.MultipleOf != nil {
-		s.msgMultipleOf = fmt.Sprintf("expected number to be a multiple of %f", *s.MultipleOf)
+		s.msgMultipleOf = fmt.Sprintf("expected number to be a multiple of %v", *s.MultipleOf)
 	}
 	if s.MinLength != nil {
 		s.msgMinLength = fmt.Sprintf("expected length >= %d", *s.MinLength)
@@ -128,10 +128,10 @@ func (s *Schema) PrecomputeMessages() {
 		s.msgPattern = "expected string to match pattern " + s.Pattern
 	}
 	if s.MinItems != nil {
-		s.msgMinItems = fmt.Sprintf("expected array with at least %d items", *s.MinItems)
+		s.msgMinItems = fmt.Sprintf("expected array length >= %d", *s.MinItems)
 	}
 	if s.MaxItems != nil {
-		s.msgMaxItems = fmt.Sprintf("expected array with at most %d items", *s.MaxItems)
+		s.msgMaxItems = fmt.Sprintf("expected array length <= %d", *s.MaxItems)
 	}
 	if s.MinProperties != nil {
 		s.msgMinProperties = fmt.Sprintf("expected object with at least %d properties", *s.MinProperties)
@@ -252,8 +252,12 @@ func SchemaFromField(registry Registry, parent reflect.Type, f reflect.StructFie
 	}
 	fs := registry.Schema(f.Type, true, parentName+f.Name+"Struct")
 	fs.Description = f.Tag.Get("doc")
-	fs.Format = f.Tag.Get("format")
-	fs.ContentEncoding = f.Tag.Get("encoding")
+	if fmt := f.Tag.Get("format"); fmt != "" {
+		fs.Format = fmt
+	}
+	if enc := f.Tag.Get("encoding"); enc != "" {
+		fs.ContentEncoding = enc
+	}
 	fs.Default = jsonTag(f, "default", false)
 	fs.Example = jsonTag(f, "example", false)
 

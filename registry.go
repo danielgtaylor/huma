@@ -45,6 +45,10 @@ type mapRegistry struct {
 func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema {
 	t = deref(t)
 	getsRef := t.Kind() == reflect.Struct
+	if t == timeType {
+		// Special case: time.Time is always a string.
+		getsRef = false
+	}
 
 	name := r.namer(t, hint)
 

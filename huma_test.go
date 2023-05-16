@@ -1,13 +1,159 @@
 package huma
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 
+	"github.com/danielgtaylor/huma/v2/queryparam"
+	"github.com/go-chi/chi"
 	"github.com/mitchellh/mapstructure"
+	"github.com/stretchr/testify/assert"
 )
+
+type testContext struct {
+	r *http.Request
+	w http.ResponseWriter
+}
+
+func (ctx *testContext) GetMatched() string {
+	return chi.RouteContext(ctx.r.Context()).RoutePattern()
+}
+
+func (ctx *testContext) GetContext() context.Context {
+	return ctx.r.Context()
+}
+
+func (ctx *testContext) GetURL() url.URL {
+	return *ctx.r.URL
+}
+
+func (ctx *testContext) GetParam(name string) string {
+	return chi.URLParam(ctx.r, name)
+}
+
+func (ctx *testContext) GetQuery(name string) string {
+	return queryparam.Get(ctx.r.URL.RawQuery, name)
+}
+
+func (ctx *testContext) GetHeader(name string) string {
+	return ctx.r.Header.Get(name)
+}
+
+func (ctx *testContext) GetBody() ([]byte, error) {
+	return io.ReadAll(ctx.r.Body)
+}
+
+func (ctx *testContext) GetBodyReader() io.Reader {
+	return ctx.r.Body
+}
+
+func (ctx *testContext) WriteStatus(code int) {
+	ctx.w.WriteHeader(code)
+}
+
+func (ctx *testContext) AppendHeader(name string, value string) {
+	ctx.w.Header().Add(name, value)
+}
+
+func (ctx *testContext) WriteHeader(name string, value string) {
+	ctx.w.Header().Set(name, value)
+}
+
+func (ctx *testContext) BodyWriter() io.Writer {
+	return ctx.w
+}
+
+type testAdapter struct {
+	router chi.Router
+}
+
+func (a *testAdapter) Handle(method, path string, handler func(Context)) {
+	a.router.MethodFunc(method, path, func(w http.ResponseWriter, r *http.Request) {
+		handler(&testContext{r: r, w: w})
+	})
+}
+
+func NewTestAdapter(r chi.Router, config Config) API {
+	return NewAPI(config, &testAdapter{router: r})
+}
+
+type ExhaustiveErrorsInputBody struct {
+	Name  string `json:"name" maxLength:"10"`
+	Count int    `json:"count" minimum:"1"`
+}
+
+func (b *ExhaustiveErrorsInputBody) Resolve(ctx Context) []error {
+	return []error{fmt.Errorf("body resolver error")}
+}
+
+type ExhaustiveErrorsInput struct {
+	ID   string                    `path:"id" maxLength:"5"`
+	Body ExhaustiveErrorsInputBody `json:"body"`
+}
+
+func (i *ExhaustiveErrorsInput) Resolve(ctx Context) []error {
+	return []error{&ErrorDetail{
+		Location: "path.id",
+		Message:  "input resolver error",
+		Value:    i.ID,
+	}}
+}
+
+type ExhaustiveErrorsOutput struct {
+}
+
+func TestExhaustiveErrors(t *testing.T) {
+	r := chi.NewRouter()
+	app := NewTestAdapter(r, DefaultConfig("Test API", "1.0.0"))
+	Register(app, Operation{
+		OperationID: "test",
+		Method:      http.MethodPut,
+		Path:        "/errors/{id}",
+	}, func(ctx context.Context, input *ExhaustiveErrorsInput) (*ExhaustiveErrorsOutput, error) {
+		return &ExhaustiveErrorsOutput{}, nil
+	})
+
+	req, _ := http.NewRequest(http.MethodPut, "/errors/123456", strings.NewReader(`{"name": "12345678901", "count": 0}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.JSONEq(t, `{
+		"$schema": "https:///schemas/ErrorModel.json",
+		"title": "Unprocessable Entity",
+		"status": 422,
+		"detail": "validation failed",
+		"errors": [
+			{
+				"message": "expected length <= 5",
+				"location": "path.id",
+				"value": "123456"
+			}, {
+				"message": "expected length <= 10",
+				"location": "body.name",
+				"value": "12345678901"
+			}, {
+				"message": "expected number >= 1",
+				"location": "body.count",
+				"value": 0
+			}, {
+				"message": "input resolver error",
+				"location": "path.id",
+				"value": "123456"
+			}, {
+				"message": "body resolver error"
+			}
+		]
+	}`, w.Body.String())
+}
 
 func BenchmarkSecondDecode(b *testing.B) {
 	type MediumSized struct {
