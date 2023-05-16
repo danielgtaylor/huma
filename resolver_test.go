@@ -360,3 +360,24 @@ func TestRawBody(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Result().StatusCode)
 }
+
+type PathParamTestModel struct {
+	TestParam string `path:"test-id"`
+}
+
+func TestPathParamAlwaysRequired(t *testing.T) {
+	app := newTestRouter()
+
+	app.Resource("/test/{test-id}/foo").Get("test", "Test",
+		NewResponse(http.StatusOK, "desc"),
+	).Run(func(ctx Context, input PathParamTestModel) {
+		ctx.WriteHeader(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest(http.MethodGet, "/test//foo", nil)
+	app.ServeHTTP(w, r)
+
+	assert.Equal(t, http.StatusBadRequest, w.Result().StatusCode)
+	assert.Contains(t, w.Body.String(), "test-id is required")
+}
