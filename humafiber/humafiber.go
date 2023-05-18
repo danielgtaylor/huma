@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -40,6 +41,12 @@ func (c *fiberCtx) GetHeader(name string) string {
 	return c.orig.Get(name)
 }
 
+func (c *fiberCtx) EachHeader(cb func(name, value string)) {
+	c.orig.Request().Header.VisitAll(func(k, v []byte) {
+		cb(string(k), string(v))
+	})
+}
+
 func (c *fiberCtx) GetBodyReader() io.Reader {
 	// return c.orig.Context().RequestBodyStream()
 	return bytes.NewReader(c.orig.Body())
@@ -62,7 +69,7 @@ func (c *fiberCtx) BodyWriter() io.Writer {
 }
 
 type fiberAdapter struct {
-	router fiber.Router
+	router *fiber.App
 }
 
 func (a *fiberAdapter) Handle(method, path string, handler func(huma.Context)) {
@@ -76,6 +83,23 @@ func (a *fiberAdapter) Handle(method, path string, handler func(huma.Context)) {
 	})
 }
 
-func New(r fiber.Router, config huma.Config) huma.API {
+func (a *fiberAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// b, _ := httputil.DumpRequest(r, true)
+	// fmt.Println(string(b))
+	resp, err := a.router.Test(r)
+	if err != nil {
+		panic(err)
+	}
+	h := w.Header()
+	for k, v := range resp.Header {
+		for item := range v {
+			h.Add(k, v[item])
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+func New(r *fiber.App, config huma.Config) huma.API {
 	return huma.NewAPI(config, &fiberAdapter{router: r})
 }

@@ -178,7 +178,10 @@ func _findInType(t reflect.Type, path []int, result *findResult, onType func(ref
 	}
 }
 
-func writeErr(api API, op *Operation, ctx Context, status int, msg string, errs ...error) {
+// WriteErr writes an error response with the given context, using the
+// configured error type and with the given status code and message. It is
+// marshaled using the API's content negotiation methods.
+func WriteErr(api API, op *Operation, ctx Context, status int, msg string, errs ...error) {
 	var err any = NewError(status, msg, errs...)
 
 	ct, _ := api.Negotiate(ctx.GetHeader("Accept"))
@@ -501,14 +504,14 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				if count == op.MaxBodyBytes {
 					buf.Reset()
 					bufPool.Put(buf)
-					writeErr(api, &op, ctx, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body is too large limit=%d bytes", op.MaxBodyBytes))
+					WriteErr(api, &op, ctx, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body is too large limit=%d bytes", op.MaxBodyBytes))
 					return
 				}
 			}
 			if err != nil {
 				buf.Reset()
 				bufPool.Put(buf)
-				writeErr(api, &op, ctx, http.StatusInternalServerError, "cannot read request body", err)
+				WriteErr(api, &op, ctx, http.StatusInternalServerError, "cannot read request body", err)
 				return
 			}
 			body := buf.Bytes()
@@ -577,7 +580,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		})
 
 		if len(res.Errors) > 0 {
-			writeErr(api, &op, ctx, errStatus, "validation failed", res.Errors...)
+			WriteErr(api, &op, ctx, errStatus, "validation failed", res.Errors...)
 			return
 		}
 
@@ -633,7 +636,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 			ct, err := api.Negotiate(ctx.GetHeader("Accept"))
 			if err != nil {
-				writeErr(api, &op, ctx, http.StatusNotAcceptable, "unable to marshal response", err)
+				WriteErr(api, &op, ctx, http.StatusNotAcceptable, "unable to marshal response", err)
 				return
 			}
 			if ctf, ok := body.(ContentTypeFilter); ok {

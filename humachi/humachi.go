@@ -40,6 +40,14 @@ func (ctx *chiContext) GetHeader(name string) string {
 	return ctx.r.Header.Get(name)
 }
 
+func (ctx *chiContext) EachHeader(cb func(name, value string)) {
+	for name, values := range ctx.r.Header {
+		for _, value := range values {
+			cb(name, value)
+		}
+	}
+}
+
 func (ctx *chiContext) GetBody() ([]byte, error) {
 	return io.ReadAll(ctx.r.Body)
 }
@@ -72,6 +80,10 @@ func (a *chiAdapter) Handle(method, path string, handler func(huma.Context)) {
 	a.router.MethodFunc(method, path, func(w http.ResponseWriter, r *http.Request) {
 		handler(&chiContext{r: r, w: w})
 	})
+}
+
+func (a *chiAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	a.router.ServeHTTP(w, r)
 }
 
 func NewChi(r chi.Router, config huma.Config) huma.API {

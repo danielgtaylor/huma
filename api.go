@@ -33,6 +33,7 @@ var resolverType = reflect.TypeOf((*Resolver)(nil)).Elem()
 // functionality in one place.
 type Adapter interface {
 	Handle(method, path string, handler func(ctx Context))
+	ServeHTTP(http.ResponseWriter, *http.Request)
 }
 
 // Context is the current request/response context. It provides a generic
@@ -43,6 +44,7 @@ type Context interface {
 	GetParam(name string) string
 	GetQuery(name string) string
 	GetHeader(name string) string
+	EachHeader(cb func(name, value string))
 	GetBodyReader() io.Reader
 	WriteStatus(code int)
 	AppendHeader(name, value string)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/autopatch"
 	"github.com/danielgtaylor/huma/v2/humafiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/compress"
@@ -134,6 +135,32 @@ func RegisterRoutes(api huma.API) {
 	}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
 		return nil, nil
 	})
+
+	type Patch struct {
+		Body struct {
+			Foo string `json:"foo"`
+			Bar string `json:"bar"`
+		}
+	}
+
+	huma.Register(api, huma.Operation{
+		OperationID: "patch-get",
+		Method:      http.MethodGet,
+		Path:        "/patch-test",
+	}, func(ctx context.Context, input *struct{}) (*Patch, error) {
+		resp := &Patch{}
+		resp.Body.Foo = "foo"
+		resp.Body.Bar = "bar"
+		return resp, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "patch-put",
+		Method:      http.MethodPut,
+		Path:        "/patch-test",
+	}, func(ctx context.Context, input *Patch) (*Patch, error) {
+		return input, nil
+	})
 }
 
 func main() {
@@ -186,6 +213,8 @@ func main() {
 		// 	return &GreetingOutput{"Hello, " + input.ID}, nil
 		// })
 		RegisterRoutes(api)
+
+		autopatch.AutoPatch(api)
 
 		cli.OnStart(func() {
 			// Connect dependencies here...

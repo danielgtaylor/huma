@@ -47,6 +47,14 @@ func (ctx *testContext) GetHeader(name string) string {
 	return ctx.r.Header.Get(name)
 }
 
+func (ctx *testContext) EachHeader(cb func(name, value string)) {
+	for name, values := range ctx.r.Header {
+		for _, value := range values {
+			cb(name, value)
+		}
+	}
+}
+
 func (ctx *testContext) GetBody() ([]byte, error) {
 	return io.ReadAll(ctx.r.Body)
 }
@@ -79,6 +87,10 @@ func (a *testAdapter) Handle(method, path string, handler func(Context)) {
 	a.router.MethodFunc(method, path, func(w http.ResponseWriter, r *http.Request) {
 		handler(&testContext{r: r, w: w})
 	})
+}
+
+func (a *testAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	a.router.ServeHTTP(w, r)
 }
 
 func NewTestAdapter(r chi.Router, config Config) API {
