@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2/negotiation"
-	"gopkg.in/yaml.v2"
+	"github.com/goccy/go-yaml"
 )
 
 var rxSchema = regexp.MustCompile(`#/components/schemas/([^"]+)`)

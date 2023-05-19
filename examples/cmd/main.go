@@ -10,11 +10,11 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humafiber"
 	"github.com/danielgtaylor/huma/v2/autopatch"
+	"github.com/goccy/go-yaml"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 type Options struct {
