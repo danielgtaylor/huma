@@ -641,6 +641,21 @@ var validateTests = []struct {
 		input: map[string]any{"value": "three"},
 		errs:  []string{"expected value to be one of \"one, two\""},
 	},
+	{
+		name: "optional success",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value,omitempty" minLength:"1"`
+		}{}),
+		input: map[string]any{},
+	},
+	{
+		name: "optional fail",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value,omitempty" minLength:"1"`
+		}{}),
+		input: map[string]any{"value": ""},
+		errs:  []string{"expected length >= 1"},
+	},
 }
 
 func TestValidate(t *testing.T) {
