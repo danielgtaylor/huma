@@ -115,91 +115,91 @@ var NewError = func(status int, msg string, errs ...error) StatusError {
 
 // Status304NotModied returns a 304. This is not really an error, but provides
 // a way to send non-default responses.
-func Status304NotModied() error {
-	return NewError(http.StatusNotModified, "", nil)
+func Status304NotModied() StatusError {
+	return NewError(http.StatusNotModified, "")
 }
 
 // Error400BadRequest returns a 400.
-func Error400BadRequest(msg string, errs ...error) error {
+func Error400BadRequest(msg string, errs ...error) StatusError {
 	return NewError(http.StatusBadRequest, msg, errs...)
 }
 
 // Error401Unauthorized returns a 401.
-func Error401Unauthorized(msg string, errs ...error) error {
+func Error401Unauthorized(msg string, errs ...error) StatusError {
 	return NewError(http.StatusUnauthorized, msg, errs...)
 }
 
 // Error403Forbidden returns a 403.
-func Error403Forbidden(msg string, errs ...error) error {
+func Error403Forbidden(msg string, errs ...error) StatusError {
 	return NewError(http.StatusForbidden, msg, errs...)
 }
 
 // Error404NotFound returns a 404.
-func Error404NotFound(msg string, errs ...error) error {
+func Error404NotFound(msg string, errs ...error) StatusError {
 	return NewError(http.StatusNotFound, msg, errs...)
 }
 
 // Error405MethodNotAllowed returns a 405.
-func Error405MethodNotAllowed(msg string, errs ...error) error {
+func Error405MethodNotAllowed(msg string, errs ...error) StatusError {
 	return NewError(http.StatusMethodNotAllowed, msg, errs...)
 }
 
 // Error406NotAcceptable returns a 406.
-func Error406NotAcceptable(msg string, errs ...error) error {
+func Error406NotAcceptable(msg string, errs ...error) StatusError {
 	return NewError(http.StatusNotAcceptable, msg, errs...)
 }
 
 // Error409Conflict returns a 409.
-func Error409Conflict(msg string, errs ...error) error {
+func Error409Conflict(msg string, errs ...error) StatusError {
 	return NewError(http.StatusConflict, msg, errs...)
 }
 
 // Error410Gone returns a 410.
-func Error410Gone(msg string, errs ...error) error {
+func Error410Gone(msg string, errs ...error) StatusError {
 	return NewError(http.StatusGone, msg, errs...)
 }
 
 // Error412PreconditionFailed returns a 412.
-func Error412PreconditionFailed(msg string, errs ...error) error {
+func Error412PreconditionFailed(msg string, errs ...error) StatusError {
 	return NewError(http.StatusPreconditionFailed, msg, errs...)
 }
 
 // Error415UnsupportedMediaType returns a 415.
-func Error415UnsupportedMediaType(msg string, errs ...error) error {
+func Error415UnsupportedMediaType(msg string, errs ...error) StatusError {
 	return NewError(http.StatusUnsupportedMediaType, msg, errs...)
 }
 
 // Error422UnprocessableEntity returns a 422.
-func Error422UnprocessableEntity(msg string, errs ...error) error {
+func Error422UnprocessableEntity(msg string, errs ...error) StatusError {
 	return NewError(http.StatusUnprocessableEntity, msg, errs...)
 }
 
 // Error429TooManyRequests returns a 429.
-func Error429TooManyRequests(msg string, errs ...error) error {
+func Error429TooManyRequests(msg string, errs ...error) StatusError {
 	return NewError(http.StatusTooManyRequests, msg, errs...)
 }
 
 // Error500InternalServerError returns a 500.
-func Error500InternalServerError(msg string, errs ...error) error {
+func Error500InternalServerError(msg string, errs ...error) StatusError {
 	return NewError(http.StatusInternalServerError, msg, errs...)
 }
 
 // Error501NotImplemented returns a 501.
-func Error501NotImplemented(msg string, errs ...error) error {
+func Error501NotImplemented(msg string, errs ...error) StatusError {
 	return NewError(http.StatusNotImplemented, msg, errs...)
 }
 
 // Error502BadGateway returns a 502.
-func Error502BadGateway(msg string, errs ...error) error {
+func Error502BadGateway(msg string, errs ...error) StatusError {
 	return NewError(http.StatusBadGateway, msg, errs...)
 }
 
 // Error503ServiceUnavailable returns a 503.
-func Error503ServiceUnavailable(msg string, errs ...error) error {
+func Error503ServiceUnavailable(msg string, errs ...error) StatusError {
 	return NewError(http.StatusServiceUnavailable, msg, errs...)
 }
 
 // Error504GatewayTimeout returns a 504.
-func Error504GatewayTimeout(msg string, errs ...error) error {
+func Error504GatewayTimeout(msg string, errs ...error) StatusError {
 	return NewError(http.StatusGatewayTimeout, msg, errs...)
 }
