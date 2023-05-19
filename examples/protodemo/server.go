@@ -7,8 +7,8 @@ import (
 	"reflect"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/humafiber"
-	"github.com/danielgtaylor/huma/v2/protodemo/protodemo"
+	"github.com/danielgtaylor/huma/v2/adapters/humafiber"
+	"github.com/danielgtaylor/huma/v2/examples/protodemo/protodemo"
 	"github.com/gofiber/fiber/v2"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"

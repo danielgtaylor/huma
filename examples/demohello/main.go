@@ -7,9 +7,8 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/humafiber"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/compress"
+	"github.com/danielgtaylor/huma/v2/adapters/humagin"
+	"github.com/gin-gonic/gin"
 )
 
 type Options struct {
@@ -39,10 +38,13 @@ type GreetingResponse struct {
 
 func main() {
 	cli := huma.NewCLI(func(cli huma.CLI, options *Options) {
-		router := fiber.New()
-		router.Use(compress.New())
+		// router := gin.Default()
+		router := gin.New()
+		// router := fiber.New()
+		// router.Use(compress.New())
 
-		api := humafiber.New(router, huma.DefaultConfig("My API", "1.0.0"))
+		// api := humafiber.New(router, huma.DefaultConfig("My API", "1.0.0"))
+		api := humagin.New(router, huma.DefaultConfig("My API", "1.0.0"))
 
 		huma.Register(api, huma.Operation{
 			OperationID: "hello",
@@ -58,7 +60,8 @@ func main() {
 
 		cli.OnStart(func() {
 			// Connect dependencies, if needed.
-			router.Listen(fmt.Sprintf(":%d", options.Port))
+			// router.Listen(fmt.Sprintf(":%d", options.Port))
+			router.Run(fmt.Sprintf(":%d", options.Port))
 		})
 	})
 
