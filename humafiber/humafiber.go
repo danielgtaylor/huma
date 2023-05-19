@@ -24,6 +24,10 @@ func (c *fiberCtx) GetContext() context.Context {
 	return c.orig.Context()
 }
 
+func (c *fiberCtx) GetMethod() string {
+	return c.orig.Method()
+}
+
 func (c *fiberCtx) GetURL() url.URL {
 	u, _ := url.Parse(string(c.orig.Request().RequestURI()))
 	return *u

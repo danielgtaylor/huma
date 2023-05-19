@@ -24,6 +24,10 @@ func (ctx *chiContext) GetContext() context.Context {
 	return ctx.r.Context()
 }
 
+func (ctx *chiContext) GetMethod() string {
+	return ctx.r.Method
+}
+
 func (ctx *chiContext) GetURL() url.URL {
 	return *ctx.r.URL
 }

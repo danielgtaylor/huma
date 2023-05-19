@@ -31,6 +31,10 @@ func (ctx *testContext) GetContext() context.Context {
 	return ctx.r.Context()
 }
 
+func (ctx *testContext) GetMethod() string {
+	return ctx.r.Method
+}
+
 func (ctx *testContext) GetURL() url.URL {
 	return *ctx.r.URL
 }

@@ -40,6 +40,7 @@ type Adapter interface {
 // interface to get request information and write responses.
 type Context interface {
 	GetContext() context.Context
+	GetMethod() string
 	GetURL() url.URL
 	GetParam(name string) string
 	GetQuery(name string) string
