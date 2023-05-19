@@ -357,7 +357,8 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		}
 	}
 
-	for k, v := range s.Properties {
+	for _, k := range s.propertyNames {
+		v := s.Properties[k]
 		for v.Ref != "" {
 			v = r.SchemaFromRef(v.Ref)
 		}

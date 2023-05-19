@@ -77,8 +77,9 @@ type Schema struct {
 	WriteOnly            bool               `yaml:"writeOnly,omitempty"`
 	Extensions           map[string]any     `yaml:",inline"`
 
-	patternRe   *regexp.Regexp  `yaml:"-"`
-	requiredMap map[string]bool `yaml:"-"`
+	patternRe     *regexp.Regexp  `yaml:"-"`
+	requiredMap   map[string]bool `yaml:"-"`
+	propertyNames []string        `yaml:"-"`
 
 	// Precomputed validation messages. These prevent allocations during
 	// validation and are known at schema creation time.
@@ -359,6 +360,7 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 
 		required := []string{}
 		requiredMap := map[string]bool{}
+		propNames := []string{}
 		props := map[string]*Schema{}
 		for i := 0; i < t.NumField(); i++ {
 			f := t.Field(i)
@@ -382,10 +384,12 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 
 			fs := SchemaFromField(r, t, f)
 			props[name] = fs
+			propNames = append(propNames, name)
 		}
 		s.Type = TypeObject
 		s.AdditionalProperties = false
 		s.Properties = props
+		s.propertyNames = propNames
 		s.Required = required
 		s.requiredMap = requiredMap
 		s.PrecomputeMessages()
