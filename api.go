@@ -263,12 +263,11 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	if config.SchemasPath != "" {
-		a.Handle(http.MethodGet, config.SchemasPath+"/{schema}.json", func(ctx Context) {
-			schema := ctx.GetParam("schema")
+		a.Handle(http.MethodGet, config.SchemasPath+"/{schema}", func(ctx Context) {
+			// Some routers dislike a path param+suffix, so we strip it here instead.
+			schema := strings.TrimSuffix(ctx.GetParam("schema"), ".json")
 			ctx.WriteHeader("Content-Type", "application/json")
-			// TODO: copy & convert refs...
 			b, _ := json.Marshal(config.OpenAPI.Components.Schemas.Map()[schema])
-
 			b = rxSchema.ReplaceAll(b, []byte(config.SchemasPath+`/$1.json`))
 			ctx.BodyWriter().Write(b)
 		})
