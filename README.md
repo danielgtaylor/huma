@@ -9,61 +9,53 @@
 - [Design](#design)
 
 <a name="intro"></a>
-A modern, simple, fast & opinionated REST API framework for Go with batteries included. Pronounced IPA: [/'hjuːmɑ/](https://en.wiktionary.org/wiki/Wiktionary:International_Phonetic_Alphabet). The goals of this project are to provide:
+A modern, simple, fast & flexible micro framework for building REST/RPC APIs in Go backed by OpenAPI 3 and JSON Schema. Pronounced IPA: [/'hjuːmɑ/](https://en.wiktionary.org/wiki/Wiktionary:International_Phonetic_Alphabet). The goals of this project are to provide:
 
-- A modern REST API backend framework for Go developers
-  - Described by [OpenAPI 3](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.0.3.md) & [JSON Schema](https://json-schema.org/)
-  - First class support for middleware, JSON/CBOR, and other features
+- Incremental adoption for teams with existing services
+  - Bring your own router, middleware, and logging/metrics
+  - Extensible OpenAPI & JSON Schema layer to document existing routes
+- A modern REST or RPC API backend framework for Go developers
+  - Described by [OpenAPI 3.1](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md) & [JSON Schema](https://json-schema.org/)
 - Guard rails to prevent common mistakes
 - Documentation that can't get out of date
-- High-quality developer tooling
+- High-quality generated developer tooling
 
 Features include:
 
-- HTTP, HTTPS (TLS), and [HTTP/2](https://http2.github.io/) built-in
-- Optional read-only GraphQL interface built-in
-- Declarative interface on top of [Chi](https://github.com/go-chi/chi)
+- Declarative interface on top of your router of choice:
   - Operation & model documentation
   - Request params (path, query, or header)
   - Request body
   - Responses (including errors)
   - Response headers
-- JSON Errors using [RFC7807](https://tools.ietf.org/html/rfc7807) and `application/problem+json`
-- Default (optional) middleware
-  - [RFC8631](https://tools.ietf.org/html/rfc8631) service description & docs links
-  - Automatic recovery from panics with traceback & request logging
-  - Structured logging middleware using [Zap](https://github.com/uber-go/zap)
-  - Automatic handling of `Prefer: return=minimal` from [RFC 7240](https://tools.ietf.org/html/rfc7240#section-4.2)
-  - [OpenTracing](https://opentracing.io/) for requests and errors
-- Per-operation request size limits & timeouts with sane defaults
+- JSON Errors using [RFC7807](https://tools.ietf.org/html/rfc7807) and `application/problem+json` by default (but can be changed)
+- Per-operation request size limits with sane defaults
 - [Content negotiation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Content_negotiation) between server and client
-  - Support for gzip ([RFC 1952](https://tools.ietf.org/html/rfc1952)) & Brotli ([RFC 7932](https://tools.ietf.org/html/rfc7932)) content encoding via the `Accept-Encoding` header.
-  - Support for JSON ([RFC 8259](https://tools.ietf.org/html/rfc8259)), YAML, and CBOR ([RFC 7049](https://tools.ietf.org/html/rfc7049)) content types via the `Accept` header.
+  - Support for JSON ([RFC 8259](https://tools.ietf.org/html/rfc8259)) and CBOR ([RFC 7049](https://tools.ietf.org/html/rfc7049)) content types via the `Accept` header with the default config.
 - Conditional requests support, e.g. `If-Match` or `If-Unmodified-Since` header utilities.
 - Optional automatic generation of `PATCH` operations that support:
   - [RFC 7386](https://www.rfc-editor.org/rfc/rfc7386) JSON Merge Patch
   - [RFC 6902](https://www.rfc-editor.org/rfc/rfc6902) JSON Patch
+  - [Shorthand](https://github.com/danielgtaylor/shorthand)
 - Annotated Go types for input and output models
   - Generates JSON Schema from Go types
   - Automatic input model validation & error handling
-- Documentation generation using [RapiDoc](https://mrin9.github.io/RapiDoc/), [ReDoc](https://github.com/Redocly/redoc), or [SwaggerUI](https://swagger.io/tools/swagger-ui/)
-- CLI built-in, configured via arguments or environment variables
+- Documentation generation using [Stoplight Elements](https://stoplight.io/open-source/elements)
+- Optional CLI built-in, configured via arguments or environment variables
   - Set via e.g. `-p 8000`, `--port=8000`, or `SERVICE_PORT=8000`
-  - Connection timeouts & graceful shutdown built-in
-- Generates OpenAPI JSON for access to a rich ecosystem of tools
+  - Startup actions & graceful shutdown built-in
+- Generates OpenAPI for access to a rich ecosystem of tools
   - Mocks with [API Sprout](https://github.com/danielgtaylor/apisprout)
   - SDKs with [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator)
   - CLI with [Restish](https://rest.sh/)
   - And [plenty](https://openapi.tools/) [more](https://apis.guru/awesome-openapi3/category.html)
-- Generates JSON Schema for each resource using `describedby` link relation headers as well as optional `$schema` properties in returned objects that integrate into editors for validation & completion.
+- Generates JSON Schema for each resource using optional `describedby` link relation headers as well as optional `$schema` properties in returned objects that integrate into editors for validation & completion.
 
-This project was inspired by [FastAPI](https://fastapi.tiangolo.com/). Look at the [benchmarks](https://github.com/danielgtaylor/huma/tree/master/benchmark) to see how Huma compares.
-
-Logo & branding designed by [Kari Taylor](https://www.kari.photography/).
+This project was inspired by [FastAPI](https://fastapi.tiangolo.com/). Logo & branding designed by Kari Taylor.
 
 # Example
 
-Here is a complete basic hello world example in Huma, that shows how to initialize a Huma app complete with CLI & default middleware, declare a resource with an operation, and define its handler function.
+Here is a complete basic hello world example in Huma, that shows how to initialize a Huma app complete with CLI, declare a resource with an operation, and define its handler function.
 
 ```go
 package main
@@ -71,39 +63,70 @@ package main
 import (
 	"net/http"
 
-	"github.com/danielgtaylor/huma"
-	"github.com/danielgtaylor/huma/cli"
-	"github.com/danielgtaylor/huma/responses"
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/adapters/humachi"
 )
 
-func main() {
-	// Create a new router & CLI with default middleware.
-	app := cli.NewRouter("Minimal Example", "1.0.0")
+// Options for the CLI.
+type Options struct {
+	Port int `help:"Port to listen on" default:"8888"`
+}
 
-	// Declare the root resource and a GET operation on it.
-	app.Resource("/").Get("get-root", "Get a short text message",
-		// The only response is HTTP 200 with text/plain
-		responses.OK().ContentType("text/plain"),
-	).Run(func(ctx huma.Context) {
-		// This is he handler function for the operation. Write the response.
-		ctx.Header().Set("Content-Type", "text/plain")
-		ctx.Write([]byte("Hello, world"))
+// GreetingInput represents the greeting operation request.
+type GreetingInput struct {
+	Name string `path:"name"`
+}
+
+// GreetingOutput represents the greeting operation response.
+type GreetingOutput struct {
+	Body struct {
+		Message string `json:"message"`
+	}
+}
+
+func main() {
+	// Create a CLI app which takes a port option.
+	huma.NewCLI(func(cli huma.CLI, options *Options) {
+		// Create a new router & API
+		router := chi.NewMux()
+		api := humachi.New(router, huma.DefaultConfig("My API", "1.0.0"))
+
+		// Register GET /greeting/{name}
+		huma.Register(api, huma.Operation{
+			OperationID: "get-greeting",
+			Method:      http.MethodGet,
+			Path:        "/greeting/{name}",
+		}, func(ctx context.Context, input *GreetingInput) (*GreetingOutput, error) {
+			resp := &GreetingOutput{}
+			resp.Body.Message: fmt.Sprintf("Hello, %s!", input.Name)
+			return resp, nil
+		})
+
+		// Tell the CLI how to start your router.
+		cli.OnStart(func() {
+			router.Listen(fmt.Sprintf(":%d", options.Port)
+		})
 	})
 
-	// Run the CLI. When passed no arguments, it starts the server.
+	// Run the CLI. When passed no commands, it starts the server.
 	app.Run()
 }
 ```
 
-You can test it with `go run hello.go` and make a sample request using [Restish](https://rest.sh/) (or `curl`). By default, Huma runs on port `8888`:
+You can test it with `go run hello.go` (optionally pass `--port` to change the default) and make a sample request using [Restish](https://rest.sh/) (or `curl`):
 
 ```sh
 # Get the message from the server
-$ restish :8888
-Hello, world
+$ restish :8888/greeting/world
+HTTP/1.1 200 OK
+...
+{
+	$schema: "http://localhost:8888/schemas/GreetingOutputBody.json",
+	message: "Hello, world!"
+}
 ```
 
-Even though the example is tiny you can also see some generated documentation at http://localhost:8888/docs.
+Even though the example is tiny you can also see some generated documentation at http://localhost:8888/docs. The generated OpenAPI is available at http://localhost:8888/openapi.json or http://localhost:8888/openapi.yaml.
 
 See the examples directory for more complete examples.
 
@@ -116,15 +139,8 @@ See the examples directory for more complete examples.
 # Install
 
 ```sh
-# after: go mod init ...
-go get -u github.com/danielgtaylor/huma@latest
-
-# and to taste:
-go get -u github.com/danielgtaylor/huma/cli
-go get -u github.com/danielgtaylor/huma/humatest
-go get -u github.com/danielgtaylor/huma/middleware
-go get -u github.com/danielgtaylor/huma/responses
-# for example
+# After: go mod init ...
+go get -u github.com/danielgtaylor/huma/v2
 ```
 
 # Documentation
@@ -133,7 +149,53 @@ Official Go package documentation can always be found at https://pkg.go.dev/gith
 
 > :whale: Hi there! I'm the happy Huma whale here to provide help. You'll see me leave helpful tips down below.
 
-## The Router
+## BYOR (Bring Your Own Router)
+
+Huma is designed to be router-agnostic to enable incremental adoption in existing and new services across a large number of organizations. This means you can use any router you want, or even write your own. The only requirement is that you implement a small `huma.Adapter` interface. This is how Huma integrates with your router.
+
+Adapters are in the `adapters` directory and named after the router they support. Many common routers are supported out of the box:
+
+- [chi](https://github.com/go-chi/chi) via `humachi`
+- [gin](https://gin-gonic.com/) via `humagin`
+- [Fiber](https://gofiber.io/) via `humafiber`
+
+Writing your own wrapper is quick and simple, and PRs are accepted for additional adapters to be built-in.
+
+Adapters are instantiated by wrapping your router and providing a Huma configuration object which describes the API. Here is a simple example using Fiber:
+
+```go
+// Create your router.
+app := fiber.New()
+
+// Wrap the router with Huma to create an API instance.
+api := humafiber.New(app, huma.DefaultConfig("My API", "1.0.0"))
+
+// Register your operations with the API.
+// ...
+
+// Start the server!
+app.Listen(":3000")
+```
+
+## Open API Generation & Extensibility
+
+Huma generates Open API 3.1.0 compatible JSON/YAML specs and provides rendered documentation automatically. Every operation that is registered with the API is included in the spec by default. The operation's inputs and outputs are used to generate the request and response parameters / schemas.
+
+Sometimes you may need to customize the generated Open API spec. With Huma v2 you have full access and can modify it as needed. For example, to set up a security scheme:
+
+```go
+config := huma.DefaultConfig("My API", "1.0.0")
+config.Components.SecuritySchemes.....
+api := humachi.New(router, config)
+```
+
+---
+
+# Old docs below!
+
+These will get updated soon.
+
+---
 
 The Huma router is the entrypoint to your service or application. There are a couple of ways to create it, depending on what level of customization you need.
 
