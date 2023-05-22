@@ -27,7 +27,7 @@ func findParamFields(registry Registry, op *Operation, adapter Adapter, path []i
 		fi = append(fi, i)
 
 		if f.Anonymous {
-			findParamFields(registry, op, adapter, path, deref(f.Type), m)
+			findParamFields(registry, op, adapter, fi, deref(f.Type), m)
 			continue
 		}
 
