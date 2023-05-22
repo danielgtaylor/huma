@@ -1,11 +1,370 @@
 package huma
 
 import (
+	"encoding/json"
+	"fmt"
+	"math/bits"
+	"net"
+	"net/url"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestSchema(t *testing.T) {
+	bitSize := fmt.Sprint(bits.UintSize)
+
+	cases := []struct {
+		name     string
+		input    any
+		expected string
+		panics   string
+	}{
+		{
+			name:     "bool",
+			input:    true,
+			expected: `{"type": "boolean"}`,
+		},
+		{
+			name:     "int",
+			input:    1,
+			expected: `{"type": "integer", "format": "int` + bitSize + `"}`,
+		},
+		{
+			name:     "int32",
+			input:    int32(1),
+			expected: `{"type": "integer", "format": "int32"}`,
+		},
+		{
+			name:     "int64",
+			input:    int64(1),
+			expected: `{"type": "integer", "format": "int64"}`,
+		},
+		{
+			name:     "uint",
+			input:    uint(1),
+			expected: `{"type": "integer", "format": "int` + bitSize + `", "minimum": 0}`,
+		},
+		{
+			name:     "uint32",
+			input:    uint32(1),
+			expected: `{"type": "integer", "format": "int32", "minimum": 0}`,
+		},
+		{
+			name:     "uint64",
+			input:    uint64(1),
+			expected: `{"type": "integer", "format": "int64", "minimum": 0}`,
+		},
+		{
+			name:     "float64",
+			input:    1.0,
+			expected: `{"type": "number", "format": "double"}`,
+		},
+		{
+			name:     "float32",
+			input:    float32(1.0),
+			expected: `{"type": "number", "format": "float"}`,
+		},
+		{
+			name:     "string",
+			input:    "test",
+			expected: `{"type": "string"}`,
+		},
+		{
+			name:     "time",
+			input:    time.Now(),
+			expected: `{"type": "string", "format": "date-time"}`,
+		},
+		{
+			name:     "url",
+			input:    &url.URL{},
+			expected: `{"type": "string", "format": "uri"}`,
+		},
+		{
+			name:     "ip",
+			input:    net.IPv4(127, 0, 0, 1),
+			expected: `{"type": "string", "format": "ipv4"}`,
+		},
+		{
+			name:     "bytes",
+			input:    []byte("test"),
+			expected: `{"type": "string", "contentEncoding": "base64"}`,
+		},
+		{
+			name:     "array",
+			input:    [2]int{1, 2},
+			expected: `{"type": "array", "items": {"type": "integer", "format": "int64"}, "minItems": 2, "maxItems": 2}`,
+		},
+		{
+			name:     "slice",
+			input:    []int{1, 2, 3},
+			expected: `{"type": "array", "items": {"type": "integer", "format": "int64"}}`,
+		},
+		{
+			name:     "map",
+			input:    map[string]string{"foo": "bar"},
+			expected: `{"type": "object", "additionalProperties": {"type": "string"}}`,
+		},
+		{
+			name: "field-int",
+			input: struct {
+				Value int `json:"value" minimum:"1" exclusiveMinimum:"0" maximum:"10" exclusiveMaximum:"11" multipleOf:"2"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "integer",
+						"format": "int64",
+						"minimum": 1,
+						"exclusiveMinimum": 0,
+						"maximum": 10,
+						"exclusiveMaximum": 11,
+						"multipleOf": 2
+					}
+				},
+				"required": ["value"],
+				"additionalProperties": false
+			}`,
+		},
+		{
+			name: "field-string",
+			input: struct {
+				Value string `json:"value" minLength:"1" maxLength:"10" pattern:"^foo$" format:"foo" encoding:"bar"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 10,
+						"pattern": "^foo$",
+						"format": "foo",
+						"contentEncoding": "bar"
+					}
+				},
+				"required": ["value"],
+				"additionalProperties": false
+			}`,
+		},
+		{
+			name: "field-array",
+			input: struct {
+				Value []int `json:"value" minItems:"1" maxItems:"10" uniqueItems:"true"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "array",
+						"minItems": 1,
+						"maxItems": 10,
+						"uniqueItems": true,
+						"items": {"type": "integer", "format": "int64"}
+					}
+				},
+				"required": ["value"],
+				"additionalProperties": false
+			}`,
+		},
+		{
+			name: "field-map",
+			input: struct {
+				Value map[string]string `json:"value" minProperties:"2" maxProperties:"5"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "object",
+						"minProperties": 2,
+						"maxProperties": 5,
+						"additionalProperties": {
+							"type": "string"
+						}
+					}
+				},
+				"required": ["value"],
+				"additionalProperties": false
+			}`,
+		},
+		{
+			name: "field-enum",
+			input: struct {
+				Value string `json:"value" enum:"one,two"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "string",
+						"enum": ["one", "two"]
+					}
+				},
+				"required": ["value"],
+				"additionalProperties": false
+			}`,
+		},
+		{
+			name: "field-array-enum",
+			input: struct {
+				Value []int `json:"value" enum:"1,2,3,5,8,11"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "array",
+						"items": {
+							"type": "integer",
+							"format": "int64",
+							"enum": [1, 2, 3, 5, 8, 11]
+						}
+					}
+				},
+				"required": ["value"],
+				"additionalProperties": false
+			}`,
+		},
+		{
+			name: "field-readonly",
+			input: struct {
+				Value string `json:"value" readOnly:"true" writeOnly:"false"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "string",
+						"readOnly": true
+					}
+				},
+				"additionalProperties": false,
+				"required": ["value"]
+			}`,
+		},
+		{
+			name: "field-default-string",
+			input: struct {
+				Value string `json:"value" default:"foo"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "string",
+						"default": "foo"
+					}
+				},
+				"additionalProperties": false,
+				"required": ["value"]
+			}`,
+		},
+		{
+			name: "field-default-array-string",
+			input: struct {
+				Value []string `json:"value" default:"foo,bar"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"default": ["foo", "bar"]
+					}
+				},
+				"additionalProperties": false,
+				"required": ["value"]
+			}`,
+		},
+		{
+			name: "field-default-array-int",
+			input: struct {
+				Value []int `json:"value" default:"[1,2]"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "array",
+						"items": {
+							"type": "integer",
+							"format": "int64"
+						},
+						"default": [1, 2]
+					}
+				},
+				"additionalProperties": false,
+				"required": ["value"]
+			}`,
+		},
+		{
+			name: "field-skip",
+			input: struct {
+				// Filtered out from JSON tag
+				Value1 string `json:"-"`
+				// Filtered because it's private
+				value2 string
+				// Filtered due to being an unsupported type
+				Value3 func()
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false
+			}`,
+		},
+		{
+			name: "panic-bool",
+			input: struct {
+				Value string `json:"value" readOnly:"bad"`
+			}{},
+			panics: "invalid bool tag 'readOnly' for field 'Value': bad",
+		},
+		{
+			name: "panic-int",
+			input: struct {
+				Value string `json:"value" minLength:"bad"`
+			}{},
+			panics: "invalid int tag 'minLength' for field 'Value': bad (strconv.Atoi: parsing \"bad\": invalid syntax)",
+		},
+		{
+			name: "panic-float",
+			input: struct {
+				Value int `json:"value" minimum:"bad"`
+			}{},
+			panics: "invalid float tag 'minimum' for field 'Value': bad (strconv.ParseFloat: parsing \"bad\": invalid syntax)",
+		},
+		{
+			name: "panic-json",
+			input: struct {
+				Value int `json:"value" default:"bad"`
+			}{},
+			panics: `invalid tag for field 'Value': invalid character 'b' looking for beginning of value`,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+
+			if c.panics != "" {
+				assert.PanicsWithValue(t, c.panics, func() {
+					r.Schema(reflect.TypeOf(c.input), false, "")
+				})
+			} else {
+				s := r.Schema(reflect.TypeOf(c.input), false, "")
+				b, _ := json.Marshal(s)
+				assert.JSONEq(t, c.expected, string(b))
+			}
+		})
+	}
+}
 
 type GreetingInput struct {
 	ID string `path:"id"`
@@ -24,7 +383,7 @@ type RecursiveInput struct {
 	Value *RecursiveInput
 }
 
-func TestSchema(t *testing.T) {
+func TestSchemaOld(t *testing.T) {
 	r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
 
 	s := r.Schema(reflect.TypeOf(GreetingInput{}), false, "")

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -43,7 +44,7 @@ func findParamFields(registry Registry, op *Operation, adapter Adapter, path []i
 
 		var example any
 		if e := f.Tag.Get("example"); e != "" {
-			example = jsonTagValue(f.Type, f.Tag.Get("example"))
+			example = jsonTagValue(f, f.Type, f.Tag.Get("example"))
 		}
 
 		if def := f.Tag.Get("default"); def != "" {
@@ -93,7 +94,7 @@ func findResolvers(resolverType, t reflect.Type) *findResult {
 func findDefaults(t reflect.Type) *findResult {
 	return findInType(t, nil, func(sf reflect.StructField, i []int) any {
 		if d := sf.Tag.Get("default"); d != "" {
-			return jsonTagValue(sf.Type, d)
+			return jsonTagValue(sf, sf.Type, d)
 		}
 		return nil
 	})
@@ -650,4 +651,36 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			ctx.WriteStatus(op.DefaultStatus)
 		}
 	})
+}
+
+// AutoRegister auto-detects operation registration methods and registers them
+// with the given API. Any method named `Register...` will be called and
+// passed the API as the only argument. Since registration happens at
+// service startup, no errors are returned and methods should panic on error.
+//
+//	type ItemServer struct {}
+//
+//	func (s *ItemServer) RegisterListItems(api API) {
+//		huma.Register(api, huma.Operation{
+//			OperationID: "ListItems",
+//			Method: http.MethodGet,
+//			Path: "/items",
+//		}, s.ListItems)
+//	}
+//
+//	func main() {
+//		api := huma.NewAPI("My Service", "1.0.0")
+//		itemServer := &ItemServer{}
+//		huma.AutoRegister(api, itemServer)
+//	}
+func AutoRegister(api API, server any) {
+	args := []reflect.Value{reflect.ValueOf(server), reflect.ValueOf(api)}
+
+	t := reflect.TypeOf(server)
+	for i := 0; i < t.NumMethod(); i++ {
+		m := t.Method(i)
+		if strings.HasPrefix(m.Name, "Register") && len(m.Name) > 8 {
+			m.Func.Call(args)
+		}
+	}
 }

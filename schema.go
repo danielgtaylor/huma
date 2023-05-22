@@ -32,7 +32,7 @@ const (
 var (
 	timeType = reflect.TypeOf(time.Time{})
 	ipType   = reflect.TypeOf(net.IP{})
-	uriType  = reflect.TypeOf(url.URL{})
+	urlType  = reflect.TypeOf(url.URL{})
 )
 
 func deref(t reflect.Type) reflect.Type {
@@ -162,7 +162,7 @@ func boolTag(f reflect.StructField, tag string) bool {
 		} else if v == "false" {
 			return false
 		} else {
-			panic("invalid bool tag")
+			panic("invalid bool tag '" + tag + "' for field '" + f.Name + "': " + v)
 		}
 	}
 	return false
@@ -173,7 +173,7 @@ func intTag(f reflect.StructField, tag string) *int {
 		if i, err := strconv.Atoi(v); err == nil {
 			return &i
 		} else {
-			panic(err)
+			panic("invalid int tag '" + tag + "' for field '" + f.Name + "': " + v + " (" + err.Error() + ")")
 		}
 	}
 	return nil
@@ -184,13 +184,13 @@ func floatTag(f reflect.StructField, tag string) *float64 {
 		if i, err := strconv.ParseFloat(v, 64); err == nil {
 			return &i
 		} else {
-			panic(err)
+			panic("invalid float tag '" + tag + "' for field '" + f.Name + "': " + v + " (" + err.Error() + ")")
 		}
 	}
 	return nil
 }
 
-func jsonTagValue(t reflect.Type, value string) any {
+func jsonTagValue(f reflect.StructField, t reflect.Type, value string) any {
 	// Special case: strings don't need quotes.
 	if t.Kind() == reflect.String {
 		return value
@@ -207,7 +207,7 @@ func jsonTagValue(t reflect.Type, value string) any {
 
 	var v any
 	if err := json.Unmarshal([]byte(value), &v); err != nil {
-		panic(err)
+		panic("invalid tag for field '" + f.Name + "': " + err.Error())
 	}
 
 	vv := reflect.ValueOf(v)
@@ -241,7 +241,7 @@ func jsonTagValue(t reflect.Type, value string) any {
 func jsonTag(f reflect.StructField, name string, multi bool) any {
 	t := f.Type
 	if value := f.Tag.Get(name); value != "" {
-		return jsonTagValue(t, value)
+		return jsonTagValue(f, t, value)
 	}
 	return nil
 }
@@ -252,6 +252,9 @@ func SchemaFromField(registry Registry, parent reflect.Type, f reflect.StructFie
 		parentName = parent.Name()
 	}
 	fs := registry.Schema(f.Type, true, parentName+f.Name+"Struct")
+	if fs == nil {
+		return fs
+	}
 	fs.Description = f.Tag.Get("doc")
 	if fmt := f.Tag.Get("format"); fmt != "" {
 		fs.Format = fmt
@@ -263,9 +266,13 @@ func SchemaFromField(registry Registry, parent reflect.Type, f reflect.StructFie
 	fs.Example = jsonTag(f, "example", false)
 
 	if enum := f.Tag.Get("enum"); enum != "" {
+		fType := f.Type
+		if fs.Type == TypeArray {
+			fType = fType.Elem()
+		}
 		enumValues := []any{}
 		for _, e := range strings.Split(enum, ",") {
-			enumValues = append(enumValues, jsonTagValue(f.Type, e))
+			enumValues = append(enumValues, jsonTagValue(f, fType, e))
 		}
 		if fs.Type == TypeArray {
 			fs.Items.Enum = enumValues
@@ -319,7 +326,15 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 	case reflect.Int64:
 		s.Type = TypeInteger
 		s.Format = "int64"
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32:
+	case reflect.Uint:
+		s.Type = TypeInteger
+		if bits.UintSize == 32 {
+			s.Format = "int32"
+		} else {
+			s.Format = "int64"
+		}
+		s.Minimum = &minZero
+	case reflect.Uint8, reflect.Uint16, reflect.Uint32:
 		// Unsigned integers can't be negative.
 		s.Type = TypeInteger
 		s.Format = "int32"
@@ -345,6 +360,12 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		} else {
 			s.Type = TypeArray
 			s.Items = r.Schema(t.Elem(), true, t.Name()+"Item")
+
+			if t.Kind() == reflect.Array {
+				len := t.Len()
+				s.MinItems = &len
+				s.MaxItems = &len
+			}
 		}
 	case reflect.Map:
 		s.Type = TypeObject
@@ -354,7 +375,7 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		switch t {
 		case timeType:
 			return &Schema{Type: TypeString, Format: "date-time"}
-		case uriType:
+		case urlType:
 			return &Schema{Type: TypeString, Format: "uri"}
 		}
 
@@ -371,20 +392,25 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 
 			name := f.Name
 			omit := false
-			if j := f.Tag.Get("json"); j != "" && j != "-" {
+			if j := f.Tag.Get("json"); j != "" {
 				name = strings.Split(j, ",")[0]
 				if strings.Contains(j, "omitempty") {
 					omit = true
 				}
 			}
-			if !omit {
-				required = append(required, name)
-				requiredMap[name] = true
+			if name == "-" {
+				continue
 			}
 
 			fs := SchemaFromField(r, t, f)
-			props[name] = fs
-			propNames = append(propNames, name)
+			if fs != nil {
+				props[name] = fs
+				propNames = append(propNames, name)
+				if !omit {
+					required = append(required, name)
+					requiredMap[name] = true
+				}
+			}
 		}
 		s.Type = TypeObject
 		s.AdditionalProperties = false
@@ -393,6 +419,10 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		s.Required = required
 		s.requiredMap = requiredMap
 		s.PrecomputeMessages()
+	case reflect.Interface:
+		// Interfaces mean any object.
+	default:
+		return nil
 	}
 
 	return &s
