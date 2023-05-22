@@ -43,7 +43,7 @@ func BenchmarkHumaV2ChiNormal(b *testing.B) {
 	}
 
 	r := chi.NewMux()
-	app := NewChi(r, huma.DefaultConfig("Test", "1.0.0"))
+	app := New(r, huma.DefaultConfig("Test", "1.0.0"))
 
 	huma.Register(app, huma.Operation{
 		OperationID: "greet",

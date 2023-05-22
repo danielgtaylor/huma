@@ -90,6 +90,6 @@ func (a *chiAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a.router.ServeHTTP(w, r)
 }
 
-func NewChi(r chi.Router, config huma.Config) huma.API {
+func New(r chi.Router, config huma.Config) huma.API {
 	return huma.NewAPI(config, &chiAdapter{router: r})
 }
