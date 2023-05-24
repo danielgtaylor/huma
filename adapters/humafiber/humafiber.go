@@ -13,7 +13,12 @@ import (
 )
 
 type fiberCtx struct {
+	op   *huma.Operation
 	orig *fiber.Ctx
+}
+
+func (ctx *fiberCtx) GetOperation() *huma.Operation {
+	return ctx.op
 }
 
 func (c *fiberCtx) GetMatched() string {
@@ -76,12 +81,13 @@ type fiberAdapter struct {
 	router *fiber.App
 }
 
-func (a *fiberAdapter) Handle(method, path string, handler func(huma.Context)) {
+func (a *fiberAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	// Convert {param} to :param
+	path := op.Path
 	path = strings.ReplaceAll(path, "{", ":")
 	path = strings.ReplaceAll(path, "}", "")
-	a.router.Add(method, path, func(c *fiber.Ctx) error {
-		ctx := &fiberCtx{orig: c}
+	a.router.Add(op.Method, path, func(c *fiber.Ctx) error {
+		ctx := &fiberCtx{op: op, orig: c}
 		handler(ctx)
 		return nil
 	})

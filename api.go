@@ -32,13 +32,14 @@ var resolverType = reflect.TypeOf((*Resolver)(nil)).Elem()
 // `gin.Context` or `fiber.Ctx` that provide both request and response
 // functionality in one place.
 type Adapter interface {
-	Handle(method, path string, handler func(ctx Context))
+	Handle(op *Operation, handler func(ctx Context))
 	ServeHTTP(http.ResponseWriter, *http.Request)
 }
 
 // Context is the current request/response context. It provides a generic
 // interface to get request information and write responses.
 type Context interface {
+	GetOperation() *Operation
 	GetContext() context.Context
 	GetMethod() string
 	GetURL() url.URL
@@ -57,7 +58,7 @@ type Context interface {
 // serialized. The `status` is the HTTP status code for the response and `v` is
 // the value to be serialized. The return value is the new value to be
 // serialized or an error.
-type Transformer func(ctx Context, op *Operation, status string, v any) (any, error)
+type Transformer func(ctx Context, status string, v any) (any, error)
 
 // Config represents a configuration for a new API. See `huma.DefaultConfig()`
 // as a starting point.
@@ -104,7 +105,7 @@ type API interface {
 	// Marshal marshals the given value into the given writer. The content type
 	// is used to determine which format to use. Use `Negotiate` to get the
 	// content type from an accept header. TODO: update
-	Marshal(ctx Context, op *Operation, respKey string, contentType string, v any) error
+	Marshal(ctx Context, respKey string, contentType string, v any) error
 
 	// Unmarshal unmarshals the given data into the given value. The content type
 	Unmarshal(contentType string, data []byte, v any) error
@@ -161,12 +162,12 @@ func (r *api) Negotiate(accept string) (string, error) {
 	return ct, nil
 }
 
-func (a *api) Marshal(ctx Context, op *Operation, respKey string, ct string, v any) error {
+func (a *api) Marshal(ctx Context, respKey string, ct string, v any) error {
 	// fmt.Println("marshaling", ct)
 	var err error
 
 	for _, t := range a.transformers {
-		v, err = t(ctx, op, respKey, v)
+		v, err = t(ctx, respKey, v)
 		if err != nil {
 			return err
 		}
@@ -220,7 +221,10 @@ func NewAPI(config Config, a Adapter) API {
 
 	if config.OpenAPIPath != "" {
 		var specJSON []byte
-		a.Handle(http.MethodGet, config.OpenAPIPath+".json", func(ctx Context) {
+		a.Handle(&Operation{
+			Method: http.MethodGet,
+			Path:   config.OpenAPIPath + ".json",
+		}, func(ctx Context) {
 			ctx.WriteHeader("Content-Type", "application/vnd.oai.openapi+json")
 			if specJSON == nil {
 				specJSON, _ = json.Marshal(newAPI.OpenAPI())
@@ -228,7 +232,10 @@ func NewAPI(config Config, a Adapter) API {
 			ctx.BodyWriter().Write(specJSON)
 		})
 		var specYAML []byte
-		a.Handle(http.MethodGet, config.OpenAPIPath+".yaml", func(ctx Context) {
+		a.Handle(&Operation{
+			Method: http.MethodGet,
+			Path:   config.OpenAPIPath + ".yaml",
+		}, func(ctx Context) {
 			ctx.WriteHeader("Content-Type", "application/vnd.oai.openapi+yaml")
 			if specYAML == nil {
 				specYAML, _ = yaml.Marshal(newAPI.OpenAPI())
@@ -238,7 +245,10 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	if config.DocsPath != "" {
-		a.Handle(http.MethodGet, config.DocsPath, func(ctx Context) {
+		a.Handle(&Operation{
+			Method: http.MethodGet,
+			Path:   config.DocsPath,
+		}, func(ctx Context) {
 			ctx.WriteHeader("Content-Type", "text/html")
 			ctx.BodyWriter().Write([]byte(`<!doctype html>
 <html lang="en">
@@ -264,7 +274,10 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	if config.SchemasPath != "" {
-		a.Handle(http.MethodGet, config.SchemasPath+"/{schema}", func(ctx Context) {
+		a.Handle(&Operation{
+			Method: http.MethodGet,
+			Path:   config.SchemasPath + "/{schema}",
+		}, func(ctx Context) {
 			// Some routers dislike a path param+suffix, so we strip it here instead.
 			schema := strings.TrimSuffix(ctx.GetParam("schema"), ".json")
 			ctx.WriteHeader("Content-Type", "application/json")

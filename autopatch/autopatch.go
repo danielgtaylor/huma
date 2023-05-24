@@ -137,7 +137,7 @@ func generatePatch(api huma.API, path *huma.PathItem) {
 	// Huma API since this is easier and we are just calling the other pre-existing
 	// operations.
 	adapter := api.Adapter()
-	adapter.Handle(http.MethodPatch, op.Path, func(ctx huma.Context) {
+	adapter.Handle(op, func(ctx huma.Context) {
 		patchData, err := io.ReadAll(ctx.GetBodyReader())
 		if err != nil {
 			huma.WriteErr(api, op, ctx, http.StatusBadRequest, "Unable to read request body", err)

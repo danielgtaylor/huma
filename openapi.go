@@ -7,42 +7,95 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
+// Contact information to get support for the API.
 type Contact struct {
-	Name       string         `yaml:"name,omitempty"`
-	URL        string         `yaml:"url,omitempty"`
-	Email      string         `yaml:"email,omitempty"`
+	// Name of the contact person/organization.
+	Name string `yaml:"name,omitempty"`
+
+	// URL pointing to the contact information.
+	URL string `yaml:"url,omitempty"`
+
+	// Email address of the contact person/organization.
+	Email string `yaml:"email,omitempty"`
+
+	// Extensions (user-defined properties), if any. Values in this map will
+	// be marshalled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
+// License name & link for using the API.
 type License struct {
-	Name       string         `yaml:"name"`
-	Identifier string         `yaml:"identifier,omitempty"`
-	URL        string         `yaml:"url,omitempty"`
+	// Name of the license.
+	Name string `yaml:"name"`
+
+	// Identifier SPDX license expression for the API. This field is mutually
+	// exclusive with the URL field.
+	Identifier string `yaml:"identifier,omitempty"`
+
+	// URL pointing to the license. This field is mutually exclusive with the
+	// Identifier field.
+	URL string `yaml:"url,omitempty"`
+
+	// Extensions (user-defined properties), if any. Values in this map will
+	// be marshalled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
+// Info object that provides metadata about the API. The metadata MAY be used by the clients if needed, and MAY be presented in editing or documentation generation tools for convenience.
 type Info struct {
-	Title          string         `yaml:"title"`
-	Description    string         `yaml:"description,omitempty"`
-	TermsOfService string         `yaml:"termsOfService,omitempty"`
-	Contact        *Contact       `yaml:"contact,omitempty"`
-	License        *License       `yaml:"license,omitempty"`
-	Version        string         `yaml:"version"`
-	Extensions     map[string]any `yaml:",inline"`
+	// Title of the API.
+	Title string `yaml:"title"`
+
+	// Description of the API. CommonMark syntax MAY be used for rich text representation.
+	Description string `yaml:"description,omitempty"`
+
+	// TermsOfService URL for the API.
+	TermsOfService string `yaml:"termsOfService,omitempty"`
+
+	// Contact information to get support for the API.
+	Contact *Contact `yaml:"contact,omitempty"`
+
+	// License name & link for using the API.
+	License *License `yaml:"license,omitempty"`
+
+	// Version of the OpenAPI document (which is distinct from the OpenAPI Specification version or the API implementation version).
+	Version string `yaml:"version"`
+
+	// Extensions (user-defined properties), if any. Values in this map will
+	// be marshalled as siblings of the other properties above.
+	Extensions map[string]any `yaml:",inline"`
 }
 
+// ServerVariable for server URL template substitution.
 type ServerVariable struct {
-	Enum        []string       `yaml:"enum,omitempty"`
-	Default     string         `yaml:"default"`
-	Description string         `yaml:"description,omitempty"`
-	Extensions  map[string]any `yaml:",inline"`
+	// Enumeration of string values to be used if the substitution options are from a limited set. The array MUST NOT be empty.
+	Enum []string `yaml:"enum,omitempty"`
+
+	// Default value to use for substitution, which SHALL be sent if an alternate value is not supplied.
+	Default string `yaml:"default"`
+
+	// Description for the server variable. CommonMark syntax MAY be used for rich text representation.
+	Description string `yaml:"description,omitempty"`
+
+	// Extensions (user-defined properties), if any. Values in this map will
+	// be marshalled as siblings of the other properties above.
+	Extensions map[string]any `yaml:",inline"`
 }
 
+// Server URL, optionally with variables.
 type Server struct {
-	URL         string                     `yaml:"url"`
-	Description string                     `yaml:"description,omitempty"`
-	Variables   map[string]*ServerVariable `yaml:"variables,omitempty"`
-	Extensions  map[string]any             `yaml:",inline"`
+	// URL to the target host. This URL supports Server Variables and MAY be relative, to indicate that the host location is relative to the location where the OpenAPI document is being served. Variable substitutions will be made when a variable is named in {brackets}.
+	URL string `yaml:"url"`
+
+	// Description of the host designated by the URL. CommonMark syntax MAY be used for rich text representation.
+	Description string `yaml:"description,omitempty"`
+
+	// Variables map between a variable name and its value. The value is used for substitution in the server’s URL template.
+	Variables map[string]*ServerVariable `yaml:"variables,omitempty"`
+
+	// Extensions (user-defined properties), if any. Values in this map will
+	// be marshalled as siblings of the other properties above.
+	Extensions map[string]any `yaml:",inline"`
 }
 
 type Example struct {
@@ -156,6 +209,7 @@ type Operation struct {
 	Hidden bool `yaml:"-"`
 
 	// OpenAPI fields
+
 	Tags         []string              `yaml:"tags,omitempty"`
 	Summary      string                `yaml:"summary,omitempty"`
 	Description  string                `yaml:"description,omitempty"`

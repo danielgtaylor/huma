@@ -192,7 +192,7 @@ func WriteErr(api API, op *Operation, ctx Context, status int, msg string, errs 
 
 	ctx.WriteHeader("Content-Type", ct)
 	ctx.WriteStatus(status)
-	api.Marshal(ctx, op, strconv.Itoa(status), ct, err)
+	api.Marshal(ctx, strconv.Itoa(status), ct, err)
 }
 
 func getHint(parent reflect.Type, name string, other string) string {
@@ -238,7 +238,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	oapi := api.OpenAPI()
 	registry := oapi.Components.Schemas
 
-	// fmt.Println("get params")
+	if op.Method == "" || op.Path == "" {
+		panic("method and path must be specified in operation")
+	}
+
 	inputType := reflect.TypeOf((*I)(nil)).Elem()
 	if inputType.Kind() != reflect.Struct {
 		panic("input must be a struct")
@@ -248,12 +251,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	inputBodyIndex := -1
 	var inSchema *Schema
 	for i := 0; i < inputType.NumField(); i++ {
-		// fmt.Println("get schema")
 		f := inputType.Field(i)
 		if f.Name == "Body" {
 			inputBodyIndex = i
 			inSchema = registry.Schema(f.Type, true, getHint(inputType, f.Name, op.OperationID+"Request"))
-			// addSchemaField(registry, inSchema)
 			op.RequestBody = &RequestBody{
 				Content: map[string]*MediaType{
 					"application/json": {
@@ -276,7 +277,6 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	if op.Responses == nil {
 		op.Responses = map[string]*Response{}
 	}
-	// fmt.Println("get output")
 	outputType := reflect.TypeOf((*O)(nil)).Elem()
 	if outputType.Kind() != reflect.Struct {
 		panic("output must be a struct")
@@ -333,13 +333,17 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			op.DefaultStatus = http.StatusNoContent
 		}
 	}
-	if op.Responses[fmt.Sprintf("%d", op.DefaultStatus)] == nil {
-		op.Responses[fmt.Sprintf("%d", op.DefaultStatus)] = &Response{
+	defaultStatusStr := fmt.Sprintf("%d", op.DefaultStatus)
+	if op.Responses[defaultStatusStr] == nil {
+		op.Responses[defaultStatusStr] = &Response{
 			Description: http.StatusText(op.DefaultStatus),
 		}
 	}
 	for name := range outHeaders {
-		op.Responses[fmt.Sprintf("%d", op.DefaultStatus)].Headers[name] = &Param{
+		if op.Responses[defaultStatusStr].Headers == nil {
+			op.Responses[defaultStatusStr].Headers = map[string]*Param{}
+		}
+		op.Responses[defaultStatusStr].Headers[name] = &Param{
 			Schema: registry.Schema(outputType.Field(outHeaders[name].Index).Type, true, getHint(outputType, name, op.OperationID+"Response")),
 		}
 	}
@@ -386,7 +390,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 	a := api.Adapter()
 
-	a.Handle(op.Method, op.Path, func(ctx Context) {
+	a.Handle(&op, func(ctx Context) {
 		var input I
 
 		// Get the validation dependencies from the shared pool.
@@ -601,7 +605,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 			ctx.WriteStatus(status)
 			ctx.WriteHeader("Content-Type", ct)
-			api.Marshal(ctx, &op, strconv.Itoa(status), ct, err)
+			api.Marshal(ctx, strconv.Itoa(status), ct, err)
 			return
 		}
 
@@ -646,7 +650,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 			ctx.WriteHeader("Content-Type", ct)
 			ctx.WriteStatus(op.DefaultStatus)
-			api.Marshal(ctx, &op, strconv.Itoa(op.DefaultStatus), ct, body)
+			api.Marshal(ctx, strconv.Itoa(op.DefaultStatus), ct, body)
 		} else {
 			ctx.WriteStatus(op.DefaultStatus)
 		}

@@ -12,8 +12,13 @@ import (
 )
 
 type chiContext struct {
-	r *http.Request
-	w http.ResponseWriter
+	op *huma.Operation
+	r  *http.Request
+	w  http.ResponseWriter
+}
+
+func (ctx *chiContext) GetOperation() *huma.Operation {
+	return ctx.op
 }
 
 func (ctx *chiContext) GetMatched() string {
@@ -80,9 +85,9 @@ type chiAdapter struct {
 	router chi.Router
 }
 
-func (a *chiAdapter) Handle(method, path string, handler func(huma.Context)) {
-	a.router.MethodFunc(method, path, func(w http.ResponseWriter, r *http.Request) {
-		handler(&chiContext{r: r, w: w})
+func (a *chiAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
+	a.router.MethodFunc(op.Method, op.Path, func(w http.ResponseWriter, r *http.Request) {
+		handler(&chiContext{op: op, r: r, w: w})
 	})
 }
 

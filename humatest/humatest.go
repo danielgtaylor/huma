@@ -12,12 +12,17 @@ import (
 )
 
 type testContext struct {
-	r *http.Request
-	w http.ResponseWriter
+	op *huma.Operation
+	r  *http.Request
+	w  http.ResponseWriter
 }
 
-func NewContext(r *http.Request, w http.ResponseWriter) huma.Context {
-	return &testContext{r, w}
+func NewContext(op *huma.Operation, r *http.Request, w http.ResponseWriter) huma.Context {
+	return &testContext{op, r, w}
+}
+
+func (ctx *testContext) GetOperation() *huma.Operation {
+	return ctx.op
 }
 
 func (ctx *testContext) GetMatched() string {
@@ -84,9 +89,9 @@ type testAdapter struct {
 	router chi.Router
 }
 
-func (a *testAdapter) Handle(method, path string, handler func(huma.Context)) {
-	a.router.MethodFunc(method, path, func(w http.ResponseWriter, r *http.Request) {
-		handler(&testContext{r: r, w: w})
+func (a *testAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
+	a.router.MethodFunc(op.Method, op.Path, func(w http.ResponseWriter, r *http.Request) {
+		handler(&testContext{op: op, r: r, w: w})
 	})
 }
 

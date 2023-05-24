@@ -12,7 +12,12 @@ import (
 )
 
 type ginCtx struct {
+	op   *huma.Operation
 	orig *gin.Context
+}
+
+func (ctx *ginCtx) GetOperation() *huma.Operation {
+	return ctx.op
 }
 
 func (c *ginCtx) GetContext() context.Context {
@@ -71,12 +76,13 @@ type ginAdapter struct {
 	router *gin.Engine
 }
 
-func (a *ginAdapter) Handle(method, path string, handler func(huma.Context)) {
+func (a *ginAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	// Convert {param} to :param
+	path := op.Path
 	path = strings.ReplaceAll(path, "{", ":")
 	path = strings.ReplaceAll(path, "}", "")
-	a.router.Handle(method, path, func(c *gin.Context) {
-		ctx := &ginCtx{orig: c}
+	a.router.Handle(op.Method, path, func(c *gin.Context) {
+		ctx := &ginCtx{op: op, orig: c}
 		handler(ctx)
 	})
 }

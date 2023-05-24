@@ -86,7 +86,7 @@ func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
 	}
 }
 
-func (t *SchemaLinkTransformer) Transform(ctx Context, op *Operation, status string, v any) (any, error) {
+func (t *SchemaLinkTransformer) Transform(ctx Context, status string, v any) (any, error) {
 	if v == nil {
 		return v, nil
 	}
@@ -135,7 +135,7 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, op *Operation, status str
 // FieldSelectTransform is an example of a transform that can use an input
 // header value to modify the response on the server, providing a GraphQL-like
 // way to send only the fields that the client wants over the wire.
-func FieldSelectTransform(ctx Context, op *Operation, status string, v any) (any, error) {
+func FieldSelectTransform(ctx Context, status string, v any) (any, error) {
 	if fields := ctx.GetHeader("Fields"); fields != "" {
 		// Ugh this is inefficient... consider other ways of doing this :-(
 		var tmp any

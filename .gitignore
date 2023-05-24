@@ -1,2 +1,5 @@
 coverage.txt
 .vscode
+*.test
+cpu.out
+mem.out
