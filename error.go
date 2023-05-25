@@ -3,6 +3,7 @@ package huma
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 )
 
 // ErrorDetailer returns error details for responses & debugging.
@@ -111,6 +112,22 @@ var NewError = func(status int, msg string, errs ...error) StatusError {
 		Detail: msg,
 		Errors: details,
 	}
+}
+
+// WriteErr writes an error response with the given context, using the
+// configured error type and with the given status code and message. It is
+// marshaled using the API's content negotiation methods.
+func WriteErr(api API, op *Operation, ctx Context, status int, msg string, errs ...error) {
+	var err any = NewError(status, msg, errs...)
+
+	ct, _ := api.Negotiate(ctx.GetHeader("Accept"))
+	if ctf, ok := err.(ContentTypeFilter); ok {
+		ct = ctf.ContentType(ct)
+	}
+
+	ctx.WriteHeader("Content-Type", ct)
+	ctx.WriteStatus(status)
+	api.Marshal(ctx, strconv.Itoa(status), ct, err)
 }
 
 // Status304NotModied returns a 304. This is not really an error, but provides

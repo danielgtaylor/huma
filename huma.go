@@ -11,35 +11,23 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/exp/slices"
 )
 
 type paramFieldInfo struct {
-	Type      reflect.Type
-	IndexPath []int
-	Loc       string
-	Default   string
-	Schema    *Schema
+	Type    reflect.Type
+	Name    string
+	Loc     string
+	Default string
+	Schema  *Schema
 }
 
-func findParamFields(registry Registry, op *Operation, adapter Adapter, path []int, t reflect.Type, m map[string]*paramFieldInfo) {
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		fi := append([]int{}, path...)
-		fi = append(fi, i)
-
-		if f.Anonymous {
-			findParamFields(registry, op, adapter, fi, deref(f.Type), m)
-			continue
-		}
-
-		if f.Name == "Body" {
-			continue
-		}
-
+func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*paramFieldInfo] {
+	return findInType(t, nil, func(f reflect.StructField, path []int) *paramFieldInfo {
 		pfi := &paramFieldInfo{
-			Type:      f.Type,
-			IndexPath: fi,
-			Schema:    SchemaFromField(registry, nil, f),
+			Type:   f.Type,
+			Schema: SchemaFromField(registry, nil, f),
 		}
 
 		var example any
@@ -55,22 +43,21 @@ func findParamFields(registry Registry, op *Operation, adapter Adapter, path []i
 		required := false
 		if p := f.Tag.Get("path"); p != "" {
 			pfi.Loc = "path"
-			m[p] = pfi
 			name = p
 			required = true
 		}
 
 		if q := f.Tag.Get("query"); q != "" {
 			pfi.Loc = "query"
-			m[q] = pfi
 			name = q
 		}
 
 		if h := f.Tag.Get("header"); h != "" {
 			pfi.Loc = "header"
-			m[h] = pfi
 			name = h
 		}
+
+		pfi.Name = name
 
 		op.Parameters = append(op.Parameters, &Param{
 			Name:     name,
@@ -79,19 +66,17 @@ func findParamFields(registry Registry, op *Operation, adapter Adapter, path []i
 			Schema:   pfi.Schema,
 			Example:  example,
 		})
-	}
+		return pfi
+	}, "Body")
 }
 
-func findResolvers(resolverType, t reflect.Type) *findResult {
-	return findInType(t, func(t reflect.Type, path []int) any {
-		if reflect.PtrTo(t).Implements(resolverType) {
-			return true
-		}
-		return nil
+func findResolvers(resolverType, t reflect.Type) *findResult[bool] {
+	return findInType(t, func(t reflect.Type, path []int) bool {
+		return reflect.PtrTo(t).Implements(resolverType)
 	}, nil)
 }
 
-func findDefaults(t reflect.Type) *findResult {
+func findDefaults(t reflect.Type) *findResult[any] {
 	return findInType(t, nil, func(sf reflect.StructField, i []int) any {
 		if d := sf.Tag.Get("default"); d != "" {
 			return jsonTagValue(sf, sf.Type, d)
@@ -100,14 +85,39 @@ func findDefaults(t reflect.Type) *findResult {
 	})
 }
 
-type findResult struct {
-	Paths []struct {
-		Path  []int
-		Value any
-	}
+type headerInfo struct {
+	Field      reflect.StructField
+	Name       string
+	TimeFormat string
 }
 
-func (r *findResult) every(current reflect.Value, path []int, v any, f func(reflect.Value, any)) {
+func findHeaders(t reflect.Type) *findResult[*headerInfo] {
+	return findInType(t, nil, func(sf reflect.StructField, i []int) *headerInfo {
+		header := sf.Tag.Get("header")
+		if header == "" {
+			header = sf.Name
+		}
+		timeFormat := ""
+		if sf.Type == timeType {
+			timeFormat = http.TimeFormat
+			if f := sf.Tag.Get("timeFormat"); f != "" {
+				timeFormat = f
+			}
+		}
+		return &headerInfo{sf, header, timeFormat}
+	}, "Status", "Body")
+}
+
+type findResultPath[T comparable] struct {
+	Path  []int
+	Value T
+}
+
+type findResult[T comparable] struct {
+	Paths []findResultPath[T]
+}
+
+func (r *findResult[T]) every(current reflect.Value, path []int, v T, f func(reflect.Value, T)) {
 	if len(path) == 0 {
 		f(current, v)
 		return
@@ -129,27 +139,25 @@ func (r *findResult) every(current reflect.Value, path []int, v any, f func(refl
 	}
 }
 
-func (r *findResult) Every(v reflect.Value, f func(reflect.Value, any)) {
+func (r *findResult[T]) Every(v reflect.Value, f func(reflect.Value, T)) {
 	for i := range r.Paths {
-		r.every(v, r.Paths[i].Path, &r.Paths[i].Value, f)
+		r.every(v, r.Paths[i].Path, r.Paths[i].Value, f)
 	}
 }
 
-func findInType(t reflect.Type, onType func(reflect.Type, []int) any, onField func(reflect.StructField, []int) any) *findResult {
-	result := &findResult{}
-	_findInType(t, []int{}, result, onType, onField)
+func findInType[T comparable](t reflect.Type, onType func(reflect.Type, []int) T, onField func(reflect.StructField, []int) T, ignore ...string) *findResult[T] {
+	result := &findResult[T]{}
+	_findInType(t, []int{}, result, onType, onField, ignore...)
 	return result
 }
 
-func _findInType(t reflect.Type, path []int, result *findResult, onType func(reflect.Type, []int) any, onField func(reflect.StructField, []int) any) {
+func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T], onType func(reflect.Type, []int) T, onField func(reflect.StructField, []int) T, ignore ...string) {
 	t = deref(t)
+	zero := reflect.Zero(reflect.TypeOf((*T)(nil)).Elem()).Interface()
 
 	if onType != nil {
-		if v := onType(t, path); v != nil {
-			result.Paths = append(result.Paths, struct {
-				Path  []int
-				Value any
-			}{path, v})
+		if v := onType(t, path); v != zero {
+			result.Paths = append(result.Paths, findResultPath[T]{path, v})
 		}
 	}
 
@@ -160,39 +168,23 @@ func _findInType(t reflect.Type, path []int, result *findResult, onType func(ref
 			if !f.IsExported() {
 				continue
 			}
+			if slices.Contains(ignore, f.Name) {
+				continue
+			}
 			fi := append([]int{}, path...)
 			fi = append(fi, i)
 			if onField != nil {
-				if v := onField(f, fi); v != nil {
-					result.Paths = append(result.Paths, struct {
-						Path  []int
-						Value any
-					}{fi, v})
+				if v := onField(f, fi); v != zero {
+					result.Paths = append(result.Paths, findResultPath[T]{fi, v})
 				}
 			}
-			_findInType(f.Type, fi, result, onType, onField)
+			_findInType(f.Type, fi, result, onType, onField, ignore...)
 		}
 	case reflect.Slice:
-		_findInType(t.Elem(), path, result, onType, onField)
+		_findInType(t.Elem(), path, result, onType, onField, ignore...)
 	case reflect.Map:
-		_findInType(t.Elem(), path, result, onType, onField)
+		_findInType(t.Elem(), path, result, onType, onField, ignore...)
 	}
-}
-
-// WriteErr writes an error response with the given context, using the
-// configured error type and with the given status code and message. It is
-// marshaled using the API's content negotiation methods.
-func WriteErr(api API, op *Operation, ctx Context, status int, msg string, errs ...error) {
-	var err any = NewError(status, msg, errs...)
-
-	ct, _ := api.Negotiate(ctx.GetHeader("Accept"))
-	if ctf, ok := err.(ContentTypeFilter); ok {
-		ct = ctf.ContentType(ct)
-	}
-
-	ctx.WriteHeader("Content-Type", ct)
-	ctx.WriteStatus(status)
-	api.Marshal(ctx, strconv.Itoa(status), ct, err)
 }
 
 func getHint(parent reflect.Type, name string, other string) string {
@@ -223,11 +215,6 @@ var bufPool = sync.Pool{
 	},
 }
 
-type headerInfo struct {
-	Index      int
-	TimeFormat string
-}
-
 // Register an operation handler for an API. The handler must be a function that
 // takes a context and a pointer to the input struct and returns a pointer to the
 // output struct and an error. The input struct must be a struct with fields
@@ -246,29 +233,23 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	if inputType.Kind() != reflect.Struct {
 		panic("input must be a struct")
 	}
-	inputParams := map[string]*paramFieldInfo{}
-	findParamFields(registry, &op, api.Adapter(), []int{}, inputType, inputParams)
+	inputParams := findParams(registry, &op, inputType)
 	inputBodyIndex := -1
 	var inSchema *Schema
-	for i := 0; i < inputType.NumField(); i++ {
-		f := inputType.Field(i)
-		if f.Name == "Body" {
-			inputBodyIndex = i
-			inSchema = registry.Schema(f.Type, true, getHint(inputType, f.Name, op.OperationID+"Request"))
-			op.RequestBody = &RequestBody{
-				Content: map[string]*MediaType{
-					"application/json": {
-						Schema: inSchema,
-					},
+	if f, ok := inputType.FieldByName("Body"); ok {
+		inputBodyIndex = f.Index[0]
+		inSchema = registry.Schema(f.Type, true, getHint(inputType, f.Name, op.OperationID+"Request"))
+		op.RequestBody = &RequestBody{
+			Content: map[string]*MediaType{
+				"application/json": {
+					Schema: inSchema,
 				},
-			}
+			},
+		}
 
-			if op.MaxBodyBytes == 0 {
-				// 1 MB default
-				op.MaxBodyBytes = 1024 * 1024
-			}
-
-			break
+		if op.MaxBodyBytes == 0 {
+			// 1 MB default
+			op.MaxBodyBytes = 1024 * 1024
 		}
 	}
 	resolvers := findResolvers(resolverType, inputType)
@@ -282,49 +263,42 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		panic("output must be a struct")
 	}
 
-	outHeaders := map[string]headerInfo{}
+	outStatusIndex := -1
+	if f, ok := outputType.FieldByName("Status"); ok {
+		outStatusIndex = f.Index[0]
+		if f.Type.Kind() != reflect.Int {
+			panic("status field must be an int")
+		}
+		// TODO: enum tag?
+		// TODO: register each of the possible responses with the right model
+		//       and headers down below.
+	}
+	outHeaders := findHeaders(outputType)
 	outBodyIndex := -1
-	for i := 0; i < outputType.NumField(); i++ {
-		f := outputType.Field(i)
-		if f.Name == "Body" {
-			outBodyIndex = i
-			status := op.DefaultStatus
-			if status == 0 {
-				status = http.StatusOK
-			}
-			outSchema := registry.Schema(f.Type, true, getHint(outputType, f.Name, op.OperationID+"Response"))
-			statusStr := fmt.Sprintf("%d", status)
-			if op.Responses[statusStr] == nil {
-				op.Responses[statusStr] = &Response{}
-			}
-			if op.Responses[statusStr].Description == "" {
-				op.Responses[statusStr].Description = http.StatusText(status)
-			}
-			if op.Responses[statusStr].Headers == nil {
-				op.Responses[statusStr].Headers = map[string]*Param{}
-			}
-			if op.Responses[statusStr].Content == nil {
-				op.Responses[statusStr].Content = map[string]*MediaType{}
-			}
-			if _, ok := op.Responses[statusStr].Content["application/json"]; !ok {
-				op.Responses[statusStr].Content["application/json"] = &MediaType{}
-			}
-			op.Responses[statusStr].Content["application/json"].Schema = outSchema
-			continue
+	if f, ok := outputType.FieldByName("Body"); ok {
+		outBodyIndex = f.Index[0]
+		status := op.DefaultStatus
+		if status == 0 {
+			status = http.StatusOK
 		}
-
-		header := f.Tag.Get("header")
-		if header == "" {
-			header = f.Name
+		outSchema := registry.Schema(f.Type, true, getHint(outputType, f.Name, op.OperationID+"Response"))
+		statusStr := fmt.Sprintf("%d", status)
+		if op.Responses[statusStr] == nil {
+			op.Responses[statusStr] = &Response{}
 		}
-		timeFormat := ""
-		if f.Type == timeType {
-			timeFormat = http.TimeFormat
-			if f := f.Tag.Get("timeFormat"); f != "" {
-				timeFormat = f
-			}
+		if op.Responses[statusStr].Description == "" {
+			op.Responses[statusStr].Description = http.StatusText(status)
 		}
-		outHeaders[header] = headerInfo{Index: i, TimeFormat: timeFormat}
+		if op.Responses[statusStr].Headers == nil {
+			op.Responses[statusStr].Headers = map[string]*Param{}
+		}
+		if op.Responses[statusStr].Content == nil {
+			op.Responses[statusStr].Content = map[string]*MediaType{}
+		}
+		if _, ok := op.Responses[statusStr].Content["application/json"]; !ok {
+			op.Responses[statusStr].Content["application/json"] = &MediaType{}
+		}
+		op.Responses[statusStr].Content["application/json"].Schema = outSchema
 	}
 	if op.DefaultStatus == 0 {
 		if outBodyIndex != -1 {
@@ -339,16 +313,20 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			Description: http.StatusText(op.DefaultStatus),
 		}
 	}
-	for name := range outHeaders {
+	for _, entry := range outHeaders.Paths {
+		// Document the header's name and type.
 		if op.Responses[defaultStatusStr].Headers == nil {
 			op.Responses[defaultStatusStr].Headers = map[string]*Param{}
 		}
-		op.Responses[defaultStatusStr].Headers[name] = &Param{
-			Schema: registry.Schema(outputType.Field(outHeaders[name].Index).Type, true, getHint(outputType, name, op.OperationID+"Response")),
+		v := entry.Value
+		op.Responses[defaultStatusStr].Headers[v.Name] = &Header{
+			// We need to generate the schema from the field to get validation info
+			// like min/max and enums. Useful to let the client know possible values.
+			Schema: SchemaFromField(registry, outputType, v.Field),
 		}
 	}
 
-	if len(op.Errors) > 0 && (len(inputParams) > 0 || inputBodyIndex >= -1) {
+	if len(op.Errors) > 0 && (len(inputParams.Paths) > 0 || inputBodyIndex >= -1) {
 		op.Errors = append(op.Errors, http.StatusUnprocessableEntity)
 	}
 	if len(op.Errors) > 0 {
@@ -406,24 +384,20 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		errStatus := http.StatusUnprocessableEntity
 
 		v := reflect.ValueOf(&input).Elem()
-		for name, p := range inputParams {
-			f := v
-			for _, i := range p.IndexPath {
-				f = reflect.Indirect(f).Field(i)
-			}
+		inputParams.Every(v, func(f reflect.Value, p *paramFieldInfo) {
 			var value string
 			switch p.Loc {
 			case "path":
-				value = ctx.GetParam(name)
+				value = ctx.GetParam(p.Name)
 			case "query":
-				value = ctx.GetQuery(name)
+				value = ctx.GetQuery(p.Name)
 			case "header":
-				value = ctx.GetHeader(name)
+				value = ctx.GetHeader(p.Name)
 			}
 
 			pb.Reset()
 			pb.Push(p.Loc)
-			pb.Push(name)
+			pb.Push(p.Name)
 
 			if value == "" && p.Default != "" {
 				value = p.Default
@@ -432,7 +406,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			if p.Loc == "path" && value == "" {
 				// Path params are always required.
 				res.Add(pb, "", "required path parameter is missing")
-				continue
+				return
 			}
 
 			if value != "" {
@@ -446,7 +420,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					v, err := strconv.ParseInt(value, 10, 64)
 					if err != nil {
 						res.Add(pb, value, "invalid integer")
-						continue
+						return
 					}
 					f.SetInt(v)
 					pv = v
@@ -454,7 +428,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					v, err := strconv.ParseUint(value, 10, 64)
 					if err != nil {
 						res.Add(pb, value, "invalid integer")
-						continue
+						return
 					}
 					f.SetUint(v)
 					pv = v
@@ -462,7 +436,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					v, err := strconv.ParseFloat(value, 64)
 					if err != nil {
 						res.Add(pb, value, "invalid float")
-						continue
+						return
 					}
 					f.SetFloat(v)
 					pv = v
@@ -470,7 +444,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					v, err := strconv.ParseBool(value)
 					if err != nil {
 						res.Add(pb, value, "invalid boolean")
-						continue
+						return
 					}
 					f.SetBool(v)
 					pv = v
@@ -479,7 +453,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						t, err := time.Parse(time.RFC3339, value)
 						if err != nil {
 							res.Add(pb, value, "invalid time")
-							continue
+							return
 						}
 						f.Set(reflect.ValueOf(t))
 						pv = t
@@ -492,7 +466,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					Validate(oapi.Components.Schemas, p.Schema, pb, ModeWriteToServer, pv, res)
 				}
 			}
-		}
+		})
 
 		// Read input body if defined.
 		if inputBodyIndex != -1 {
@@ -567,7 +541,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				// Set defaults for any fields that were not in the input.
 				defaults.Every(v, func(item reflect.Value, def any) {
 					if item.IsZero() {
-						item.Set(reflect.ValueOf(def).Elem().Elem())
+						item.Set(reflect.Indirect(reflect.ValueOf(def)))
 					}
 				})
 			}
@@ -576,7 +550,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			bufPool.Put(buf)
 		}
 
-		resolvers.Every(v, func(item reflect.Value, _ any) {
+		resolvers.Every(v, func(item reflect.Value, _ bool) {
 			if resolver, ok := item.Addr().Interface().(Resolver); ok {
 				if errs := resolver.Resolve(ctx); len(errs) > 0 {
 					res.Errors = append(res.Errors, errs...)
@@ -611,28 +585,31 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 		// Serialize output headers
 		vo := reflect.ValueOf(output).Elem()
-		for header, info := range outHeaders {
-			f := vo.Field(info.Index)
-
+		outHeaders.Every(vo, func(f reflect.Value, info *headerInfo) {
 			switch f.Kind() {
 			case reflect.String:
-				ctx.WriteHeader(header, f.String())
+				ctx.WriteHeader(info.Name, f.String())
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				ctx.WriteHeader(header, strconv.FormatInt(f.Int(), 10))
+				ctx.WriteHeader(info.Name, strconv.FormatInt(f.Int(), 10))
 			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-				ctx.WriteHeader(header, strconv.FormatUint(f.Uint(), 10))
+				ctx.WriteHeader(info.Name, strconv.FormatUint(f.Uint(), 10))
 			case reflect.Float32, reflect.Float64:
-				ctx.WriteHeader(header, strconv.FormatFloat(f.Float(), 'f', -1, 64))
+				ctx.WriteHeader(info.Name, strconv.FormatFloat(f.Float(), 'f', -1, 64))
 			case reflect.Bool:
-				ctx.WriteHeader(header, strconv.FormatBool(f.Bool()))
+				ctx.WriteHeader(info.Name, strconv.FormatBool(f.Bool()))
 			default:
 				if f.Type() == timeType {
-					ctx.WriteHeader(header, f.Interface().(time.Time).Format(info.TimeFormat))
-					continue
+					ctx.WriteHeader(info.Name, f.Interface().(time.Time).Format(info.TimeFormat))
+					return
 				}
 
-				ctx.WriteHeader(header, fmt.Sprintf("%v", f.Interface()))
+				ctx.WriteHeader(info.Name, fmt.Sprintf("%v", f.Interface()))
 			}
+		})
+
+		status := op.DefaultStatus
+		if outStatusIndex != -1 {
+			status = int(vo.Field(outStatusIndex).Int())
 		}
 
 		if outBodyIndex != -1 {
@@ -649,10 +626,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			}
 
 			ctx.WriteHeader("Content-Type", ct)
-			ctx.WriteStatus(op.DefaultStatus)
+			ctx.WriteStatus(status)
 			api.Marshal(ctx, strconv.Itoa(op.DefaultStatus), ct, body)
 		} else {
-			ctx.WriteStatus(op.DefaultStatus)
+			ctx.WriteStatus(status)
 		}
 	})
 }

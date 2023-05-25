@@ -179,7 +179,10 @@ func main() {
 		// 		},
 		// 	},
 		// })
-		r := fiber.New()
+		r := fiber.New(fiber.Config{
+			ReadTimeout:  15 * time.Second,
+			WriteTimeout: 15 * time.Second,
+		})
 		// r.Use(logger.New())
 		// r.Use(recover.New())
 		r.Use(compress.New())
