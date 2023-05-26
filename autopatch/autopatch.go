@@ -140,14 +140,14 @@ func generatePatch(api huma.API, path *huma.PathItem) {
 	adapter.Handle(op, func(ctx huma.Context) {
 		patchData, err := io.ReadAll(ctx.GetBodyReader())
 		if err != nil {
-			huma.WriteErr(api, op, ctx, http.StatusBadRequest, "Unable to read request body", err)
+			huma.WriteErr(api, ctx, http.StatusBadRequest, "Unable to read request body", err)
 			return
 		}
 
 		// Perform the get!
 		origReq, err := http.NewRequest(http.MethodGet, ctx.GetURL().Path, nil)
 		if err != nil {
-			huma.WriteErr(api, op, ctx, http.StatusInternalServerError, "Unable to get resource", err)
+			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to get resource", err)
 			return
 		}
 
@@ -195,26 +195,26 @@ func generatePatch(api huma.API, path *huma.PathItem) {
 		case "application/json-patch+json":
 			patch, err := jsonpatch.DecodePatch(patchData)
 			if err != nil {
-				huma.WriteErr(api, op, ctx, http.StatusUnprocessableEntity, "Unable to decode JSON Patch", err)
+				huma.WriteErr(api, ctx, http.StatusUnprocessableEntity, "Unable to decode JSON Patch", err)
 				return
 			}
 			patched, err = patch.Apply(origWriter.Body.Bytes())
 			if err != nil {
-				huma.WriteErr(api, op, ctx, http.StatusUnprocessableEntity, "Unable to apply patch", err)
+				huma.WriteErr(api, ctx, http.StatusUnprocessableEntity, "Unable to apply patch", err)
 				return
 			}
 		case "application/merge-patch+json", "application/json", "":
 			// Assume most cases are merge-patch.
 			patched, err = jsonpatch.MergePatch(origWriter.Body.Bytes(), patchData)
 			if err != nil {
-				huma.WriteErr(api, op, ctx, http.StatusUnprocessableEntity, "Unable to apply patch", err)
+				huma.WriteErr(api, ctx, http.StatusUnprocessableEntity, "Unable to apply patch", err)
 				return
 			}
 		case "application/merge-patch+shorthand":
 			// Load the original data so it can be used as a base.
 			var tmp any
 			if err := json.Unmarshal(origWriter.Body.Bytes(), &tmp); err != nil {
-				huma.WriteErr(api, op, ctx, http.StatusUnprocessableEntity, "Unable to apply patch", err)
+				huma.WriteErr(api, ctx, http.StatusUnprocessableEntity, "Unable to apply patch", err)
 				return
 			}
 
@@ -223,19 +223,19 @@ func generatePatch(api huma.API, path *huma.PathItem) {
 				ForceStringKeys: true,
 			}, tmp)
 			if err != nil {
-				huma.WriteErr(api, op, ctx, http.StatusUnprocessableEntity, "Unable to apply patch", err)
+				huma.WriteErr(api, ctx, http.StatusUnprocessableEntity, "Unable to apply patch", err)
 				return
 			}
 
 			// Marshal the updated data back for the request to PUT.
 			patched, err = json.Marshal(tmp)
 			if err != nil {
-				huma.WriteErr(api, op, ctx, http.StatusUnprocessableEntity, "Unable to apply patch", err)
+				huma.WriteErr(api, ctx, http.StatusUnprocessableEntity, "Unable to apply patch", err)
 				return
 			}
 		default:
 			// A content type we explicitly do not support was passed.
-			huma.WriteErr(api, op, ctx, http.StatusUnsupportedMediaType, "Content type should be one of application/merge-patch+json or application/json-patch+json", nil)
+			huma.WriteErr(api, ctx, http.StatusUnsupportedMediaType, "Content type should be one of application/merge-patch+json or application/json-patch+json", nil)
 			return
 		}
 
@@ -247,7 +247,7 @@ func generatePatch(api huma.API, path *huma.PathItem) {
 		// Write the updated data back to the server!
 		putReq, err := http.NewRequest(http.MethodPut, op.Path, bytes.NewReader(patched))
 		if err != nil {
-			huma.WriteErr(api, op, ctx, http.StatusInternalServerError, "Unable to put modified resource", err)
+			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to put modified resource", err)
 			return
 		}
 		ctx.EachHeader(func(k, v string) {

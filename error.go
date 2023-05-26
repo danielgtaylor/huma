@@ -117,7 +117,7 @@ var NewError = func(status int, msg string, errs ...error) StatusError {
 // WriteErr writes an error response with the given context, using the
 // configured error type and with the given status code and message. It is
 // marshaled using the API's content negotiation methods.
-func WriteErr(api API, op *Operation, ctx Context, status int, msg string, errs ...error) {
+func WriteErr(api API, ctx Context, status int, msg string, errs ...error) {
 	var err any = NewError(status, msg, errs...)
 
 	ct, _ := api.Negotiate(ctx.GetHeader("Accept"))

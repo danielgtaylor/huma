@@ -483,14 +483,14 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				if count == op.MaxBodyBytes {
 					buf.Reset()
 					bufPool.Put(buf)
-					WriteErr(api, &op, ctx, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body is too large limit=%d bytes", op.MaxBodyBytes))
+					WriteErr(api, ctx, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body is too large limit=%d bytes", op.MaxBodyBytes))
 					return
 				}
 			}
 			if err != nil {
 				buf.Reset()
 				bufPool.Put(buf)
-				WriteErr(api, &op, ctx, http.StatusInternalServerError, "cannot read request body", err)
+				WriteErr(api, ctx, http.StatusInternalServerError, "cannot read request body", err)
 				return
 			}
 			body := buf.Bytes()
@@ -559,7 +559,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		})
 
 		if len(res.Errors) > 0 {
-			WriteErr(api, &op, ctx, errStatus, "validation failed", res.Errors...)
+			WriteErr(api, ctx, errStatus, "validation failed", res.Errors...)
 			return
 		}
 
@@ -618,7 +618,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 			ct, err := api.Negotiate(ctx.GetHeader("Accept"))
 			if err != nil {
-				WriteErr(api, &op, ctx, http.StatusNotAcceptable, "unable to marshal response", err)
+				WriteErr(api, ctx, http.StatusNotAcceptable, "unable to marshal response", err)
 				return
 			}
 			if ctf, ok := body.(ContentTypeFilter); ok {
