@@ -4,7 +4,9 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/queryparam"
@@ -67,6 +69,10 @@ func (ctx *testContext) GetBody() ([]byte, error) {
 
 func (ctx *testContext) GetBodyReader() io.Reader {
 	return ctx.r.Body
+}
+
+func (ctx *testContext) SetReadDeadline(deadline time.Time) error {
+	return http.NewResponseController(ctx.w).SetReadDeadline(deadline)
 }
 
 func (ctx *testContext) WriteStatus(code int) {

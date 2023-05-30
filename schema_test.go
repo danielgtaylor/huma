@@ -305,6 +305,22 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-any",
+			input: struct {
+				Value any `json:"value" doc:"Some value"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"description": "Some value"
+					}
+				},
+				"additionalProperties": false,
+				"required": ["value"]
+			}`,
+		},
+		{
 			name: "field-skip",
 			input: struct {
 				// Filtered out from JSON tag

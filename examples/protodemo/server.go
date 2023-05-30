@@ -23,8 +23,9 @@ restish put :3000/users/daniel -H "Accept:application/protobuf" name: Daniel Tay
 Convert to JSON:
 
 cat user.pb | restish put :3000/users/daniel -H "Content-Type: application/protobuf" -H "Accept: application/json"
-
 */
+
+//go:generate protoc --go_out=. model.proto
 
 type PutUserInput struct {
 	ID   string `path:"id"`

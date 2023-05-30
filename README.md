@@ -74,13 +74,13 @@ type Options struct {
 
 // GreetingInput represents the greeting operation request.
 type GreetingInput struct {
-	Name string `path:"name"`
+	Name string `path:"name" doc:"Name to greet"`
 }
 
 // GreetingOutput represents the greeting operation response.
 type GreetingOutput struct {
 	Body struct {
-		Message string `json:"message"`
+		Message string `json:"message" doc:"Greeting message" example:"Hello, world!"`
 	}
 }
 
@@ -96,6 +96,8 @@ func main() {
 			OperationID: "get-greeting",
 			Method:      http.MethodGet,
 			Path:        "/greeting/{name}",
+			Summary:     "Get a greeting",
+			Description: "Get a greeting for the given name. Longer docs...",
 		}, func(ctx context.Context, input *GreetingInput) (*GreetingOutput, error) {
 			resp := &GreetingOutput{}
 			resp.Body.Message: fmt.Sprintf("Hello, %s!", input.Name)

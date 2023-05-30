@@ -93,6 +93,10 @@ type StatusError interface {
 	Error() string
 }
 
+// Ensure the default error model satisfies these interfaces.
+var _ StatusError = (*ErrorModel)(nil)
+var _ ContentTypeFilter = (*ErrorModel)(nil)
+
 // NewError creates a new instance of an error model with the given status code,
 // message, and errors. If the error implements the `ErrorDetailer` interface,
 // the error details will be used. Otherwise, the error message will be used.

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -14,6 +15,25 @@ import (
 
 	"golang.org/x/exp/slices"
 )
+
+var errDeadlineUnsupported = fmt.Errorf("%w", http.ErrNotSupported)
+
+// SetReadDeadline is a utility to set the read deadline on a response writer,
+// if possible. If not, it will not incur any allocations (unlike the stdlib
+// `http.ResponseController`).
+func SetReadDeadline(w http.ResponseWriter, deadline time.Time) error {
+	rw := w
+	for {
+		switch t := rw.(type) {
+		case interface{ SetReadDeadline(time.Time) error }:
+			return t.SetReadDeadline(deadline)
+		case interface{ Unwrap() http.ResponseWriter }:
+			rw = t.Unwrap()
+		default:
+			return errDeadlineUnsupported
+		}
+	}
+}
 
 type paramFieldInfo struct {
 	Type    reflect.Type
@@ -247,6 +267,11 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			},
 		}
 
+		if op.BodyReadTimeout == 0 {
+			// 5 second default
+			op.BodyReadTimeout = 5 * time.Second
+		}
+
 		if op.MaxBodyBytes == 0 {
 			// 1 MB default
 			op.MaxBodyBytes = 1024 * 1024
@@ -470,6 +495,13 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 		// Read input body if defined.
 		if inputBodyIndex != -1 {
+			if op.BodyReadTimeout > 0 {
+				ctx.SetReadDeadline(time.Now().Add(op.BodyReadTimeout))
+			} else if op.BodyReadTimeout < 0 {
+				// Disable any server-wide deadline.
+				ctx.SetReadDeadline(time.Time{})
+			}
+
 			buf := bufPool.Get().(*bytes.Buffer)
 			reader := ctx.GetBodyReader()
 			if closer, ok := reader.(io.Closer); ok {
@@ -490,6 +522,12 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			if err != nil {
 				buf.Reset()
 				bufPool.Put(buf)
+
+				if e, ok := err.(net.Error); ok && e.Timeout() {
+					WriteErr(api, ctx, http.StatusRequestTimeout, "request body read timeout")
+					return
+				}
+
 				WriteErr(api, ctx, http.StatusInternalServerError, "cannot read request body", err)
 				return
 			}

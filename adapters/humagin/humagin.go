@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gin-gonic/gin"
@@ -54,6 +55,10 @@ func (c *ginCtx) EachHeader(cb func(name, value string)) {
 
 func (c *ginCtx) GetBodyReader() io.Reader {
 	return c.orig.Request.Body
+}
+
+func (ctx *ginCtx) SetReadDeadline(deadline time.Time) error {
+	return huma.SetReadDeadline(ctx.orig.Writer, deadline)
 }
 
 func (c *ginCtx) WriteStatus(code int) {

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/queryparam"
@@ -63,6 +64,10 @@ func (ctx *chiContext) GetBody() ([]byte, error) {
 
 func (ctx *chiContext) GetBodyReader() io.Reader {
 	return ctx.r.Body
+}
+
+func (ctx *chiContext) SetReadDeadline(deadline time.Time) error {
+	return huma.SetReadDeadline(ctx.w, deadline)
 }
 
 func (ctx *chiContext) WriteStatus(code int) {

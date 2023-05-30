@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2/queryparam"
 	"github.com/go-chi/chi"
@@ -70,6 +71,10 @@ func (ctx *testContext) GetBody() ([]byte, error) {
 
 func (ctx *testContext) GetBodyReader() io.Reader {
 	return ctx.r.Body
+}
+
+func (ctx *testContext) SetReadDeadline(deadline time.Time) error {
+	return http.NewResponseController(ctx.w).SetReadDeadline(deadline)
 }
 
 func (ctx *testContext) WriteStatus(code int) {

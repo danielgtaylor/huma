@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2/negotiation"
 	"github.com/goccy/go-yaml"
@@ -48,6 +49,7 @@ type Context interface {
 	GetHeader(name string) string
 	EachHeader(cb func(name, value string))
 	GetBodyReader() io.Reader
+	SetReadDeadline(time.Time) error
 	WriteStatus(code int)
 	AppendHeader(name, value string)
 	WriteHeader(name, value string)

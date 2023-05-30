@@ -1,12 +1,12 @@
 package humafiber
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gofiber/fiber/v2"
@@ -57,8 +57,16 @@ func (c *fiberCtx) EachHeader(cb func(name, value string)) {
 }
 
 func (c *fiberCtx) GetBodyReader() io.Reader {
-	// return c.orig.Context().RequestBodyStream()
-	return bytes.NewReader(c.orig.Body())
+	return c.orig.Request().BodyStream()
+}
+
+func (c *fiberCtx) SetReadDeadline(deadline time.Time) error {
+	// Note: for this to work properly you need to do two things:
+	// 1. Set the Fiber app's `StreamRequestBody` to `true`
+	// 2. Set the Fiber app's `BodyLimit` to some small value like `1`
+	// Fiber will only call the request handler for streaming once the limit is
+	// reached. This is annoying but currently how things work.
+	return c.orig.Context().Conn().SetReadDeadline(deadline)
 }
 
 func (c *fiberCtx) WriteStatus(code int) {

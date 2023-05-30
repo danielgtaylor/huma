@@ -3,6 +3,7 @@ package huma
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/goccy/go-yaml"
 )
@@ -188,6 +189,13 @@ type Operation struct {
 	// body. If not specified, the default is 1MB. Use -1 for unlimited. If
 	// the limit is reached, then an HTTP 413 error is returned.
 	MaxBodyBytes int64 `yaml:"-"`
+
+	// BodyReadTimeout is the maximum amount of time to wait for the request
+	// body to be read. If not specified, the default is 5 seconds. Use -1
+	// for unlimited. If the timeout is reached, then an HTTP 408 error is
+	// returned. This value supercedes the server's read timeout, and a value
+	// of -1 can unset the server's timeout.
+	BodyReadTimeout time.Duration `yaml:"-"`
 
 	// Errors is a list of HTTP status codes that the handler may return. If
 	// not specified, then a default error response is added to the OpenAPI.

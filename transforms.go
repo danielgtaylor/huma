@@ -41,7 +41,7 @@ func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
 	registry := oapi.Components.Schemas
 	for _, resp := range op.Responses {
 		for _, content := range resp.Content {
-			if content.Schema.Ref == "" {
+			if content == nil || content.Schema == nil || content.Schema.Ref == "" {
 				continue
 			}
 
