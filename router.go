@@ -592,10 +592,17 @@ const (
 // New creates a new Huma router to which you can attach resources,
 // operations, middleware, etc.
 func New(docs, version string) *Router {
+	return NewWithMux(docs, version, chi.NewRouter())
+}
+
+// NewWithMux creates a new Huma router to which you can attach resources,
+// operations, middleware, etc. It allows you to specify the underlying
+// `*chi.Mux` instance to use.
+func NewWithMux(docs, version string, mux *chi.Mux) *Router {
 	title, desc := splitDocs(docs)
 
 	r := &Router{
-		mux:                      chi.NewRouter(),
+		mux:                      mux,
 		resources:                []*Resource{},
 		title:                    title,
 		description:              desc,
