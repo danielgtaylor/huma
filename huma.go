@@ -18,6 +18,8 @@ import (
 
 var errDeadlineUnsupported = fmt.Errorf("%w", http.ErrNotSupported)
 
+var bodyCallbackType = reflect.TypeOf(func(Context) {})
+
 // SetReadDeadline is a utility to set the read deadline on a response writer,
 // if possible. If not, it will not incur any allocations (unlike the stdlib
 // `http.ResponseController`).
@@ -33,6 +35,13 @@ func SetReadDeadline(w http.ResponseWriter, deadline time.Time) error {
 			return errDeadlineUnsupported
 		}
 	}
+}
+
+// StreamResponse is a response that streams data to the client. The body
+// function will be called once the response headers have been written and
+// the body writer is ready to be written to.
+type StreamResponse struct {
+	Body func(ctx Context)
 }
 
 type paramFieldInfo struct {
@@ -300,13 +309,20 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	}
 	outHeaders := findHeaders(outputType)
 	outBodyIndex := -1
+	outBodyFunc := false
 	if f, ok := outputType.FieldByName("Body"); ok {
 		outBodyIndex = f.Index[0]
+		if f.Type.Kind() == reflect.Func {
+			outBodyFunc = true
+
+			if f.Type != bodyCallbackType {
+				panic("body field must be a function with signature func(huma.Context)")
+			}
+		}
 		status := op.DefaultStatus
 		if status == 0 {
 			status = http.StatusOK
 		}
-		outSchema := registry.Schema(f.Type, true, getHint(outputType, f.Name, op.OperationID+"Response"))
 		statusStr := fmt.Sprintf("%d", status)
 		if op.Responses[statusStr] == nil {
 			op.Responses[statusStr] = &Response{}
@@ -317,13 +333,16 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		if op.Responses[statusStr].Headers == nil {
 			op.Responses[statusStr].Headers = map[string]*Param{}
 		}
-		if op.Responses[statusStr].Content == nil {
-			op.Responses[statusStr].Content = map[string]*MediaType{}
+		if !outBodyFunc {
+			outSchema := registry.Schema(f.Type, true, getHint(outputType, f.Name, op.OperationID+"Response"))
+			if op.Responses[statusStr].Content == nil {
+				op.Responses[statusStr].Content = map[string]*MediaType{}
+			}
+			if _, ok := op.Responses[statusStr].Content["application/json"]; !ok {
+				op.Responses[statusStr].Content["application/json"] = &MediaType{}
+			}
+			op.Responses[statusStr].Content["application/json"].Schema = outSchema
 		}
-		if _, ok := op.Responses[statusStr].Content["application/json"]; !ok {
-			op.Responses[statusStr].Content["application/json"] = &MediaType{}
-		}
-		op.Responses[statusStr].Content["application/json"].Schema = outSchema
 	}
 	if op.DefaultStatus == 0 {
 		if outBodyIndex != -1 {
@@ -653,6 +672,11 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		if outBodyIndex != -1 {
 			// Serialize output body
 			body := vo.Field(outBodyIndex).Interface()
+
+			if outBodyFunc {
+				body.(func(Context))(ctx)
+				return
+			}
 
 			ct, err := api.Negotiate(ctx.GetHeader("Accept"))
 			if err != nil {
