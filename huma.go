@@ -493,6 +493,15 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					f.SetBool(v)
 					pv = v
 				default:
+					// Special case: list of strings
+					if f.Type().Kind() == reflect.Slice && f.Type().Elem().Kind() == reflect.String {
+						values := strings.Split(value, ",")
+						f.Set(reflect.ValueOf(values))
+						pv = values
+						break
+					}
+
+					// Special case: time.Time
 					if f.Type() == timeType {
 						t, err := time.Parse(time.RFC3339, value)
 						if err != nil {
@@ -503,7 +512,8 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						pv = t
 						break
 					}
-					panic("unsupported param type")
+
+					panic("unsupported param type " + p.Type.String())
 				}
 
 				if !op.SkipValidateParams {
