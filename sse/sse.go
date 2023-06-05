@@ -138,13 +138,16 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 						return err
 					}
 					if err := encoder.Encode(msg.Data); err != nil {
+						bw.Write([]byte(`{"error": "encode error: `))
+						bw.Write([]byte(err.Error()))
+						bw.Write([]byte("\"}\n\n"))
 						return err
 					}
 					bw.Write([]byte("\n"))
 					if f, ok := bw.(http.Flusher); ok {
 						f.Flush()
 					} else {
-						fmt.Println("warning: unable to flush")
+						fmt.Println("error: unable to flush")
 						return fmt.Errorf("unable to flush: %w", http.ErrNotSupported)
 					}
 					return nil

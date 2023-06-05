@@ -3,7 +3,6 @@ package sse
 import (
 	"context"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -21,7 +20,7 @@ type UserCreatedEvent struct {
 }
 
 func TestSSE(t *testing.T) {
-	router, api := humatest.New()
+	_, api := humatest.New(t)
 
 	Register(api, huma.Operation{
 		OperationID: "sse",
@@ -40,14 +39,22 @@ func TestSSE(t *testing.T) {
 			Retry: 1000,
 			Data:  UserCreatedEvent{UserID: 1, Username: "foo"},
 		})
+
+		// Unknown event type gets sent as the default. Still uses JSON encoding!
+		send(Message{
+			Data: "unknown event",
+		})
+
+		// Encode failure should return an error and not write anything.
+		assert.Error(t, send(Message{
+			Data: make(chan int),
+		}))
 	})
 
-	r, _ := http.NewRequest(http.MethodGet, "/sse", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, r)
+	resp := api.Get("/sse")
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
+	assert.Equal(t, http.StatusOK, resp.Code)
+	assert.Equal(t, "text/event-stream", resp.Header().Get("Content-Type"))
 	assert.Equal(t, `data: {"message":"Hello, world!"}
 
 id: 5
@@ -55,5 +62,9 @@ retry: 1000
 event: userCreate
 data: {"user_id":1,"username":"foo"}
 
-`, w.Body.String())
+data: "unknown event"
+
+data: {"error": "encode error: json: unsupported type: chan int"}
+
+`, resp.Body.String())
 }
