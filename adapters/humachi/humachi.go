@@ -22,10 +22,6 @@ func (ctx *chiContext) GetOperation() *huma.Operation {
 	return ctx.op
 }
 
-func (ctx *chiContext) GetMatched() string {
-	return chi.RouteContext(ctx.r.Context()).RoutePattern()
-}
-
 func (ctx *chiContext) GetContext() context.Context {
 	return ctx.r.Context()
 }
@@ -56,10 +52,6 @@ func (ctx *chiContext) EachHeader(cb func(name, value string)) {
 			cb(name, value)
 		}
 	}
-}
-
-func (ctx *chiContext) GetBody() ([]byte, error) {
-	return io.ReadAll(ctx.r.Body)
 }
 
 func (ctx *chiContext) GetBodyReader() io.Reader {

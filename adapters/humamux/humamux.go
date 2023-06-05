@@ -54,10 +54,6 @@ func (ctx *gmuxContext) EachHeader(cb func(name, value string)) {
 	}
 }
 
-func (ctx *gmuxContext) GetBody() ([]byte, error) {
-	return io.ReadAll(ctx.r.Body)
-}
-
 func (ctx *gmuxContext) GetBodyReader() io.Reader {
 	return ctx.r.Body
 }
