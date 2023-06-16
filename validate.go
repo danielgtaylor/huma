@@ -66,11 +66,10 @@ func (b *PathBuffer) Pop() {
 	for b.off > 0 {
 		b.off--
 		if b.buf[b.off] == '.' {
-			b.buf = b.buf[:b.off]
-			return
+			break
 		}
 	}
-	b.buf = b.buf[:0]
+	b.buf = b.buf[:b.off]
 }
 
 func (b *PathBuffer) Len() int {
