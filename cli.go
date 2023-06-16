@@ -124,6 +124,13 @@ func (c *cli[O]) setupOptions(flags *pflag.FlagSet, t reflect.Type, path []int) 
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 
+		if !field.IsExported() {
+			// This isn't a public field, so we cannot use reflect.Value.Set with
+			// it. This is usually a struct field with a lowercase name.
+			fmt.Println("warning: ignoring unexported options field", field.Name)
+			continue
+		}
+
 		currentPath := append([]int{}, path...)
 		currentPath = append(currentPath, i)
 

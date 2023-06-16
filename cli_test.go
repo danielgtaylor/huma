@@ -15,12 +15,16 @@ func TestCLIPlain(t *testing.T) {
 		Debug bool
 		Host  string
 		Port  int
+
+		// ignore private fields, should not crash.
+		ingore bool
 	}
 
 	cli := NewCLI(func(cli CLI, options *Options) {
 		assert.Equal(t, true, options.Debug)
 		assert.Equal(t, "localhost", options.Host)
 		assert.Equal(t, 8001, options.Port)
+		assert.Equal(t, false, options.ingore)
 		cli.OnStart(func() {
 			// Do nothing
 		})
