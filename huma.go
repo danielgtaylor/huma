@@ -45,11 +45,12 @@ type StreamResponse struct {
 }
 
 type paramFieldInfo struct {
-	Type    reflect.Type
-	Name    string
-	Loc     string
-	Default string
-	Schema  *Schema
+	Type       reflect.Type
+	Name       string
+	Loc        string
+	Default    string
+	TimeFormat string
+	Schema     *Schema
 }
 
 func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*paramFieldInfo] {
@@ -87,6 +88,14 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		}
 
 		pfi.Name = name
+
+		if f.Type == timeType {
+			timeFormat := http.TimeFormat
+			if f := f.Tag.Get("timeFormat"); f != "" {
+				timeFormat = f
+			}
+			pfi.TimeFormat = timeFormat
+		}
 
 		op.Parameters = append(op.Parameters, &Param{
 			Name:     name,
@@ -285,6 +294,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			// 1 MB default
 			op.MaxBodyBytes = 1024 * 1024
 		}
+	}
+	rawBodyIndex := -1
+	if f, ok := inputType.FieldByName("RawBody"); ok {
+		rawBodyIndex = f.Index[0]
 	}
 	resolvers := findResolvers(resolverType, inputType)
 	defaults := findDefaults(inputType)
@@ -503,7 +516,15 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 					// Special case: time.Time
 					if f.Type() == timeType {
-						t, err := time.Parse(time.RFC3339, value)
+						timeFormat := time.RFC3339Nano
+						if p.Loc == "header" {
+							timeFormat = http.TimeFormat
+						}
+						if p.TimeFormat != "" {
+							timeFormat = p.TimeFormat
+						}
+
+						t, err := time.Parse(timeFormat, value)
 						if err != nil {
 							res.Add(pb, value, "invalid time")
 							return
@@ -544,7 +565,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				if count == op.MaxBodyBytes {
 					buf.Reset()
 					bufPool.Put(buf)
-					WriteErr(api, ctx, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body is too large limit=%d bytes", op.MaxBodyBytes))
+					WriteErr(api, ctx, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body is too large limit=%d bytes", op.MaxBodyBytes), res.Errors...)
 					return
 				}
 			}
@@ -553,7 +574,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				bufPool.Put(buf)
 
 				if e, ok := err.(net.Error); ok && e.Timeout() {
-					WriteErr(api, ctx, http.StatusRequestTimeout, "request body read timeout")
+					WriteErr(api, ctx, http.StatusRequestTimeout, "request body read timeout", res.Errors...)
 					return
 				}
 
@@ -562,59 +583,74 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			}
 			body := buf.Bytes()
 
-			parseErrCount := 0
-			if !op.SkipValidateBody {
-				// Validate the input. First, parse the body into []any or map[string]any
-				// or equivalent, which can be easily validated. Then, convert to the
-				// expected struct type to call the handler.
-				var parsed any
-				if err := api.Unmarshal(ctx.GetHeader("Content-Type"), body, &parsed); err != nil {
-					// TODO: handle not acceptable
-					errStatus = http.StatusBadRequest
-					res.Errors = append(res.Errors, &ErrorDetail{
-						Location: "body",
-						Message:  err.Error(),
-						Value:    body,
-					})
-					parseErrCount++
-				} else {
-					pb.Reset()
-					pb.Push("body")
-					count := len(res.Errors)
-					Validate(oapi.Components.Schemas, inSchema, pb, ModeWriteToServer, parsed, res)
-					parseErrCount = len(res.Errors) - count
-					if parseErrCount > 0 {
-						errStatus = http.StatusUnprocessableEntity
-					}
-				}
+			if rawBodyIndex != -1 {
+				f := v.Field(rawBodyIndex)
+				f.SetBytes(body)
 			}
 
-			// We need to get the body into the correct type now that it has been
-			// validated. Benchmarks on Go 1.20 show that using `json.Unmarshal` a
-			// second time is faster than `mapstructure.Decode` or any of the other
-			// common reflection-based approaches when using real-world medium-sized
-			// JSON payloads with lots of strings.
-			f := v.Field(inputBodyIndex)
-			if err := api.Unmarshal(ctx.GetHeader("Content-Type"), body, f.Addr().Interface()); err != nil {
-				if parseErrCount == 0 {
-					// Hmm, this should have worked... validator missed something?
-					res.Errors = append(res.Errors, &ErrorDetail{
-						Location: "body",
-						Message:  err.Error(),
-						Value:    string(body),
-					})
+			if len(body) == 0 {
+				kind := v.Field(inputBodyIndex).Kind()
+				if kind != reflect.Ptr && kind != reflect.Interface {
+					buf.Reset()
+					bufPool.Put(buf)
+					WriteErr(api, ctx, http.StatusBadRequest, "request body is required", res.Errors...)
+					return
 				}
 			} else {
-				// Set defaults for any fields that were not in the input.
-				defaults.Every(v, func(item reflect.Value, def any) {
-					if item.IsZero() {
-						item.Set(reflect.Indirect(reflect.ValueOf(def)))
+				parseErrCount := 0
+				if !op.SkipValidateBody {
+					// Validate the input. First, parse the body into []any or map[string]any
+					// or equivalent, which can be easily validated. Then, convert to the
+					// expected struct type to call the handler.
+					var parsed any
+					if err := api.Unmarshal(ctx.GetHeader("Content-Type"), body, &parsed); err != nil {
+						// TODO: handle not acceptable
+						errStatus = http.StatusBadRequest
+						res.Errors = append(res.Errors, &ErrorDetail{
+							Location: "body",
+							Message:  err.Error(),
+							Value:    body,
+						})
+						parseErrCount++
+					} else {
+						pb.Reset()
+						pb.Push("body")
+						count := len(res.Errors)
+						Validate(oapi.Components.Schemas, inSchema, pb, ModeWriteToServer, parsed, res)
+						parseErrCount = len(res.Errors) - count
+						if parseErrCount > 0 {
+							errStatus = http.StatusUnprocessableEntity
+						}
 					}
-				})
-			}
+				}
 
-			buf.Reset()
-			bufPool.Put(buf)
+				// We need to get the body into the correct type now that it has been
+				// validated. Benchmarks on Go 1.20 show that using `json.Unmarshal` a
+				// second time is faster than `mapstructure.Decode` or any of the other
+				// common reflection-based approaches when using real-world medium-sized
+				// JSON payloads with lots of strings.
+				f := v.Field(inputBodyIndex)
+				if err := api.Unmarshal(ctx.GetHeader("Content-Type"), body, f.Addr().Interface()); err != nil {
+					if parseErrCount == 0 {
+						// Hmm, this should have worked... validator missed something?
+						res.Errors = append(res.Errors, &ErrorDetail{
+							Location: "body",
+							Message:  err.Error(),
+							Value:    string(body),
+						})
+					}
+				} else {
+					// Set defaults for any fields that were not in the input.
+					defaults.Every(v, func(item reflect.Value, def any) {
+						if item.IsZero() {
+							item.Set(reflect.Indirect(reflect.ValueOf(def)))
+						}
+					})
+				}
+
+				buf.Reset()
+				bufPool.Put(buf)
+			}
 		}
 
 		resolvers.Every(v, func(item reflect.Value, _ bool) {
