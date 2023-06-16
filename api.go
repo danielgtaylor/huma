@@ -43,6 +43,7 @@ type Context interface {
 	GetOperation() *Operation
 	GetContext() context.Context
 	GetMethod() string
+	GetHost() string
 	GetURL() url.URL
 	GetParam(name string) string
 	GetQuery(name string) string

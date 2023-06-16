@@ -33,6 +33,10 @@ func (c *fiberCtx) GetMethod() string {
 	return c.orig.Method()
 }
 
+func (ctx *fiberCtx) GetHost() string {
+	return ctx.orig.Hostname()
+}
+
 func (c *fiberCtx) GetURL() url.URL {
 	u, _ := url.Parse(string(c.orig.Request().RequestURI()))
 	return *u

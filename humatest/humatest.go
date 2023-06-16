@@ -49,6 +49,10 @@ func (ctx *testContext) GetMethod() string {
 	return ctx.r.Method
 }
 
+func (ctx *testContext) GetHost() string {
+	return ctx.r.Host
+}
+
 func (ctx *testContext) GetURL() url.URL {
 	return *ctx.r.URL
 }

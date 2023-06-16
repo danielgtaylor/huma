@@ -30,6 +30,10 @@ func (ctx *chiContext) GetMethod() string {
 	return ctx.r.Method
 }
 
+func (ctx *chiContext) GetHost() string {
+	return ctx.r.Host
+}
+
 func (ctx *chiContext) GetURL() url.URL {
 	return *ctx.r.URL
 }

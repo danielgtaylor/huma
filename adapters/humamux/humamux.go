@@ -30,6 +30,10 @@ func (ctx *gmuxContext) GetMethod() string {
 	return ctx.r.Method
 }
 
+func (ctx *gmuxContext) GetHost() string {
+	return ctx.r.Host
+}
+
 func (ctx *gmuxContext) GetURL() url.URL {
 	return *ctx.r.URL
 }

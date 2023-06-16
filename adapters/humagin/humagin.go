@@ -29,6 +29,10 @@ func (c *ginCtx) GetMethod() string {
 	return c.orig.Request.Method
 }
 
+func (ctx *ginCtx) GetHost() string {
+	return ctx.orig.Request.Host
+}
+
 func (c *ginCtx) GetURL() url.URL {
 	return *c.orig.Request.URL
 }
