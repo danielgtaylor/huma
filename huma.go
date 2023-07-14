@@ -97,13 +97,16 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			pfi.TimeFormat = timeFormat
 		}
 
-		op.Parameters = append(op.Parameters, &Param{
-			Name:     name,
-			In:       pfi.Loc,
-			Required: required,
-			Schema:   pfi.Schema,
-			Example:  example,
-		})
+		if f.Tag.Get("internal") == "" {
+			// Document the parameter if not internal (hidden).
+			op.Parameters = append(op.Parameters, &Param{
+				Name:     name,
+				In:       pfi.Loc,
+				Required: required,
+				Schema:   pfi.Schema,
+				Example:  example,
+			})
+		}
 		return pfi
 	}, "Body")
 }
@@ -687,11 +690,15 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		}
 
 		// Serialize output headers
+		ct := ""
 		vo := reflect.ValueOf(output).Elem()
 		outHeaders.Every(vo, func(f reflect.Value, info *headerInfo) {
 			switch f.Kind() {
 			case reflect.String:
 				ctx.WriteHeader(info.Name, f.String())
+				if info.Name == "Content-Type" {
+					ct = f.String()
+				}
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 				ctx.WriteHeader(info.Name, strconv.FormatInt(f.Int(), 10))
 			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
@@ -724,16 +731,27 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				return
 			}
 
-			ct, err := api.Negotiate(ctx.GetHeader("Accept"))
-			if err != nil {
-				WriteErr(api, ctx, http.StatusNotAcceptable, "unable to marshal response", err)
+			if b, ok := body.([]byte); ok {
+				ctx.WriteStatus(status)
+				ctx.BodyWriter().Write(b)
 				return
 			}
-			if ctf, ok := body.(ContentTypeFilter); ok {
-				ct = ctf.ContentType(ct)
+
+			// Only write a content type if one wasn't already written by the
+			// response headers handled above.
+			if ct == "" {
+				ct, err = api.Negotiate(ctx.GetHeader("Accept"))
+				if err != nil {
+					WriteErr(api, ctx, http.StatusNotAcceptable, "unable to marshal response", err)
+					return
+				}
+				if ctf, ok := body.(ContentTypeFilter); ok {
+					ct = ctf.ContentType(ct)
+				}
+
+				ctx.WriteHeader("Content-Type", ct)
 			}
 
-			ctx.WriteHeader("Content-Type", ct)
 			ctx.WriteStatus(status)
 			api.Marshal(ctx, strconv.Itoa(op.DefaultStatus), ct, body)
 		} else {

@@ -75,6 +75,7 @@ type Schema struct {
 	MaxProperties        *int               `yaml:"maxProperties,omitempty"`
 	ReadOnly             bool               `yaml:"readOnly,omitempty"`
 	WriteOnly            bool               `yaml:"writeOnly,omitempty"`
+	Deprecated           bool               `yaml:"deprecated,omitempty"`
 	Extensions           map[string]any     `yaml:",inline"`
 
 	patternRe     *regexp.Regexp  `yaml:"-"`
@@ -295,6 +296,7 @@ func SchemaFromField(registry Registry, parent reflect.Type, f reflect.StructFie
 	fs.MaxProperties = intTag(f, "maxProperties")
 	fs.ReadOnly = boolTag(f, "readOnly")
 	fs.WriteOnly = boolTag(f, "writeOnly")
+	fs.Deprecated = boolTag(f, "deprecated")
 	fs.PrecomputeMessages()
 
 	return fs
