@@ -70,7 +70,13 @@ func SelectQValueFast(header string, allowed []string) string {
 		if char == ',' || pos == len(header)-1 {
 			q := 1.0
 			if pos == len(header)-1 {
+				// This is the end, so it must be the name.
+				// Example: "application/yaml"
 				name = header[start : pos+1]
+			} else if name == "" {
+				// No name yet means we did not encounter a `;`.
+				// Example: "a, b, c"
+				name = header[start:pos]
 			} else {
 				if parsed, _ := strconv.ParseFloat(header[start+2:end+1], 64); parsed > 0 {
 					q = parsed
