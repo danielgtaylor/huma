@@ -152,6 +152,7 @@ Adapters are in the `adapters` directory and named after the router they support
 - [chi](https://github.com/go-chi/chi) via `humachi`
 - [gin](https://gin-gonic.com/) via `humagin`
 - [gorilla/mux](https://github.com/gorilla/mux) via `humamux`
+- [httprouter](https://github.com/julienschmidt/httprouter) via `humahttprouter`
 - [Fiber](https://gofiber.io/) via `humafiber`
 
 Adapters are instantiated by wrapping your router and providing a Huma configuration object which describes the API. Here is a simple example using Chi:
