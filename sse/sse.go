@@ -32,12 +32,23 @@ type Message struct {
 	Retry int
 }
 
+// Sender is a send function for sending SSE messages to the client. It is
+// callable but also provides a `sender.Data(...)` convenience method if
+// you don't need to set the other fields in the message.
+type Sender func(Message) error
+
+// Data sends a message with the given data to the client. This is equivalent
+// to calling `sender(Message{Data: data})`.
+func (s Sender) Data(data any) error {
+	return s(Message{Data: data})
+}
+
 // Register a new SSE operation. The `eventTypeMap` maps from event name to
 // the type of the data that will be sent. The `f` function is called with
 // the context, input, and a `send` function that can be used to send messages
 // to the client. Flushing is handled automatically as long as the adapter's
 // `BodyWriter` implements `http.Flusher`.
-func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]any, f func(ctx context.Context, input *I, send func(Message) error)) {
+func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]any, f func(ctx context.Context, input *I, send Sender)) {
 	// Start by defining the SSE schema & operation response.
 	if op.Responses == nil {
 		op.Responses = map[string]*huma.Response{}

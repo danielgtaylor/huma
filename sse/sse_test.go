@@ -14,10 +14,13 @@ type DefaultMessage struct {
 	Message string `json:"message"`
 }
 
-type UserCreatedEvent struct {
+type UserEvent struct {
 	UserID   int    `json:"user_id"`
 	Username string `json:"username"`
 }
+
+type UserCreatedEvent UserEvent
+type UserDeletedEvent UserEvent
 
 func TestSSE(t *testing.T) {
 	_, api := humatest.New(t)
@@ -29,10 +32,9 @@ func TestSSE(t *testing.T) {
 	}, map[string]any{
 		"message":    &DefaultMessage{},
 		"userCreate": UserCreatedEvent{},
-	}, func(ctx context.Context, input *struct{}, send func(Message) error) {
-		send(Message{
-			Data: DefaultMessage{Message: "Hello, world!"},
-		})
+		"userDelete": UserDeletedEvent{},
+	}, func(ctx context.Context, input *struct{}, send Sender) {
+		send.Data(DefaultMessage{Message: "Hello, world!"})
 
 		send(Message{
 			ID:    5,
@@ -40,12 +42,12 @@ func TestSSE(t *testing.T) {
 			Data:  UserCreatedEvent{UserID: 1, Username: "foo"},
 		})
 
-		// Unknown event type gets sent as the default. Still uses JSON encoding!
-		send(Message{
-			Data: "unknown event",
-		})
+		send.Data(UserDeletedEvent{UserID: 2, Username: "bar"})
 
-		// Encode failure should return an error and not write anything.
+		// Unknown event type gets sent as the default. Still uses JSON encoding!
+		send.Data("unknown event")
+
+		// Encode failure should return an error.
 		assert.Error(t, send(Message{
 			Data: make(chan int),
 		}))
@@ -61,6 +63,9 @@ id: 5
 retry: 1000
 event: userCreate
 data: {"user_id":1,"username":"foo"}
+
+event: userDelete
+data: {"user_id":2,"username":"bar"}
 
 data: "unknown event"
 
