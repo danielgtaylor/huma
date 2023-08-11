@@ -9,7 +9,7 @@
 - [Design](#design)
 
 <a name="intro"></a>
-A modern, simple, fast & flexible micro framework for building REST/RPC APIs in Go backed by OpenAPI 3 and JSON Schema. Pronounced IPA: [/'hjuːmɑ/](https://en.wiktionary.org/wiki/Wiktionary:International_Phonetic_Alphabet). The goals of this project are to provide:
+A modern, simple, fast & flexible micro framework for building HTTP REST/RPC APIs in Go backed by OpenAPI 3 and JSON Schema. Pronounced IPA: [/'hjuːmɑ/](https://en.wiktionary.org/wiki/Wiktionary:International_Phonetic_Alphabet). The goals of this project are to provide:
 
 - Incremental adoption for teams with existing services
   - Bring your own router, middleware, and logging/metrics
@@ -36,22 +36,30 @@ Features include:
 - Optional automatic generation of `PATCH` operations that support:
   - [RFC 7386](https://www.rfc-editor.org/rfc/rfc7386) JSON Merge Patch
   - [RFC 6902](https://www.rfc-editor.org/rfc/rfc6902) JSON Patch
-  - [Shorthand](https://github.com/danielgtaylor/shorthand)
+  - [Shorthand](https://github.com/danielgtaylor/shorthand) patches
 - Annotated Go types for input and output models
   - Generates JSON Schema from Go types
+  - Static typing for path/query/header params, bodies, response headers, etc.
   - Automatic input model validation & error handling
 - Documentation generation using [Stoplight Elements](https://stoplight.io/open-source/elements)
 - Optional CLI built-in, configured via arguments or environment variables
   - Set via e.g. `-p 8000`, `--port=8000`, or `SERVICE_PORT=8000`
   - Startup actions & graceful shutdown built-in
 - Generates OpenAPI for access to a rich ecosystem of tools
-  - Mocks with [API Sprout](https://github.com/danielgtaylor/apisprout)
-  - SDKs with [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator)
+  - Mocks with [API Sprout](https://github.com/danielgtaylor/apisprout) or [Prism](https://stoplight.io/open-source/prism)
+  - SDKs with [OpenAPI Generator](https://github.com/OpenAPITools/openapi-generator) or [oapi-codegen](https://github.com/deepmap/oapi-codegen)
   - CLI with [Restish](https://rest.sh/)
   - And [plenty](https://openapi.tools/) [more](https://apis.guru/awesome-openapi3/category.html)
 - Generates JSON Schema for each resource using optional `describedby` link relation headers as well as optional `$schema` properties in returned objects that integrate into editors for validation & completion.
 
 This project was inspired by [FastAPI](https://fastapi.tiangolo.com/). Logo & branding designed by Kari Taylor.
+
+# Install
+
+```sh
+# After: go mod init ...
+go get -u github.com/danielgtaylor/huma/v2
+```
 
 # Example
 
@@ -129,13 +137,6 @@ HTTP/1.1 200 OK
 
 Even though the example is tiny you can also see some generated documentation at http://localhost:8888/docs. The generated OpenAPI is available at http://localhost:8888/openapi.json or http://localhost:8888/openapi.yaml.
 
-# Install
-
-```sh
-# After: go mod init ...
-go get -u github.com/danielgtaylor/huma/v2
-```
-
 # Documentation
 
 Official Go package documentation can always be found at https://pkg.go.dev/github.com/danielgtaylor/huma. Below is an introduction to the various features available in Huma.
@@ -153,20 +154,20 @@ Adapters are in the `adapters` directory and named after the router they support
 - [gorilla/mux](https://github.com/gorilla/mux) via `humamux`
 - [Fiber](https://gofiber.io/) via `humafiber`
 
-Adapters are instantiated by wrapping your router and providing a Huma configuration object which describes the API. Here is a simple example using Fiber:
+Adapters are instantiated by wrapping your router and providing a Huma configuration object which describes the API. Here is a simple example using Chi:
 
 ```go
 // Create your router.
-app := fiber.New()
+app := chi.NewMux()
 
 // Wrap the router with Huma to create an API instance.
-api := humafiber.New(app, huma.DefaultConfig("My API", "1.0.0"))
+api := humachi.New(app, huma.DefaultConfig("My API", "1.0.0"))
 
 // Register your operations with the API.
 // ...
 
 // Start the server!
-app.Listen(":3000")
+http.ListenAndServe(":8888", r)
 ```
 
 > :whale: Writing your own adapter is quick and simple, and PRs are accepted for additional adapters to be built-in.
@@ -175,8 +176,10 @@ app.Listen(":3000")
 
 Huma v1 came with its own middleware, but v2 does not. You can use any middleware you want, or even write your own. This is for two reasons:
 
-1. Middleware is router-specific and Huma is designed to be router-agnostic.
+1. Middleware is often router-specific and Huma is designed to be router-agnostic.
 2. Many organizations already have a set of middleware for logging, metrics, distributed tracing, panic recovery, etc.
+
+> :whale: Huma v1 middleware is compatible with Chi, so if you use that router with v2 you can continue to use the v1 middleware in a v2 application.
 
 ## Open API Generation & Extensibility
 
@@ -304,9 +307,9 @@ huma.Register(api, huma.Operation{
 })
 ```
 
-> :whale: If following REST-ish conventions, operation paths should be nouns, and plural if they return more than one item. Good examples: `/notes`, `/likes`, `/users`, `/videos`, etc. Huma does not enforce this or care, so RPC-style paths are also fine to use. Use what works best for you or your organization.
+> :whale: If following REST-ish conventions, operation paths should be nouns, and plural if they return more than one item. Good examples: `/notes`, `/likes`, `/users/{user-id}`, `/videos/{video-id}/stats`, etc. Huma does not enforce this or care, so RPC-style paths are also fine to use. Use what works best for you and your team.
 
-The operation handler function always has the following generic format, where `Input` and `Output` are custom structs defined by the developer:
+The operation handler function always has the following generic format, where `Input` and `Output` are custom structs defined by the developer that respresent the entirety of the request (path/query/header params & body) and response (headers & body), respectively:
 
 ```go
 func(context.Context, *Input) (*Output, error)
@@ -360,6 +363,10 @@ type MyInput struct {
 A request to such an endpoint might look like:
 
 ```sh
+# Via high-level operations:
+$ restish api my-op 123 --detail=true --authorization=foo <body.json
+
+# Via URL:
 $ restish api/my-op/123?detail=true -H "Authorization: foo" <body.json
 ```
 
@@ -395,9 +402,9 @@ The standard `json` tag is supported and can be used to rename a field and mark 
 
 Parameters have some additional validation tags:
 
-| Tag        | Description                    | Example           |
-| ---------- | ------------------------------ | ----------------- |
-| `internal` | Internal-only (not documented) | `internal:"true"` |
+| Tag      | Description                       | Example         |
+| -------- | --------------------------------- | --------------- |
+| `hidden` | Hide parameter from documentation | `hidden:"true"` |
 
 #### Resolvers
 
@@ -414,7 +421,7 @@ type MyInput struct {
 
 func (m *MyInput) Resolve(ctx huma.Context) []error {
 	// Get request info you don't normally have access to.
-	m.Host = ctx.GetHost()
+	m.Host = ctx.Host()
 
 	// Transformations or other data validation
 	m.Name = strings.Title(m.Name)
@@ -434,7 +441,9 @@ huma.Register(api, huma.Operation{
 })
 ```
 
-It is recommended that you do not save the context. Whenever possible, use existing mechanisms for describing your input so that it becomes part of the OpenAPI description.
+It is recommended that you do not save the context object passed to the `Resolve` method for later use.
+
+> :whale: Prefer using built-in validation over resolvers whenever possible, as it will be better documented and is also usable by OpenAPI tooling to provide a better developer experience.
 
 ##### Resolver Errors
 
@@ -446,7 +455,7 @@ type MyInput struct {
 }
 
 func (m *MyInput) Resolve(ctx huma.Context) []error {
-	if m.Host = ctx.GetHost(); m.Host == "localhost" {
+	if m.Host = ctx.Host(); m.Host == "localhost" {
 		return []error{&huma.ErrorDetail{
 			Message: "Unsupported host value!",
 			Location: "request.host",
@@ -456,6 +465,8 @@ func (m *MyInput) Resolve(ctx huma.Context) []error {
 	return nil
 }
 ```
+
+> :whale: Exhaustive errors lessen frustration for users. It's better to return three errors in response to one request than to have the user make three requests which each return a new different error.
 
 #### Input Composition
 
@@ -478,6 +489,7 @@ huma.Register(api, huma.Operation{
 	Path:        "/things",
 	Summary:     "Get a filtered list of things",
 }, func(ctx context.Context, input struct {
+	// Embed both structs to compose your input.
 	AuthParam
 	PaginationParams
 }) {
@@ -487,11 +499,45 @@ huma.Register(api, huma.Operation{
 
 #### Request Deadlines & Timeouts
 
-TODO
+A combination of the server and the request context can be used to control deadlines & timeouts. Go's built-in HTTP server supports a few timeout settings:
+
+```go
+srv := &http.Server{
+	ReadTimeout:       5 * time.Second,
+	WriteTimeout:      5 * time.Second,
+	IdleTimeout:       30 * time.Second,
+	ReadHeaderTimeout: 2 * time.Second,
+	// ...
+}
+```
+
+The Huma request context (accessible via resolvers) can be used to set a read deadline, which can be used to process large or streaming inputs:
+
+```go
+type MyInput struct {}
+
+func (m *MyInput) Resolve(ctx huma.Context) []error {
+	ctx.SetReadDeadline(time.Now().Add(5 * time.Second))
+}
+```
+
+Additionally, a `context.Context` can be used to set a deadline for dependencies like databases:
+
+```go
+// Create a new context with a 10 second timeout.
+newCtx, cancel := context.WithTimeout(ctx, 10 * time.Second)
+defer cancel()
+
+// Use the new context for any dependencies.
+result, err := myDB.Get(newCtx, /* ... */)
+if err != nil {
+	// Deadline may have been hit, handle it here!
+}
+```
 
 #### Request Body Size Limits
 
-By default each operation has a 1 MiB reqeuest body size limit. This can be changed by setting `huma.Operation.MaxBodyBytes` to a different value. If the request body is larger than the limit then a `413 Request Entity Too Large` error will be returned.
+By default each operation has a 1 MiB reqeuest body size limit. This can be changed by setting `huma.Operation.MaxBodyBytes` to a different value when registering the operation. If the request body is larger than the limit then a `413 Request Entity Too Large` error will be returned.
 
 #### Response Model
 
@@ -501,7 +547,7 @@ Responses can have an optional status code, headers, and/or body. Like inputs, t
 | -------- | --------------------------- | ------------------------ |
 | `header` | Name of the response header | `header:"Authorization"` |
 
-The special struct field `Status` with a type of `int` is used to optionally communicate a dynamic response status code from the handler. If not present, the default is to use `200` for responses with bodies and `204` for responses without a body. Use `huma.Operation.DefaultStatus` to override.
+The special struct field `Status` with a type of `int` is used to optionally communicate a **dynamic** response status code from the handler (you should not need this most of the time!). If not present, the default is to use `200` for responses with bodies and `204` for responses without a body. Use `huma.Operation.DefaultStatus` at operation registration time to override. Note: it is much more common to set the default status code than to need a `Status` field in your response struct!
 
 The special struct field `Body` will be treated as the response body and can refer to any other type or you can embed a struct or slice inline. Use a type of `[]byte` to bypass serialization. A default `Content-Type` header will be set if none is present, selected via client-driven content negotiation with the server based on the registered serialization types.
 
@@ -517,15 +563,22 @@ type MyOutput struct {
 
 #### Streaming Responses
 
-The response `Body` can also be a callback function taking a `huma.Context` to facilitate streaming:
+The response `Body` can also be a callback function taking a `huma.Context` to facilitate streaming. The `huma.StreamResponse` utility makes this easy to return:
 
 ```go
 func handler(ctx context.Context, input *MyInput) (*huma.StreamResponse, error) {
 	return &huma.StreamResponse{
 		Body: func(ctx huma.Context) {
 			// Write header info before streaming the body.
-			ctx.WriteHeader("Content-Type", "text/my-stream")
+			ctx.SetHeader("Content-Type", "text/my-stream")
 			writer := ctx.BodyWriter()
+
+			// Update the write deadline to give us extra time.
+			if d, ok := bw.(interface{ SetWriteDeadline(time.Time) error }); ok {
+				d.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			} else {
+				fmt.Println("warning: unable to set write deadline")
+			}
 
 			// Write the first message, then flush and wait.
 			writer.Write([]byte("Hello, I'm streaming!"))
@@ -535,7 +588,7 @@ func handler(ctx context.Context, input *MyInput) (*huma.StreamResponse, error) 
 				fmt.Println("error: unable to flush")
 			}
 
-			time.Sleep(1 * time.Second)
+			time.Sleep(3 * time.Second)
 
 			// Write the second message.
 			writer.Write([]byte("Hello, I'm still streaming!"))
@@ -543,6 +596,8 @@ func handler(ctx context.Context, input *MyInput) (*huma.StreamResponse, error) 
 	}, nil
 }
 ```
+
+Also take a look at [`http.ResponseController`](https://pkg.go.dev/net/http#ResponseController) which can be used to set timeouts, flush, etc in one simple interface.
 
 > :whale: The `sse` package provides a helper for streaming Server-Sent Events (SSE) responses that is easier to use than the above example!
 
@@ -624,6 +679,8 @@ The default configuration for Huma includes support for JSON ([RFC 8259](https:/
 
 Content negotiation allows clients to select the content type they are most comfortable working with when talking to the API. For request bodies, this uses the `Content-Type` header. For response bodies, it uses the `Accept` header. If none are present then JSON is usually selected as the default / preferred content type.
 
+See the `negotiation` package for more info.
+
 ## CLI
 
 Huma ships with a built-in lightweight utility to wrap your service with a CLI, enabling you to run it with different arguments and easily write custom commands to do things like print out the OpenAPI or run on-demand database migrations.
@@ -693,9 +750,28 @@ The following struct tags are available:
 
 ### Custom Commands
 
-You can access the root `cobra.Command` via `cli.Root()` and add new custom commands via `cli.Root().AddCommand(...)`.
+You can access the root `cobra.Command` via `cli.Root()` and add new custom commands via `cli.Root().AddCommand(...)`. For example, to have a command print out the generated OpenAPI:
 
-> :whale: You can also overwite `cli.Root().Run` to completely customize how you run the server. Or just ditch the `cli` package completely!
+```go
+var api huma.API
+
+// ... set up the CLI, create the API wrapping the router ...
+
+cli.Root().AddCommand(&cobra.Command{
+	Use:   "openapi",
+	Short: "Print the OpenAPI spec",
+	Run: func(cmd *cobra.Command, args []string) {
+		b, _ := yaml.Marshal(api.OpenAPI())
+		fmt.Println(string(b))
+	},
+})
+```
+
+Now you can run your service and use the new command: `go run main.go openapi`.
+
+If you want to access your custom options struct with custom commands, use the `huma.WithOptions(func(cmd *cobra.Command, args []string, options *YourOptions)) func(cmd *cobra.Command, args []string)` utitity function. It ensures the options are parsed and available before running your command.
+
+> :whale: You can also overwite `cli.Root().Run` to completely customize how you run the server. Or just ditch the `cli` package altogether!
 
 ## Additional Features
 
@@ -767,26 +843,147 @@ The following formats are supported out of the box, selected via the `Content-Ty
 
 If the `PATCH` request has no `Content-Type` header, or uses `application/json` or a variant thereof, then JSON Merge Patch is assumed.
 
+> :whale: You can think of the Shorthand Merge Patch as an extension to the JSON merge patch with support for field paths, arrays, and a few other features. Patches like this are possible, appending an item to an array (creating it if needed):
+>
+> ```
+> {
+>   foo.bar[]: "baz",
+> }
+> ```
+
 ## Server Sent Events (SSE)
 
-TODO
+The `sse` package provides a helper for streaming Server-Sent Events (SSE) responses. It provides a simple API for sending events to the client and documents the event types and data structures in the OpenAPI spec if you provide a mapping of message type names to Go structs:
+
+```go
+// Register using sse.Register instead of huma.Register
+sse.Register(api, huma.Operation{
+	OperationID: "sse",
+	Method:      http.MethodGet,
+	Path:        "/sse",
+	Summary:     "Server sent events example",
+}, map[string]any{
+	// Mapping of event type name to Go struct for that event.
+	"message":      DefaultMessage{},
+	"userCreate":   UserCreatedEvent{},
+	"mailRecieved": MailReceivedEvent{},
+}, func(ctx context.Context, input *struct{}, send func(sse.Message) error) {
+	// Send an event every second for 10 seconds.
+	for x := 0; x < 10; x++ {
+		send.Data(MailReceivedEvent{UserID: "abc123"})
+		time.Sleep(1 * time.Second)
+	}
+})
+```
+
+> :whale: Each event model **must** be a unique Go type. If you want to reuse Go type definitions, you can define a new type referencing another type, e.g. `type MySpecificEvent MyBaseEvent` and it will work as expected.
 
 ## CLI AutoConfig
 
-TODO
+Huma includes built-in support for an OpenAPI 3 extension that enables CLI autoconfiguration. This allows tools like [Restish](https://rest.sh/) to automatically configure themselves to talk to your API with the correct endpoints, authentication mechanism, etc without the user needing to know anything about your API.
+
+```go
+o := api.OpenAPI()
+o.Components.SecuritySchemes["my-scheme"] = &huma.SecurityScheme{
+	Type: "oauth2",
+	// ... security scheme definition ...
+}
+o.Extensions["x-cli-autoconfig"] = huma.AutoConfig{
+	Security: "my-scheme",
+	Params: map[string]string{
+		"cliend_id": "abc123",
+		"authorize_url": "https://example.tld/authorize",
+		"token_url": "https://example.tld/token",
+		"scopes": "read,write",
+	}
+}
+```
+
+See the [CLI AutoConfiguration](https://rest.sh/#/openapi?id=autoconfiguration) documentation for more info, including how to ask the user for custom parameters.
 
 ## Low-Level API
 
+Huma v2 is written so that you can use the low-level API directly if you want to. This is useful if you want to add some new feature or abstraction that Huma doesn't support out of the box. Huma's own `huma.Register` function, automatic HTTP `PATCH` handlers, and the `sse` package are all built on top of the public low-level API.
+
 ### `huma.Adapter`
 
-TODO
+The adapter is the core of Huma's bring-your-own-router functionality. It is an abstraction on top of routers and HTTP libraries that operates on a generic `huma.Context` described below. The adapter interface is simple and allows registering operation handlers and serving standard library HTTP requests:
+
+```go
+type Adapter interface {
+	Handle(op *Operation, handler func(ctx Context))
+	ServeHTTP(http.ResponseWriter, *http.Request)
+}
+```
 
 ### `huma.Context`
 
-TODO
+The context provides a generic HTTP layer which is translated into specific router operations when called by the adapter.
+
+```go
+type Context interface {
+	Operation() *Operation
+	Context() context.Context
+	Method() string
+	Host() string
+	URL() url.URL
+	Param(name string) string
+	Query(name string) string
+	Header(name string) string
+	EachHeader(cb func(name, value string))
+	BodyReader() io.Reader
+	SetReadDeadline(time.Time) error
+	SetStatus(code int)
+	SetHeader(name, value string)
+	AppendHeader(name, value string)
+	BodyWriter() io.Writer
+}
+```
+
+### `huma.Register`
+
+The `huma.Register` function is a highly-optimized wrapper around the low-level API that handles all the OpenAPI generation, validation, and serialization for you. It is a good example of how to use the low-level API. At a high level it does the following:
+
+1. Adds OpenAPI descriptions of the operation to the OpenAPI spec
+1. Registers an operation handler with the adapter
+   1. Reads request parameters (`ctx.Param`, `ctx.Query`, `ctx.Header`)
+   1. Parses request body if present (`ctx.BodyReader`)
+   1. Calls the user's handler function with all inputs
+   1. Handles errors returned from the handler by writing to the `ctx`
+   1. Writes success response (`ctx.SetStatus`, `ctx.SetHeader`, `ctx.BodyWriter`)
+
+> :whale: Because `huma.Register` uses only the _public_ interfaces of the low-level API, you can easily wrap it or write your own register function to provide new functionality.
 
 ## Migrating from Huma v1
 
-TODO
+1. Import `github.com/danielgtaylor/huma/v2` instead of `github.com/danielgtaylor/huma`.
+1. Use the `humachi` adapter as v1 uses Chi under the hood
+1. Attach your middleware to the `chi` instance.
+1. Replace resource & operation creation with `huma.Register`
+1. Rewrite handlers to be like `func(context.Context, *Input) (*Output, error)`
+   1. Return errors instead of `ctx.WriteError(...)`
+   1. Return instances instead of `ctx.WriteModel(...)`
+1. Define options via a struct and use `huma.NewCLI` to wrap the service
+
+Note that GraphQL support from Huma v1 has been removed. Take a look at alternative tools like https://www.npmjs.com/package/openapi-to-graphql which will automatically generate a GraphQL endpoint from Huma's generated OpenAPI spec.
+
+## Benchmarks
+
+Significant performance improvements have been made since Huma v1, as shown by the following basic benchmark operation with a few input parameters, a small input body, some output headers and an output body (see `adapters/humachi/humachi_test.go`).
+
+```sh
+# Huma v1
+BenchmarkHumaV1Chi-10         16285  112086 ns/op  852209 B/op  258 allocs/op
+
+# Huma v2
+BenchmarkHumaV2ChiNormal-10  431028    2777 ns/op    1718 B/op   29 allocs/op
+
+# Chi without Huma (raw)
+BenchmarkRawChi-10           552764    2143 ns/op    2370 B/op   29 allocs/op
+```
+
+These improvements are due to a number of factors, including changes to the Huma API, precomputation of reflection data when possible, low or zero-allocation validation & URL parsing, using shared buffer pools to limit garbage collector pressure, and more.
+
+Since you bring your own router, you are free to "escape" Huma by using the router directly, but as you can see above it's rarely needed with v2.
 
 > :whale: Thanks for reading!

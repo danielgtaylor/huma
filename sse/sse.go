@@ -116,7 +116,7 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 	huma.Register(api, op, func(ctx context.Context, input *I) (*huma.StreamResponse, error) {
 		return &huma.StreamResponse{
 			Body: func(ctx huma.Context) {
-				ctx.WriteHeader("Content-Type", "text/event-stream")
+				ctx.SetHeader("Content-Type", "text/event-stream")
 				bw := ctx.BodyWriter()
 				encoder := json.NewEncoder(bw)
 				send := func(msg Message) error {
@@ -165,7 +165,7 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 				}
 
 				// Call the user-provided SSE handler.
-				f(ctx.GetContext(), input, send)
+				f(ctx.Context(), input, send)
 			},
 		}, nil
 	})

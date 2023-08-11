@@ -40,20 +40,20 @@ type Adapter interface {
 // Context is the current request/response context. It provides a generic
 // interface to get request information and write responses.
 type Context interface {
-	GetOperation() *Operation
-	GetContext() context.Context
-	GetMethod() string
-	GetHost() string
-	GetURL() url.URL
-	GetParam(name string) string
-	GetQuery(name string) string
-	GetHeader(name string) string
+	Operation() *Operation
+	Context() context.Context
+	Method() string
+	Host() string
+	URL() url.URL
+	Param(name string) string
+	Query(name string) string
+	Header(name string) string
 	EachHeader(cb func(name, value string))
-	GetBodyReader() io.Reader
+	BodyReader() io.Reader
 	SetReadDeadline(time.Time) error
-	WriteStatus(code int)
+	SetStatus(code int)
+	SetHeader(name, value string)
 	AppendHeader(name, value string)
-	WriteHeader(name, value string)
 	BodyWriter() io.Writer
 }
 
@@ -228,7 +228,7 @@ func NewAPI(config Config, a Adapter) API {
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + ".json",
 		}, func(ctx Context) {
-			ctx.WriteHeader("Content-Type", "application/vnd.oai.openapi+json")
+			ctx.SetHeader("Content-Type", "application/vnd.oai.openapi+json")
 			if specJSON == nil {
 				specJSON, _ = json.Marshal(newAPI.OpenAPI())
 			}
@@ -239,7 +239,7 @@ func NewAPI(config Config, a Adapter) API {
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + ".yaml",
 		}, func(ctx Context) {
-			ctx.WriteHeader("Content-Type", "application/vnd.oai.openapi+yaml")
+			ctx.SetHeader("Content-Type", "application/vnd.oai.openapi+yaml")
 			if specYAML == nil {
 				specYAML, _ = yaml.Marshal(newAPI.OpenAPI())
 			}
@@ -252,7 +252,7 @@ func NewAPI(config Config, a Adapter) API {
 			Method: http.MethodGet,
 			Path:   config.DocsPath,
 		}, func(ctx Context) {
-			ctx.WriteHeader("Content-Type", "text/html")
+			ctx.SetHeader("Content-Type", "text/html")
 			ctx.BodyWriter().Write([]byte(`<!doctype html>
 <html lang="en">
   <head>
@@ -282,8 +282,8 @@ func NewAPI(config Config, a Adapter) API {
 			Path:   config.SchemasPath + "/{schema}",
 		}, func(ctx Context) {
 			// Some routers dislike a path param+suffix, so we strip it here instead.
-			schema := strings.TrimSuffix(ctx.GetParam("schema"), ".json")
-			ctx.WriteHeader("Content-Type", "application/json")
+			schema := strings.TrimSuffix(ctx.Param("schema"), ".json")
+			ctx.SetHeader("Content-Type", "application/json")
 			b, _ := json.Marshal(config.OpenAPI.Components.Schemas.Map()[schema])
 			b = rxSchema.ReplaceAll(b, []byte(config.SchemasPath+`/$1.json`))
 			ctx.BodyWriter().Write(b)

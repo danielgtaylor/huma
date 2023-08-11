@@ -102,7 +102,7 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, status string, v any) (an
 		return v, nil
 	}
 
-	host := ctx.GetHeader("Host")
+	host := ctx.Header("Host")
 	ctx.AppendHeader("Link", info.header)
 
 	vv := reflect.Indirect(reflect.ValueOf(v))
@@ -136,7 +136,7 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, status string, v any) (an
 // header value to modify the response on the server, providing a GraphQL-like
 // way to send only the fields that the client wants over the wire.
 func FieldSelectTransform(ctx Context, status string, v any) (any, error) {
-	if fields := ctx.GetHeader("Fields"); fields != "" {
+	if fields := ctx.Header("Fields"); fields != "" {
 		// Ugh this is inefficient... consider other ways of doing this :-(
 		var tmp any
 		b, _ := json.Marshal(v)

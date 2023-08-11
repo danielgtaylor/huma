@@ -17,35 +17,35 @@ type ginCtx struct {
 	orig *gin.Context
 }
 
-func (ctx *ginCtx) GetOperation() *huma.Operation {
+func (ctx *ginCtx) Operation() *huma.Operation {
 	return ctx.op
 }
 
-func (c *ginCtx) GetContext() context.Context {
+func (c *ginCtx) Context() context.Context {
 	return c.orig.Request.Context()
 }
 
-func (c *ginCtx) GetMethod() string {
+func (c *ginCtx) Method() string {
 	return c.orig.Request.Method
 }
 
-func (ctx *ginCtx) GetHost() string {
+func (ctx *ginCtx) Host() string {
 	return ctx.orig.Request.Host
 }
 
-func (c *ginCtx) GetURL() url.URL {
+func (c *ginCtx) URL() url.URL {
 	return *c.orig.Request.URL
 }
 
-func (c *ginCtx) GetParam(name string) string {
+func (c *ginCtx) Param(name string) string {
 	return c.orig.Param(name)
 }
 
-func (c *ginCtx) GetQuery(name string) string {
+func (c *ginCtx) Query(name string) string {
 	return c.orig.Query(name)
 }
 
-func (c *ginCtx) GetHeader(name string) string {
+func (c *ginCtx) Header(name string) string {
 	return c.orig.GetHeader(name)
 }
 
@@ -57,7 +57,7 @@ func (c *ginCtx) EachHeader(cb func(name, value string)) {
 	}
 }
 
-func (c *ginCtx) GetBodyReader() io.Reader {
+func (c *ginCtx) BodyReader() io.Reader {
 	return c.orig.Request.Body
 }
 
@@ -65,7 +65,7 @@ func (ctx *ginCtx) SetReadDeadline(deadline time.Time) error {
 	return huma.SetReadDeadline(ctx.orig.Writer, deadline)
 }
 
-func (c *ginCtx) WriteStatus(code int) {
+func (c *ginCtx) SetStatus(code int) {
 	c.orig.Status(code)
 }
 
@@ -73,7 +73,7 @@ func (c *ginCtx) AppendHeader(name string, value string) {
 	c.orig.Writer.Header().Add(name, value)
 }
 
-func (c *ginCtx) WriteHeader(name string, value string) {
+func (c *ginCtx) SetHeader(name string, value string) {
 	c.orig.Header(name, value)
 }
 

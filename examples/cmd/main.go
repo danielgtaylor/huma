@@ -8,12 +8,11 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/adapters/humafiber"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/danielgtaylor/huma/v2/autopatch"
+	"github.com/danielgtaylor/huma/v2/sse"
+	"github.com/go-chi/chi"
 	"github.com/goccy/go-yaml"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/compress"
-	"github.com/gofiber/fiber/v2/middleware/requestid"
 	"github.com/spf13/cobra"
 )
 
@@ -104,6 +103,8 @@ func RegisterRoutes(api huma.API) {
 		Extensions: map[string]any{
 			"x-my-extension": "value",
 		},
+		// BodyReadTimeout: 1,
+		// MaxBodyBytes:    1,
 	}, func(ctx context.Context, input *GreetingInput) (*GreetingOutput, error) {
 		if input.ID == "error" {
 			return nil, huma.Error404NotFound("can't find greeting", &huma.ErrorDetail{
@@ -167,7 +168,7 @@ func main() {
 	var api huma.API
 
 	cli := huma.NewCLI(func(cli huma.CLI, opts *Options) {
-		// r := chi.NewMux()
+		r := chi.NewMux()
 		// api := huma.NewChi(r, huma.Config{
 		// 	OpenAPI: &huma.OpenAPI{
 		// 		Info: &huma.Info{
@@ -179,23 +180,35 @@ func main() {
 		// 		},
 		// 	},
 		// })
-		r := fiber.New(fiber.Config{
-			ReadTimeout:  15 * time.Second,
-			WriteTimeout: 15 * time.Second,
-		})
+		// r := fiber.New(fiber.Config{
+		// 	// Enable streaming and force it to be streamed by setting a low limit.
+		// 	// This lets Huma handle the size & timeout limits per operation while
+		// 	// still respecting the server's read timeout.
+		// 	BodyLimit:         1,
+		// 	StreamRequestBody: true,
+		// 	ReadTimeout:       15 * time.Second,
+		// 	WriteTimeout:      15 * time.Second,
+		// })
 		// r.Use(logger.New())
 		// r.Use(recover.New())
-		r.Use(compress.New())
-		r.Use(requestid.New())
+		// r.Use(compress.New())
+		// r.Use(requestid.New())
 
 		// Add a custom health check
-		r.Get("/health", func(c *fiber.Ctx) error {
-			return c.SendString("OK")
-		})
+		// r.Get("/health", func(c *fiber.Ctx) error {
+		// 	return c.SendString("OK")
+		// })
 
 		config := huma.DefaultConfig("My API", "1.0.0")
 		config.Transformers = append(config.Transformers, huma.FieldSelectTransform)
-		api = humafiber.New(r, config)
+		config.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
+			"bearer": {
+				Type:         "http",
+				Scheme:       "bearer",
+				BearerFormat: "JWT",
+			},
+		}
+		api = humachi.New(r, config)
 		// api = humafiber.New(r, huma.Config{
 		// 	OpenAPI: &huma.OpenAPI{
 		// 		Info: &huma.Info{
@@ -217,17 +230,50 @@ func main() {
 		// })
 		RegisterRoutes(api)
 
+		type A struct {
+			Value int `json:"value"`
+		}
+		type B struct {
+			Value string `json:"value"`
+		}
+
+		sse.Register(api, huma.Operation{
+			OperationID: "sse",
+			Method:      http.MethodGet,
+			Path:        "/sse",
+			Security: []map[string][]string{
+				{"bearer": {}},
+			},
+		}, map[string]any{
+			"message": A{},
+			"b":       B{},
+		}, func(ctx context.Context, input *struct{}, send sse.Sender) {
+			for i := 0; i < 5; i++ {
+				var msg sse.Message
+				if i%2 == 0 {
+					msg.Data = A{Value: i}
+				} else {
+					msg.Data = B{Value: fmt.Sprintf("i=%d", i)}
+				}
+				if err := send(msg); err != nil {
+					fmt.Println("error sending", err)
+					break
+				}
+				time.Sleep(500 * time.Millisecond)
+			}
+		})
+
 		autopatch.AutoPatch(api)
 
 		cli.OnStart(func() {
 			// Connect dependencies here...
 			// things.Init(...)
-			r.Listen(fmt.Sprintf("%s:%d", opts.Host, opts.Port))
-			// http.ListenAndServe(":3001", r)
+			// r.Listen(fmt.Sprintf("%s:%d", opts.Host, opts.Port))
+			http.ListenAndServe(":3001", r)
 		})
 
 		cli.OnStop(func() {
-			r.ShutdownWithTimeout(5 * time.Second)
+			// r.ShutdownWithTimeout(5 * time.Second)
 		})
 	})
 

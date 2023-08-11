@@ -17,40 +17,40 @@ type fiberCtx struct {
 	orig *fiber.Ctx
 }
 
-func (ctx *fiberCtx) GetOperation() *huma.Operation {
+func (ctx *fiberCtx) Operation() *huma.Operation {
 	return ctx.op
 }
 
-func (c *fiberCtx) GetMatched() string {
+func (c *fiberCtx) Matched() string {
 	return c.orig.Route().Path
 }
 
-func (c *fiberCtx) GetContext() context.Context {
+func (c *fiberCtx) Context() context.Context {
 	return c.orig.Context()
 }
 
-func (c *fiberCtx) GetMethod() string {
+func (c *fiberCtx) Method() string {
 	return c.orig.Method()
 }
 
-func (ctx *fiberCtx) GetHost() string {
+func (ctx *fiberCtx) Host() string {
 	return ctx.orig.Hostname()
 }
 
-func (c *fiberCtx) GetURL() url.URL {
+func (c *fiberCtx) URL() url.URL {
 	u, _ := url.Parse(string(c.orig.Request().RequestURI()))
 	return *u
 }
 
-func (c *fiberCtx) GetParam(name string) string {
+func (c *fiberCtx) Param(name string) string {
 	return c.orig.Params(name)
 }
 
-func (c *fiberCtx) GetQuery(name string) string {
+func (c *fiberCtx) Query(name string) string {
 	return c.orig.Query(name)
 }
 
-func (c *fiberCtx) GetHeader(name string) string {
+func (c *fiberCtx) Header(name string) string {
 	return c.orig.Get(name)
 }
 
@@ -60,7 +60,7 @@ func (c *fiberCtx) EachHeader(cb func(name, value string)) {
 	})
 }
 
-func (c *fiberCtx) GetBodyReader() io.Reader {
+func (c *fiberCtx) BodyReader() io.Reader {
 	return c.orig.Request().BodyStream()
 }
 
@@ -73,7 +73,7 @@ func (c *fiberCtx) SetReadDeadline(deadline time.Time) error {
 	return c.orig.Context().Conn().SetReadDeadline(deadline)
 }
 
-func (c *fiberCtx) WriteStatus(code int) {
+func (c *fiberCtx) SetStatus(code int) {
 	c.orig.Status(code)
 }
 
@@ -81,7 +81,7 @@ func (c *fiberCtx) AppendHeader(name string, value string) {
 	c.orig.Append(name, value)
 }
 
-func (c *fiberCtx) WriteHeader(name string, value string) {
+func (c *fiberCtx) SetHeader(name string, value string) {
 	c.orig.Set(name, value)
 }
 

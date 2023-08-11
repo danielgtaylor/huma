@@ -61,9 +61,9 @@ func TestContext(t *testing.T) {
 	w := httptest.NewRecorder()
 	ctx := NewContext(op, r, w)
 
-	assert.Equal(t, op, ctx.GetOperation())
-	assert.Equal(t, http.MethodGet, ctx.GetMethod())
-	assert.Equal(t, "/", ctx.GetURL().Path)
+	assert.Equal(t, op, ctx.Operation())
+	assert.Equal(t, http.MethodGet, ctx.Method())
+	assert.Equal(t, "/", ctx.URL().Path)
 
 	headers := map[string]string{}
 	ctx.EachHeader(func(name, value string) {

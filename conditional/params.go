@@ -34,7 +34,7 @@ type Params struct {
 }
 
 func (p *Params) Resolve(ctx huma.Context) []error {
-	switch ctx.GetMethod() {
+	switch ctx.Method() {
 	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 		p.isWrite = true
 	}

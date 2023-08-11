@@ -138,14 +138,14 @@ func generatePatch(api huma.API, path *huma.PathItem) {
 	// operations.
 	adapter := api.Adapter()
 	adapter.Handle(op, func(ctx huma.Context) {
-		patchData, err := io.ReadAll(ctx.GetBodyReader())
+		patchData, err := io.ReadAll(ctx.BodyReader())
 		if err != nil {
 			huma.WriteErr(api, ctx, http.StatusBadRequest, "Unable to read request body", err)
 			return
 		}
 
 		// Perform the get!
-		origReq, err := http.NewRequest(http.MethodGet, ctx.GetURL().Path, nil)
+		origReq, err := http.NewRequest(http.MethodGet, ctx.URL().Path, nil)
 		if err != nil {
 			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to get resource", err)
 			return
@@ -171,8 +171,8 @@ func generatePatch(api huma.API, path *huma.PathItem) {
 
 		// Accept JSON for the patches.
 		// TODO: could we accept other stuff here...?
-		ctx.WriteHeader("Accept", "application/json")
-		ctx.WriteHeader("Accept-Encoding", "")
+		ctx.SetHeader("Accept", "application/json")
+		ctx.SetHeader("Accept-Encoding", "")
 
 		origWriter := httptest.NewRecorder()
 		adapter.ServeHTTP(origWriter, origReq)
@@ -181,17 +181,17 @@ func generatePatch(api huma.API, path *huma.PathItem) {
 			// This represents an error on the GET side.
 			for key, values := range origWriter.Header() {
 				for _, value := range values {
-					ctx.WriteHeader(key, value)
+					ctx.SetHeader(key, value)
 				}
 			}
-			ctx.WriteStatus(origWriter.Code)
+			ctx.SetStatus(origWriter.Code)
 			io.Copy(ctx.BodyWriter(), origWriter.Body)
 			return
 		}
 
 		// Patch the data!
 		var patched []byte
-		switch strings.Split(ctx.GetHeader("Content-Type"), ";")[0] {
+		switch strings.Split(ctx.Header("Content-Type"), ";")[0] {
 		case "application/json-patch+json":
 			patch, err := jsonpatch.DecodePatch(patchData)
 			if err != nil {
@@ -240,7 +240,7 @@ func generatePatch(api huma.API, path *huma.PathItem) {
 		}
 
 		if bytes.Equal(bytes.TrimSpace(patched), bytes.TrimSpace(origWriter.Body.Bytes())) {
-			ctx.WriteStatus(http.StatusNotModified)
+			ctx.SetStatus(http.StatusNotModified)
 			return
 		}
 
@@ -278,10 +278,10 @@ func generatePatch(api huma.API, path *huma.PathItem) {
 		adapter.ServeHTTP(putWriter, putReq)
 		for key, values := range putWriter.Header() {
 			for _, value := range values {
-				ctx.WriteHeader(key, value)
+				ctx.SetHeader(key, value)
 			}
 		}
-		ctx.WriteStatus(putWriter.Code)
+		ctx.SetStatus(putWriter.Code)
 		io.Copy(ctx.BodyWriter(), putWriter.Body)
 	})
 }

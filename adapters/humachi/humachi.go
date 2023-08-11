@@ -18,35 +18,35 @@ type chiContext struct {
 	w  http.ResponseWriter
 }
 
-func (ctx *chiContext) GetOperation() *huma.Operation {
+func (ctx *chiContext) Operation() *huma.Operation {
 	return ctx.op
 }
 
-func (ctx *chiContext) GetContext() context.Context {
+func (ctx *chiContext) Context() context.Context {
 	return ctx.r.Context()
 }
 
-func (ctx *chiContext) GetMethod() string {
+func (ctx *chiContext) Method() string {
 	return ctx.r.Method
 }
 
-func (ctx *chiContext) GetHost() string {
+func (ctx *chiContext) Host() string {
 	return ctx.r.Host
 }
 
-func (ctx *chiContext) GetURL() url.URL {
+func (ctx *chiContext) URL() url.URL {
 	return *ctx.r.URL
 }
 
-func (ctx *chiContext) GetParam(name string) string {
+func (ctx *chiContext) Param(name string) string {
 	return chi.URLParam(ctx.r, name)
 }
 
-func (ctx *chiContext) GetQuery(name string) string {
+func (ctx *chiContext) Query(name string) string {
 	return queryparam.Get(ctx.r.URL.RawQuery, name)
 }
 
-func (ctx *chiContext) GetHeader(name string) string {
+func (ctx *chiContext) Header(name string) string {
 	return ctx.r.Header.Get(name)
 }
 
@@ -58,7 +58,7 @@ func (ctx *chiContext) EachHeader(cb func(name, value string)) {
 	}
 }
 
-func (ctx *chiContext) GetBodyReader() io.Reader {
+func (ctx *chiContext) BodyReader() io.Reader {
 	return ctx.r.Body
 }
 
@@ -66,7 +66,7 @@ func (ctx *chiContext) SetReadDeadline(deadline time.Time) error {
 	return huma.SetReadDeadline(ctx.w, deadline)
 }
 
-func (ctx *chiContext) WriteStatus(code int) {
+func (ctx *chiContext) SetStatus(code int) {
 	ctx.w.WriteHeader(code)
 }
 
@@ -74,7 +74,7 @@ func (ctx *chiContext) AppendHeader(name string, value string) {
 	ctx.w.Header().Add(name, value)
 }
 
-func (ctx *chiContext) WriteHeader(name string, value string) {
+func (ctx *chiContext) SetHeader(name string, value string) {
 	ctx.w.Header().Set(name, value)
 }
 

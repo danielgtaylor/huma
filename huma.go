@@ -97,8 +97,8 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			pfi.TimeFormat = timeFormat
 		}
 
-		if f.Tag.Get("internal") == "" {
-			// Document the parameter if not internal (hidden).
+		if f.Tag.Get("hidden") == "" {
+			// Document the parameter if not hidden.
 			op.Parameters = append(op.Parameters, &Param{
 				Name:     name,
 				In:       pfi.Loc,
@@ -448,11 +448,11 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			var value string
 			switch p.Loc {
 			case "path":
-				value = ctx.GetParam(p.Name)
+				value = ctx.Param(p.Name)
 			case "query":
-				value = ctx.GetQuery(p.Name)
+				value = ctx.Query(p.Name)
 			case "header":
-				value = ctx.GetHeader(p.Name)
+				value = ctx.Header(p.Name)
 			}
 
 			pb.Reset()
@@ -556,7 +556,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			}
 
 			buf := bufPool.Get().(*bytes.Buffer)
-			reader := ctx.GetBodyReader()
+			reader := ctx.BodyReader()
 			if closer, ok := reader.(io.Closer); ok {
 				defer closer.Close()
 			}
@@ -606,7 +606,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					// or equivalent, which can be easily validated. Then, convert to the
 					// expected struct type to call the handler.
 					var parsed any
-					if err := api.Unmarshal(ctx.GetHeader("Content-Type"), body, &parsed); err != nil {
+					if err := api.Unmarshal(ctx.Header("Content-Type"), body, &parsed); err != nil {
 						// TODO: handle not acceptable
 						errStatus = http.StatusBadRequest
 						res.Errors = append(res.Errors, &ErrorDetail{
@@ -633,7 +633,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				// common reflection-based approaches when using real-world medium-sized
 				// JSON payloads with lots of strings.
 				f := v.Field(inputBodyIndex)
-				if err := api.Unmarshal(ctx.GetHeader("Content-Type"), body, f.Addr().Interface()); err != nil {
+				if err := api.Unmarshal(ctx.Header("Content-Type"), body, f.Addr().Interface()); err != nil {
 					if parseErrCount == 0 {
 						// Hmm, this should have worked... validator missed something?
 						res.Errors = append(res.Errors, &ErrorDetail{
@@ -669,7 +669,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			return
 		}
 
-		output, err := handler(ctx.GetContext(), &input)
+		output, err := handler(ctx.Context(), &input)
 		if err != nil {
 			status := http.StatusInternalServerError
 			if se, ok := err.(StatusError); ok {
@@ -678,13 +678,13 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				err = NewError(http.StatusInternalServerError, err.Error())
 			}
 
-			ct, _ := api.Negotiate(ctx.GetHeader("Accept"))
+			ct, _ := api.Negotiate(ctx.Header("Accept"))
 			if ctf, ok := err.(ContentTypeFilter); ok {
 				ct = ctf.ContentType(ct)
 			}
 
-			ctx.WriteStatus(status)
-			ctx.WriteHeader("Content-Type", ct)
+			ctx.SetStatus(status)
+			ctx.SetHeader("Content-Type", ct)
 			api.Marshal(ctx, strconv.Itoa(status), ct, err)
 			return
 		}
@@ -695,25 +695,25 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		outHeaders.Every(vo, func(f reflect.Value, info *headerInfo) {
 			switch f.Kind() {
 			case reflect.String:
-				ctx.WriteHeader(info.Name, f.String())
+				ctx.SetHeader(info.Name, f.String())
 				if info.Name == "Content-Type" {
 					ct = f.String()
 				}
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				ctx.WriteHeader(info.Name, strconv.FormatInt(f.Int(), 10))
+				ctx.SetHeader(info.Name, strconv.FormatInt(f.Int(), 10))
 			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-				ctx.WriteHeader(info.Name, strconv.FormatUint(f.Uint(), 10))
+				ctx.SetHeader(info.Name, strconv.FormatUint(f.Uint(), 10))
 			case reflect.Float32, reflect.Float64:
-				ctx.WriteHeader(info.Name, strconv.FormatFloat(f.Float(), 'f', -1, 64))
+				ctx.SetHeader(info.Name, strconv.FormatFloat(f.Float(), 'f', -1, 64))
 			case reflect.Bool:
-				ctx.WriteHeader(info.Name, strconv.FormatBool(f.Bool()))
+				ctx.SetHeader(info.Name, strconv.FormatBool(f.Bool()))
 			default:
 				if f.Type() == timeType {
-					ctx.WriteHeader(info.Name, f.Interface().(time.Time).Format(info.TimeFormat))
+					ctx.SetHeader(info.Name, f.Interface().(time.Time).Format(info.TimeFormat))
 					return
 				}
 
-				ctx.WriteHeader(info.Name, fmt.Sprintf("%v", f.Interface()))
+				ctx.SetHeader(info.Name, fmt.Sprintf("%v", f.Interface()))
 			}
 		})
 
@@ -732,7 +732,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			}
 
 			if b, ok := body.([]byte); ok {
-				ctx.WriteStatus(status)
+				ctx.SetStatus(status)
 				ctx.BodyWriter().Write(b)
 				return
 			}
@@ -740,7 +740,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			// Only write a content type if one wasn't already written by the
 			// response headers handled above.
 			if ct == "" {
-				ct, err = api.Negotiate(ctx.GetHeader("Accept"))
+				ct, err = api.Negotiate(ctx.Header("Accept"))
 				if err != nil {
 					WriteErr(api, ctx, http.StatusNotAcceptable, "unable to marshal response", err)
 					return
@@ -749,13 +749,13 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					ct = ctf.ContentType(ct)
 				}
 
-				ctx.WriteHeader("Content-Type", ct)
+				ctx.SetHeader("Content-Type", ct)
 			}
 
-			ctx.WriteStatus(status)
+			ctx.SetStatus(status)
 			api.Marshal(ctx, strconv.Itoa(op.DefaultStatus), ct, body)
 		} else {
-			ctx.WriteStatus(status)
+			ctx.SetStatus(status)
 		}
 	})
 }

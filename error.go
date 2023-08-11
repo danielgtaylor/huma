@@ -124,13 +124,13 @@ var NewError = func(status int, msg string, errs ...error) StatusError {
 func WriteErr(api API, ctx Context, status int, msg string, errs ...error) {
 	var err any = NewError(status, msg, errs...)
 
-	ct, _ := api.Negotiate(ctx.GetHeader("Accept"))
+	ct, _ := api.Negotiate(ctx.Header("Accept"))
 	if ctf, ok := err.(ContentTypeFilter); ok {
 		ct = ctf.ContentType(ct)
 	}
 
-	ctx.WriteHeader("Content-Type", ct)
-	ctx.WriteStatus(status)
+	ctx.SetHeader("Content-Type", ct)
+	ctx.SetStatus(status)
 	api.Marshal(ctx, strconv.Itoa(status), ct, err)
 }
 

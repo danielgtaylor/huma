@@ -25,39 +25,39 @@ type testContext struct {
 	w  http.ResponseWriter
 }
 
-func (ctx *testContext) GetOperation() *Operation {
+func (ctx *testContext) Operation() *Operation {
 	return ctx.op
 }
 
-func (ctx *testContext) GetMatched() string {
+func (ctx *testContext) Matched() string {
 	return chi.RouteContext(ctx.r.Context()).RoutePattern()
 }
 
-func (ctx *testContext) GetContext() context.Context {
+func (ctx *testContext) Context() context.Context {
 	return ctx.r.Context()
 }
 
-func (ctx *testContext) GetMethod() string {
+func (ctx *testContext) Method() string {
 	return ctx.r.Method
 }
 
-func (ctx *testContext) GetHost() string {
+func (ctx *testContext) Host() string {
 	return ctx.r.Host
 }
 
-func (ctx *testContext) GetURL() url.URL {
+func (ctx *testContext) URL() url.URL {
 	return *ctx.r.URL
 }
 
-func (ctx *testContext) GetParam(name string) string {
+func (ctx *testContext) Param(name string) string {
 	return chi.URLParam(ctx.r, name)
 }
 
-func (ctx *testContext) GetQuery(name string) string {
+func (ctx *testContext) Query(name string) string {
 	return queryparam.Get(ctx.r.URL.RawQuery, name)
 }
 
-func (ctx *testContext) GetHeader(name string) string {
+func (ctx *testContext) Header(name string) string {
 	return ctx.r.Header.Get(name)
 }
 
@@ -69,11 +69,11 @@ func (ctx *testContext) EachHeader(cb func(name, value string)) {
 	}
 }
 
-func (ctx *testContext) GetBody() ([]byte, error) {
+func (ctx *testContext) Body() ([]byte, error) {
 	return io.ReadAll(ctx.r.Body)
 }
 
-func (ctx *testContext) GetBodyReader() io.Reader {
+func (ctx *testContext) BodyReader() io.Reader {
 	return ctx.r.Body
 }
 
@@ -81,7 +81,7 @@ func (ctx *testContext) SetReadDeadline(deadline time.Time) error {
 	return http.NewResponseController(ctx.w).SetReadDeadline(deadline)
 }
 
-func (ctx *testContext) WriteStatus(code int) {
+func (ctx *testContext) SetStatus(code int) {
 	ctx.w.WriteHeader(code)
 }
 
@@ -89,7 +89,7 @@ func (ctx *testContext) AppendHeader(name string, value string) {
 	ctx.w.Header().Add(name, value)
 }
 
-func (ctx *testContext) WriteHeader(name string, value string) {
+func (ctx *testContext) SetHeader(name string, value string) {
 	ctx.w.Header().Set(name, value)
 }
 

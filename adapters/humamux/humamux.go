@@ -18,35 +18,35 @@ type gmuxContext struct {
 	w  http.ResponseWriter
 }
 
-func (ctx *gmuxContext) GetOperation() *huma.Operation {
+func (ctx *gmuxContext) Operation() *huma.Operation {
 	return ctx.op
 }
 
-func (ctx *gmuxContext) GetContext() context.Context {
+func (ctx *gmuxContext) Context() context.Context {
 	return ctx.r.Context()
 }
 
-func (ctx *gmuxContext) GetMethod() string {
+func (ctx *gmuxContext) Method() string {
 	return ctx.r.Method
 }
 
-func (ctx *gmuxContext) GetHost() string {
+func (ctx *gmuxContext) Host() string {
 	return ctx.r.Host
 }
 
-func (ctx *gmuxContext) GetURL() url.URL {
+func (ctx *gmuxContext) URL() url.URL {
 	return *ctx.r.URL
 }
 
-func (ctx *gmuxContext) GetParam(name string) string {
+func (ctx *gmuxContext) Param(name string) string {
 	return mux.Vars(ctx.r)[name]
 }
 
-func (ctx *gmuxContext) GetQuery(name string) string {
+func (ctx *gmuxContext) Query(name string) string {
 	return queryparam.Get(ctx.r.URL.RawQuery, name)
 }
 
-func (ctx *gmuxContext) GetHeader(name string) string {
+func (ctx *gmuxContext) Header(name string) string {
 	return ctx.r.Header.Get(name)
 }
 
@@ -58,7 +58,7 @@ func (ctx *gmuxContext) EachHeader(cb func(name, value string)) {
 	}
 }
 
-func (ctx *gmuxContext) GetBodyReader() io.Reader {
+func (ctx *gmuxContext) BodyReader() io.Reader {
 	return ctx.r.Body
 }
 
@@ -66,7 +66,7 @@ func (ctx *gmuxContext) SetReadDeadline(deadline time.Time) error {
 	return huma.SetReadDeadline(ctx.w, deadline)
 }
 
-func (ctx *gmuxContext) WriteStatus(code int) {
+func (ctx *gmuxContext) SetStatus(code int) {
 	ctx.w.WriteHeader(code)
 }
 
@@ -74,7 +74,7 @@ func (ctx *gmuxContext) AppendHeader(name string, value string) {
 	ctx.w.Header().Add(name, value)
 }
 
-func (ctx *gmuxContext) WriteHeader(name string, value string) {
+func (ctx *gmuxContext) SetHeader(name string, value string) {
 	ctx.w.Header().Set(name, value)
 }
 
