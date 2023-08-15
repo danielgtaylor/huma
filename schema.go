@@ -54,7 +54,7 @@ type Schema struct {
 	Format               string             `yaml:"format,omitempty"`
 	ContentEncoding      string             `yaml:"contentEncoding,omitempty"`
 	Default              any                `yaml:"default,omitempty"`
-	Example              any                `yaml:"example,omitempty"`
+	Examples             []any              `yaml:"examples,omitempty"`
 	Items                *Schema            `yaml:"items,omitempty"`
 	AdditionalProperties any                `yaml:"additionalProperties,omitempty"`
 	Properties           map[string]*Schema `yaml:"properties,omitempty"`
@@ -264,7 +264,10 @@ func SchemaFromField(registry Registry, parent reflect.Type, f reflect.StructFie
 		fs.ContentEncoding = enc
 	}
 	fs.Default = jsonTag(f, "default", false)
-	fs.Example = jsonTag(f, "example", false)
+
+	if e := jsonTag(f, "example", false); e != nil {
+		fs.Examples = []any{e}
+	}
 
 	if enum := f.Tag.Get("enum"); enum != "" {
 		fType := f.Type

@@ -55,6 +55,10 @@ type paramFieldInfo struct {
 
 func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*paramFieldInfo] {
 	return findInType(t, nil, func(f reflect.StructField, path []int) *paramFieldInfo {
+		if f.Anonymous {
+			return nil
+		}
+
 		pfi := &paramFieldInfo{
 			Type:   f.Type,
 			Schema: SchemaFromField(registry, nil, f),
@@ -75,16 +79,14 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			pfi.Loc = "path"
 			name = p
 			required = true
-		}
-
-		if q := f.Tag.Get("query"); q != "" {
+		} else if q := f.Tag.Get("query"); q != "" {
 			pfi.Loc = "query"
 			name = q
-		}
-
-		if h := f.Tag.Get("header"); h != "" {
+		} else if h := f.Tag.Get("header"); h != "" {
 			pfi.Loc = "header"
 			name = h
+		} else {
+			return nil
 		}
 
 		pfi.Name = name
