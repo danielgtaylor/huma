@@ -185,6 +185,47 @@ func TestExhaustiveErrors(t *testing.T) {
 	}`, w.Body.String())
 }
 
+type NestedResolversStruct struct {
+	Field2 string `json:"field2"`
+}
+
+func (b *NestedResolversStruct) Resolve(ctx Context, prefix *PathBuffer) []error {
+	return []error{&ErrorDetail{
+		Location: prefix.With("field2"),
+		Message:  "resolver error",
+		Value:    b.Field2,
+	}}
+}
+
+var _ ResolverWithPath = (*NestedResolversStruct)(nil)
+
+type NestedResolversBody struct {
+	Field1 map[string][]NestedResolversStruct `json:"field1"`
+}
+
+type NestedResolverRequest struct {
+	Body NestedResolversBody
+}
+
+func TestNestedResolverWithPath(t *testing.T) {
+	r := chi.NewRouter()
+	app := NewTestAdapter(r, DefaultConfig("Test API", "1.0.0"))
+	Register(app, Operation{
+		OperationID: "test",
+		Method:      http.MethodPut,
+		Path:        "/test",
+	}, func(ctx context.Context, input *NestedResolverRequest) (*struct{}, error) {
+		return nil, nil
+	})
+
+	req, _ := http.NewRequest(http.MethodPut, "/test", strings.NewReader(`{"field1": {"foo": [{"field2": "bar"}]}}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), `"location":"body.field1.foo[0].field2"`)
+}
+
 func BenchmarkSecondDecode(b *testing.B) {
 	type MediumSized struct {
 		ID   int      `json:"id"`

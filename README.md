@@ -411,7 +411,7 @@ Parameters have some additional validation tags:
 
 Sometimes the built-in validation isn't sufficient for your use-case, or you want to do something more complex with the incoming request object. This is where resolvers come in.
 
-Any input struct can be a resolver by implementing the `huma.Resolver` interface, including embedded structs. Each resolver takes the current context and can return a list of exhaustive errors. For example:
+Any input struct can be a resolver by implementing the `huma.Resolver` or `huma.ResolverWithPath` interface, including embedded structs. Each resolver takes the current context and can return a list of exhaustive errors. For example:
 
 ```go
 // MyInput demonstrates inputs/transformation
@@ -443,6 +443,18 @@ huma.Register(api, huma.Operation{
 ```
 
 It is recommended that you do not save the context object passed to the `Resolve` method for later use.
+
+For deeply nested structs within the request body, you may not know the current location of the field being validated (e.g. it may appear in multiple places or be shared by multiple request objects). The `huma.ResolverWithPath` interface provides a path prefix that can be used to generate the full path to the field being validated. It uses a `huma.PathBuffer` for efficient path generation reusing a shared buffer. For example:
+
+```go
+func (m *MyInput) Resolve(ctx huma.Context, prefix *huma.PathBuffer) []error {
+	return []error{&huma.ErrorDetail{
+		Message: "Foo has a bad value",
+		Location: prefix.With("foo")
+		Value: m.Foo,
+	}}
+}
+```
 
 > :whale: Prefer using built-in validation over resolvers whenever possible, as it will be better documented and is also usable by OpenAPI tooling to provide a better developer experience.
 

@@ -25,7 +25,16 @@ type Resolver interface {
 	Resolve(ctx Context) []error
 }
 
+// ResolverWithPath runs a `Resolve` function after a request has been parsed,
+// enabling you to run custom validation or other code that can modify the
+// request and / or return errors. The `prefix` is the path to the current
+// location for errors, e.g. `body.foo[0].bar`.
+type ResolverWithPath interface {
+	Resolve(ctx Context, prefix *PathBuffer) []error
+}
+
 var resolverType = reflect.TypeOf((*Resolver)(nil)).Elem()
+var resolverWithPathType = reflect.TypeOf((*ResolverWithPath)(nil)).Elem()
 
 // Adapter is an interface that allows the API to be used with different HTTP
 // routers and frameworks. It is designed to work with the standard library

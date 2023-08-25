@@ -115,7 +115,13 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 
 func findResolvers(resolverType, t reflect.Type) *findResult[bool] {
 	return findInType(t, func(t reflect.Type, path []int) bool {
-		return reflect.PtrTo(t).Implements(resolverType)
+		if reflect.PtrTo(t).Implements(resolverType) {
+			return true
+		}
+		if reflect.PtrTo(t).Implements(resolverWithPathType) {
+			return true
+		}
+		return false
 	}, nil)
 }
 
@@ -161,13 +167,12 @@ type findResult[T comparable] struct {
 }
 
 func (r *findResult[T]) every(current reflect.Value, path []int, v T, f func(reflect.Value, T)) {
-	if len(path) == 0 {
-		f(current, v)
-		return
-	}
-
 	switch current.Kind() {
 	case reflect.Struct:
+		if len(path) == 0 {
+			f(current, v)
+			return
+		}
 		r.every(reflect.Indirect(current.Field(path[0])), path[1:], v, f)
 	case reflect.Slice:
 		for j := 0; j < current.Len(); j++ {
@@ -178,6 +183,10 @@ func (r *findResult[T]) every(current reflect.Value, path []int, v T, f func(ref
 			r.every(reflect.Indirect(current.MapIndex(k)), path, v, f)
 		}
 	default:
+		if len(path) == 0 {
+			f(current, v)
+			return
+		}
 		panic("unsupported")
 	}
 }
@@ -185,6 +194,62 @@ func (r *findResult[T]) every(current reflect.Value, path []int, v T, f func(ref
 func (r *findResult[T]) Every(v reflect.Value, f func(reflect.Value, T)) {
 	for i := range r.Paths {
 		r.every(v, r.Paths[i].Path, r.Paths[i].Value, f)
+	}
+}
+
+func jsonName(field reflect.StructField) string {
+	name := strings.ToLower(field.Name)
+	if jsonName := field.Tag.Get("json"); jsonName != "" {
+		name = strings.Split(jsonName, ",")[0]
+	}
+	return name
+}
+
+func (r *findResult[T]) everyPB(current reflect.Value, path []int, pb *PathBuffer, v T, f func(reflect.Value, T)) {
+	switch current.Kind() {
+	case reflect.Struct:
+		if len(path) == 0 {
+			f(current, v)
+			return
+		}
+		field := current.Type().Field(path[0])
+		if !field.Anonymous {
+			// TODO: pre-compute type/field names? Could save a few allocations.
+			pb.Push(jsonName(field))
+		}
+		r.everyPB(reflect.Indirect(current.Field(path[0])), path[1:], pb, v, f)
+		if !field.Anonymous {
+			pb.Pop()
+		}
+	case reflect.Slice:
+		for j := 0; j < current.Len(); j++ {
+			pb.PushIndex(j)
+			r.everyPB(reflect.Indirect(current.Index(j)), path, pb, v, f)
+			pb.Pop()
+		}
+	case reflect.Map:
+		for _, k := range current.MapKeys() {
+			if k.Kind() == reflect.String {
+				pb.Push(k.String())
+			} else {
+				pb.Push(fmt.Sprintf("%v", k.Interface()))
+			}
+			r.everyPB(reflect.Indirect(current.MapIndex(k)), path, pb, v, f)
+			pb.Pop()
+		}
+	default:
+		if len(path) == 0 {
+			f(current, v)
+			return
+		}
+		panic("unsupported")
+	}
+}
+
+func (r *findResult[T]) EveryPB(pb *PathBuffer, v reflect.Value, f func(reflect.Value, T)) {
+	for i := range r.Paths {
+		pb.Reset()
+		r.everyPB(v, r.Paths[i].Path, pb, r.Paths[i].Value, f)
 	}
 }
 
@@ -658,11 +723,17 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			}
 		}
 
-		resolvers.Every(v, func(item reflect.Value, _ bool) {
+		resolvers.EveryPB(pb, v, func(item reflect.Value, _ bool) {
 			if resolver, ok := item.Addr().Interface().(Resolver); ok {
 				if errs := resolver.Resolve(ctx); len(errs) > 0 {
 					res.Errors = append(res.Errors, errs...)
 				}
+			} else if resolver, ok := item.Addr().Interface().(ResolverWithPath); ok {
+				if errs := resolver.Resolve(ctx, pb); len(errs) > 0 {
+					res.Errors = append(res.Errors, errs...)
+				}
+			} else {
+				panic("matched resolver cannot be run, please file a bug")
 			}
 		})
 

@@ -45,14 +45,28 @@ func mapTo[A, B any](s []A, f func(A) B) []B {
 }
 
 // PathBuffer is a low-allocation helper for building a path string like
-// `foo.bar.baz`. It is not thread-safe. Combined with `sync.Pool` it can
+// `foo.bar.baz`. It is not goroutine-safe. Combined with `sync.Pool` it can
 // result in zero allocations, and is used for validation. It is significantly
 // better than `strings.Builder` and `bytes.Buffer` for this use case.
+//
+// Path buffers can be converted to strings for use in responses or printing
+// using either the `pb.String()` or `pb.With("field")` methods.
+//
+//	pb := NewPathBuffer([]byte{}, 0)
+//	pb.Push("foo")  // foo
+//	pb.PushIndex(1) // foo[1]
+//	pb.Push("bar")  // foo[1].bar
+//	pb.Pop()        // foo[1]
+//	pb.Pop()        // foo
 type PathBuffer struct {
 	buf []byte
 	off int
 }
 
+// Push an entry onto the path, adding a `.` separator as needed.
+//
+//	pb.Push("foo") // foo
+//	pb.Push("bar") // foo.bar
 func (b *PathBuffer) Push(s string) {
 	if b.off > 0 {
 		b.buf = append(b.buf, '.')
@@ -62,33 +76,73 @@ func (b *PathBuffer) Push(s string) {
 	b.off += len(s)
 }
 
+// PushIndex pushes an entry onto the path surrounded by `[` and `]`.
+//
+//	pb.Push("foo")  // foo
+//	pb.PushIndex(1) // foo[1]
+func (b *PathBuffer) PushIndex(i int) {
+	l := len(b.buf)
+	b.buf = append(b.buf, '[')
+	b.buf = append(b.buf, strconv.Itoa(i)...)
+	b.buf = append(b.buf, ']')
+	b.off += len(b.buf) - l
+}
+
+// Pop the latest entry off the path.
+//
+//	pb.Push("foo")  // foo
+//	pb.PushIndex(1) // foo[1]
+//	pb.Push("bar")  // foo[1].bar
+//	pb.Pop()        // foo[1]
+//	pb.Pop()        // foo
 func (b *PathBuffer) Pop() {
 	for b.off > 0 {
 		b.off--
-		if b.buf[b.off] == '.' {
+		if b.buf[b.off] == '.' || b.buf[b.off] == '[' {
 			break
 		}
 	}
 	b.buf = b.buf[:b.off]
 }
 
+// With is shorthand for push, convert to string, and pop. This is useful
+// when you want the location of a field given a path buffer as a prefix.
+//
+//	pb.Push("foo")
+//	pb.With("bar") // returns foo.bar
+func (b *PathBuffer) With(s string) string {
+	b.Push(s)
+	tmp := b.String()
+	b.Pop()
+	return tmp
+}
+
+// Len returns the length of the current path.
 func (b *PathBuffer) Len() int {
 	return b.off
 }
 
+// Bytes returns the underlying slice of bytes of the path.
 func (b *PathBuffer) Bytes() []byte {
 	return b.buf[:b.off]
 }
 
+// String converts the path buffer to a string.
 func (b *PathBuffer) String() string {
 	return string(b.buf[:b.off])
 }
 
+// Reset the path buffer to empty, keeping and reusing the underlying bytes.
 func (b *PathBuffer) Reset() {
 	b.buf = b.buf[:0]
 	b.off = 0
 }
 
+// NewPathBuffer creates a new path buffer given an existing byte slice.
+// Tip: using `sync.Pool` can significantly reduce buffer allocations.
+//
+//	pb := NewPathBuffer([]byte{}, 0)
+//	pb.Push("foo")
 func NewPathBuffer(buf []byte, offset int) *PathBuffer {
 	return &PathBuffer{buf: buf, off: offset}
 }
@@ -316,7 +370,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		}
 
 		for i, item := range arr {
-			path.Push(strconv.Itoa(i))
+			path.PushIndex(i)
 			Validate(r, s.Items, path, mode, item, res)
 			path.Pop()
 		}
