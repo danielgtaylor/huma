@@ -13,9 +13,19 @@ type ErrorDetailer interface {
 
 // ErrorDetail provides details about a specific error.
 type ErrorDetail struct {
-	Message  string `json:"message,omitempty" doc:"Error message text"`
+	// Message is a human-readable explanation of the error.
+	Message string `json:"message,omitempty" doc:"Error message text"`
+
+	// Location is a path-like string indicating where the error occured.
+	// It typically begins with `path`, `query`, `header`, or `body`. Example:
+	// `body.items[3].tags` or `path.thing-id`.
 	Location string `json:"location,omitempty" doc:"Where the error occured, e.g. 'body.items[3].tags' or 'path.thing-id'"`
-	Value    any    `json:"value,omitempty" doc:"The value at the given location"`
+
+	// Value is the value at the given location, echoed back to the client
+	// to help with debugging. This can be useful for e.g. validating that
+	// the client didn't send extra whitespace or help when the client
+	// did not log an outgoing request.
+	Value any `json:"value,omitempty" doc:"The value at the given location"`
 }
 
 // Error returns the error message / satisfies the `error` interface.
@@ -35,17 +45,22 @@ func (e *ErrorDetail) ErrorDetail() *ErrorDetail {
 type ErrorModel struct {
 	// Type is a URI to get more information about the error type.
 	Type string `json:"type,omitempty" format:"uri" default:"about:blank" example:"https://example.com/errors/example" doc:"A URI reference to human-readable documentation for the error."`
+
 	// Title provides a short static summary of the problem. Huma will default this
 	// to the HTTP response status code text if not present.
 	Title string `json:"title,omitempty" example:"Bad Request" doc:"A short, human-readable summary of the problem type. This value should not change between occurances of the error."`
+
 	// Status provides the HTTP status code for client convenience. Huma will
 	// default this to the response status code if unset. This SHOULD match the
 	// response status code (though proxies may modify the actual status code).
 	Status int `json:"status,omitempty" example:"400" doc:"HTTP status code"`
+
 	// Detail is an explanation specific to this error occurrence.
 	Detail string `json:"detail,omitempty" example:"Property foo is required but is missing." doc:"A human-readable explanation specific to this occurrence of the problem."`
+
 	// Instance is a URI to get more info about this error occurence.
 	Instance string `json:"instance,omitempty" format:"uri" example:"https://example.com/error-log/abc123" doc:"A URI reference that identifies the specific occurence of the problem."`
+
 	// Errors provides an optional mechanism of passing additional error details
 	// as a list.
 	Errors []*ErrorDetail `json:"errors,omitempty" doc:"Optional list of individual error details"`
