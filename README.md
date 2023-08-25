@@ -3,10 +3,9 @@
 [![HUMA Powered](https://img.shields.io/badge/Powered%20By-HUMA-f40273)](https://huma.rocks/) [![CI](https://github.com/danielgtaylor/huma/workflows/CI/badge.svg?branch=master)](https://github.com/danielgtaylor/huma/actions?query=workflow%3ACI+branch%3Amaster++) [![codecov](https://codecov.io/gh/danielgtaylor/huma/branch/master/graph/badge.svg)](https://codecov.io/gh/danielgtaylor/huma) [![Docs](https://godoc.org/github.com/danielgtaylor/huma?status.svg)](https://pkg.go.dev/github.com/danielgtaylor/huma?tab=doc) [![Go Report Card](https://goreportcard.com/badge/github.com/danielgtaylor/huma)](https://goreportcard.com/report/github.com/danielgtaylor/huma)
 
 - [What is huma?](#intro)
-- [Example](#example)
 - [Install](#install)
+- [Example](#example)
 - [Documentation](#documentation)
-- [Design](#design)
 
 <a name="intro"></a>
 A modern, simple, fast & flexible micro framework for building HTTP REST/RPC APIs in Go backed by OpenAPI 3 and JSON Schema. Pronounced IPA: [/'hjuːmɑ/](https://en.wiktionary.org/wiki/Wiktionary:International_Phonetic_Alphabet). The goals of this project are to provide:
@@ -94,7 +93,7 @@ type GreetingOutput struct {
 
 func main() {
 	// Create a CLI app which takes a port option.
-	huma.NewCLI(func(cli huma.CLI, options *Options) {
+	cli := huma.NewCLI(func(hooks huma.Hooks, options *Options) {
 		// Create a new router & API
 		router := chi.NewMux()
 		api := humachi.New(router, huma.DefaultConfig("My API", "1.0.0"))
@@ -102,27 +101,27 @@ func main() {
 		// Register GET /greeting/{name}
 		huma.Register(api, huma.Operation{
 			OperationID: "get-greeting",
+			Summary:     "Get a greeting",
 			Method:      http.MethodGet,
 			Path:        "/greeting/{name}",
-			Summary:     "Get a greeting",
 		}, func(ctx context.Context, input *GreetingInput) (*GreetingOutput, error) {
 			resp := &GreetingOutput{}
-			resp.Body.Message: fmt.Sprintf("Hello, %s!", input.Name)
+			resp.Body.Message = fmt.Sprintf("Hello, %s!", input.Name)
 			return resp, nil
 		})
 
 		// Tell the CLI how to start your router.
-		cli.OnStart(func() {
-			router.Listen(fmt.Sprintf(":%d", options.Port)
+		hooks.OnStart(func() {
+			http.ListenAndServe(fmt.Sprintf(":%d", options.Port), router)
 		})
 	})
 
 	// Run the CLI. When passed no commands, it starts the server.
-	app.Run()
+	cli.Run()
 }
 ```
 
-You can test it with `go run hello.go` (optionally pass `--port` to change the default) and make a sample request using [Restish](https://rest.sh/) (or `curl`):
+You can test it with `go run greet.go` (optionally pass `--port` to change the default) and make a sample request using [Restish](https://rest.sh/) (or `curl`):
 
 ```sh
 # Get the message from the server
@@ -710,7 +709,7 @@ type Options struct {
 
 func main() {
 	// Then, create the CLI.
-	cli := huma.NewCLI(func(cli huma.CLI, opts *Options) {
+	cli := huma.NewCLI(func(hooks huma.Hooks, opts *Options) {
 		fmt.Printf("I was run with debug:%v host:%v port%v\n",
 			opts.Debug, opts.Host, opts.Port)
 	})

@@ -20,12 +20,12 @@ func TestCLIPlain(t *testing.T) {
 		ingore bool
 	}
 
-	cli := NewCLI(func(cli CLI, options *Options) {
+	cli := NewCLI(func(hooks Hooks, options *Options) {
 		assert.Equal(t, true, options.Debug)
 		assert.Equal(t, "localhost", options.Host)
 		assert.Equal(t, 8001, options.Port)
 		assert.Equal(t, false, options.ingore)
-		cli.OnStart(func() {
+		hooks.OnStart(func() {
 			// Do nothing
 		})
 	})
@@ -46,11 +46,11 @@ func TestCLIAdvanced(t *testing.T) {
 		Port int    `doc:"Port to listen on." short:"p" default:"8000"`
 	}
 
-	cli := NewCLI(func(cli CLI, options *Options) {
+	cli := NewCLI(func(hooks Hooks, options *Options) {
 		assert.Equal(t, true, options.Debug)
 		assert.Equal(t, "localhost", options.Host)
 		assert.Equal(t, 8001, options.Port)
-		cli.OnStart(func() {
+		hooks.OnStart(func() {
 			// Do nothing
 		})
 	})
@@ -73,7 +73,7 @@ func TestCLIHelp(t *testing.T) {
 		Port  int
 	}
 
-	cli := NewCLI(func(cli CLI, options *Options) {
+	cli := NewCLI(func(hooks Hooks, options *Options) {
 		// Do nothing
 	})
 
@@ -91,7 +91,7 @@ func TestCLICommandWithOptions(t *testing.T) {
 		Debug bool
 	}
 
-	cli := NewCLI(func(cli CLI, options *Options) {
+	cli := NewCLI(func(hooks Hooks, options *Options) {
 		// Do nothing
 	})
 
@@ -116,12 +116,12 @@ func TestCLIShutdown(t *testing.T) {
 
 	started := false
 	stopping := make(chan bool, 1)
-	cli := NewCLI(func(cli CLI, options *Options) {
-		cli.OnStart(func() {
+	cli := NewCLI(func(hooks Hooks, options *Options) {
+		hooks.OnStart(func() {
 			started = true
 			<-stopping
 		})
-		cli.OnStop(func() {
+		hooks.OnStop(func() {
 			stopping <- true
 		})
 	})
@@ -142,7 +142,7 @@ func TestCLIBadType(t *testing.T) {
 	}
 
 	assert.Panics(t, func() {
-		NewCLI(func(cli CLI, options *Options) {})
+		NewCLI(func(hooks Hooks, options *Options) {})
 	})
 }
 
@@ -156,10 +156,10 @@ func TestCLIBadDefaults(t *testing.T) {
 	}
 
 	assert.Panics(t, func() {
-		NewCLI(func(cli CLI, options *OptionsBool) {})
+		NewCLI(func(hooks Hooks, options *OptionsBool) {})
 	})
 
 	assert.Panics(t, func() {
-		NewCLI(func(cli CLI, options *OptionsInt) {})
+		NewCLI(func(hooks Hooks, options *OptionsInt) {})
 	})
 }

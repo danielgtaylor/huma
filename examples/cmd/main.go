@@ -167,7 +167,7 @@ func RegisterRoutes(api huma.API) {
 func main() {
 	var api huma.API
 
-	cli := huma.NewCLI(func(cli huma.CLI, opts *Options) {
+	cli := huma.NewCLI(func(hooks huma.Hooks, opts *Options) {
 		r := chi.NewMux()
 		// api := huma.NewChi(r, huma.Config{
 		// 	OpenAPI: &huma.OpenAPI{
@@ -265,14 +265,14 @@ func main() {
 
 		autopatch.AutoPatch(api)
 
-		cli.OnStart(func() {
+		hooks.OnStart(func() {
 			// Connect dependencies here...
 			// things.Init(...)
 			// r.Listen(fmt.Sprintf("%s:%d", opts.Host, opts.Port))
 			http.ListenAndServe(":3001", r)
 		})
 
-		cli.OnStop(func() {
+		hooks.OnStop(func() {
 			// r.ShutdownWithTimeout(5 * time.Second)
 		})
 	})

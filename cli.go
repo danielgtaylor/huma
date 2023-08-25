@@ -29,7 +29,11 @@ type CLI interface {
 	// Root returns the root Cobra command. This can be used to add additional
 	// commands or flags. Customize it however you like.
 	Root() *cobra.Command
+}
 
+// Hooks is an interface for setting up callbacks for the CLI. It is used to
+// start and stop the service.
+type Hooks interface {
 	// OnStart sets a function to call when the service should be started. This
 	// is called by the default command if no command is given. The callback
 	// should take whatever steps are necessary to start the server, such as
@@ -65,7 +69,7 @@ type cli[Options any] struct {
 	root     *cobra.Command
 	optInfo  []option
 	cfg      *viper.Viper
-	onParsed func(CLI, *Options)
+	onParsed func(Hooks, *Options)
 	start    func()
 	stop     func()
 }
@@ -181,7 +185,7 @@ func (c *cli[O]) setupOptions(flags *pflag.FlagSet, t reflect.Type, path []int) 
 // options have been parsed and the options struct has been populated. You
 // should set up a `cli.OnStart` callback to start the server with your chosen
 // router.
-func NewCLI[O any](onParsed func(CLI, *O)) CLI {
+func NewCLI[O any](onParsed func(Hooks, *O)) CLI {
 	c := &cli[O]{
 		root: &cobra.Command{
 			Use: "myapp",
