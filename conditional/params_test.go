@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/danielgtaylor/huma"
+	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -33,31 +33,33 @@ func TestIfMatch(t *testing.T) {
 	// Read request
 	r, _ := http.NewRequest(http.MethodGet, "https://example.com/resource", nil)
 	w := httptest.NewRecorder()
-	ctx := huma.ContextFromRequest(w, r)
+	ctx := humatest.NewContext(nil, r, w)
 
 	p.IfMatch = []string{`"abc123"`, `W/"def456"`}
-	p.Resolve(ctx, r)
-	assert.False(t, p.PreconditionFailed(ctx, "abc123", time.Time{}))
-	assert.False(t, p.PreconditionFailed(ctx, "def456", time.Time{}))
-	assert.True(t, p.PreconditionFailed(ctx, "bad", time.Time{}))
-	assert.True(t, p.PreconditionFailed(ctx, "", time.Time{}))
+	p.Resolve(ctx)
+	assert.NoError(t, p.PreconditionFailed("abc123", time.Time{}))
+	assert.NoError(t, p.PreconditionFailed("def456", time.Time{}))
 
-	assert.False(t, ctx.HasError())
-	assert.Equal(t, http.StatusNotModified, w.Result().StatusCode)
+	err := p.PreconditionFailed("bad", time.Time{})
+	assert.Error(t, err)
+	assert.Equal(t, http.StatusNotModified, err.GetStatus())
+
+	err = p.PreconditionFailed("", time.Time{})
+	assert.Error(t, err)
+	assert.Equal(t, http.StatusNotModified, err.GetStatus())
 
 	// Write request
 	r, _ = http.NewRequest(http.MethodPut, "https://example.com/resource", nil)
 	w = httptest.NewRecorder()
-	ctx = huma.ContextFromRequest(w, r)
+	ctx = humatest.NewContext(nil, r, w)
 
 	p.IfMatch = []string{`"abc123"`, `W/"def456"`}
-	p.Resolve(ctx, r)
-	assert.False(t, p.PreconditionFailed(ctx, "abc123", time.Time{}))
-	assert.False(t, ctx.HasError())
+	p.Resolve(ctx)
+	assert.NoError(t, p.PreconditionFailed("abc123", time.Time{}))
 
-	assert.True(t, p.PreconditionFailed(ctx, "bad", time.Time{}))
-	assert.True(t, ctx.HasError())
-	assert.Equal(t, http.StatusPreconditionFailed, w.Result().StatusCode)
+	err = p.PreconditionFailed("bad", time.Time{})
+	assert.Error(t, err)
+	assert.Equal(t, http.StatusPreconditionFailed, err.GetStatus())
 }
 
 func TestIfNoneMatch(t *testing.T) {
@@ -66,41 +68,38 @@ func TestIfNoneMatch(t *testing.T) {
 	// Read request
 	r, _ := http.NewRequest(http.MethodGet, "https://example.com/resource", nil)
 	w := httptest.NewRecorder()
-	ctx := huma.ContextFromRequest(w, r)
+	ctx := humatest.NewContext(nil, r, w)
 
 	p.IfNoneMatch = []string{`"abc123"`, `W/"def456"`}
-	p.Resolve(ctx, r)
-	assert.False(t, p.PreconditionFailed(ctx, "bad", time.Time{}))
-	assert.False(t, p.PreconditionFailed(ctx, "", time.Time{}))
-	assert.True(t, p.PreconditionFailed(ctx, "abc123", time.Time{}))
-	assert.True(t, p.PreconditionFailed(ctx, "def456", time.Time{}))
+	p.Resolve(ctx)
+	assert.NoError(t, p.PreconditionFailed("bad", time.Time{}))
+	assert.NoError(t, p.PreconditionFailed("", time.Time{}))
 
-	assert.False(t, ctx.HasError())
-	assert.Equal(t, http.StatusNotModified, w.Result().StatusCode)
+	err := p.PreconditionFailed("abc123", time.Time{})
+	assert.Error(t, err)
+	assert.Equal(t, http.StatusNotModified, err.GetStatus())
+
+	err = p.PreconditionFailed("def456", time.Time{})
+	assert.Error(t, err)
+	assert.Equal(t, http.StatusNotModified, err.GetStatus())
 
 	// Write request
 	r, _ = http.NewRequest(http.MethodPut, "https://example.com/resource", nil)
 	w = httptest.NewRecorder()
-	ctx = huma.ContextFromRequest(w, r)
+	ctx = humatest.NewContext(nil, r, w)
 
 	p.IfNoneMatch = []string{`"abc123"`, `W/"def456"`}
-	p.Resolve(ctx, r)
-	assert.True(t, p.PreconditionFailed(ctx, "abc123", time.Time{}))
-	assert.True(t, ctx.HasError())
-
-	ctx = huma.ContextFromRequest(w, r)
-	assert.False(t, p.PreconditionFailed(ctx, "bad", time.Time{}))
-	assert.False(t, ctx.HasError())
+	p.Resolve(ctx)
+	assert.Error(t, p.PreconditionFailed("abc123", time.Time{}))
+	assert.NoError(t, p.PreconditionFailed("bad", time.Time{}))
 
 	// Write with special `*` syntax to match any.
 	p.IfNoneMatch = []string{"*"}
-	ctx = huma.ContextFromRequest(w, r)
-	assert.False(t, p.PreconditionFailed(ctx, "", time.Time{}))
-	assert.False(t, ctx.HasError())
+	assert.NoError(t, p.PreconditionFailed("", time.Time{}))
 
-	assert.True(t, p.PreconditionFailed(ctx, "abc123", time.Time{}))
-	assert.True(t, ctx.HasError())
-	assert.Equal(t, http.StatusPreconditionFailed, w.Result().StatusCode)
+	err = p.PreconditionFailed("abc123", time.Time{})
+	assert.Error(t, err)
+	assert.Equal(t, http.StatusPreconditionFailed, err.GetStatus())
 }
 
 func TestIfModifiedSince(t *testing.T) {
@@ -118,28 +117,26 @@ func TestIfModifiedSince(t *testing.T) {
 	// Read request
 	r, _ := http.NewRequest(http.MethodGet, "https://example.com/resource", nil)
 	w := httptest.NewRecorder()
-	ctx := huma.ContextFromRequest(w, r)
+	ctx := humatest.NewContext(nil, r, w)
 
 	p.IfModifiedSince = now
 
-	p.Resolve(ctx, r)
-	assert.True(t, p.PreconditionFailed(ctx, "", before))
-	assert.True(t, p.PreconditionFailed(ctx, "", now))
-	assert.False(t, p.PreconditionFailed(ctx, "", after))
-
-	assert.False(t, ctx.HasError())
+	p.Resolve(ctx)
+	assert.Error(t, p.PreconditionFailed("", before))
+	assert.Error(t, p.PreconditionFailed("", now))
+	assert.NoError(t, p.PreconditionFailed("", after))
 
 	// Write request
 	r, _ = http.NewRequest(http.MethodPut, "https://example.com/resource", nil)
 	w = httptest.NewRecorder()
-	ctx = huma.ContextFromRequest(w, r)
+	ctx = humatest.NewContext(nil, r, w)
 
 	p.IfModifiedSince = now
 
-	p.Resolve(ctx, r)
-	assert.True(t, p.PreconditionFailed(ctx, "", before))
-	assert.True(t, ctx.HasError())
-	assert.Equal(t, http.StatusPreconditionFailed, w.Result().StatusCode)
+	p.Resolve(ctx)
+	perr := p.PreconditionFailed("", before)
+	assert.Error(t, perr)
+	assert.Equal(t, http.StatusPreconditionFailed, perr.GetStatus())
 }
 
 func TestIfUnmodifiedSince(t *testing.T) {
@@ -157,26 +154,24 @@ func TestIfUnmodifiedSince(t *testing.T) {
 	// Read request
 	r, _ := http.NewRequest(http.MethodGet, "https://example.com/resource", nil)
 	w := httptest.NewRecorder()
-	ctx := huma.ContextFromRequest(w, r)
+	ctx := humatest.NewContext(nil, r, w)
 
 	p.IfUnmodifiedSince = now
 
-	p.Resolve(ctx, r)
-	assert.False(t, p.PreconditionFailed(ctx, "", before))
-	assert.False(t, p.PreconditionFailed(ctx, "", now))
-	assert.True(t, p.PreconditionFailed(ctx, "", after))
-
-	assert.False(t, ctx.HasError())
+	p.Resolve(ctx)
+	assert.NoError(t, p.PreconditionFailed("", before))
+	assert.NoError(t, p.PreconditionFailed("", now))
+	assert.Error(t, p.PreconditionFailed("", after))
 
 	// Write request
 	r, _ = http.NewRequest(http.MethodPut, "https://example.com/resource", nil)
 	w = httptest.NewRecorder()
-	ctx = huma.ContextFromRequest(w, r)
+	ctx = humatest.NewContext(nil, r, w)
 
 	p.IfUnmodifiedSince = now
 
-	p.Resolve(ctx, r)
-	assert.True(t, p.PreconditionFailed(ctx, "", after))
-	assert.True(t, ctx.HasError())
-	assert.Equal(t, http.StatusPreconditionFailed, w.Result().StatusCode)
+	p.Resolve(ctx)
+	perr := p.PreconditionFailed("", after)
+	assert.Error(t, perr)
+	assert.Equal(t, http.StatusPreconditionFailed, perr.GetStatus())
 }

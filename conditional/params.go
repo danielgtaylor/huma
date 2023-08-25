@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/danielgtaylor/huma"
+	"github.com/danielgtaylor/huma/v2"
 )
 
 // trimETag removes the quotes and `W/` prefix for incoming ETag values to
@@ -33,11 +33,12 @@ type Params struct {
 	isWrite bool
 }
 
-func (p *Params) Resolve(ctx huma.Context, r *http.Request) {
-	switch r.Method {
+func (p *Params) Resolve(ctx huma.Context) []error {
+	switch ctx.Method() {
 	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
 		p.isWrite = true
 	}
+	return nil
 }
 
 // HasConditionalParams returns true if any conditional request headers have
@@ -51,8 +52,9 @@ func (p *Params) HasConditionalParams() bool {
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Conditional_requests.
 // This method assumes there is some fast/efficient way to get a resource's
 // current ETag and/or last-modified time before it is run.
-func (p *Params) PreconditionFailed(ctx huma.Context, etag string, modified time.Time) bool {
+func (p *Params) PreconditionFailed(etag string, modified time.Time) huma.StatusError {
 	failed := false
+	errors := []error{}
 
 	foundMsg := "found no existing resource"
 	if etag != "" {
@@ -66,7 +68,7 @@ func (p *Params) PreconditionFailed(ctx huma.Context, etag string, modified time
 		if trimmed == etag || (trimmed == "*" && etag != "") {
 			// We matched an existing resource, abort!
 			if p.isWrite {
-				ctx.AddError(&huma.ErrorDetail{
+				errors = append(errors, &huma.ErrorDetail{
 					Message:  "If-None-Match: " + match + " precondition failed, " + foundMsg,
 					Location: "request.headers.If-None-Match",
 					Value:    match,
@@ -89,7 +91,7 @@ func (p *Params) PreconditionFailed(ctx huma.Context, etag string, modified time
 		if !found {
 			// We did not match the expected resource, abort!
 			if p.isWrite {
-				ctx.AddError(&huma.ErrorDetail{
+				errors = append(errors, &huma.ErrorDetail{
 					Message:  "If-Match precondition failed, " + foundMsg,
 					Location: "request.headers.If-Match",
 					Value:    p.IfMatch,
@@ -102,7 +104,7 @@ func (p *Params) PreconditionFailed(ctx huma.Context, etag string, modified time
 	if !p.IfModifiedSince.IsZero() && !modified.After(p.IfModifiedSince) {
 		// Resource was modified *before* the date that was passed, abort!
 		if p.isWrite {
-			ctx.AddError(&huma.ErrorDetail{
+			errors = append(errors, &huma.ErrorDetail{
 				Message:  "If-Modified-Since: " + p.IfModifiedSince.Format(http.TimeFormat) + " precondition failed, resource was modified at " + modified.Format(http.TimeFormat),
 				Location: "request.headers.If-Modified-Since",
 				Value:    p.IfModifiedSince.Format(http.TimeFormat),
@@ -114,7 +116,7 @@ func (p *Params) PreconditionFailed(ctx huma.Context, etag string, modified time
 	if !p.IfUnmodifiedSince.IsZero() && modified.After(p.IfUnmodifiedSince) {
 		// Resource was modified *after* the date that was passed, abort!
 		if p.isWrite {
-			ctx.AddError(&huma.ErrorDetail{
+			errors = append(errors, &huma.ErrorDetail{
 				Message:  "If-Unmodified-Since: " + p.IfUnmodifiedSince.Format(http.TimeFormat) + " precondition failed, resource was modified at " + modified.Format(http.TimeFormat),
 				Location: "request.headers.If-Unmodified-Since",
 				Value:    p.IfUnmodifiedSince.Format(http.TimeFormat),
@@ -125,13 +127,15 @@ func (p *Params) PreconditionFailed(ctx huma.Context, etag string, modified time
 
 	if failed {
 		if p.isWrite {
-			ctx.WriteError(http.StatusPreconditionFailed, http.StatusText(http.StatusPreconditionFailed))
-		} else {
-			ctx.WriteHeader(http.StatusNotModified)
+			return huma.NewError(
+				http.StatusPreconditionFailed,
+				http.StatusText(http.StatusPreconditionFailed),
+				errors...,
+			)
 		}
 
-		return true
+		return huma.Status304NotModied()
 	}
 
-	return false
+	return nil
 }

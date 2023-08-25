@@ -48,3 +48,69 @@ func SelectQValue(header string, allowed []string) string {
 
 	return best
 }
+
+// SelectQValueFast is a faster version of SelectQValue that does not
+// need any dynamic memory allocations.
+func SelectQValueFast(header string, allowed []string) string {
+	best := ""
+	bestQ := 0.0
+
+	name := ""
+	start := -1
+	end := 0
+
+	for pos, char := range header {
+		// Format is like "a; q=0.5, b;q=1.0,c; q=0.3"
+		if char == ';' {
+			name = header[start : end+1]
+			start = -1
+			continue
+		}
+
+		if char == ',' || pos == len(header)-1 {
+			q := 1.0
+			if pos == len(header)-1 {
+				// This is the end, so it must be the name.
+				// Example: "application/yaml"
+				name = header[start : pos+1]
+			} else if name == "" {
+				// No name yet means we did not encounter a `;`.
+				// Example: "a, b, c"
+				name = header[start:pos]
+			} else {
+				if parsed, _ := strconv.ParseFloat(header[start+2:end+1], 64); parsed > 0 {
+					q = parsed
+				}
+			}
+			start = -1
+
+			found := false
+			for _, n := range allowed {
+				if n == name {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				// Skip formats we don't support.
+				continue
+			}
+
+			if q > bestQ || (q == bestQ && name == allowed[0]) {
+				bestQ = q
+				best = name
+			}
+			continue
+		}
+
+		if char != ' ' && char != '\t' {
+			end = pos
+			if start == -1 {
+				start = pos
+			}
+		}
+	}
+
+	return best
+}
