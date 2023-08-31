@@ -309,7 +309,7 @@ huma.Register(api, huma.Operation{
 
 > :whale: If following REST-ish conventions, operation paths should be nouns, and plural if they return more than one item. Good examples: `/notes`, `/likes`, `/users/{user-id}`, `/videos/{video-id}/stats`, etc. Huma does not enforce this or care, so RPC-style paths are also fine to use. Use what works best for you and your team.
 
-The operation handler function always has the following generic format, where `Input` and `Output` are custom structs defined by the developer that respresent the entirety of the request (path/query/header params & body) and response (headers & body), respectively:
+The operation handler function always has the following generic format, where `Input` and `Output` are custom structs defined by the developer that represent the entirety of the request (path/query/header params & body) and response (headers & body), respectively:
 
 ```go
 func(context.Context, *Input) (*Output, error)
@@ -549,7 +549,7 @@ if err != nil {
 
 #### Request Body Size Limits
 
-By default each operation has a 1 MiB reqeuest body size limit. This can be changed by setting `huma.Operation.MaxBodyBytes` to a different value when registering the operation. If the request body is larger than the limit then a `413 Request Entity Too Large` error will be returned.
+By default each operation has a 1 MiB request body size limit. This can be changed by setting `huma.Operation.MaxBodyBytes` to a different value when registering the operation. If the request body is larger than the limit then a `413 Request Entity Too Large` error will be returned.
 
 #### Response Model
 
