@@ -13,6 +13,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type EmbeddedChild struct {
+	// This one should be ignored as it is overriden by `Embedded`.
+	Value string `json:"value" doc:"old doc"`
+}
+
+type Embedded struct {
+	EmbeddedChild
+	Value string `json:"value" doc:"new doc"`
+}
+
 func TestSchema(t *testing.T) {
 	bitSize := fmt.Sprint(bits.UintSize)
 
@@ -333,6 +343,29 @@ func TestSchema(t *testing.T) {
 			expected: `{
 				"type": "object",
 				"additionalProperties": false
+			}`,
+		},
+		{
+			name: "field-embed",
+			input: struct {
+				// Because this is embedded, the fields should be merged into
+				// the parent object.
+				*Embedded
+				Value2 string `json:"value2"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["value2", "value"],
+				"properties": {
+					"value": {
+						"type": "string",
+						"description": "new doc"
+					},
+					"value2": {
+						"type": "string"
+					}
+				}
 			}`,
 		},
 		{
