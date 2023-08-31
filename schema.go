@@ -305,6 +305,47 @@ func SchemaFromField(registry Registry, parent reflect.Type, f reflect.StructFie
 	return fs
 }
 
+// fieldInfo stores information about a field, which may come from an
+// embedded type. The `Parent` stores the field's direct parent.
+type fieldInfo struct {
+	Parent reflect.Type
+	Field  reflect.StructField
+}
+
+// getFields performs a breadth-first search for all fields including embedded
+// ones. It may return multiple fields with the same name, the first of which
+// represents the outer-most declaration.
+func getFields(typ reflect.Type) []fieldInfo {
+	fields := make([]fieldInfo, 0, typ.NumField())
+	embedded := []reflect.StructField{}
+
+	for i := 0; i < typ.NumField(); i++ {
+		f := typ.Field(i)
+		if !f.IsExported() {
+			continue
+		}
+
+		if f.Anonymous {
+			embedded = append(embedded, f)
+			continue
+		}
+
+		fields = append(fields, fieldInfo{typ, f})
+	}
+
+	for _, f := range embedded {
+		newTyp := f.Type
+		for newTyp.Kind() == reflect.Ptr {
+			newTyp = newTyp.Elem()
+		}
+		if newTyp.Kind() == reflect.Struct {
+			fields = append(fields, getFields(newTyp)...)
+		}
+	}
+
+	return fields
+}
+
 func SchemaFromType(r Registry, t reflect.Type) *Schema {
 	s := Schema{}
 	t = deref(t)
@@ -388,12 +429,8 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		requiredMap := map[string]bool{}
 		propNames := []string{}
 		props := map[string]*Schema{}
-		for i := 0; i < t.NumField(); i++ {
-			f := t.Field(i)
-
-			if !f.IsExported() {
-				continue
-			}
+		for _, info := range getFields(t) {
+			f := info.Field
 
 			name := f.Name
 			omit := false
@@ -404,10 +441,16 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 				}
 			}
 			if name == "-" {
+				// This field is deliberately ignored.
+				continue
+			}
+			if props[name] != nil {
+				// This field was overridden by an ancestor type, so we
+				// should ignore it.
 				continue
 			}
 
-			fs := SchemaFromField(r, t, f)
+			fs := SchemaFromField(r, info.Parent, f)
 			if fs != nil {
 				props[name] = fs
 				propNames = append(propNames, name)
