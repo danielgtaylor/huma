@@ -425,6 +425,20 @@ func TestSchemaOld(t *testing.T) {
 	// fmt.Println(string(b))
 }
 
+func TestSchemaGenericNaming(t *testing.T) {
+	type SchemaGeneric[T any] struct {
+		Value T `json:"value"`
+	}
+
+	r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+	s := r.Schema(reflect.TypeOf(SchemaGeneric[int]{}), true, "")
+
+	b, _ := json.Marshal(s)
+	assert.JSONEq(t, `{
+		"$ref": "#/components/schemas/SchemaGenericint"
+	}`, string(b))
+}
+
 type BenchSub struct {
 	Visible bool      `json:"visible" default:"true"`
 	Metrics []float64 `json:"metrics" maxItems:"31"`

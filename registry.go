@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strings"
 )
 
 // Registry creates and stores schemas and their references, and supports
@@ -16,18 +17,22 @@ type Registry interface {
 	SchemaFromRef(ref string) *Schema
 	TypeFromRef(ref string) reflect.Type
 	Map() map[string]*Schema
-	MarshalJSON() ([]byte, error)
-	MarshalYAML() (interface{}, error)
 }
 
 // DefaultSchemaNamer provides schema names for types. It uses the type name
-// when possible, ignoring the package name. If the type is unnamed, then
-// the name hint is used.
+// when possible, ignoring the package name. If the type is generic, e.g.
+// `MyType[SubType]`, then the brackets are removed like `MyTypeSubType`.
+// If the type is unnamed, then the name hint is used.
 // Note: if you plan to use types with the same name from different packages,
 // you should implement your own namer function to prevent issues. Nested
 // anonymous types can also present naming issues.
 func DefaultSchemaNamer(t reflect.Type, hint string) string {
 	name := deref(t).Name()
+
+	// Fix up generics, if used, for nicer refs & URLs.
+	name = strings.ReplaceAll(name, "[", "")
+	name = strings.ReplaceAll(name, "]", "")
+
 	if name == "" {
 		name = hint
 	}
