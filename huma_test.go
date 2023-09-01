@@ -15,6 +15,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2/queryparam"
 	"github.com/go-chi/chi"
+	"github.com/goccy/go-yaml"
 	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/assert"
 )
@@ -113,6 +114,98 @@ func (a *testAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func NewTestAdapter(r chi.Router, config Config) API {
 	return NewAPI(config, &testAdapter{router: r})
+}
+
+func TestFeatures(t *testing.T) {
+	for _, feature := range []struct {
+		Name     string
+		Register func(t *testing.T, api API)
+		Method   string
+		URL      string
+		Headers  map[string]string
+		Assert   func(t *testing.T, resp *httptest.ResponseRecorder)
+	}{
+		{
+			Name: "params",
+			Register: func(t *testing.T, api API) {
+				Register(api, Operation{
+					Method: http.MethodGet,
+					Path:   "/test-params/{string}/{int}",
+				}, func(ctx context.Context, input *struct {
+					PathString   string    `path:"string"`
+					PathInt      int       `path:"int"`
+					QueryString  string    `query:"string"`
+					QueryInt     int       `query:"int"`
+					QueryDefault float32   `query:"def" default:"135" example:"5"`
+					QueryBefore  time.Time `query:"before"`
+					QueryDate    time.Time `query:"date" timeFormat:"2006-01-02"`
+					HeaderString string    `header:"String"`
+					HeaderInt    int       `header:"Int"`
+				}) (*struct{}, error) {
+					assert.Equal(t, "foo", input.PathString)
+					assert.Equal(t, 123, input.PathInt)
+					assert.Equal(t, "bar", input.QueryString)
+					assert.Equal(t, 456, input.QueryInt)
+					assert.Equal(t, float32(135), input.QueryDefault)
+					assert.True(t, input.QueryBefore.Equal(time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)))
+					assert.True(t, input.QueryDate.Equal(time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)))
+					assert.Equal(t, "baz", input.HeaderString)
+					assert.Equal(t, 789, input.HeaderInt)
+					return nil, nil
+				})
+			},
+			Method:  http.MethodGet,
+			URL:     "/test-params/foo/123?string=bar&int=456&before=2023-01-01T12:00:00Z&date=2023-01-01",
+			Headers: map[string]string{"string": "baz", "int": "789"},
+		},
+		{
+			Name: "response",
+			Register: func(t *testing.T, api API) {
+				type Resp struct {
+					Foo  string `header:"foo"`
+					Body struct {
+						Greeting string `json:"greeting"`
+					}
+				}
+
+				Register(api, Operation{
+					Method: http.MethodGet,
+					Path:   "/response",
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					resp := &Resp{}
+					resp.Foo = "foo"
+					resp.Body.Greeting = "Hello, world!"
+					return resp, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/response",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				assert.Equal(t, "foo", resp.Header().Get("Foo"))
+				assert.JSONEq(t, `{"$schema": "https:///schemas/RespBody.json", "greeting":"Hello, world!"}`, resp.Body.String())
+			},
+		},
+	} {
+		t.Run(feature.Name, func(t *testing.T) {
+			r := chi.NewRouter()
+			api := NewTestAdapter(r, DefaultConfig("Features Test API", "1.0.0"))
+			feature.Register(t, api)
+
+			req, _ := http.NewRequest(feature.Method, feature.URL, nil)
+			for k, v := range feature.Headers {
+				req.Header.Set(k, v)
+			}
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, req)
+			b, _ := yaml.Marshal(api.OpenAPI())
+			t.Log(string(b))
+			assert.Less(t, w.Code, 300, w.Body.String())
+			if feature.Assert != nil {
+				feature.Assert(t, w)
+			}
+		})
+	}
 }
 
 type ExhaustiveErrorsInputBody struct {
