@@ -92,7 +92,10 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		pfi.Name = name
 
 		if f.Type == timeType {
-			timeFormat := http.TimeFormat
+			timeFormat := time.RFC3339Nano
+			if pfi.Loc == "header" {
+				timeFormat = http.TimeFormat
+			}
 			if f := f.Tag.Get("timeFormat"); f != "" {
 				timeFormat = f
 			}
@@ -586,21 +589,13 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 					// Special case: time.Time
 					if f.Type() == timeType {
-						timeFormat := time.RFC3339Nano
-						if p.Loc == "header" {
-							timeFormat = http.TimeFormat
-						}
-						if p.TimeFormat != "" {
-							timeFormat = p.TimeFormat
-						}
-
-						t, err := time.Parse(timeFormat, value)
+						t, err := time.Parse(p.TimeFormat, value)
 						if err != nil {
-							res.Add(pb, value, "invalid time")
+							res.Add(pb, value, "invalid date/time for format "+p.TimeFormat)
 							return
 						}
 						f.Set(reflect.ValueOf(t))
-						pv = t
+						pv = value
 						break
 					}
 

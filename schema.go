@@ -260,6 +260,16 @@ func SchemaFromField(registry Registry, parent reflect.Type, f reflect.StructFie
 	if fmt := f.Tag.Get("format"); fmt != "" {
 		fs.Format = fmt
 	}
+	if timeFmt := f.Tag.Get("timeFormat"); timeFmt != "" {
+		switch timeFmt {
+		case "2006-01-02":
+			fs.Format = "date"
+		case "15:04:05":
+			fs.Format = "time"
+		default:
+			fs.Format = timeFmt
+		}
+	}
 	if enc := f.Tag.Get("encoding"); enc != "" {
 		fs.ContentEncoding = enc
 	}
