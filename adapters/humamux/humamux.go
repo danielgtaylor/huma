@@ -3,6 +3,7 @@ package humagmux
 import (
 	"context"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"time"
@@ -18,68 +19,73 @@ type gmuxContext struct {
 	w  http.ResponseWriter
 }
 
-func (ctx *gmuxContext) Operation() *huma.Operation {
-	return ctx.op
+func (c *gmuxContext) Operation() *huma.Operation {
+	return c.op
 }
 
-func (ctx *gmuxContext) Context() context.Context {
-	return ctx.r.Context()
+func (c *gmuxContext) Context() context.Context {
+	return c.r.Context()
 }
 
-func (ctx *gmuxContext) Method() string {
-	return ctx.r.Method
+func (c *gmuxContext) Method() string {
+	return c.r.Method
 }
 
-func (ctx *gmuxContext) Host() string {
-	return ctx.r.Host
+func (c *gmuxContext) Host() string {
+	return c.r.Host
 }
 
-func (ctx *gmuxContext) URL() url.URL {
-	return *ctx.r.URL
+func (c *gmuxContext) URL() url.URL {
+	return *c.r.URL
 }
 
-func (ctx *gmuxContext) Param(name string) string {
-	return mux.Vars(ctx.r)[name]
+func (c *gmuxContext) Param(name string) string {
+	return mux.Vars(c.r)[name]
 }
 
-func (ctx *gmuxContext) Query(name string) string {
-	return queryparam.Get(ctx.r.URL.RawQuery, name)
+func (c *gmuxContext) Query(name string) string {
+	return queryparam.Get(c.r.URL.RawQuery, name)
 }
 
-func (ctx *gmuxContext) Header(name string) string {
-	return ctx.r.Header.Get(name)
+func (c *gmuxContext) Header(name string) string {
+	return c.r.Header.Get(name)
 }
 
-func (ctx *gmuxContext) EachHeader(cb func(name, value string)) {
-	for name, values := range ctx.r.Header {
+func (c *gmuxContext) EachHeader(cb func(name, value string)) {
+	for name, values := range c.r.Header {
 		for _, value := range values {
 			cb(name, value)
 		}
 	}
 }
 
-func (ctx *gmuxContext) BodyReader() io.Reader {
-	return ctx.r.Body
+func (c *gmuxContext) BodyReader() io.Reader {
+	return c.r.Body
 }
 
-func (ctx *gmuxContext) SetReadDeadline(deadline time.Time) error {
-	return huma.SetReadDeadline(ctx.w, deadline)
+func (c *gmuxContext) GetMultipartForm() (*multipart.Form, error) {
+	err := c.r.ParseMultipartForm(8 * 1024)
+	return c.r.MultipartForm, err
 }
 
-func (ctx *gmuxContext) SetStatus(code int) {
-	ctx.w.WriteHeader(code)
+func (c *gmuxContext) SetReadDeadline(deadline time.Time) error {
+	return huma.SetReadDeadline(c.w, deadline)
 }
 
-func (ctx *gmuxContext) AppendHeader(name string, value string) {
-	ctx.w.Header().Add(name, value)
+func (c *gmuxContext) SetStatus(code int) {
+	c.w.WriteHeader(code)
 }
 
-func (ctx *gmuxContext) SetHeader(name string, value string) {
-	ctx.w.Header().Set(name, value)
+func (c *gmuxContext) AppendHeader(name string, value string) {
+	c.w.Header().Add(name, value)
 }
 
-func (ctx *gmuxContext) BodyWriter() io.Writer {
-	return ctx.w
+func (c *gmuxContext) SetHeader(name string, value string) {
+	c.w.Header().Set(name, value)
+}
+
+func (c *gmuxContext) BodyWriter() io.Writer {
+	return c.w
 }
 
 type gMux struct {

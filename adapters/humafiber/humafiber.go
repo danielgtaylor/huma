@@ -3,6 +3,7 @@ package humafiber
 import (
 	"context"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -17,8 +18,8 @@ type fiberCtx struct {
 	orig *fiber.Ctx
 }
 
-func (ctx *fiberCtx) Operation() *huma.Operation {
-	return ctx.op
+func (c *fiberCtx) Operation() *huma.Operation {
+	return c.op
 }
 
 func (c *fiberCtx) Matched() string {
@@ -33,8 +34,8 @@ func (c *fiberCtx) Method() string {
 	return c.orig.Method()
 }
 
-func (ctx *fiberCtx) Host() string {
-	return ctx.orig.Hostname()
+func (c *fiberCtx) Host() string {
+	return c.orig.Hostname()
 }
 
 func (c *fiberCtx) URL() url.URL {
@@ -62,6 +63,10 @@ func (c *fiberCtx) EachHeader(cb func(name, value string)) {
 
 func (c *fiberCtx) BodyReader() io.Reader {
 	return c.orig.Request().BodyStream()
+}
+
+func (c *fiberCtx) GetMultipartForm() (*multipart.Form, error) {
+	return c.orig.MultipartForm()
 }
 
 func (c *fiberCtx) SetReadDeadline(deadline time.Time) error {

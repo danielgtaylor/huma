@@ -3,6 +3,7 @@ package humachi
 import (
 	"context"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"time"
@@ -18,68 +19,73 @@ type chiContext struct {
 	w  http.ResponseWriter
 }
 
-func (ctx *chiContext) Operation() *huma.Operation {
-	return ctx.op
+func (c *chiContext) Operation() *huma.Operation {
+	return c.op
 }
 
-func (ctx *chiContext) Context() context.Context {
-	return ctx.r.Context()
+func (c *chiContext) Context() context.Context {
+	return c.r.Context()
 }
 
-func (ctx *chiContext) Method() string {
-	return ctx.r.Method
+func (c *chiContext) Method() string {
+	return c.r.Method
 }
 
-func (ctx *chiContext) Host() string {
-	return ctx.r.Host
+func (c *chiContext) Host() string {
+	return c.r.Host
 }
 
-func (ctx *chiContext) URL() url.URL {
-	return *ctx.r.URL
+func (c *chiContext) URL() url.URL {
+	return *c.r.URL
 }
 
-func (ctx *chiContext) Param(name string) string {
-	return chi.URLParam(ctx.r, name)
+func (c *chiContext) Param(name string) string {
+	return chi.URLParam(c.r, name)
 }
 
-func (ctx *chiContext) Query(name string) string {
-	return queryparam.Get(ctx.r.URL.RawQuery, name)
+func (c *chiContext) Query(name string) string {
+	return queryparam.Get(c.r.URL.RawQuery, name)
 }
 
-func (ctx *chiContext) Header(name string) string {
-	return ctx.r.Header.Get(name)
+func (c *chiContext) Header(name string) string {
+	return c.r.Header.Get(name)
 }
 
-func (ctx *chiContext) EachHeader(cb func(name, value string)) {
-	for name, values := range ctx.r.Header {
+func (c *chiContext) EachHeader(cb func(name, value string)) {
+	for name, values := range c.r.Header {
 		for _, value := range values {
 			cb(name, value)
 		}
 	}
 }
 
-func (ctx *chiContext) BodyReader() io.Reader {
-	return ctx.r.Body
+func (c *chiContext) BodyReader() io.Reader {
+	return c.r.Body
 }
 
-func (ctx *chiContext) SetReadDeadline(deadline time.Time) error {
-	return huma.SetReadDeadline(ctx.w, deadline)
+func (c *chiContext) GetMultipartForm() (*multipart.Form, error) {
+	err := c.r.ParseMultipartForm(8 * 1024)
+	return c.r.MultipartForm, err
 }
 
-func (ctx *chiContext) SetStatus(code int) {
-	ctx.w.WriteHeader(code)
+func (c *chiContext) SetReadDeadline(deadline time.Time) error {
+	return huma.SetReadDeadline(c.w, deadline)
 }
 
-func (ctx *chiContext) AppendHeader(name string, value string) {
-	ctx.w.Header().Add(name, value)
+func (c *chiContext) SetStatus(code int) {
+	c.w.WriteHeader(code)
 }
 
-func (ctx *chiContext) SetHeader(name string, value string) {
-	ctx.w.Header().Set(name, value)
+func (c *chiContext) AppendHeader(name string, value string) {
+	c.w.Header().Add(name, value)
 }
 
-func (ctx *chiContext) BodyWriter() io.Writer {
-	return ctx.w
+func (c *chiContext) SetHeader(name string, value string) {
+	c.w.Header().Set(name, value)
+}
+
+func (c *chiContext) BodyWriter() io.Writer {
+	return c.w
 }
 
 type chiAdapter struct {
