@@ -3,6 +3,7 @@ package humagin
 import (
 	"context"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -17,8 +18,8 @@ type ginCtx struct {
 	orig *gin.Context
 }
 
-func (ctx *ginCtx) Operation() *huma.Operation {
-	return ctx.op
+func (c *ginCtx) Operation() *huma.Operation {
+	return c.op
 }
 
 func (c *ginCtx) Context() context.Context {
@@ -29,8 +30,8 @@ func (c *ginCtx) Method() string {
 	return c.orig.Request.Method
 }
 
-func (ctx *ginCtx) Host() string {
-	return ctx.orig.Request.Host
+func (c *ginCtx) Host() string {
+	return c.orig.Request.Host
 }
 
 func (c *ginCtx) URL() url.URL {
@@ -61,8 +62,13 @@ func (c *ginCtx) BodyReader() io.Reader {
 	return c.orig.Request.Body
 }
 
-func (ctx *ginCtx) SetReadDeadline(deadline time.Time) error {
-	return huma.SetReadDeadline(ctx.orig.Writer, deadline)
+func (c *ginCtx) GetMultipartForm() (*multipart.Form, error) {
+	err := c.orig.Request.ParseMultipartForm(8 * 1024)
+	return c.orig.Request.MultipartForm, err
+}
+
+func (c *ginCtx) SetReadDeadline(deadline time.Time) error {
+	return huma.SetReadDeadline(c.orig.Writer, deadline)
 }
 
 func (c *ginCtx) SetStatus(code int) {

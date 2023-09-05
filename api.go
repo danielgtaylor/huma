@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -59,6 +60,7 @@ type Context interface {
 	Header(name string) string
 	EachHeader(cb func(name, value string))
 	BodyReader() io.Reader
+	GetMultipartForm() (*multipart.Form, error)
 	SetReadDeadline(time.Time) error
 	SetStatus(code int)
 	SetHeader(name, value string)

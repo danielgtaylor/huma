@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -26,76 +27,81 @@ type testContext struct {
 	w  http.ResponseWriter
 }
 
-func (ctx *testContext) Operation() *Operation {
-	return ctx.op
+func (c *testContext) Operation() *Operation {
+	return c.op
 }
 
-func (ctx *testContext) Matched() string {
-	return chi.RouteContext(ctx.r.Context()).RoutePattern()
+func (c *testContext) Matched() string {
+	return chi.RouteContext(c.r.Context()).RoutePattern()
 }
 
-func (ctx *testContext) Context() context.Context {
-	return ctx.r.Context()
+func (c *testContext) Context() context.Context {
+	return c.r.Context()
 }
 
-func (ctx *testContext) Method() string {
-	return ctx.r.Method
+func (c *testContext) Method() string {
+	return c.r.Method
 }
 
-func (ctx *testContext) Host() string {
-	return ctx.r.Host
+func (c *testContext) Host() string {
+	return c.r.Host
 }
 
-func (ctx *testContext) URL() url.URL {
-	return *ctx.r.URL
+func (c *testContext) URL() url.URL {
+	return *c.r.URL
 }
 
-func (ctx *testContext) Param(name string) string {
-	return chi.URLParam(ctx.r, name)
+func (c *testContext) Param(name string) string {
+	return chi.URLParam(c.r, name)
 }
 
-func (ctx *testContext) Query(name string) string {
-	return queryparam.Get(ctx.r.URL.RawQuery, name)
+func (c *testContext) Query(name string) string {
+	return queryparam.Get(c.r.URL.RawQuery, name)
 }
 
-func (ctx *testContext) Header(name string) string {
-	return ctx.r.Header.Get(name)
+func (c *testContext) Header(name string) string {
+	return c.r.Header.Get(name)
 }
 
-func (ctx *testContext) EachHeader(cb func(name, value string)) {
-	for name, values := range ctx.r.Header {
+func (c *testContext) EachHeader(cb func(name, value string)) {
+	for name, values := range c.r.Header {
 		for _, value := range values {
 			cb(name, value)
 		}
 	}
 }
 
-func (ctx *testContext) Body() ([]byte, error) {
-	return io.ReadAll(ctx.r.Body)
+func (c *testContext) Body() ([]byte, error) {
+	return io.ReadAll(c.r.Body)
 }
 
-func (ctx *testContext) BodyReader() io.Reader {
-	return ctx.r.Body
+func (c *testContext) BodyReader() io.Reader {
+	return c.r.Body
 }
 
-func (ctx *testContext) SetReadDeadline(deadline time.Time) error {
-	return http.NewResponseController(ctx.w).SetReadDeadline(deadline)
+func (c *testContext) GetMultipartForm() (*multipart.Form, error) {
+	err := c.r.ParseMultipartForm(8 * 1024)
+	return c.r.MultipartForm, err
 }
 
-func (ctx *testContext) SetStatus(code int) {
-	ctx.w.WriteHeader(code)
+func (c *testContext) SetReadDeadline(deadline time.Time) error {
+	return http.NewResponseController(c.w).SetReadDeadline(deadline)
 }
 
-func (ctx *testContext) AppendHeader(name string, value string) {
-	ctx.w.Header().Add(name, value)
+func (c *testContext) SetStatus(code int) {
+	c.w.WriteHeader(code)
 }
 
-func (ctx *testContext) SetHeader(name string, value string) {
-	ctx.w.Header().Set(name, value)
+func (c *testContext) AppendHeader(name string, value string) {
+	c.w.Header().Add(name, value)
 }
 
-func (ctx *testContext) BodyWriter() io.Writer {
-	return ctx.w
+func (c *testContext) SetHeader(name string, value string) {
+	c.w.Header().Set(name, value)
+}
+
+func (c *testContext) BodyWriter() io.Writer {
+	return c.w
 }
 
 type testAdapter struct {

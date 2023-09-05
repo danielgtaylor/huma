@@ -3,6 +3,7 @@ package humahttprouter
 import (
 	"context"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -20,68 +21,73 @@ type httprouterContext struct {
 	ps httprouter.Params
 }
 
-func (ctx *httprouterContext) Operation() *huma.Operation {
-	return ctx.op
+func (c *httprouterContext) Operation() *huma.Operation {
+	return c.op
 }
 
-func (ctx *httprouterContext) Context() context.Context {
-	return ctx.r.Context()
+func (c *httprouterContext) Context() context.Context {
+	return c.r.Context()
 }
 
-func (ctx *httprouterContext) Method() string {
-	return ctx.r.Method
+func (c *httprouterContext) Method() string {
+	return c.r.Method
 }
 
-func (ctx *httprouterContext) Host() string {
-	return ctx.r.Host
+func (c *httprouterContext) Host() string {
+	return c.r.Host
 }
 
-func (ctx *httprouterContext) URL() url.URL {
-	return *ctx.r.URL
+func (c *httprouterContext) URL() url.URL {
+	return *c.r.URL
 }
 
-func (ctx *httprouterContext) Param(name string) string {
-	return ctx.ps.ByName(name)
+func (c *httprouterContext) Param(name string) string {
+	return c.ps.ByName(name)
 }
 
-func (ctx *httprouterContext) Query(name string) string {
-	return queryparam.Get(ctx.r.URL.RawQuery, name)
+func (c *httprouterContext) Query(name string) string {
+	return queryparam.Get(c.r.URL.RawQuery, name)
 }
 
-func (ctx *httprouterContext) Header(name string) string {
-	return ctx.r.Header.Get(name)
+func (c *httprouterContext) Header(name string) string {
+	return c.r.Header.Get(name)
 }
 
-func (ctx *httprouterContext) EachHeader(cb func(name, value string)) {
-	for name, values := range ctx.r.Header {
+func (c *httprouterContext) EachHeader(cb func(name, value string)) {
+	for name, values := range c.r.Header {
 		for _, value := range values {
 			cb(name, value)
 		}
 	}
 }
 
-func (ctx *httprouterContext) BodyReader() io.Reader {
-	return ctx.r.Body
+func (c *httprouterContext) BodyReader() io.Reader {
+	return c.r.Body
 }
 
-func (ctx *httprouterContext) SetReadDeadline(deadline time.Time) error {
-	return huma.SetReadDeadline(ctx.w, deadline)
+func (c *httprouterContext) GetMultipartForm() (*multipart.Form, error) {
+	err := c.r.ParseMultipartForm(8 * 1024)
+	return c.r.MultipartForm, err
 }
 
-func (ctx *httprouterContext) SetStatus(code int) {
-	ctx.w.WriteHeader(code)
+func (c *httprouterContext) SetReadDeadline(deadline time.Time) error {
+	return huma.SetReadDeadline(c.w, deadline)
 }
 
-func (ctx *httprouterContext) AppendHeader(name string, value string) {
-	ctx.w.Header().Add(name, value)
+func (c *httprouterContext) SetStatus(code int) {
+	c.w.WriteHeader(code)
 }
 
-func (ctx *httprouterContext) SetHeader(name string, value string) {
-	ctx.w.Header().Set(name, value)
+func (c *httprouterContext) AppendHeader(name string, value string) {
+	c.w.Header().Add(name, value)
 }
 
-func (ctx *httprouterContext) BodyWriter() io.Writer {
-	return ctx.w
+func (c *httprouterContext) SetHeader(name string, value string) {
+	c.w.Header().Set(name, value)
+}
+
+func (c *httprouterContext) BodyWriter() io.Writer {
+	return c.w
 }
 
 type httprouterAdapter struct {
