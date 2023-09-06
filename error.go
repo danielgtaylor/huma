@@ -108,10 +108,6 @@ type StatusError interface {
 	Error() string
 }
 
-// Ensure the default error model satisfies these interfaces.
-var _ StatusError = (*ErrorModel)(nil)
-var _ ContentTypeFilter = (*ErrorModel)(nil)
-
 // NewError creates a new instance of an error model with the given status code,
 // message, and errors. If the error implements the `ErrorDetailer` interface,
 // the error details will be used. Otherwise, the error message will be used.
@@ -149,9 +145,9 @@ func WriteErr(api API, ctx Context, status int, msg string, errs ...error) {
 	api.Marshal(ctx, strconv.Itoa(status), ct, err)
 }
 
-// Status304NotModied returns a 304. This is not really an error, but provides
-// a way to send non-default responses.
-func Status304NotModied() StatusError {
+// Status304NotModified returns a 304. This is not really an error, but
+// provides a way to send non-default responses.
+func Status304NotModified() StatusError {
 	return NewError(http.StatusNotModified, "")
 }
 

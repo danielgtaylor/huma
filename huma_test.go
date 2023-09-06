@@ -129,6 +129,7 @@ func TestFeatures(t *testing.T) {
 		Method   string
 		URL      string
 		Headers  map[string]string
+		Body     string
 		Assert   func(t *testing.T, resp *httptest.ResponseRecorder)
 	}{
 		{
@@ -145,30 +146,207 @@ func TestFeatures(t *testing.T) {
 					QueryDefault float32   `query:"def" default:"135" example:"5"`
 					QueryBefore  time.Time `query:"before"`
 					QueryDate    time.Time `query:"date" timeFormat:"2006-01-02"`
+					QueryUint    uint32    `query:"uint"`
+					QueryBool    bool      `query:"bool"`
+					QueryStrings []string  `query:"strings"`
 					HeaderString string    `header:"String"`
 					HeaderInt    int       `header:"Int"`
+					HeaderDate   time.Time `header:"Date"`
 				}) (*struct{}, error) {
 					assert.Equal(t, "foo", input.PathString)
 					assert.Equal(t, 123, input.PathInt)
 					assert.Equal(t, "bar", input.QueryString)
 					assert.Equal(t, 456, input.QueryInt)
-					assert.Equal(t, float32(135), input.QueryDefault)
+					assert.EqualValues(t, 135, input.QueryDefault)
 					assert.True(t, input.QueryBefore.Equal(time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)))
 					assert.True(t, input.QueryDate.Equal(time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)))
+					assert.EqualValues(t, 1, input.QueryUint)
+					assert.Equal(t, true, input.QueryBool)
+					assert.Equal(t, []string{"foo", "bar"}, input.QueryStrings)
 					assert.Equal(t, "baz", input.HeaderString)
 					assert.Equal(t, 789, input.HeaderInt)
 					return nil, nil
 				})
 			},
-			Method:  http.MethodGet,
-			URL:     "/test-params/foo/123?string=bar&int=456&before=2023-01-01T12:00:00Z&date=2023-01-01",
-			Headers: map[string]string{"string": "baz", "int": "789"},
+			Method: http.MethodGet,
+			URL:    "/test-params/foo/123?string=bar&int=456&before=2023-01-01T12:00:00Z&date=2023-01-01&uint=1&bool=true&strings=foo,bar",
+			Headers: map[string]string{
+				"string": "baz",
+				"int":    "789",
+				"date":   "Mon, 01 Jan 2023 12:00:00 GMT",
+			},
+		},
+		{
+			Name: "params-error",
+			Register: func(t *testing.T, api API) {
+				Register(api, Operation{
+					Method: http.MethodGet,
+					Path:   "/test-params/{int}",
+				}, func(ctx context.Context, input *struct {
+					PathInt     string    `path:"int"`
+					QueryInt    int       `query:"int"`
+					QueryFloat  float32   `query:"float"`
+					QueryBefore time.Time `query:"before"`
+					QueryDate   time.Time `query:"date" timeFormat:"2006-01-02"`
+					QueryUint   uint32    `query:"uint"`
+					QueryBool   bool      `query:"bool"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test-params/bad?int=bad&float=bad&before=bad&date=bad&uint=bad&bool=bad",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "invalid integer")
+				assert.Contains(t, resp.Body.String(), "invalid float")
+				assert.Contains(t, resp.Body.String(), "invalid date/time")
+				assert.Contains(t, resp.Body.String(), "invalid bool")
+			},
+		},
+		{
+			Name: "request-body",
+			Register: func(t *testing.T, api API) {
+				Register(api, Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					RawBody []byte
+					Body    struct {
+						Name string `json:"name"`
+					}
+				}) (*struct{}, error) {
+					assert.Equal(t, `{"name":"foo"}`, string(input.RawBody))
+					assert.Equal(t, "foo", input.Body.Name)
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			// Headers: map[string]string{"Content-Type": "application/json"},
+			Body: `{"name":"foo"}`,
+		},
+		{
+			Name: "request-body-required",
+			Register: func(t *testing.T, api API) {
+				Register(api, Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name string `json:"name"`
+					}
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusBadRequest, resp.Code)
+			},
+		},
+		{
+			Name: "request-body-too-large",
+			Register: func(t *testing.T, api API) {
+				Register(api, Operation{
+					Method:       http.MethodPut,
+					Path:         "/body",
+					MaxBodyBytes: 1,
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name string `json:"name"`
+					}
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   "foobarbaz",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusRequestEntityTooLarge, resp.Code)
+			},
+		},
+		{
+			Name: "request-body-bad-json",
+			Register: func(t *testing.T, api API) {
+				Register(api, Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name string `json:"name"`
+					}
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   "{{{",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusBadRequest, resp.Code)
+			},
+		},
+		{
+			Name: "handler-error",
+			Register: func(t *testing.T, api API) {
+				Register(api, Operation{
+					Method: http.MethodGet,
+					Path:   "/error",
+				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+					return nil, Error403Forbidden("nope")
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/error",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusForbidden, resp.Code)
+			},
+		},
+		{
+			Name: "response-headers",
+			Register: func(t *testing.T, api API) {
+				type Resp struct {
+					Str   string    `header:"str"`
+					Int   int       `header:"int"`
+					Uint  uint      `header:"uint"`
+					Float float64   `header:"float"`
+					Bool  bool      `header:"bool"`
+					Date  time.Time `header:"date"`
+				}
+
+				Register(api, Operation{
+					Method: http.MethodGet,
+					Path:   "/response-headers",
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					resp := &Resp{}
+					resp.Str = "str"
+					resp.Int = 1
+					resp.Uint = 2
+					resp.Float = 3.45
+					resp.Bool = true
+					resp.Date = time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
+					return resp, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/response-headers",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNoContent, resp.Code)
+				assert.Equal(t, "str", resp.Header().Get("Str"))
+				assert.Equal(t, "1", resp.Header().Get("Int"))
+				assert.Equal(t, "2", resp.Header().Get("Uint"))
+				assert.Equal(t, "3.45", resp.Header().Get("Float"))
+				assert.Equal(t, "true", resp.Header().Get("Bool"))
+				assert.Equal(t, "Sun, 01 Jan 2023 12:00:00 GMT", resp.Header().Get("Date"))
+			},
 		},
 		{
 			Name: "response",
 			Register: func(t *testing.T, api API) {
 				type Resp struct {
-					Foo  string `header:"foo"`
 					Body struct {
 						Greeting string `json:"greeting"`
 					}
@@ -179,7 +357,6 @@ func TestFeatures(t *testing.T) {
 					Path:   "/response",
 				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
 					resp := &Resp{}
-					resp.Foo = "foo"
 					resp.Body.Greeting = "Hello, world!"
 					return resp, nil
 				})
@@ -188,8 +365,73 @@ func TestFeatures(t *testing.T) {
 			URL:    "/response",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusOK, resp.Code)
-				assert.Equal(t, "foo", resp.Header().Get("Foo"))
 				assert.JSONEq(t, `{"$schema": "https:///schemas/RespBody.json", "greeting":"Hello, world!"}`, resp.Body.String())
+			},
+		},
+		{
+			Name: "response-raw",
+			Register: func(t *testing.T, api API) {
+				type Resp struct {
+					Body []byte
+				}
+
+				Register(api, Operation{
+					Method: http.MethodGet,
+					Path:   "/response-raw",
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					return &Resp{Body: []byte("hello")}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/response-raw",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				assert.Equal(t, `hello`, resp.Body.String())
+			},
+		},
+		{
+			Name: "response-stream",
+			Register: func(t *testing.T, api API) {
+				Register(api, Operation{
+					Method: http.MethodGet,
+					Path:   "/stream",
+				}, func(ctx context.Context, input *struct{}) (*StreamResponse, error) {
+					return &StreamResponse{
+						Body: func(ctx Context) {
+							writer := ctx.BodyWriter()
+							writer.Write([]byte("hel"))
+							writer.Write([]byte("lo"))
+						},
+					}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/stream",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				assert.Equal(t, `hello`, resp.Body.String())
+			},
+		},
+		{
+			Name: "dynamic-status",
+			Register: func(t *testing.T, api API) {
+				type Resp struct {
+					Status int
+				}
+
+				Register(api, Operation{
+					Method: http.MethodGet,
+					Path:   "/status",
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					resp := &Resp{}
+					resp.Status = 256
+					return resp, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/status",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, 256, resp.Code)
 			},
 		},
 	} {
@@ -198,7 +440,11 @@ func TestFeatures(t *testing.T) {
 			api := NewTestAdapter(r, DefaultConfig("Features Test API", "1.0.0"))
 			feature.Register(t, api)
 
-			req, _ := http.NewRequest(feature.Method, feature.URL, nil)
+			var body io.Reader = nil
+			if feature.Body != "" {
+				body = strings.NewReader(feature.Body)
+			}
+			req, _ := http.NewRequest(feature.Method, feature.URL, body)
 			for k, v := range feature.Headers {
 				req.Header.Set(k, v)
 			}
@@ -206,11 +452,40 @@ func TestFeatures(t *testing.T) {
 			r.ServeHTTP(w, req)
 			b, _ := yaml.Marshal(api.OpenAPI())
 			t.Log(string(b))
-			assert.Less(t, w.Code, 300, w.Body.String())
 			if feature.Assert != nil {
 				feature.Assert(t, w)
+			} else {
+				assert.Less(t, w.Code, 300, w.Body.String())
 			}
 		})
+	}
+}
+
+func TestOpenAPI(t *testing.T) {
+	r := chi.NewRouter()
+	api := NewTestAdapter(r, DefaultConfig("Features Test API", "1.0.0"))
+
+	type Resp struct {
+		Body struct {
+			Greeting string `json:"greeting"`
+		}
+	}
+
+	Register(api, Operation{
+		Method: http.MethodGet,
+		Path:   "/test",
+	}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+		resp := &Resp{}
+		resp.Body.Greeting = "Hello, world"
+		return resp, nil
+	})
+
+	for _, url := range []string{"/openapi.json", "/openapi.yaml", "/docs", "/schemas/Resp.json"} {
+		req, _ := http.NewRequest(http.MethodGet, url, nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		assert.Equal(t, w.Code, 200, w.Body.String())
 	}
 }
 

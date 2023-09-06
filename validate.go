@@ -185,6 +185,10 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 		if !found {
 			res.Add(path, str, "expected string to be RFC 3339 date-time")
 		}
+	case "date-time-http":
+		if _, err := time.Parse(time.RFC1123, str); err != nil {
+			res.Add(path, str, "expected string to be RFC 1123 date-time")
+		}
 	case "date":
 		if _, err := time.Parse("2006-01-02", str); err != nil {
 			res.Add(path, str, "expected string to be RFC 3339 date")
@@ -271,9 +275,27 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		switch v := v.(type) {
 		case float64:
 			num = v
+		case float32:
+			num = float64(v)
 		case int:
 			num = float64(v)
+		case int8:
+			num = float64(v)
+		case int16:
+			num = float64(v)
+		case int32:
+			num = float64(v)
 		case int64:
+			num = float64(v)
+		case uint:
+			num = float64(v)
+		case uint8:
+			num = float64(v)
+		case uint16:
+			num = float64(v)
+		case uint32:
+			num = float64(v)
+		case uint64:
 			num = float64(v)
 		default:
 			res.Add(path, v, "expected number")
@@ -342,37 +364,15 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 			}
 		}
 	case TypeArray:
-		arr, ok := v.([]any)
-		if !ok {
+		switch arr := v.(type) {
+		case []any:
+			handleArray(r, s, path, mode, res, arr)
+		case []string:
+			// Special case for params which are lists.
+			handleArray(r, s, path, mode, res, arr)
+		default:
 			res.Add(path, v, "expected array")
 			return
-		}
-
-		if s.MinItems != nil {
-			if len(arr) < *s.MinItems {
-				res.Addf(path, v, s.msgMinItems)
-			}
-		}
-		if s.MaxItems != nil {
-			if len(arr) > *s.MaxItems {
-				res.Addf(path, v, s.msgMaxItems)
-			}
-		}
-
-		if s.UniqueItems {
-			seen := make(map[any]struct{}, len(arr))
-			for _, item := range arr {
-				if _, ok := seen[item]; ok {
-					res.Add(path, v, "expected array items to be unique")
-				}
-				seen[item] = struct{}{}
-			}
-		}
-
-		for i, item := range arr {
-			path.PushIndex(i)
-			Validate(r, s.Items, path, mode, item, res)
-			path.Pop()
 		}
 	case TypeObject:
 		if vv, ok := v.(map[string]any); ok {
@@ -395,6 +395,35 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		if !found {
 			res.Add(path, v, s.msgEnum)
 		}
+	}
+}
+
+func handleArray[T any](r Registry, s *Schema, path *PathBuffer, mode ValidateMode, res *ValidateResult, arr []T) {
+	if s.MinItems != nil {
+		if len(arr) < *s.MinItems {
+			res.Addf(path, arr, s.msgMinItems)
+		}
+	}
+	if s.MaxItems != nil {
+		if len(arr) > *s.MaxItems {
+			res.Addf(path, arr, s.msgMaxItems)
+		}
+	}
+
+	if s.UniqueItems {
+		seen := make(map[any]struct{}, len(arr))
+		for _, item := range arr {
+			if _, ok := seen[item]; ok {
+				res.Add(path, arr, "expected array items to be unique")
+			}
+			seen[item] = struct{}{}
+		}
+	}
+
+	for i, item := range arr {
+		path.PushIndex(i)
+		Validate(r, s.Items, path, mode, item, res)
+		path.Pop()
 	}
 }
 

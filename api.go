@@ -158,7 +158,12 @@ func (r *api) Unmarshal(contentType string, data []byte, v any) error {
 	if end == -1 {
 		end = len(contentType)
 	}
-	f, ok := r.formats[contentType[start:end]]
+	ct := contentType[start:end]
+	if ct == "" {
+		// Default to assume JSON since this is an API.
+		ct = "application/json"
+	}
+	f, ok := r.formats[ct]
 	if !ok {
 		return fmt.Errorf("unknown content type: %s", contentType)
 	}
@@ -177,7 +182,6 @@ func (r *api) Negotiate(accept string) (string, error) {
 }
 
 func (a *api) Marshal(ctx Context, respKey string, ct string, v any) error {
-	// fmt.Println("marshaling", ct)
 	var err error
 
 	for _, t := range a.transformers {
