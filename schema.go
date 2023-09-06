@@ -257,6 +257,12 @@ func SchemaFromField(registry Registry, parent reflect.Type, f reflect.StructFie
 		return fs
 	}
 	fs.Description = f.Tag.Get("doc")
+	if fs.Format == "date-time" && f.Tag.Get("header") != "" {
+		// Special case: this is a header and uses a different date/time format.
+		// Note that it can still be overridden by the `format` or `timeFormat`
+		// tags later.
+		fs.Format = "date-time-http"
+	}
 	if fmt := f.Tag.Get("format"); fmt != "" {
 		fs.Format = fmt
 	}

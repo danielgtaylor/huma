@@ -134,7 +134,7 @@ func (p *Params) PreconditionFailed(etag string, modified time.Time) huma.Status
 			)
 		}
 
-		return huma.Status304NotModied()
+		return huma.Status304NotModified()
 	}
 
 	return nil

@@ -24,13 +24,12 @@ var bodyCallbackType = reflect.TypeOf(func(Context) {})
 // if possible. If not, it will not incur any allocations (unlike the stdlib
 // `http.ResponseController`).
 func SetReadDeadline(w http.ResponseWriter, deadline time.Time) error {
-	rw := w
 	for {
-		switch t := rw.(type) {
+		switch t := w.(type) {
 		case interface{ SetReadDeadline(time.Time) error }:
 			return t.SetReadDeadline(deadline)
 		case interface{ Unwrap() http.ResponseWriter }:
-			rw = t.Unwrap()
+			w = t.Unwrap()
 		default:
 			return errDeadlineUnsupported
 		}
@@ -170,12 +169,13 @@ type findResult[T comparable] struct {
 }
 
 func (r *findResult[T]) every(current reflect.Value, path []int, v T, f func(reflect.Value, T)) {
+	if len(path) == 0 {
+		f(current, v)
+		return
+	}
+
 	switch current.Kind() {
 	case reflect.Struct:
-		if len(path) == 0 {
-			f(current, v)
-			return
-		}
 		r.every(reflect.Indirect(current.Field(path[0])), path[1:], v, f)
 	case reflect.Slice:
 		for j := 0; j < current.Len(); j++ {
@@ -186,10 +186,6 @@ func (r *findResult[T]) every(current reflect.Value, path []int, v T, f func(ref
 			r.every(reflect.Indirect(current.MapIndex(k)), path, v, f)
 		}
 	default:
-		if len(path) == 0 {
-			f(current, v)
-			return
-		}
 		panic("unsupported")
 	}
 }
@@ -619,6 +615,9 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 			buf := bufPool.Get().(*bytes.Buffer)
 			reader := ctx.BodyReader()
+			if reader == nil {
+				reader = bytes.NewReader(nil)
+			}
 			if closer, ok := reader.(io.Closer); ok {
 				defer closer.Close()
 			}

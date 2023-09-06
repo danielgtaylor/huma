@@ -35,9 +35,64 @@ var validateTests = []struct {
 		input: 0,
 	},
 	{
-		name:  "float64 success",
+		name:  "int from float64 success",
 		typ:   reflect.TypeOf(0),
 		input: float64(0),
+	},
+	{
+		name:  "int from int8 success",
+		typ:   reflect.TypeOf(0),
+		input: int8(0),
+	},
+	{
+		name:  "int from int16 success",
+		typ:   reflect.TypeOf(0),
+		input: int16(0),
+	},
+	{
+		name:  "int from int32 success",
+		typ:   reflect.TypeOf(0),
+		input: int32(0),
+	},
+	{
+		name:  "int from int64 success",
+		typ:   reflect.TypeOf(0),
+		input: int64(0),
+	},
+	{
+		name:  "int from uint success",
+		typ:   reflect.TypeOf(0),
+		input: uint(0),
+	},
+	{
+		name:  "int from uint8 success",
+		typ:   reflect.TypeOf(0),
+		input: uint8(0),
+	},
+	{
+		name:  "int from uint16 success",
+		typ:   reflect.TypeOf(0),
+		input: uint16(0),
+	},
+	{
+		name:  "int from uint32 success",
+		typ:   reflect.TypeOf(0),
+		input: uint32(0),
+	},
+	{
+		name:  "int from uint64 success",
+		typ:   reflect.TypeOf(0),
+		input: uint64(0),
+	},
+	{
+		name:  "float64 from int success",
+		typ:   reflect.TypeOf(0.0),
+		input: 0,
+	},
+	{
+		name:  "float64 from float32 success",
+		typ:   reflect.TypeOf(0.0),
+		input: float32(0),
 	},
 	{
 		name:  "int64 success",
@@ -216,6 +271,21 @@ var validateTests = []struct {
 		}{}),
 		input: map[string]any{"value": "bad"},
 		errs:  []string{"expected string to be RFC 3339 date-time"},
+	},
+	{
+		name: "date-time-http success",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" format:"date-time-http"`
+		}{}),
+		input: map[string]any{"value": []byte("Mon, 01 Jan 2023 12:00:00 GMT")},
+	},
+	{
+		name: "expected date-time-http",
+		typ: reflect.TypeOf(struct {
+			Value time.Time `json:"value" format:"date-time-http"`
+		}{}),
+		input: map[string]any{"value": "bad"},
+		errs:  []string{"expected string to be RFC 1123 date-time"},
 	},
 	{
 		name: "date success",
