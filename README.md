@@ -729,16 +729,18 @@ I was run with debug:false host: port:8888
 To do useful work, you will want to register a handler for the default start command and optionally a way to gracefully shutdown the server:
 
 ```go
-cli.OnStart(func() {
-	// Start your server here
-	http.ListenAndServe(
-		fmt.Sprintf("%s:%d", options.Host, options.Port), myRouter
-	)
-})
+cli := huma.NewCLI(func(hooks huma.Hooks, opts *Options) {
+	hooks.OnStart(func() {
+		// Start your server here
+		http.ListenAndServe(
+			fmt.Sprintf("%s:%d", opts.Host, opts.Port), myRouter,
+		)
+	})
 
-cli.OnStop(func() {
-	// Gracefully shutdown your server here
-	// ...
+	hooks.OnStop(func() {
+		// Gracefully shutdown your server here
+		// ...
+	})
 })
 ```
 
