@@ -918,6 +918,28 @@ o.Extensions["x-cli-autoconfig"] = huma.AutoConfig{
 
 See the [CLI AutoConfiguration](https://rest.sh/#/openapi?id=autoconfiguration) documentation for more info, including how to ask the user for custom parameters.
 
+## Model Validation
+
+Huma includes a utility to make it a little easier to validate models outside of the normal HTTP request/response flow, for example on app startup to load example or default data and verify it is correct. This is just a thin wrapper around the built-in validation functionality, but abstracts away some of the boilerplate required for efficient operation and provides a simple API.
+
+```go
+type MyExample struct {
+	Name string `json:"name" maxLength:"5"`
+	Age int `json:"age" minimum:"25"`
+}
+
+var value any
+json.Unmarshal([]byte(`{"name": "abcdefg", "age": 1}`), &value)
+
+validator := huma.ModelValidator()
+errs := validator.Validate(reflect.TypeOf(MyExample{}), value)
+if errs != nil {
+	fmt.Println("Validation error", errs)
+}
+```
+
+> :whale: The `huma.ModelValidator` is **not** goroutine-safe! For more flexible validation, use the `huma.Validate` function directly and provide your own registry, path buffer, validation result struct, etc.
+
 ## Low-Level API
 
 Huma v2 is written so that you can use the low-level API directly if you want to. This is useful if you want to add some new feature or abstraction that Huma doesn't support out of the box. Huma's own `huma.Register` function, automatic HTTP `PATCH` handlers, and the `sse` package are all built on top of the public low-level API.

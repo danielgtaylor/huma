@@ -518,3 +518,69 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		}
 	}
 }
+
+// ModelValidator is a utility for validating e.g. JSON loaded data against a
+// Go struct model. It is not goroutine-safe and should not be used in HTTP
+// handlers! Schemas are generated on-the-fly on first use and re-used on
+// subsequent calls. This utility can be used to easily validate data outside
+// of the normal request/response flow, for example on application startup:
+//
+//	type MyExample struct {
+//		Name string `json:"name" maxLength:"5"`
+//		Age int `json:"age" minimum:"25"`
+//	}
+//
+//	var value any
+//	json.Unmarshal([]byte(`{"name": "abcdefg", "age": 1}`), &value)
+//
+//	validator := ModelValidator()
+//	errs := validator.Validate(reflect.TypeOf(MyExample{}), value)
+//	if errs != nil {
+//		fmt.Println("Validation error", errs)
+//	}
+type ModelValidator struct {
+	registry Registry
+	pb       *PathBuffer
+	result   *ValidateResult
+}
+
+// NewModelValidator creates a new model validator with all the components
+// it needs to create schemas, validate them, and return any errors.
+func NewModelValidator() *ModelValidator {
+	return &ModelValidator{
+		registry: NewMapRegistry("#/components/schemas/", DefaultSchemaNamer),
+		pb:       NewPathBuffer([]byte(""), 0),
+		result:   &ValidateResult{},
+	}
+}
+
+// Validate the inputs. The type should be the Go struct with validation field
+// tags and the value should be e.g. JSON loaded into an `any`. A list of
+// errors is returned if validation failed, otherwise `nil`.
+//
+//	type MyExample struct {
+//		Name string `json:"name" maxLength:"5"`
+//		Age int `json:"age" minimum:"25"`
+//	}
+//
+//	var value any
+//	json.Unmarshal([]byte(`{"name": "abcdefg", "age": 1}`), &value)
+//
+//	validator := ModelValidator()
+//	errs := validator.Validate(reflect.TypeOf(MyExample{}), value)
+//	if errs != nil {
+//		fmt.Println("Validation error", errs)
+//	}
+func (v *ModelValidator) Validate(typ reflect.Type, value any) []error {
+	v.pb.Reset()
+	v.result.Reset()
+
+	s := v.registry.Schema(typ, true, typ.Name())
+
+	Validate(v.registry, s, v.pb, ModeReadFromServer, value, v.result)
+
+	if len(v.result.Errors) > 0 {
+		return v.result.Errors
+	}
+	return nil
+}
