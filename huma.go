@@ -22,7 +22,10 @@ var bodyCallbackType = reflect.TypeOf(func(Context) {})
 
 // SetReadDeadline is a utility to set the read deadline on a response writer,
 // if possible. If not, it will not incur any allocations (unlike the stdlib
-// `http.ResponseController`).
+// `http.ResponseController`). This is mostly a convenience function for
+// adapters so they can be more efficient.
+//
+//	huma.SetReadDeadline(w, time.Now().Add(5*time.Second))
 func SetReadDeadline(w http.ResponseWriter, deadline time.Time) error {
 	for {
 		switch t := w.(type) {
@@ -39,6 +42,26 @@ func SetReadDeadline(w http.ResponseWriter, deadline time.Time) error {
 // StreamResponse is a response that streams data to the client. The body
 // function will be called once the response headers have been written and
 // the body writer is ready to be written to.
+//
+//	func handler(ctx context.Context, input *struct{}) (*huma.StreamResponse, error) {
+//		return &huma.StreamResponse{
+//			Body: func(ctx huma.Context) {
+//				ctx.SetHeader("Content-Type", "text/my-type")
+//
+//				// Write some data to the stream.
+//				writer := ctx.BodyWriter()
+//				writer.Write([]byte("Hello "))
+//
+//				// Flush the stream to the client.
+//				if f, ok := writer.(http.Flusher); ok {
+//					f.Flush()
+//				}
+//
+//				// Write some more...
+//				writer.Write([]byte("world!"))
+//			}
+//		}
+//	}
 type StreamResponse struct {
 	Body func(ctx Context)
 }

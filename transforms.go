@@ -13,6 +13,12 @@ type schemaField struct {
 	Schema string `json:"$schema"`
 }
 
+// SchemaLinkTransformer is a transform that adds a `$schema` field to the
+// response (if it is a struct) and a Link header pointing to the JSON
+// Schema that describes the response structure. This is useful for clients
+// to understand the structure of the response and enables things like
+// as-you-type validation & completion of HTTP resources in editors like
+// VSCode.
 type SchemaLinkTransformer struct {
 	prefix      string
 	schemasPath string
@@ -23,6 +29,12 @@ type SchemaLinkTransformer struct {
 	}
 }
 
+// NewSchemaLinkTransformer creates a new transformer that will add a `$schema`
+// field to the response (if it is a struct) and a Link header pointing to the
+// JSON Schema that describes the response structure. This is useful for clients
+// to understand the structure of the response and enables things like
+// as-you-type validation & completion of HTTP resources in editors like
+// VSCode.
 func NewSchemaLinkTransformer(prefix, schemasPath string) *SchemaLinkTransformer {
 	return &SchemaLinkTransformer{
 		prefix:      prefix,
@@ -35,6 +47,9 @@ func NewSchemaLinkTransformer(prefix, schemasPath string) *SchemaLinkTransformer
 	}
 }
 
+// OnAddOperation is triggered whenever a new operation is added to the API,
+// enabling this transformer to precompute & cache information about the
+// response and schema.
 func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
 	// Update registry to be able to get the type from a schema ref.
 	// Register the type in t.types with the generated ref
@@ -86,6 +101,8 @@ func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
 	}
 }
 
+// Transform is called for every response to add the `$schema` field and/or
+// the Link header pointing to the JSON Schema.
 func (t *SchemaLinkTransformer) Transform(ctx Context, status string, v any) (any, error) {
 	if v == nil {
 		return v, nil

@@ -143,15 +143,15 @@ type api struct {
 	transformers []Transformer
 }
 
-func (r *api) Adapter() Adapter {
-	return r.adapter
+func (a *api) Adapter() Adapter {
+	return a.adapter
 }
 
-func (r *api) OpenAPI() *OpenAPI {
-	return r.config.OpenAPI
+func (a *api) OpenAPI() *OpenAPI {
+	return a.config.OpenAPI
 }
 
-func (r *api) Unmarshal(contentType string, data []byte, v any) error {
+func (a *api) Unmarshal(contentType string, data []byte, v any) error {
 	// Handle e.g. `application/json; charset=utf-8` or `my/format+json`
 	start := strings.IndexRune(contentType, '+') + 1
 	end := strings.IndexRune(contentType, ';')
@@ -163,19 +163,19 @@ func (r *api) Unmarshal(contentType string, data []byte, v any) error {
 		// Default to assume JSON since this is an API.
 		ct = "application/json"
 	}
-	f, ok := r.formats[ct]
+	f, ok := a.formats[ct]
 	if !ok {
 		return fmt.Errorf("unknown content type: %s", contentType)
 	}
 	return f.Unmarshal(data, v)
 }
 
-func (r *api) Negotiate(accept string) (string, error) {
-	ct := negotiation.SelectQValueFast(accept, r.formatKeys)
-	if ct == "" {
-		ct = r.formatKeys[0]
+func (a *api) Negotiate(accept string) (string, error) {
+	ct := negotiation.SelectQValueFast(accept, a.formatKeys)
+	if ct == "" && a.formatKeys != nil {
+		ct = a.formatKeys[0]
 	}
-	if _, ok := r.formats[ct]; !ok {
+	if _, ok := a.formats[ct]; !ok {
 		return ct, fmt.Errorf("unknown content type: %s", ct)
 	}
 	return ct, nil

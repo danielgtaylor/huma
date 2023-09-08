@@ -46,6 +46,16 @@ func deref(t reflect.Type) reflect.Type {
 // with your own custom properties. It supports a subset of the full JSON Schema
 // spec, designed specifically for use with Go structs and to enable fast zero
 // or near-zero allocation happy-path validation for incoming requests.
+//
+// Typically you will use a registry and `huma.SchemaFromType` to generate
+// schemas for your types. You can then use `huma.Validate` to validate
+// incoming requests.
+//
+//	// Create a registry and register a type.
+//	registry := huma.NewMapRegistry("#/prefix", huma.DefaultSchemaNamer)
+//	schema := huma.SchemaFromType(registry, reflect.TypeOf(MyType{}))
+//
+// Note that the registry may create references for your types.
 type Schema struct {
 	Type                 string             `yaml:"type,omitempty"`
 	Title                string             `yaml:"title,omitempty"`
@@ -100,6 +110,8 @@ type Schema struct {
 	msgRequired         map[string]string `yaml:"-"`
 }
 
+// PrecomputeMessages tries to precompute as many validation error messages
+// as possible so that new strings aren't allocated during request validation.
 func (s *Schema) PrecomputeMessages() {
 	s.msgEnum = "expected value to be one of \"" + strings.Join(mapTo(s.Enum, func(v any) string {
 		return fmt.Sprintf("%v", v)
@@ -152,6 +164,8 @@ func (s *Schema) PrecomputeMessages() {
 	}
 }
 
+// MarshalJSON marshals the schema into JSON, respecting the `Extensions` map
+// to marshal extensions inline.
 func (s *Schema) MarshalJSON() ([]byte, error) {
 	return yaml.MarshalWithOptions(s, yaml.JSON())
 }
@@ -247,6 +261,12 @@ func jsonTag(f reflect.StructField, name string, multi bool) any {
 	return nil
 }
 
+// SchemaFromField generates a schema for a given struct field. If the field
+// is a struct (or slice/map of structs) then the registry is used to
+// potentially get a reference to that type.
+//
+// This is used by `huma.SchemaFromType` when it encounters a struct, and
+// is used to generate schemas for path/query/header parameters.
 func SchemaFromField(registry Registry, parent reflect.Type, f reflect.StructField) *Schema {
 	parentName := ""
 	if parent != nil {
@@ -362,6 +382,14 @@ func getFields(typ reflect.Type) []fieldInfo {
 	return fields
 }
 
+// SchemaFromType returns a schema for a given type, using the registry to
+// possibly create references for nested structs. The schema that is returned
+// can then be passed to `huma.Validate` to efficiently validate incoming
+// requests.
+//
+//	// Create a registry and register a type.
+//	registry := huma.NewMapRegistry("#/prefix", huma.DefaultSchemaNamer)
+//	schema := huma.SchemaFromType(registry, reflect.TypeOf(MyType{}))
 func SchemaFromType(r Registry, t reflect.Type) *Schema {
 	s := Schema{}
 	t = deref(t)

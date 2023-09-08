@@ -52,6 +52,13 @@ type contextKey string
 var optionsKey contextKey = "huma/cli/options"
 
 // WithOptions is a helper for custom commands that need to access the options.
+//
+//	cli.Root().AddCommand(&cobra.Command{
+//		Use: "my-custom-command",
+//		Run: huma.WithOptions(func(cmd *cobra.Command, args []string, opts *Options) {
+//			fmt.Println("Hello " + opts.Name)
+//		}),
+//	})
 func WithOptions[Options any](f func(cmd *cobra.Command, args []string, options *Options)) func(*cobra.Command, []string) {
 	return func(cmd *cobra.Command, s []string) {
 		var options *Options = cmd.Context().Value(optionsKey).(*Options)
@@ -183,8 +190,43 @@ func (c *cli[O]) setupOptions(flags *pflag.FlagSet, t reflect.Type, path []int) 
 
 // NewCLI creates a new CLI. The `onParsed` callback is called after the command
 // options have been parsed and the options struct has been populated. You
-// should set up a `cli.OnStart` callback to start the server with your chosen
-// router.
+// should set up a `hooks.OnStart` callback to start the server with your
+// chosen router.
+//
+//	// First, define your input options.
+//	type Options struct {
+//		Debug bool   `doc:"Enable debug logging"`
+//		Host  string `doc:"Hostname to listen on."`
+//		Port  int    `doc:"Port to listen on." short:"p" default:"8888"`
+//	}
+//
+//	// Then, create the CLI.
+//	cli := huma.NewCLI(func(hooks huma.Hooks, opts *Options) {
+//		fmt.Printf("Options are debug:%v host:%v port%v\n",
+//			opts.Debug, opts.Host, opts.Port)
+//
+//		// Set up the router & API
+//		router := chi.NewRouter()
+//		api := humachi.New(router, huma.DefaultConfig("My API", "1.0.0"))
+//		srv := &http.Server{
+//			Addr: fmt.Sprintf("%s:%d", opts.Host, opts.Port),
+//			Handler: router,
+//			// TODO: Set up timeouts!
+//		}
+//
+//		hooks.OnStart(func() {
+//			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+//				log.Fatalf("listen: %s\n", err)
+//			}
+//		})
+//
+//		hooks.OnStop(func() {
+//			srv.Shutdown(context.Background())
+//		})
+//	})
+//
+//	// Run the thing!
+//	cli.Run()
 func NewCLI[O any](onParsed func(Hooks, *O)) CLI {
 	c := &cli[O]{
 		root: &cobra.Command{

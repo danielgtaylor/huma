@@ -6,7 +6,8 @@ import (
 	"strconv"
 )
 
-// ErrorDetailer returns error details for responses & debugging.
+// ErrorDetailer returns error details for responses & debugging. This enables
+// the use of custom error types. See `NewError` for more details.
 type ErrorDetailer interface {
 	ErrorDetail() *ErrorDetail
 }
@@ -16,10 +17,10 @@ type ErrorDetail struct {
 	// Message is a human-readable explanation of the error.
 	Message string `json:"message,omitempty" doc:"Error message text"`
 
-	// Location is a path-like string indicating where the error occured.
+	// Location is a path-like string indicating where the error occurred.
 	// It typically begins with `path`, `query`, `header`, or `body`. Example:
 	// `body.items[3].tags` or `path.thing-id`.
-	Location string `json:"location,omitempty" doc:"Where the error occured, e.g. 'body.items[3].tags' or 'path.thing-id'"`
+	Location string `json:"location,omitempty" doc:"Where the error occurred, e.g. 'body.items[3].tags' or 'path.thing-id'"`
 
 	// Value is the value at the given location, echoed back to the client
 	// to help with debugging. This can be useful for e.g. validating that
@@ -28,7 +29,9 @@ type ErrorDetail struct {
 	Value any `json:"value,omitempty" doc:"The value at the given location"`
 }
 
-// Error returns the error message / satisfies the `error` interface.
+// Error returns the error message / satisfies the `error` interface. If a
+// location and value are set, they will be included in the error message,
+// otherwise just the message is returned.
 func (e *ErrorDetail) Error() string {
 	if e.Location == "" && e.Value == nil {
 		return e.Message
@@ -41,14 +44,35 @@ func (e *ErrorDetail) ErrorDetail() *ErrorDetail {
 	return e
 }
 
-// ErrorModel defines a basic error message model.
+// ErrorModel defines a basic error message model based on RFC 7807 Problem
+// Details for HTTP APIs (https://datatracker.ietf.org/doc/html/rfc7807). It
+// is augmented with an `errors` field of `huma.ErrorDetail` objects that
+// can help provide exhaustive & descriptive errors.
+//
+//	err := &huma.ErrorModel{
+//		Title: http.StatusText(http.StatusBadRequest),
+//		Status http.StatusBadRequest,
+//		Detail: "Validation failed",
+//		Errors: []*huma.ErrorDetail{
+//			&huma.ErrorDetail{
+//				Message: "expected required property id to be present",
+//				Location: "body.friends[0]",
+//				Value: nil,
+//			},
+//			&huma.ErrorDetail{
+//				Message: "expected boolean",
+//				Location: "body.friends[1].active",
+//				Value: 5,
+//			},
+//		},
+//	}
 type ErrorModel struct {
 	// Type is a URI to get more information about the error type.
 	Type string `json:"type,omitempty" format:"uri" default:"about:blank" example:"https://example.com/errors/example" doc:"A URI reference to human-readable documentation for the error."`
 
 	// Title provides a short static summary of the problem. Huma will default this
 	// to the HTTP response status code text if not present.
-	Title string `json:"title,omitempty" example:"Bad Request" doc:"A short, human-readable summary of the problem type. This value should not change between occurances of the error."`
+	Title string `json:"title,omitempty" example:"Bad Request" doc:"A short, human-readable summary of the problem type. This value should not change between occurrences of the error."`
 
 	// Status provides the HTTP status code for client convenience. Huma will
 	// default this to the response status code if unset. This SHOULD match the
@@ -58,18 +82,29 @@ type ErrorModel struct {
 	// Detail is an explanation specific to this error occurrence.
 	Detail string `json:"detail,omitempty" example:"Property foo is required but is missing." doc:"A human-readable explanation specific to this occurrence of the problem."`
 
-	// Instance is a URI to get more info about this error occurence.
-	Instance string `json:"instance,omitempty" format:"uri" example:"https://example.com/error-log/abc123" doc:"A URI reference that identifies the specific occurence of the problem."`
+	// Instance is a URI to get more info about this error occurrence.
+	Instance string `json:"instance,omitempty" format:"uri" example:"https://example.com/error-log/abc123" doc:"A URI reference that identifies the specific occurrence of the problem."`
 
 	// Errors provides an optional mechanism of passing additional error details
 	// as a list.
 	Errors []*ErrorDetail `json:"errors,omitempty" doc:"Optional list of individual error details"`
 }
 
+// Error satisfies the `error` interface. It returns the error's detail field.
 func (e *ErrorModel) Error() string {
 	return e.Detail
 }
 
+// Add an error to the `Errors` slice. If passed a struct that satisfies the
+// `huma.ErrorDetailer` interface, then it is used, otherwise the error
+// string is used as the error detail message.
+//
+//	err := &ErrorModel{ /* ... */ }
+//	err.Add(&huma.ErrorDetail{
+//		Message: "expected boolean",
+//		Location: "body.friends[1].active",
+//		Value: 5
+//	})
 func (e *ErrorModel) Add(err error) {
 	if converted, ok := err.(ErrorDetailer); ok {
 		e.Errors = append(e.Errors, converted.ErrorDetail())
@@ -79,10 +114,15 @@ func (e *ErrorModel) Add(err error) {
 	e.Errors = append(e.Errors, &ErrorDetail{Message: err.Error()})
 }
 
+// GetStatus returns the HTTP status that should be returned to the client
+// for this error.
 func (e *ErrorModel) GetStatus() int {
 	return e.Status
 }
 
+// ContentType provides a filter to adjust response content types. This is
+// used to ensure e.g. `application/problem+json` content types defined in
+// RFC 7807 Problem Details for HTTP APIs are used in responses to clients.
 func (e *ErrorModel) ContentType(ct string) string {
 	if ct == "application/json" {
 		return "application/problem+json"
@@ -102,16 +142,47 @@ type ContentTypeFilter interface {
 }
 
 // StatusError is an error that has an HTTP status code. When returned from
-// an operation handler, this sets the response status code.
+// an operation handler, this sets the response status code before sending it
+// to the client.
 type StatusError interface {
 	GetStatus() int
 	Error() string
 }
 
 // NewError creates a new instance of an error model with the given status code,
-// message, and errors. If the error implements the `ErrorDetailer` interface,
-// the error details will be used. Otherwise, the error message will be used.
-// Replace this function to use your own error type.
+// message, and optional error details. If the error details implement the
+// `ErrorDetailer` interface, the error details will be used. Otherwise, the
+// error string will be used as the message. This function is used by all the
+// error response utility functions, like `huma.Error400BadRequest`.
+//
+// Replace this function to use your own error type. Example:
+//
+//	type MyDetail struct {
+//		Message string	`json:"message"`
+//		Location string	`json:"location"`
+//	}
+//
+//	type MyError struct {
+//		status  int
+//		Message string	`json:"message"`
+//		Errors  []error	`json:"errors"`
+//	}
+//
+//	func (e *MyError) Error() string {
+//		return e.Message
+//	}
+//
+//	func (e *MyError) GetStatus() int {
+//		return e.status
+//	}
+//
+//	huma.NewError = func(status int, msg string, errs ...error) StatusError {
+//		return &MyError{
+//			status:  status,
+//			Message: msg,
+//			Errors:  errs,
+//		}
+//	}
 var NewError = func(status int, msg string, errs ...error) StatusError {
 	details := make([]*ErrorDetail, len(errs))
 	for i := 0; i < len(errs); i++ {
@@ -132,17 +203,21 @@ var NewError = func(status int, msg string, errs ...error) StatusError {
 // WriteErr writes an error response with the given context, using the
 // configured error type and with the given status code and message. It is
 // marshaled using the API's content negotiation methods.
-func WriteErr(api API, ctx Context, status int, msg string, errs ...error) {
+func WriteErr(api API, ctx Context, status int, msg string, errs ...error) error {
 	var err any = NewError(status, msg, errs...)
 
-	ct, _ := api.Negotiate(ctx.Header("Accept"))
+	ct, negotiateErr := api.Negotiate(ctx.Header("Accept"))
+	if negotiateErr != nil {
+		return negotiateErr
+	}
+
 	if ctf, ok := err.(ContentTypeFilter); ok {
 		ct = ctf.ContentType(ct)
 	}
 
 	ctx.SetHeader("Content-Type", ct)
 	ctx.SetStatus(status)
-	api.Marshal(ctx, strconv.Itoa(status), ct, err)
+	return api.Marshal(ctx, strconv.Itoa(status), ct, err)
 }
 
 // Status304NotModified returns a 304. This is not really an error, but

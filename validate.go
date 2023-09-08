@@ -16,6 +16,9 @@ import (
 	"golang.org/x/net/idna"
 )
 
+// ValidateMode describes the direction of validation (server -> client or
+// client -> server). It impacts things like how read-only or write-only fields
+// are handled.
 type ValidateMode int
 
 const (
@@ -147,11 +150,14 @@ func NewPathBuffer(buf []byte, offset int) *PathBuffer {
 	return &PathBuffer{buf: buf, off: offset}
 }
 
-// ValidateResult tracks validation errors.
+// ValidateResult tracks validation errors. It is safe to use for multiple
+// validations as long as `Reset()` is called between uses.
 type ValidateResult struct {
 	Errors []error
 }
 
+// Add an error to the validation result at the given path and with the
+// given value.
 func (r *ValidateResult) Add(path *PathBuffer, v any, msg string) {
 	r.Errors = append(r.Errors, &ErrorDetail{
 		Message:  msg,
@@ -160,6 +166,8 @@ func (r *ValidateResult) Add(path *PathBuffer, v any, msg string) {
 	})
 }
 
+// Addf adds an error to the validation result at the given path and with
+// the given value, allowing for fmt.Printf-style formatting.
 func (r *ValidateResult) Addf(path *PathBuffer, v any, format string, args ...any) {
 	r.Errors = append(r.Errors, &ErrorDetail{
 		Message:  fmt.Sprintf(format, args...),
@@ -168,6 +176,7 @@ func (r *ValidateResult) Addf(path *PathBuffer, v any, format string, args ...an
 	})
 }
 
+// Reset the validation error so it can be used again.
 func (r *ValidateResult) Reset() {
 	r.Errors = r.Errors[:0]
 }
@@ -257,6 +266,18 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 // result object. If successful, `res.Errors` will be empty. It is suggested
 // to use a `sync.Pool` to reuse the PathBuffer and ValidateResult objects,
 // making sure to call `Reset()` on them before returning them to the pool.
+//
+//	registry := huma.NewMapRegistry("#/prefix", huma.DefaultSchemaNamer)
+//	schema := huma.SchemaFromType(registry, reflect.TypeOf(MyType{}))
+//	pb := huma.NewPathBuffer([]byte(""), 0)
+//	res := &huma.ValidateResult{}
+//
+//	var value any
+//	json.Unmarshal([]byte(`{"foo": "bar"}`), &v)
+//	huma.Validate(registry, schema, pb, huma.ModeWriteToServer, value, res)
+//	for _, err := range res.Errors {
+//		fmt.Println(err.Error())
+//	}
 func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any, res *ValidateResult) {
 	// Get the actual schema if this is a reference.
 	for s.Ref != "" {
