@@ -15,7 +15,7 @@ import (
 	humav1 "github.com/danielgtaylor/huma"
 	"github.com/danielgtaylor/huma/responses"
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 )
 
 var lastModified = time.Now()

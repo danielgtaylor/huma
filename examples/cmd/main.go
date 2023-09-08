@@ -11,7 +11,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/danielgtaylor/huma/v2/autopatch"
 	"github.com/danielgtaylor/huma/v2/sse"
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/goccy/go-yaml"
 	"github.com/spf13/cobra"
 )
