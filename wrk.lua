@@ -1,3 +1,2 @@
-wrk.method = "POST"
-wrk.body   = "{\"suffix\": \"!\"}"
-wrk.headers["Content-Type"] = "application/json"
+wrk.method = "GET"
+-- wrk.headers["Content-Type"] = "application/json"

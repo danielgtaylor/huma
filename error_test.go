@@ -2,14 +2,18 @@ package huma
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/go-chi/chi"
 	"github.com/stretchr/testify/assert"
 )
 
-// Ensure the default error model satisfies these interfaces.
+// Ensure the default error models satisfy these interfaces.
 var _ StatusError = (*ErrorModel)(nil)
 var _ ContentTypeFilter = (*ErrorModel)(nil)
+var _ ErrorDetailer = (*ErrorDetail)(nil)
 
 func TestError(t *testing.T) {
 	err := &ErrorModel{
@@ -67,4 +71,15 @@ func TestErrorResponses(t *testing.T) {
 		err := item.constructor("test")
 		assert.Equal(t, item.expected, err.GetStatus())
 	}
+}
+
+func TestNegotiateError(t *testing.T) {
+	r := chi.NewMux()
+	api := NewTestAdapter(r, Config{})
+
+	req, _ := http.NewRequest("GET", "/", nil)
+	resp := httptest.NewRecorder()
+	ctx := &testContext{nil, req, resp}
+
+	assert.Error(t, WriteErr(api, ctx, 400, "bad request"))
 }
