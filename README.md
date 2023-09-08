@@ -68,10 +68,13 @@ Here is a complete basic hello world example in Huma, that shows how to initiali
 package main
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/adapters/humachi"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/go-chi/chi/v5"
 )
 
 // Options for the CLI.
