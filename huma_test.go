@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2/queryparam"
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 	"github.com/goccy/go-yaml"
 	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/assert"

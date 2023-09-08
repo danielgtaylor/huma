@@ -16,7 +16,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/queryparam"
-	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/v5"
 )
 
 // TB is a subset of the `testing.TB` interface used by the test API and
