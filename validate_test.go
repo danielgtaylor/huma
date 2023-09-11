@@ -2,6 +2,7 @@ package huma
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -764,6 +765,34 @@ func TestValidate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func ExampleModelValidator() {
+	// Define a type you want to validate.
+	type Model struct {
+		Name string `json:"name" maxLength:"5"`
+		Age  int    `json:"age" minimum:"25"`
+	}
+
+	typ := reflect.TypeOf(Model{})
+
+	// Unmarshal some JSON into an `any` for validation. This input should not
+	// validate against the schema for the struct above.
+	var val any
+	json.Unmarshal([]byte(`{"name": "abcdefg", "age": 1}`), &val)
+
+	// Validate the unmarshaled data against the type and print errors.
+	validator := NewModelValidator()
+	errs := validator.Validate(typ, val)
+	fmt.Println(errs)
+
+	// Try again with valid data!
+	json.Unmarshal([]byte(`{"name": "foo", "age": 25}`), &val)
+	errs = validator.Validate(typ, val)
+	fmt.Println(errs)
+
+	// Output: [expected length <= 5 (name: abcdefg) expected number >= 25 (age: 1)]
+	// []
 }
 
 var BenchValidatePB *PathBuffer
