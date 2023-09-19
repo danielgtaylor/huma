@@ -365,14 +365,12 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	}
 	inputParams := findParams(registry, &op, inputType)
 	inputBodyIndex := -1
-	var inSchema *Schema
 	if f, ok := inputType.FieldByName("Body"); ok {
 		inputBodyIndex = f.Index[0]
-		inSchema = registry.Schema(f.Type, true, getHint(inputType, f.Name, op.OperationID+"Request"))
 		op.RequestBody = &RequestBody{
 			Content: map[string]*MediaType{
 				"application/json": {
-					Schema: inSchema,
+					Schema: registry.Schema(f.Type, true, getHint(inputType, f.Name, op.OperationID+"Request")),
 				},
 			},
 		}
@@ -391,6 +389,12 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	if f, ok := inputType.FieldByName("RawBody"); ok {
 		rawBodyIndex = f.Index[0]
 	}
+
+	var inSchema *Schema
+	if op.RequestBody != nil && op.RequestBody.Content != nil && op.RequestBody.Content["application/json"] != nil && op.RequestBody.Content["application/json"].Schema != nil {
+		inSchema = op.RequestBody.Content["application/json"].Schema
+	}
+
 	resolvers := findResolvers(resolverType, inputType)
 	defaults := findDefaults(inputType)
 
@@ -628,7 +632,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		})
 
 		// Read input body if defined.
-		if inputBodyIndex != -1 {
+		if inputBodyIndex != -1 || rawBodyIndex != -1 {
 			if op.BodyReadTimeout > 0 {
 				ctx.SetReadDeadline(time.Now().Add(op.BodyReadTimeout))
 			} else if op.BodyReadTimeout < 0 {
@@ -676,7 +680,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			}
 
 			if len(body) == 0 {
-				kind := v.Field(inputBodyIndex).Kind()
+				kind := reflect.Slice // []byte by default for raw body
+				if inputBodyIndex != -1 {
+					kind = v.Field(inputBodyIndex).Kind()
+				}
 				if kind != reflect.Ptr && kind != reflect.Interface {
 					buf.Reset()
 					bufPool.Put(buf)
@@ -711,28 +718,30 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					}
 				}
 
-				// We need to get the body into the correct type now that it has been
-				// validated. Benchmarks on Go 1.20 show that using `json.Unmarshal` a
-				// second time is faster than `mapstructure.Decode` or any of the other
-				// common reflection-based approaches when using real-world medium-sized
-				// JSON payloads with lots of strings.
-				f := v.Field(inputBodyIndex)
-				if err := api.Unmarshal(ctx.Header("Content-Type"), body, f.Addr().Interface()); err != nil {
-					if parseErrCount == 0 {
-						// Hmm, this should have worked... validator missed something?
-						res.Errors = append(res.Errors, &ErrorDetail{
-							Location: "body",
-							Message:  err.Error(),
-							Value:    string(body),
+				if inputBodyIndex != -1 {
+					// We need to get the body into the correct type now that it has been
+					// validated. Benchmarks on Go 1.20 show that using `json.Unmarshal` a
+					// second time is faster than `mapstructure.Decode` or any of the other
+					// common reflection-based approaches when using real-world medium-sized
+					// JSON payloads with lots of strings.
+					f := v.Field(inputBodyIndex)
+					if err := api.Unmarshal(ctx.Header("Content-Type"), body, f.Addr().Interface()); err != nil {
+						if parseErrCount == 0 {
+							// Hmm, this should have worked... validator missed something?
+							res.Errors = append(res.Errors, &ErrorDetail{
+								Location: "body",
+								Message:  err.Error(),
+								Value:    string(body),
+							})
+						}
+					} else {
+						// Set defaults for any fields that were not in the input.
+						defaults.Every(v, func(item reflect.Value, def any) {
+							if item.IsZero() {
+								item.Set(reflect.Indirect(reflect.ValueOf(def)))
+							}
 						})
 					}
-				} else {
-					// Set defaults for any fields that were not in the input.
-					defaults.Every(v, func(item reflect.Value, def any) {
-						if item.IsZero() {
-							item.Set(reflect.Indirect(reflect.ValueOf(def)))
-						}
-					})
 				}
 
 				buf.Reset()

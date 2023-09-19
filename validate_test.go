@@ -11,9 +11,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func Ptr[T any](v T) *T {
+	return &v
+}
+
 var validateTests = []struct {
 	name  string
 	typ   reflect.Type
+	s     *Schema
 	input any
 	mode  ValidateMode
 	errs  []string
@@ -727,6 +732,105 @@ var validateTests = []struct {
 		input: map[string]any{"value": ""},
 		errs:  []string{"expected length >= 1"},
 	},
+	{
+		name: "oneOf success bool",
+		s: &Schema{
+			OneOf: []*Schema{
+				{Type: TypeBoolean},
+				{Type: TypeString},
+			},
+		},
+		input: true,
+	},
+	{
+		name: "oneOf success string",
+		s: &Schema{
+			OneOf: []*Schema{
+				{Type: TypeBoolean},
+				{Type: TypeString},
+			},
+		},
+		input: "hello",
+	},
+	{
+		name: "oneOf fail zero",
+		s: &Schema{
+			OneOf: []*Schema{
+				{Type: TypeBoolean},
+				{Type: TypeString},
+			},
+		},
+		input: 123,
+		errs:  []string{"expected value to match exactly one schema but matched none"},
+	},
+	{
+		name: "oneOf fail multi",
+		s: &Schema{
+			OneOf: []*Schema{
+				{Type: TypeNumber, Minimum: Ptr(float64(5))},
+				{Type: TypeNumber, Maximum: Ptr(float64(10))},
+			},
+		},
+		input: 8,
+		errs:  []string{"expected value to match exactly one schema but matched multiple"},
+	},
+	{
+		name: "anyOf success",
+		s: &Schema{
+			AnyOf: []*Schema{
+				{Type: TypeNumber, Minimum: Ptr(float64(5))},
+				{Type: TypeNumber, Maximum: Ptr(float64(10))},
+			},
+		},
+		input: 8,
+	},
+	{
+		name: "anyOf fail",
+		s: &Schema{
+			AnyOf: []*Schema{
+				{Type: TypeNumber, Minimum: Ptr(float64(5))},
+				{Type: TypeNumber, Minimum: Ptr(float64(10))},
+			},
+		},
+		input: 1,
+		errs:  []string{"expected value to match at least one schema but matched none"},
+	},
+	{
+		name: "allOf success",
+		s: &Schema{
+			AllOf: []*Schema{
+				{Type: TypeNumber, Minimum: Ptr(float64(5))},
+				{Type: TypeNumber, Maximum: Ptr(float64(10))},
+			},
+		},
+		input: 8,
+	},
+	{
+		name: "allOf fail",
+		s: &Schema{
+			AllOf: []*Schema{
+				{Type: TypeNumber, Minimum: Ptr(float64(5))},
+				{Type: TypeNumber, Maximum: Ptr(float64(10))},
+			},
+		},
+		input: 12,
+		errs:  []string{"expected number <= 10"},
+	},
+	{
+		name: "not success",
+		s: &Schema{
+			Not: &Schema{Type: TypeNumber},
+		},
+		input: "hello",
+	},
+	{
+		name: "not fail",
+		s: &Schema{
+			Not: &Schema{Type: TypeNumber},
+		},
+		input: 5,
+		errs:  []string{"expected value to not match schema"},
+	},
 }
 
 func TestValidate(t *testing.T) {
@@ -744,7 +848,12 @@ func TestValidate(t *testing.T) {
 				})
 				return
 			} else {
-				s = registry.Schema(test.typ, false, "TestInput")
+				if test.s != nil {
+					s = test.s
+					s.PrecomputeMessages()
+				} else {
+					s = registry.Schema(test.typ, false, "TestInput")
+				}
 			}
 
 			pb.Reset()
