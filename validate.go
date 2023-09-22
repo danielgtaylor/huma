@@ -262,6 +262,40 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 	}
 }
 
+func validateOneOf(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any, res *ValidateResult) {
+	found := false
+	subRes := &ValidateResult{}
+	for _, sub := range s.OneOf {
+		Validate(r, sub, path, mode, v, subRes)
+		if len(subRes.Errors) == 0 {
+			if found {
+				res.Add(path, v, "expected value to match exactly one schema but matched multiple")
+			}
+			found = true
+		}
+		subRes.Reset()
+	}
+	if !found {
+		res.Add(path, v, "expected value to match exactly one schema but matched none")
+	}
+}
+
+func validateAnyOf(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any, res *ValidateResult) {
+	matches := 0
+	subRes := &ValidateResult{}
+	for _, sub := range s.AnyOf {
+		Validate(r, sub, path, mode, v, subRes)
+		if len(subRes.Errors) == 0 {
+			matches++
+		}
+		subRes.Reset()
+	}
+
+	if matches == 0 {
+		res.Add(path, v, "expected value to match at least one schema but matched none")
+	}
+}
+
 // Validate an input value against a schema, collecting errors in the validation
 // result object. If successful, `res.Errors` will be empty. It is suggested
 // to use a `sync.Pool` to reuse the PathBuffer and ValidateResult objects,
@@ -282,6 +316,28 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 	// Get the actual schema if this is a reference.
 	for s.Ref != "" {
 		s = r.SchemaFromRef(s.Ref)
+	}
+
+	if s.OneOf != nil {
+		validateOneOf(r, s, path, mode, v, res)
+	}
+
+	if s.AnyOf != nil {
+		validateAnyOf(r, s, path, mode, v, res)
+	}
+
+	if s.AllOf != nil {
+		for _, sub := range s.AllOf {
+			Validate(r, sub, path, mode, v, res)
+		}
+	}
+
+	if s.Not != nil {
+		subRes := &ValidateResult{}
+		Validate(r, s.Not, path, mode, v, subRes)
+		if len(subRes.Errors) == 0 {
+			res.Add(path, v, "expected value to not match schema")
+		}
 	}
 
 	switch s.Type {

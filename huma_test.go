@@ -434,6 +434,64 @@ func TestFeatures(t *testing.T) {
 				assert.Equal(t, 256, resp.Code)
 			},
 		},
+		{
+			Name: "one-of input",
+			Register: func(t *testing.T, api API) {
+				// Step 1: create a custom schema
+				customSchema := &Schema{
+					OneOf: []*Schema{
+						{
+							Type: TypeObject,
+							Properties: map[string]*Schema{
+								"foo": {Type: TypeString},
+							},
+						},
+						{
+							Type: TypeArray,
+							Items: &Schema{
+								Type: TypeObject,
+								Properties: map[string]*Schema{
+									"foo": {Type: TypeString},
+								},
+							},
+						},
+					},
+				}
+				customSchema.PrecomputeMessages()
+
+				Register(api, Operation{
+					Method: http.MethodPut,
+					Path:   "/one-of",
+					// Step 2: register an operation with a custom schema
+					RequestBody: &RequestBody{
+						Required: true,
+						Content: map[string]*MediaType{
+							"application/json": {
+								Schema: customSchema,
+							},
+						},
+					},
+				}, func(ctx context.Context, input *struct {
+					// Step 3: only take in raw bytes
+					RawBody []byte
+				}) (*struct{}, error) {
+					// Step 4: determine which it is and parse it into the right type.
+					// We will check the first byte but there are other ways to do this.
+					assert.EqualValues(t, '[', input.RawBody[0])
+					var parsed []struct {
+						Foo string `json:"foo"`
+					}
+					assert.NoError(t, json.Unmarshal(input.RawBody, &parsed))
+					assert.Len(t, parsed, 2)
+					assert.Equal(t, "first", parsed[0].Foo)
+					assert.Equal(t, "second", parsed[1].Foo)
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/one-of",
+			Body:   `[{"foo": "first"}, {"foo": "second"}]`,
+		},
 	} {
 		t.Run(feature.Name, func(t *testing.T) {
 			r := chi.NewRouter()

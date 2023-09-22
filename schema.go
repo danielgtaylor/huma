@@ -88,6 +88,11 @@ type Schema struct {
 	Deprecated           bool               `yaml:"deprecated,omitempty"`
 	Extensions           map[string]any     `yaml:",inline"`
 
+	OneOf []*Schema `yaml:"oneOf,omitempty"`
+	AnyOf []*Schema `yaml:"anyOf,omitempty"`
+	AllOf []*Schema `yaml:"allOf,omitempty"`
+	Not   *Schema   `yaml:"not,omitempty"`
+
 	patternRe     *regexp.Regexp  `yaml:"-"`
 	requiredMap   map[string]bool `yaml:"-"`
 	propertyNames []string        `yaml:"-"`
@@ -161,6 +166,22 @@ func (s *Schema) PrecomputeMessages() {
 		for _, name := range s.Required {
 			s.msgRequired[name] = "expected required property " + name + " to be present"
 		}
+	}
+
+	for _, sub := range s.OneOf {
+		sub.PrecomputeMessages()
+	}
+
+	for _, sub := range s.AnyOf {
+		sub.PrecomputeMessages()
+	}
+
+	for _, sub := range s.AllOf {
+		sub.PrecomputeMessages()
+	}
+
+	if sub := s.Not; sub != nil {
+		sub.PrecomputeMessages()
 	}
 }
 
