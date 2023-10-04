@@ -148,6 +148,9 @@ func RegisterRoutes(api huma.API) {
 		OperationID: "patch-get",
 		Method:      http.MethodGet,
 		Path:        "/patch-test",
+		//Security:    []map[string][]string{
+		//	{"bearer": {}},
+		//},
 	}, func(ctx context.Context, input *struct{}) (*Patch, error) {
 		resp := &Patch{}
 		resp.Body.Foo = "foo"
@@ -209,6 +212,15 @@ func main() {
 			},
 		}
 		api = humachi.New(r, config)
+		//api.UseMiddleware(middlewares.NewHumaJwtMiddleware(&middlewares.JWTValidationParameters{
+		//	ValidateIssuer:     true,
+		//	ValidIssuer:        "AuthServer",
+		//	ValidateAudience:   true,
+		//	ValidAudience:      "User",
+		//	SignatureAlgorithm: "HS256",
+		//	SignatureKey:       "SuperSecureKey0909!",
+		//	ValidateSignature:  true,
+		//}))
 		// api = humafiber.New(r, huma.Config{
 		// 	OpenAPI: &huma.OpenAPI{
 		// 		Info: &huma.Info{
