@@ -522,340 +522,342 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	a := api.Adapter()
 
 	a.Handle(&op, func(ctx Context) {
-		var input I
+		api.Middlewares().Handler(HandlerFunc(func(_ API, ctx Context) {
+			var input I
 
-		// Get the validation dependencies from the shared pool.
-		deps := validatePool.Get().(*validateDeps)
-		defer func() {
-			deps.pb.Reset()
-			deps.res.Reset()
-			validatePool.Put(deps)
-		}()
-		pb := deps.pb
-		res := deps.res
+			// Get the validation dependencies from the shared pool.
+			deps := validatePool.Get().(*validateDeps)
+			defer func() {
+				deps.pb.Reset()
+				deps.res.Reset()
+				validatePool.Put(deps)
+			}()
+			pb := deps.pb
+			res := deps.res
 
-		errStatus := http.StatusUnprocessableEntity
+			errStatus := http.StatusUnprocessableEntity
 
-		v := reflect.ValueOf(&input).Elem()
-		inputParams.Every(v, func(f reflect.Value, p *paramFieldInfo) {
-			var value string
-			switch p.Loc {
-			case "path":
-				value = ctx.Param(p.Name)
-			case "query":
-				value = ctx.Query(p.Name)
-			case "header":
-				value = ctx.Header(p.Name)
-			}
+			v := reflect.ValueOf(&input).Elem()
+			inputParams.Every(v, func(f reflect.Value, p *paramFieldInfo) {
+				var value string
+				switch p.Loc {
+				case "path":
+					value = ctx.Param(p.Name)
+				case "query":
+					value = ctx.Query(p.Name)
+				case "header":
+					value = ctx.Header(p.Name)
+				}
 
-			pb.Reset()
-			pb.Push(p.Loc)
-			pb.Push(p.Name)
+				pb.Reset()
+				pb.Push(p.Loc)
+				pb.Push(p.Name)
 
-			if value == "" && p.Default != "" {
-				value = p.Default
-			}
+				if value == "" && p.Default != "" {
+					value = p.Default
+				}
 
-			if p.Loc == "path" && value == "" {
-				// Path params are always required.
-				res.Add(pb, "", "required path parameter is missing")
-				return
-			}
+				if p.Loc == "path" && value == "" {
+					// Path params are always required.
+					res.Add(pb, "", "required path parameter is missing")
+					return
+				}
 
-			if value != "" {
-				var pv any
+				if value != "" {
+					var pv any
 
-				switch p.Type.Kind() {
-				case reflect.String:
-					f.SetString(value)
-					pv = value
-				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-					v, err := strconv.ParseInt(value, 10, 64)
-					if err != nil {
-						res.Add(pb, value, "invalid integer")
-						return
-					}
-					f.SetInt(v)
-					pv = v
-				case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-					v, err := strconv.ParseUint(value, 10, 64)
-					if err != nil {
-						res.Add(pb, value, "invalid integer")
-						return
-					}
-					f.SetUint(v)
-					pv = v
-				case reflect.Float32, reflect.Float64:
-					v, err := strconv.ParseFloat(value, 64)
-					if err != nil {
-						res.Add(pb, value, "invalid float")
-						return
-					}
-					f.SetFloat(v)
-					pv = v
-				case reflect.Bool:
-					v, err := strconv.ParseBool(value)
-					if err != nil {
-						res.Add(pb, value, "invalid boolean")
-						return
-					}
-					f.SetBool(v)
-					pv = v
-				default:
-					// Special case: list of strings
-					if f.Type().Kind() == reflect.Slice && f.Type().Elem().Kind() == reflect.String {
-						values := strings.Split(value, ",")
-						f.Set(reflect.ValueOf(values))
-						pv = values
-						break
-					}
-
-					// Special case: time.Time
-					if f.Type() == timeType {
-						t, err := time.Parse(p.TimeFormat, value)
+					switch p.Type.Kind() {
+					case reflect.String:
+						f.SetString(value)
+						pv = value
+					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+						v, err := strconv.ParseInt(value, 10, 64)
 						if err != nil {
-							res.Add(pb, value, "invalid date/time for format "+p.TimeFormat)
+							res.Add(pb, value, "invalid integer")
 							return
 						}
-						f.Set(reflect.ValueOf(t))
-						pv = value
-						break
-					}
-
-					panic("unsupported param type " + p.Type.String())
-				}
-
-				if !op.SkipValidateParams {
-					Validate(oapi.Components.Schemas, p.Schema, pb, ModeWriteToServer, pv, res)
-				}
-			}
-		})
-
-		// Read input body if defined.
-		if inputBodyIndex != -1 || rawBodyIndex != -1 {
-			if op.BodyReadTimeout > 0 {
-				ctx.SetReadDeadline(time.Now().Add(op.BodyReadTimeout))
-			} else if op.BodyReadTimeout < 0 {
-				// Disable any server-wide deadline.
-				ctx.SetReadDeadline(time.Time{})
-			}
-
-			buf := bufPool.Get().(*bytes.Buffer)
-			reader := ctx.BodyReader()
-			if reader == nil {
-				reader = bytes.NewReader(nil)
-			}
-			if closer, ok := reader.(io.Closer); ok {
-				defer closer.Close()
-			}
-			if op.MaxBodyBytes > 0 {
-				reader = io.LimitReader(reader, op.MaxBodyBytes)
-			}
-			count, err := io.Copy(buf, reader)
-			if op.MaxBodyBytes > 0 {
-				if count == op.MaxBodyBytes {
-					buf.Reset()
-					bufPool.Put(buf)
-					WriteErr(api, ctx, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body is too large limit=%d bytes", op.MaxBodyBytes), res.Errors...)
-					return
-				}
-			}
-			if err != nil {
-				buf.Reset()
-				bufPool.Put(buf)
-
-				if e, ok := err.(net.Error); ok && e.Timeout() {
-					WriteErr(api, ctx, http.StatusRequestTimeout, "request body read timeout", res.Errors...)
-					return
-				}
-
-				WriteErr(api, ctx, http.StatusInternalServerError, "cannot read request body", err)
-				return
-			}
-			body := buf.Bytes()
-
-			if rawBodyIndex != -1 {
-				f := v.Field(rawBodyIndex)
-				f.SetBytes(body)
-			}
-
-			if len(body) == 0 {
-				kind := reflect.Slice // []byte by default for raw body
-				if inputBodyIndex != -1 {
-					kind = v.Field(inputBodyIndex).Kind()
-				}
-				if kind != reflect.Ptr && kind != reflect.Interface {
-					buf.Reset()
-					bufPool.Put(buf)
-					WriteErr(api, ctx, http.StatusBadRequest, "request body is required", res.Errors...)
-					return
-				}
-			} else {
-				parseErrCount := 0
-				if !op.SkipValidateBody {
-					// Validate the input. First, parse the body into []any or map[string]any
-					// or equivalent, which can be easily validated. Then, convert to the
-					// expected struct type to call the handler.
-					var parsed any
-					if err := api.Unmarshal(ctx.Header("Content-Type"), body, &parsed); err != nil {
-						// TODO: handle not acceptable
-						errStatus = http.StatusBadRequest
-						res.Errors = append(res.Errors, &ErrorDetail{
-							Location: "body",
-							Message:  err.Error(),
-							Value:    body,
-						})
-						parseErrCount++
-					} else {
-						pb.Reset()
-						pb.Push("body")
-						count := len(res.Errors)
-						Validate(oapi.Components.Schemas, inSchema, pb, ModeWriteToServer, parsed, res)
-						parseErrCount = len(res.Errors) - count
-						if parseErrCount > 0 {
-							errStatus = http.StatusUnprocessableEntity
+						f.SetInt(v)
+						pv = v
+					case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+						v, err := strconv.ParseUint(value, 10, 64)
+						if err != nil {
+							res.Add(pb, value, "invalid integer")
+							return
 						}
+						f.SetUint(v)
+						pv = v
+					case reflect.Float32, reflect.Float64:
+						v, err := strconv.ParseFloat(value, 64)
+						if err != nil {
+							res.Add(pb, value, "invalid float")
+							return
+						}
+						f.SetFloat(v)
+						pv = v
+					case reflect.Bool:
+						v, err := strconv.ParseBool(value)
+						if err != nil {
+							res.Add(pb, value, "invalid boolean")
+							return
+						}
+						f.SetBool(v)
+						pv = v
+					default:
+						// Special case: list of strings
+						if f.Type().Kind() == reflect.Slice && f.Type().Elem().Kind() == reflect.String {
+							values := strings.Split(value, ",")
+							f.Set(reflect.ValueOf(values))
+							pv = values
+							break
+						}
+
+						// Special case: time.Time
+						if f.Type() == timeType {
+							t, err := time.Parse(p.TimeFormat, value)
+							if err != nil {
+								res.Add(pb, value, "invalid date/time for format "+p.TimeFormat)
+								return
+							}
+							f.Set(reflect.ValueOf(t))
+							pv = value
+							break
+						}
+
+						panic("unsupported param type " + p.Type.String())
+					}
+
+					if !op.SkipValidateParams {
+						Validate(oapi.Components.Schemas, p.Schema, pb, ModeWriteToServer, pv, res)
 					}
 				}
+			})
 
-				if inputBodyIndex != -1 {
-					// We need to get the body into the correct type now that it has been
-					// validated. Benchmarks on Go 1.20 show that using `json.Unmarshal` a
-					// second time is faster than `mapstructure.Decode` or any of the other
-					// common reflection-based approaches when using real-world medium-sized
-					// JSON payloads with lots of strings.
-					f := v.Field(inputBodyIndex)
-					if err := api.Unmarshal(ctx.Header("Content-Type"), body, f.Addr().Interface()); err != nil {
-						if parseErrCount == 0 {
-							// Hmm, this should have worked... validator missed something?
+			// Read input body if defined.
+			if inputBodyIndex != -1 || rawBodyIndex != -1 {
+				if op.BodyReadTimeout > 0 {
+					ctx.SetReadDeadline(time.Now().Add(op.BodyReadTimeout))
+				} else if op.BodyReadTimeout < 0 {
+					// Disable any server-wide deadline.
+					ctx.SetReadDeadline(time.Time{})
+				}
+
+				buf := bufPool.Get().(*bytes.Buffer)
+				reader := ctx.BodyReader()
+				if reader == nil {
+					reader = bytes.NewReader(nil)
+				}
+				if closer, ok := reader.(io.Closer); ok {
+					defer closer.Close()
+				}
+				if op.MaxBodyBytes > 0 {
+					reader = io.LimitReader(reader, op.MaxBodyBytes)
+				}
+				count, err := io.Copy(buf, reader)
+				if op.MaxBodyBytes > 0 {
+					if count == op.MaxBodyBytes {
+						buf.Reset()
+						bufPool.Put(buf)
+						WriteErr(api, ctx, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body is too large limit=%d bytes", op.MaxBodyBytes), res.Errors...)
+						return
+					}
+				}
+				if err != nil {
+					buf.Reset()
+					bufPool.Put(buf)
+
+					if e, ok := err.(net.Error); ok && e.Timeout() {
+						WriteErr(api, ctx, http.StatusRequestTimeout, "request body read timeout", res.Errors...)
+						return
+					}
+
+					WriteErr(api, ctx, http.StatusInternalServerError, "cannot read request body", err)
+					return
+				}
+				body := buf.Bytes()
+
+				if rawBodyIndex != -1 {
+					f := v.Field(rawBodyIndex)
+					f.SetBytes(body)
+				}
+
+				if len(body) == 0 {
+					kind := reflect.Slice // []byte by default for raw body
+					if inputBodyIndex != -1 {
+						kind = v.Field(inputBodyIndex).Kind()
+					}
+					if kind != reflect.Ptr && kind != reflect.Interface {
+						buf.Reset()
+						bufPool.Put(buf)
+						WriteErr(api, ctx, http.StatusBadRequest, "request body is required", res.Errors...)
+						return
+					}
+				} else {
+					parseErrCount := 0
+					if !op.SkipValidateBody {
+						// Validate the input. First, parse the body into []any or map[string]any
+						// or equivalent, which can be easily validated. Then, convert to the
+						// expected struct type to call the handler.
+						var parsed any
+						if err := api.Unmarshal(ctx.Header("Content-Type"), body, &parsed); err != nil {
+							// TODO: handle not acceptable
+							errStatus = http.StatusBadRequest
 							res.Errors = append(res.Errors, &ErrorDetail{
 								Location: "body",
 								Message:  err.Error(),
-								Value:    string(body),
+								Value:    body,
+							})
+							parseErrCount++
+						} else {
+							pb.Reset()
+							pb.Push("body")
+							count := len(res.Errors)
+							Validate(oapi.Components.Schemas, inSchema, pb, ModeWriteToServer, parsed, res)
+							parseErrCount = len(res.Errors) - count
+							if parseErrCount > 0 {
+								errStatus = http.StatusUnprocessableEntity
+							}
+						}
+					}
+
+					if inputBodyIndex != -1 {
+						// We need to get the body into the correct type now that it has been
+						// validated. Benchmarks on Go 1.20 show that using `json.Unmarshal` a
+						// second time is faster than `mapstructure.Decode` or any of the other
+						// common reflection-based approaches when using real-world medium-sized
+						// JSON payloads with lots of strings.
+						f := v.Field(inputBodyIndex)
+						if err := api.Unmarshal(ctx.Header("Content-Type"), body, f.Addr().Interface()); err != nil {
+							if parseErrCount == 0 {
+								// Hmm, this should have worked... validator missed something?
+								res.Errors = append(res.Errors, &ErrorDetail{
+									Location: "body",
+									Message:  err.Error(),
+									Value:    string(body),
+								})
+							}
+						} else {
+							// Set defaults for any fields that were not in the input.
+							defaults.Every(v, func(item reflect.Value, def any) {
+								if item.IsZero() {
+									item.Set(reflect.Indirect(reflect.ValueOf(def)))
+								}
 							})
 						}
-					} else {
-						// Set defaults for any fields that were not in the input.
-						defaults.Every(v, func(item reflect.Value, def any) {
-							if item.IsZero() {
-								item.Set(reflect.Indirect(reflect.ValueOf(def)))
-							}
-						})
 					}
+
+					buf.Reset()
+					bufPool.Put(buf)
 				}
-
-				buf.Reset()
-				bufPool.Put(buf)
-			}
-		}
-
-		resolvers.EveryPB(pb, v, func(item reflect.Value, _ bool) {
-			if resolver, ok := item.Addr().Interface().(Resolver); ok {
-				if errs := resolver.Resolve(ctx); len(errs) > 0 {
-					res.Errors = append(res.Errors, errs...)
-				}
-			} else if resolver, ok := item.Addr().Interface().(ResolverWithPath); ok {
-				if errs := resolver.Resolve(ctx, pb); len(errs) > 0 {
-					res.Errors = append(res.Errors, errs...)
-				}
-			} else {
-				panic("matched resolver cannot be run, please file a bug")
-			}
-		})
-
-		if len(res.Errors) > 0 {
-			WriteErr(api, ctx, errStatus, "validation failed", res.Errors...)
-			return
-		}
-
-		output, err := handler(ctx.Context(), &input)
-		if err != nil {
-			status := http.StatusInternalServerError
-			if se, ok := err.(StatusError); ok {
-				status = se.GetStatus()
-			} else {
-				err = NewError(http.StatusInternalServerError, err.Error())
 			}
 
-			ct, _ := api.Negotiate(ctx.Header("Accept"))
-			if ctf, ok := err.(ContentTypeFilter); ok {
-				ct = ctf.ContentType(ct)
-			}
-
-			ctx.SetStatus(status)
-			ctx.SetHeader("Content-Type", ct)
-			api.Marshal(ctx, strconv.Itoa(status), ct, err)
-			return
-		}
-
-		// Serialize output headers
-		ct := ""
-		vo := reflect.ValueOf(output).Elem()
-		outHeaders.Every(vo, func(f reflect.Value, info *headerInfo) {
-			switch f.Kind() {
-			case reflect.String:
-				ctx.SetHeader(info.Name, f.String())
-				if info.Name == "Content-Type" {
-					ct = f.String()
+			resolvers.EveryPB(pb, v, func(item reflect.Value, _ bool) {
+				if resolver, ok := item.Addr().Interface().(Resolver); ok {
+					if errs := resolver.Resolve(ctx); len(errs) > 0 {
+						res.Errors = append(res.Errors, errs...)
+					}
+				} else if resolver, ok := item.Addr().Interface().(ResolverWithPath); ok {
+					if errs := resolver.Resolve(ctx, pb); len(errs) > 0 {
+						res.Errors = append(res.Errors, errs...)
+					}
+				} else {
+					panic("matched resolver cannot be run, please file a bug")
 				}
-			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				ctx.SetHeader(info.Name, strconv.FormatInt(f.Int(), 10))
-			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-				ctx.SetHeader(info.Name, strconv.FormatUint(f.Uint(), 10))
-			case reflect.Float32, reflect.Float64:
-				ctx.SetHeader(info.Name, strconv.FormatFloat(f.Float(), 'f', -1, 64))
-			case reflect.Bool:
-				ctx.SetHeader(info.Name, strconv.FormatBool(f.Bool()))
-			default:
-				if f.Type() == timeType {
-					ctx.SetHeader(info.Name, f.Interface().(time.Time).Format(info.TimeFormat))
-					return
-				}
+			})
 
-				ctx.SetHeader(info.Name, fmt.Sprintf("%v", f.Interface()))
-			}
-		})
-
-		status := op.DefaultStatus
-		if outStatusIndex != -1 {
-			status = int(vo.Field(outStatusIndex).Int())
-		}
-
-		if outBodyIndex != -1 {
-			// Serialize output body
-			body := vo.Field(outBodyIndex).Interface()
-
-			if outBodyFunc {
-				body.(func(Context))(ctx)
+			if len(res.Errors) > 0 {
+				WriteErr(api, ctx, errStatus, "validation failed", res.Errors...)
 				return
 			}
 
-			if b, ok := body.([]byte); ok {
-				ctx.SetStatus(status)
-				ctx.BodyWriter().Write(b)
-				return
-			}
-
-			// Only write a content type if one wasn't already written by the
-			// response headers handled above.
-			if ct == "" {
-				ct, err = api.Negotiate(ctx.Header("Accept"))
-				if err != nil {
-					WriteErr(api, ctx, http.StatusNotAcceptable, "unable to marshal response", err)
-					return
+			output, err := handler(ctx.Context(), &input)
+			if err != nil {
+				status := http.StatusInternalServerError
+				if se, ok := err.(StatusError); ok {
+					status = se.GetStatus()
+				} else {
+					err = NewError(http.StatusInternalServerError, err.Error())
 				}
-				if ctf, ok := body.(ContentTypeFilter); ok {
+
+				ct, _ := api.Negotiate(ctx.Header("Accept"))
+				if ctf, ok := err.(ContentTypeFilter); ok {
 					ct = ctf.ContentType(ct)
 				}
 
+				ctx.SetStatus(status)
 				ctx.SetHeader("Content-Type", ct)
+				api.Marshal(ctx, strconv.Itoa(status), ct, err)
+				return
 			}
 
-			ctx.SetStatus(status)
-			api.Marshal(ctx, strconv.Itoa(op.DefaultStatus), ct, body)
-		} else {
-			ctx.SetStatus(status)
-		}
+			// Serialize output headers
+			ct := ""
+			vo := reflect.ValueOf(output).Elem()
+			outHeaders.Every(vo, func(f reflect.Value, info *headerInfo) {
+				switch f.Kind() {
+				case reflect.String:
+					ctx.SetHeader(info.Name, f.String())
+					if info.Name == "Content-Type" {
+						ct = f.String()
+					}
+				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+					ctx.SetHeader(info.Name, strconv.FormatInt(f.Int(), 10))
+				case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+					ctx.SetHeader(info.Name, strconv.FormatUint(f.Uint(), 10))
+				case reflect.Float32, reflect.Float64:
+					ctx.SetHeader(info.Name, strconv.FormatFloat(f.Float(), 'f', -1, 64))
+				case reflect.Bool:
+					ctx.SetHeader(info.Name, strconv.FormatBool(f.Bool()))
+				default:
+					if f.Type() == timeType {
+						ctx.SetHeader(info.Name, f.Interface().(time.Time).Format(info.TimeFormat))
+						return
+					}
+
+					ctx.SetHeader(info.Name, fmt.Sprintf("%v", f.Interface()))
+				}
+			})
+
+			status := op.DefaultStatus
+			if outStatusIndex != -1 {
+				status = int(vo.Field(outStatusIndex).Int())
+			}
+
+			if outBodyIndex != -1 {
+				// Serialize output body
+				body := vo.Field(outBodyIndex).Interface()
+
+				if outBodyFunc {
+					body.(func(Context))(ctx)
+					return
+				}
+
+				if b, ok := body.([]byte); ok {
+					ctx.SetStatus(status)
+					ctx.BodyWriter().Write(b)
+					return
+				}
+
+				// Only write a content type if one wasn't already written by the
+				// response headers handled above.
+				if ct == "" {
+					ct, err = api.Negotiate(ctx.Header("Accept"))
+					if err != nil {
+						WriteErr(api, ctx, http.StatusNotAcceptable, "unable to marshal response", err)
+						return
+					}
+					if ctf, ok := body.(ContentTypeFilter); ok {
+						ct = ctf.ContentType(ct)
+					}
+
+					ctx.SetHeader("Content-Type", ct)
+				}
+
+				ctx.SetStatus(status)
+				api.Marshal(ctx, strconv.Itoa(op.DefaultStatus), ct, body)
+			} else {
+				ctx.SetStatus(status)
+			}
+		})).Handle(api, ctx)
 	})
 }
 
