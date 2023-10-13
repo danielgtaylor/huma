@@ -1,6 +1,7 @@
 package humafiber
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"mime/multipart"
@@ -62,7 +63,11 @@ func (c *fiberCtx) EachHeader(cb func(name, value string)) {
 }
 
 func (c *fiberCtx) BodyReader() io.Reader {
-	return c.orig.Request().BodyStream()
+	if c.orig.App().Server().StreamRequestBody {
+		// Streaming is enabled, so send the reader.
+		return c.orig.Request().BodyStream()
+	}
+	return bytes.NewReader(c.orig.BodyRaw())
 }
 
 func (c *fiberCtx) GetMultipartForm() (*multipart.Form, error) {
