@@ -97,6 +97,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 
 		name := ""
 		required := false
+		var explode *bool
 		if p := f.Tag.Get("path"); p != "" {
 			pfi.Loc = "path"
 			name = p
@@ -104,6 +105,10 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		} else if q := f.Tag.Get("query"); q != "" {
 			pfi.Loc = "query"
 			name = q
+			// If `in` is `query` then `explode` defaults to true. Parsing is *much*
+			// easier if we use comma-separated values, so we disable explode.
+			nope := false
+			explode = &nope
 		} else if h := f.Tag.Get("header"); h != "" {
 			pfi.Loc = "header"
 			name = h
@@ -129,6 +134,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			op.Parameters = append(op.Parameters, &Param{
 				Name:     name,
 				In:       pfi.Loc,
+				Explode:  explode,
 				Required: required,
 				Schema:   pfi.Schema,
 				Example:  example,
