@@ -177,12 +177,39 @@ http.ListenAndServe(":8888", r)
 
 ### Middleware
 
-Huma v1 came with its own middleware, but v2 does not. You can use any middleware you want, or even write your own. This is for two reasons:
+Huma v2 has support two variants of middlewares:
 
-1. Middleware is often router-specific and Huma is designed to be router-agnostic.
-2. Many organizations already have a set of middleware for logging, metrics, distributed tracing, panic recovery, etc.
+1. Router-specific - works at the router level, i.e. before router-specific middleware, you can use any middleware that is implemented for your router.
+2. Router-agnostic - runs in the Huma processing chain, i.e. after calls to router-specific middleware.
 
+#### Router-specific
+Each router implementation has its own middlewares, you can use this middlewares with huma v2 framework.
+
+Chi router example:
+```go
+router := chi.NewMux()
+router.Use(jwtauth.Verifier(tokenAuth))
+api := humachi.New(router, defconfig)
+```
 > :whale: Huma v1 middleware is compatible with Chi, so if you use that router with v2 you can continue to use the v1 middleware in a v2 application.
+
+
+#### Router-agnostic
+You can write you own huma v2 middleware without dependency to router implementation.
+
+Example:
+```go
+func MyMiddleware(ctx huma.Context, next func(huma.Context)) {
+    // I don't do anything
+    next(ctx)
+}
+func NewHumaAPI() huma.API {
+    // ...
+    api := humachi.New(router, config)
+    // OR api := humagin.New(router, config)
+    api.UseMiddleware(MyMiddleware)
+}
+```
 
 ## Open API Generation & Extensibility
 

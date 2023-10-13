@@ -527,7 +527,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 	a := api.Adapter()
 
-	a.Handle(&op, func(ctx Context) {
+	a.Handle(&op, api.Middlewares().Handler(func(ctx Context) {
 		var input I
 
 		// Get the validation dependencies from the shared pool.
@@ -862,7 +862,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		} else {
 			ctx.SetStatus(status)
 		}
-	})
+	}))
 }
 
 // AutoRegister auto-detects operation registration methods and registers them

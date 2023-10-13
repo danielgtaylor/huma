@@ -123,6 +123,17 @@ type API interface {
 
 	// Unmarshal unmarshals the given data into the given value. The content type
 	Unmarshal(contentType string, data []byte, v any) error
+
+	// UseMiddleware appends a middleware handler to the API middleware stack.
+	//
+	// The middleware stack for any API will execute before searching for a matching
+	// route to a specific handler, which provides opportunity to respond early,
+	// change the course of the request execution, or set request-scoped values for
+	// the next Middleware.
+	UseMiddleware(middlewares ...func(ctx Context, next func(Context)))
+
+	// Middlewares returns a slice of middleware handler functions.
+	Middlewares() Middlewares
 }
 
 // Format represents a request / response format. It is used to marshal and
@@ -141,6 +152,7 @@ type api struct {
 	formats      map[string]Format
 	formatKeys   []string
 	transformers []Transformer
+	middlewares  Middlewares
 }
 
 func (a *api) Adapter() Adapter {
@@ -200,6 +212,14 @@ func (a *api) Marshal(ctx Context, respKey string, ct string, v any) error {
 		return fmt.Errorf("unknown content type: %s", ct)
 	}
 	return f.Marshal(ctx.BodyWriter(), v)
+}
+
+func (a *api) UseMiddleware(middlewares ...func(ctx Context, next func(Context))) {
+	a.middlewares = append(a.middlewares, middlewares...)
+}
+
+func (a *api) Middlewares() Middlewares {
+	return a.middlewares
 }
 
 func NewAPI(config Config, a Adapter) API {
