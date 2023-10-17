@@ -119,7 +119,7 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, status string, v any) (an
 		return v, nil
 	}
 
-	host := ctx.Header("Host")
+	host := ctx.Host()
 	ctx.AppendHeader("Link", info.header)
 
 	vv := reflect.Indirect(reflect.ValueOf(v))
