@@ -942,7 +942,7 @@ o.Components.SecuritySchemes["my-scheme"] = &huma.SecurityScheme{
 o.Extensions["x-cli-autoconfig"] = huma.AutoConfig{
 	Security: "my-scheme",
 	Params: map[string]string{
-		"cliend_id": "abc123",
+		"client_id": "abc123",
 		"authorize_url": "https://example.tld/authorize",
 		"token_url": "https://example.tld/token",
 		"scopes": "read,write",
