@@ -918,7 +918,7 @@ sse.Register(api, huma.Operation{
 	"message":      DefaultMessage{},
 	"userCreate":   UserCreatedEvent{},
 	"mailRecieved": MailReceivedEvent{},
-}, func(ctx context.Context, input *struct{}, send func(sse.Message) error) {
+}, func(ctx context.Context, input *struct{}, send sse.Sender) {
 	// Send an event every second for 10 seconds.
 	for x := 0; x < 10; x++ {
 		send.Data(MailReceivedEvent{UserID: "abc123"})
