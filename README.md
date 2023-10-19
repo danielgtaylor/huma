@@ -183,21 +183,25 @@ Huma v2 has support two variants of middlewares:
 2. Router-agnostic - runs in the Huma processing chain, i.e. after calls to router-specific middleware.
 
 #### Router-specific
+
 Each router implementation has its own middlewares, you can use this middlewares with huma v2 framework.
 
 Chi router example:
+
 ```go
 router := chi.NewMux()
 router.Use(jwtauth.Verifier(tokenAuth))
 api := humachi.New(router, defconfig)
 ```
+
 > :whale: Huma v1 middleware is compatible with Chi, so if you use that router with v2 you can continue to use the v1 middleware in a v2 application.
 
-
 #### Router-agnostic
+
 You can write you own huma v2 middleware without dependency to router implementation.
 
 Example:
+
 ```go
 func MyMiddleware(ctx huma.Context, next func(huma.Context)) {
     // I don't do anything
@@ -774,6 +778,8 @@ cli := huma.NewCLI(func(hooks huma.Hooks, opts *Options) {
 })
 ```
 
+> :whale: Option fields are automatically converted to `--kebab-casing` for use on the command line. If you want to use a different name, use the `name` struct tag to override the default behavior!
+
 ### Custom Options
 
 Custom options are defined by adding to your options struct. The following types are supported:
@@ -786,11 +792,12 @@ Custom options are defined by adding to your options struct. The following types
 
 The following struct tags are available:
 
-| Tag       | Description                             | Example              |
-| --------- | --------------------------------------- | -------------------- |
-| `default` | Default value (parsed automatically)    | `default:"123"`      |
-| `doc`     | Describe the option                     | `doc:"Who to greet"` |
-| `short`   | Single letter short name for the option | `short:"p"` for `-p` |
+| Tag       | Description                             | Example                 |
+| --------- | --------------------------------------- | ----------------------- |
+| `default` | Default value (parsed automatically)    | `default:"123"`         |
+| `doc`     | Describe the option                     | `doc:"Who to greet"`    |
+| `name`    | Override the name of the option         | `name:"my-option-name"` |
+| `short`   | Single letter short name for the option | `short:"p"` for `-p`    |
 
 ### Custom Commands
 
