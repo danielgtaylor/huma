@@ -374,6 +374,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	if f, ok := inputType.FieldByName("Body"); ok {
 		inputBodyIndex = f.Index[0]
 		op.RequestBody = &RequestBody{
+			Required: f.Type.Kind() != reflect.Ptr && f.Type.Kind() != reflect.Interface,
 			Content: map[string]*MediaType{
 				"application/json": {
 					Schema: registry.Schema(f.Type, true, getHint(inputType, f.Name, op.OperationID+"Request")),
@@ -686,11 +687,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			}
 
 			if len(body) == 0 {
-				kind := reflect.Slice // []byte by default for raw body
-				if inputBodyIndex != -1 {
-					kind = v.Field(inputBodyIndex).Kind()
-				}
-				if kind != reflect.Ptr && kind != reflect.Interface {
+				if op.RequestBody != nil && op.RequestBody.Required {
 					buf.Reset()
 					bufPool.Put(buf)
 					WriteErr(api, ctx, http.StatusBadRequest, "request body is required", res.Errors...)

@@ -403,6 +403,13 @@ func getFields(typ reflect.Type) []fieldInfo {
 	return fields
 }
 
+// SchemaProvider is an interface that can be implemented by types to provide
+// a custom schema for themselves, overriding the built-in schema generation.
+// This can be used by custom types with their own special serialization rules.
+type SchemaProvider interface {
+	Schema(r Registry) *Schema
+}
+
 // SchemaFromType returns a schema for a given type, using the registry to
 // possibly create references for nested structs. The schema that is returned
 // can then be passed to `huma.Validate` to efficiently validate incoming
@@ -412,6 +419,12 @@ func getFields(typ reflect.Type) []fieldInfo {
 //	registry := huma.NewMapRegistry("#/prefix", huma.DefaultSchemaNamer)
 //	schema := huma.SchemaFromType(registry, reflect.TypeOf(MyType{}))
 func SchemaFromType(r Registry, t reflect.Type) *Schema {
+	v := reflect.New(t).Interface()
+	if sp, ok := v.(SchemaProvider); ok {
+		// Special case: type provides its own schema. Do not try to generate.
+		return sp.Schema(r)
+	}
+
 	s := Schema{}
 	t = deref(t)
 
