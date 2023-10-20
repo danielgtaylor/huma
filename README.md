@@ -1030,7 +1030,7 @@ The `huma.Register` function is a highly-optimized wrapper around the low-level 
 ## Migrating from Huma v1
 
 1. Import `github.com/danielgtaylor/huma/v2` instead of `github.com/danielgtaylor/huma`.
-1. Use the `humachi` adapter as v1 uses Chi under the hood
+1. Use the `humachi.NewV4` adapter as Huma v1 uses Chi v4 under the hood
 1. Attach your middleware to the `chi` instance.
 1. Replace resource & operation creation with `huma.Register`
 1. Rewrite handlers to be like `func(context.Context, *Input) (*Output, error)`
