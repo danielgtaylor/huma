@@ -373,13 +373,15 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	inputBodyIndex := -1
 	if f, ok := inputType.FieldByName("Body"); ok {
 		inputBodyIndex = f.Index[0]
-		op.RequestBody = &RequestBody{
-			Required: f.Type.Kind() != reflect.Ptr && f.Type.Kind() != reflect.Interface,
-			Content: map[string]*MediaType{
-				"application/json": {
-					Schema: registry.Schema(f.Type, true, getHint(inputType, f.Name, op.OperationID+"Request")),
+		if op.RequestBody == nil {
+			op.RequestBody = &RequestBody{
+				Required: f.Type.Kind() != reflect.Ptr && f.Type.Kind() != reflect.Interface,
+				Content: map[string]*MediaType{
+					"application/json": {
+						Schema: registry.Schema(f.Type, true, getHint(inputType, f.Name, op.OperationID+"Request")),
+					},
 				},
-			},
+			}
 		}
 
 		if op.BodyReadTimeout == 0 {
@@ -457,7 +459,9 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			if _, ok := op.Responses[statusStr].Content["application/json"]; !ok {
 				op.Responses[statusStr].Content["application/json"] = &MediaType{}
 			}
-			op.Responses[statusStr].Content["application/json"].Schema = outSchema
+			if op.Responses[statusStr].Content["application/json"].Schema == nil {
+				op.Responses[statusStr].Content["application/json"].Schema = outSchema
+			}
 		}
 	}
 	if op.DefaultStatus == 0 {
