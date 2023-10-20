@@ -1,6 +1,7 @@
 package huma
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/bits"
@@ -470,6 +471,64 @@ func TestSchemaGenericNaming(t *testing.T) {
 	assert.JSONEq(t, `{
 		"$ref": "#/components/schemas/SchemaGenericint"
 	}`, string(b))
+}
+
+type OmittableNullable[T any] struct {
+	Sent  bool
+	Null  bool
+	Value T
+}
+
+func (o *OmittableNullable[T]) UnmarshalJSON(b []byte) error {
+	if len(b) > 0 {
+		o.Sent = true
+		if bytes.Equal(b, []byte("null")) {
+			o.Null = true
+			return nil
+		}
+		return json.Unmarshal(b, &o.Value)
+	}
+	return nil
+}
+
+func (o OmittableNullable[T]) Schema(r Registry) *Schema {
+	return r.Schema(reflect.TypeOf(o.Value), true, "")
+}
+
+func TestCustomUnmarshalType(t *testing.T) {
+	type O struct {
+		Field OmittableNullable[int] `json:"field" maximum:"10"`
+	}
+
+	var o O
+
+	// Confirm the schema is generated properly, including field constraints.
+	r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+	s := r.Schema(reflect.TypeOf(o), false, "")
+	assert.Equal(t, "integer", s.Properties["field"].Type, s)
+	assert.Equal(t, Ptr(float64(10)), s.Properties["field"].Maximum, s)
+
+	// Confirm the field works as expected when loading JSON.
+	o = O{}
+	err := json.Unmarshal([]byte(`{"field": 123}`), &o)
+	assert.NoError(t, err)
+	assert.True(t, o.Field.Sent)
+	assert.False(t, o.Field.Null)
+	assert.Equal(t, 123, o.Field.Value)
+
+	o = O{}
+	err = json.Unmarshal([]byte(`{"field": null}`), &o)
+	assert.NoError(t, err)
+	assert.True(t, o.Field.Sent)
+	assert.True(t, o.Field.Null)
+	assert.Equal(t, 0, o.Field.Value)
+
+	o = O{}
+	err = json.Unmarshal([]byte(`{}`), &o)
+	assert.NoError(t, err)
+	assert.False(t, o.Field.Sent)
+	assert.False(t, o.Field.Null)
+	assert.Equal(t, 0, o.Field.Value)
 }
 
 type BenchSub struct {
