@@ -198,7 +198,7 @@ func boolTag(f reflect.StructField, tag string) bool {
 		} else if v == "false" {
 			return false
 		} else {
-			panic("invalid bool tag '" + tag + "' for field '" + f.Name + "': " + v)
+			panic(fmt.Errorf("invalid bool tag '%s' for field '%s': %v", tag, f.Name, v))
 		}
 	}
 	return false
@@ -209,7 +209,7 @@ func intTag(f reflect.StructField, tag string) *int {
 		if i, err := strconv.Atoi(v); err == nil {
 			return &i
 		} else {
-			panic("invalid int tag '" + tag + "' for field '" + f.Name + "': " + v + " (" + err.Error() + ")")
+			panic(fmt.Errorf("invalid int tag '%s' for field '%s': %v (%w)", tag, f.Name, v, err))
 		}
 	}
 	return nil
@@ -220,7 +220,7 @@ func floatTag(f reflect.StructField, tag string) *float64 {
 		if i, err := strconv.ParseFloat(v, 64); err == nil {
 			return &i
 		} else {
-			panic("invalid float tag '" + tag + "' for field '" + f.Name + "': " + v + " (" + err.Error() + ")")
+			panic(fmt.Errorf("invalid float tag '%s' for field '%s': %v (%w)", tag, f.Name, v, err))
 		}
 	}
 	return nil
@@ -228,7 +228,7 @@ func floatTag(f reflect.StructField, tag string) *float64 {
 
 func jsonTagValue(f reflect.StructField, t reflect.Type, value string) any {
 	// Special case: strings don't need quotes.
-	if t.Kind() == reflect.String {
+	if t.Kind() == reflect.String || (t.Kind() == reflect.Pointer && t.Elem().Kind() == reflect.String) {
 		return value
 	}
 
@@ -243,7 +243,7 @@ func jsonTagValue(f reflect.StructField, t reflect.Type, value string) any {
 
 	var v any
 	if err := json.Unmarshal([]byte(value), &v); err != nil {
-		panic("invalid tag for field '" + f.Name + "': " + err.Error())
+		panic(fmt.Errorf("invalid tag for field '%s': %w", f.Name, err))
 	}
 
 	vv := reflect.ValueOf(v)
@@ -256,17 +256,25 @@ func jsonTagValue(f reflect.StructField, t reflect.Type, value string) any {
 			tmp := reflect.MakeSlice(t, 0, vv.Len())
 			for i := 0; i < vv.Len(); i++ {
 				if !vv.Index(i).Elem().Type().ConvertibleTo(t.Elem()) {
-					panic(fmt.Errorf("unable to convert %v to %v: %w", vv.Index(i).Interface(), t.Elem(), ErrSchemaInvalid))
+					panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", vv.Index(i).Interface(), t.Elem(), f.Name, ErrSchemaInvalid))
 				}
 
 				tmp = reflect.Append(tmp, vv.Index(i).Elem().Convert(t.Elem()))
 			}
 			v = tmp.Interface()
-		} else if !tv.ConvertibleTo(t) {
-			panic(fmt.Errorf("unable to convert %v to %v: %w", tv, t, ErrSchemaInvalid))
+		} else if !tv.ConvertibleTo(deref(t)) {
+			panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", tv, t, f.Name, ErrSchemaInvalid))
 		}
 
-		v = reflect.ValueOf(v).Convert(t).Interface()
+		converted := reflect.ValueOf(v).Convert(deref(t))
+		if t.Kind() == reflect.Ptr {
+			// Special case: if the field is a pointer, we need to get a pointer
+			// to the converted value.
+			tmp := reflect.New(t.Elem())
+			tmp.Elem().Set(converted)
+			converted = tmp
+		}
+		v = converted.Interface()
 	}
 
 	return v
