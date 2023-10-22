@@ -228,7 +228,7 @@ func floatTag(f reflect.StructField, tag string) *float64 {
 
 func jsonTagValue(f reflect.StructField, t reflect.Type, value string) any {
 	// Special case: strings don't need quotes.
-	if t.Kind() == reflect.String {
+	if t.Kind() == reflect.String || (t.Kind() == reflect.Pointer && t.Elem().Kind() == reflect.String) {
 		return value
 	}
 
@@ -262,11 +262,19 @@ func jsonTagValue(f reflect.StructField, t reflect.Type, value string) any {
 				tmp = reflect.Append(tmp, vv.Index(i).Elem().Convert(t.Elem()))
 			}
 			v = tmp.Interface()
-		} else if !tv.ConvertibleTo(t) {
+		} else if !tv.ConvertibleTo(deref(t)) {
 			panic(fmt.Errorf("unable to convert %v to %v: %w", tv, t, ErrSchemaInvalid))
 		}
 
-		v = reflect.ValueOf(v).Convert(t).Interface()
+		converted := reflect.ValueOf(v).Convert(deref(t))
+		if t.Kind() == reflect.Ptr {
+			// Special case: if the field is a pointer, we need to get a pointer
+			// to the converted value.
+			tmp := reflect.New(t.Elem())
+			tmp.Elem().Set(converted)
+			converted = tmp
+		}
+		v = converted.Interface()
 	}
 
 	return v

@@ -370,6 +370,29 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "fiel-pointer-example",
+			input: struct {
+				Int *int64  `json:"int" example:"123"`
+				Str *string `json:"str" example:"foo"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["int", "str"],
+				"properties": {
+					"int": {
+						"type": "integer",
+						"format": "int64",
+						"examples": [123]
+					},
+					"str": {
+						"type": "string",
+						"examples": ["foo"]
+					}
+				}
+			}`,
+		},
+		{
 			name: "panic-bool",
 			input: struct {
 				Value string `json:"value" readOnly:"bad"`
