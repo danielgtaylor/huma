@@ -70,6 +70,7 @@ type paramFieldInfo struct {
 	Type       reflect.Type
 	Name       string
 	Loc        string
+	Required   bool
 	Default    string
 	TimeFormat string
 	Schema     *Schema
@@ -96,12 +97,11 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		}
 
 		name := ""
-		required := false
 		var explode *bool
 		if p := f.Tag.Get("path"); p != "" {
 			pfi.Loc = "path"
 			name = p
-			required = true
+			pfi.Required = true
 		} else if q := f.Tag.Get("query"); q != "" {
 			pfi.Loc = "query"
 			name = q
@@ -114,6 +114,11 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			name = h
 		} else {
 			return nil
+		}
+
+		// While discouraged, make it possible to make query/header params required.
+		if r := f.Tag.Get("required"); r == "true" {
+			pfi.Required = true
 		}
 
 		pfi.Name = name
@@ -135,7 +140,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 				Name:     name,
 				In:       pfi.Loc,
 				Explode:  explode,
-				Required: required,
+				Required: pfi.Required,
 				Schema:   pfi.Schema,
 				Example:  example,
 			})
@@ -567,9 +572,9 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				value = p.Default
 			}
 
-			if p.Loc == "path" && value == "" {
+			if p.Required && value == "" {
 				// Path params are always required.
-				res.Add(pb, "", "required path parameter is missing")
+				res.Add(pb, "", "required "+p.Loc+" parameter is missing")
 				return
 			}
 
