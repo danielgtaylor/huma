@@ -361,11 +361,14 @@ Inputs and outputs are **always** structs that represent the entirety of the inc
 
 Requests can have parameters and/or a body as input to the handler function. Inputs use standard Go structs with special fields and/or tags. Here are the available tags:
 
-| Tag      | Description                        | Example                  |
-| -------- | ---------------------------------- | ------------------------ |
-| `path`   | Name of the path parameter         | `path:"thing-id"`        |
-| `query`  | Name of the query string parameter | `query:"q"`              |
-| `header` | Name of the header parameter       | `header:"Authorization"` |
+| Tag        | Description                           | Example                  |
+| ---------- | ------------------------------------- | ------------------------ |
+| `path`     | Name of the path parameter            | `path:"thing-id"`        |
+| `query`    | Name of the query string parameter    | `query:"q"`              |
+| `header`   | Name of the header parameter          | `header:"Authorization"` |
+| `required` | Mark a query/header param as required | `required:"true"`        |
+
+> :whale: The `required` tag is discouraged and is only used for query/header params, which should generally be optional for clients to send.
 
 The following parameter types are supported out of the box:
 

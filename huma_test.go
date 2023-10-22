@@ -190,6 +190,8 @@ func TestFeatures(t *testing.T) {
 					QueryDate   time.Time `query:"date" timeFormat:"2006-01-02"`
 					QueryUint   uint32    `query:"uint"`
 					QueryBool   bool      `query:"bool"`
+					QueryReq    bool      `query:"req" required:"true"`
+					HeaderReq   string    `header:"req" required:"true"`
 				}) (*struct{}, error) {
 					return nil, nil
 				})
@@ -202,6 +204,8 @@ func TestFeatures(t *testing.T) {
 				assert.Contains(t, resp.Body.String(), "invalid float")
 				assert.Contains(t, resp.Body.String(), "invalid date/time")
 				assert.Contains(t, resp.Body.String(), "invalid bool")
+				assert.Contains(t, resp.Body.String(), "required query parameter is missing")
+				assert.Contains(t, resp.Body.String(), "required header parameter is missing")
 			},
 		},
 		{
