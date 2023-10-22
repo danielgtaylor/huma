@@ -370,7 +370,7 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
-			name: "fiel-pointer-example",
+			name: "field-pointer-example",
 			input: struct {
 				Int *int64  `json:"int" example:"123"`
 				Str *string `json:"str" example:"foo"`
@@ -420,6 +420,13 @@ func TestSchema(t *testing.T) {
 			}{},
 			panics: `invalid tag for field 'Value': invalid character 'b' looking for beginning of value`,
 		},
+		{
+			name: "panic-json-type",
+			input: struct {
+				Value int `json:"value" example:"true"`
+			}{},
+			panics: `unable to convert bool to int for field 'Value': schema is invalid`,
+		},
 	}
 
 	for _, c := range cases {
@@ -427,7 +434,7 @@ func TestSchema(t *testing.T) {
 			r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
 
 			if c.panics != "" {
-				assert.PanicsWithValue(t, c.panics, func() {
+				assert.PanicsWithError(t, c.panics, func() {
 					r.Schema(reflect.TypeOf(c.input), false, "")
 				})
 			} else {
