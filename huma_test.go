@@ -725,6 +725,31 @@ func TestNestedResolverWithPath(t *testing.T) {
 	assert.Contains(t, w.Body.String(), `"location":"body.field1.foo[0].field2"`)
 }
 
+type ResolverCustomStatus struct{}
+
+func (r *ResolverCustomStatus) Resolve(ctx Context) []error {
+	return []error{Error403Forbidden("nope")}
+}
+
+func TestResolverCustomStatus(t *testing.T) {
+	r := chi.NewRouter()
+	app := NewTestAdapter(r, DefaultConfig("Test API", "1.0.0"))
+	Register(app, Operation{
+		OperationID: "test",
+		Method:      http.MethodPut,
+		Path:        "/test",
+	}, func(ctx context.Context, input *ResolverCustomStatus) (*struct{}, error) {
+		return nil, nil
+	})
+
+	req, _ := http.NewRequest(http.MethodPut, "/test", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "nope")
+}
+
 func BenchmarkSecondDecode(b *testing.B) {
 	type MediumSized struct {
 		ID   int      `json:"id"`
