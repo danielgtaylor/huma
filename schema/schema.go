@@ -67,11 +67,18 @@ func F(value float64) *float64 {
 	return &value
 }
 
+func deref(t reflect.Type) reflect.Type {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	return t
+}
+
 // getTagValue returns a value of the schema's type for the given tag string.
 // Uses JSON parsing if the schema is not a string.
 func getTagValue(s *Schema, t reflect.Type, value string) (interface{}, error) {
 	// Special case: strings don't need quotes.
-	if s.Type == TypeString {
+	if s.Type == TypeString || (t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.String) {
 		return value, nil
 	}
 
@@ -105,11 +112,19 @@ func getTagValue(s *Schema, t reflect.Type, value string) (interface{}, error) {
 				tmp = reflect.Append(tmp, vv.Index(i).Elem().Convert(t.Elem()))
 			}
 			v = tmp.Interface()
-		} else if !tv.ConvertibleTo(t) {
+		} else if !tv.ConvertibleTo(deref(t)) {
 			return nil, fmt.Errorf("unable to convert %v to %v: %w", tv, t, ErrSchemaInvalid)
 		}
 
-		v = reflect.ValueOf(v).Convert(t).Interface()
+		converted := reflect.ValueOf(v).Convert(deref(t))
+		if t.Kind() == reflect.Ptr {
+			// Special case: if the field is a pointer, we need to get a pointer
+			// to the converted value.
+			tmp := reflect.New(t.Elem())
+			tmp.Elem().Set(converted)
+			converted = tmp
+		}
+		v = converted.Interface()
 	}
 
 	return v, nil
