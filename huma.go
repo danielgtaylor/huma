@@ -84,7 +84,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 
 		pfi := &paramFieldInfo{
 			Type:   f.Type,
-			Schema: SchemaFromField(registry, nil, f),
+			Schema: SchemaFromField(registry, f, ""),
 		}
 
 		var example any
@@ -379,11 +379,23 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	if f, ok := inputType.FieldByName("Body"); ok {
 		inputBodyIndex = f.Index[0]
 		if op.RequestBody == nil {
+			required := f.Type.Kind() != reflect.Ptr && f.Type.Kind() != reflect.Interface
+			if f.Tag.Get("required") == "true" {
+				required = true
+			}
+
+			contentType := "application/json"
+			if c := f.Tag.Get("contentType"); c != "" {
+				contentType = c
+			}
+
+			s := SchemaFromField(registry, f, getHint(inputType, f.Name, op.OperationID+"Request"))
+
 			op.RequestBody = &RequestBody{
-				Required: f.Type.Kind() != reflect.Ptr && f.Type.Kind() != reflect.Interface,
+				Required: required,
 				Content: map[string]*MediaType{
-					"application/json": {
-						Schema: registry.Schema(f.Type, true, getHint(inputType, f.Name, op.OperationID+"Request")),
+					contentType: {
+						Schema: s,
 					},
 				},
 			}
@@ -402,6 +414,24 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	rawBodyIndex := -1
 	if f, ok := inputType.FieldByName("RawBody"); ok {
 		rawBodyIndex = f.Index[0]
+		if op.RequestBody == nil {
+			contentType := "application/octet-stream"
+			if c := f.Tag.Get("contentType"); c != "" {
+				contentType = c
+			}
+
+			op.RequestBody = &RequestBody{
+				Required: true,
+				Content: map[string]*MediaType{
+					contentType: {
+						Schema: &Schema{
+							Type:   "string",
+							Format: "binary",
+						},
+					},
+				},
+			}
+		}
 	}
 
 	var inSchema *Schema
@@ -457,7 +487,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			op.Responses[statusStr].Headers = map[string]*Param{}
 		}
 		if !outBodyFunc {
-			outSchema := registry.Schema(f.Type, true, getHint(outputType, f.Name, op.OperationID+"Response"))
+			outSchema := SchemaFromField(registry, f, getHint(outputType, f.Name, op.OperationID+"Response"))
 			if op.Responses[statusStr].Content == nil {
 				op.Responses[statusStr].Content = map[string]*MediaType{}
 			}
@@ -491,7 +521,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		op.Responses[defaultStatusStr].Headers[v.Name] = &Header{
 			// We need to generate the schema from the field to get validation info
 			// like min/max and enums. Useful to let the client know possible values.
-			Schema: SchemaFromField(registry, outputType, v.Field),
+			Schema: SchemaFromField(registry, v.Field, getHint(outputType, v.Field.Name, op.OperationID+defaultStatusStr+v.Name)),
 		}
 	}
 
@@ -704,7 +734,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				}
 			} else {
 				parseErrCount := 0
-				if !op.SkipValidateBody {
+				if inputBodyIndex != -1 && !op.SkipValidateBody {
 					// Validate the input. First, parse the body into []any or map[string]any
 					// or equivalent, which can be easily validated. Then, convert to the
 					// expected struct type to call the handler.
