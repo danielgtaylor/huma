@@ -806,6 +806,15 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		})
 
 		if len(res.Errors) > 0 {
+			for i := len(res.Errors) - 1; i >= 0; i-- {
+				// If there are errors, and they provide a status, then update the
+				// response status code to match. Otherwise, use the default status
+				// code is used. Since these run in order, the last error code wins.
+				if s, ok := res.Errors[i].(StatusError); ok {
+					errStatus = s.GetStatus()
+					break
+				}
+			}
 			WriteErr(api, ctx, errStatus, "validation failed", res.Errors...)
 			return
 		}
