@@ -481,6 +481,27 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
+			// Simulate a request with a body that came from another call, which
+			// includes the `$schema` field. It should be allowed to be passed
+			// to the new operation as input without modification.
+			Name: "round-trip-schema-field",
+			Register: func(t *testing.T, api API) {
+				Register(api, Operation{
+					Method: http.MethodPut,
+					Path:   "/round-trip",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name string `json:"name"`
+					}
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/round-trip",
+			Body:   `{"$schema": "...", "name": "foo"}`,
+		},
+		{
 			Name: "one-of input",
 			Register: func(t *testing.T, api API) {
 				// Step 1: create a custom schema

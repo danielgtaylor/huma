@@ -47,30 +47,42 @@ func NewSchemaLinkTransformer(prefix, schemasPath string) *SchemaLinkTransformer
 	}
 }
 
+func (t *SchemaLinkTransformer) addSchemaField(oapi *OpenAPI, content *MediaType) bool {
+	if content == nil || content.Schema == nil || content.Schema.Ref == "" {
+		return true
+	}
+
+	schema := oapi.Components.Schemas.SchemaFromRef(content.Schema.Ref)
+	if schema.Type != TypeObject || (schema.Properties != nil && schema.Properties["$schema"] != nil) {
+		return true
+	}
+
+	schema.Properties["$schema"] = &Schema{
+		Type:        TypeString,
+		Format:      "uri",
+		Description: "A URL to the JSON Schema for this object.",
+		ReadOnly:    true,
+	}
+	return false
+}
+
 // OnAddOperation is triggered whenever a new operation is added to the API,
 // enabling this transformer to precompute & cache information about the
 // response and schema.
 func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
 	// Update registry to be able to get the type from a schema ref.
 	// Register the type in t.types with the generated ref
+	if op.RequestBody != nil && op.RequestBody.Content != nil {
+		for _, content := range op.RequestBody.Content {
+			t.addSchemaField(oapi, content)
+		}
+	}
+
 	registry := oapi.Components.Schemas
 	for _, resp := range op.Responses {
 		for _, content := range resp.Content {
-			if content == nil || content.Schema == nil || content.Schema.Ref == "" {
+			if t.addSchemaField(oapi, content) {
 				continue
-			}
-
-			schema := registry.SchemaFromRef(content.Schema.Ref)
-			if schema.Type != TypeObject || (schema.Properties != nil && schema.Properties["$schema"] != nil) {
-				continue
-			}
-
-			// First, modify the schema to have the $schema field.
-			schema.Properties["$schema"] = &Schema{
-				Type:        TypeString,
-				Format:      "uri",
-				Description: "A URL to the JSON Schema for this object.",
-				ReadOnly:    true,
 			}
 
 			// Then, create the wrapper Go type that has the $schema field.
