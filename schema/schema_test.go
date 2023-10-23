@@ -145,11 +145,14 @@ func TestSchemaDefault(t *testing.T) {
 func TestSchemaExample(t *testing.T) {
 	type Example struct {
 		Foo string `json:"foo" example:"ex"`
+		Bar *int64 `json:"bar" example:"5"`
 	}
 
 	s, err := Generate(reflect.ValueOf(Example{}).Type())
 	assert.NoError(t, err)
 	assert.Equal(t, "ex", s.Properties["foo"].Example)
+	ex := int64(5)
+	assert.Equal(t, &ex, s.Properties["bar"].Example)
 }
 
 func TestSchemaNullable(t *testing.T) {
