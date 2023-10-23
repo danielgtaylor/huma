@@ -524,6 +524,16 @@ func (m *MyInput) Resolve(ctx huma.Context) []error {
 }
 ```
 
+It is also possible for resolvers to return custom HTTP status codes for the response, by returning an error which satisfies the `huma.StatusError` interface. Errors are processed in the order they are returned and the last one wins, so this feature should be used sparingly. For example:
+
+```go
+type MyInput struct{}
+
+func (i *MyInput) Resolve(ctx huma.Context) []error {
+	return []error{huma.Error403Forbidden("nope")}
+}
+```
+
 > :whale: Exhaustive errors lessen frustration for users. It's better to return three errors in response to one request than to have the user make three requests which each return a new different error.
 
 #### Input Composition
