@@ -251,6 +251,26 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
+			Name: "request-ptr-body-required",
+			Register: func(t *testing.T, api API) {
+				Register(api, Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					Body *struct {
+						Name string `json:"name"`
+					} `required:"true"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusBadRequest, resp.Code)
+			},
+		},
+		{
 			Name: "request-body-too-large",
 			Register: func(t *testing.T, api API) {
 				Register(api, Operation{
@@ -292,6 +312,28 @@ func TestFeatures(t *testing.T) {
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusBadRequest, resp.Code)
 			},
+		},
+		{
+			Name: "request-body-file-upload",
+			Register: func(t *testing.T, api API) {
+				Register(api, Operation{
+					Method: http.MethodPut,
+					Path:   "/file",
+				}, func(ctx context.Context, input *struct {
+					RawBody []byte `contentType:"application/foo"`
+				}) (*struct{}, error) {
+					assert.Equal(t, `some-data`, string(input.RawBody))
+					return nil, nil
+				})
+
+				// Ensure OpenAPI spec is listed as a binary upload. This enables
+				// generated documentation to show a file upload button.
+				assert.Equal(t, api.OpenAPI().Paths["/file"].Put.RequestBody.Content["application/foo"].Schema.Format, "binary")
+			},
+			Method:  http.MethodPut,
+			URL:     "/file",
+			Headers: map[string]string{"Content-Type": "application/foo"},
+			Body:    `some-data`,
 		},
 		{
 			Name: "handler-error",

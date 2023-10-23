@@ -383,7 +383,14 @@ The following parameter types are supported out of the box:
 
 For example, if the parameter is a query param and the type is `[]string` it might look like `?tags=tag1,tag2` in the URI.
 
-The special struct field `Body` will be treated as the input request body and can refer to any other type or you can embed a struct or slice inline. Using `[]byte` as the `Body` type will bypass parsing and validation completely. `RawBody []byte` can also be used alongside `Body` to provide access to the `[]byte` used to validate & parse `Body`.
+The special struct field `Body` will be treated as the input request body and can refer to any other type or you can embed a struct or slice inline. If the body is a pointer, then it is optional. All doc & validation tags are allowed on the body in addition to these tags:
+
+| Tag           | Description               | Example                                  |
+| ------------- | ------------------------- | ---------------------------------------- |
+| `contenttype` | Override the content type | `contenttype:"application/octet-stream"` |
+| `required`    | Mark the body as required | `required:"true"`                        |
+
+`RawBody []byte` can also be used alongside `Body` or standalone to provide access to the `[]byte` used to validate & parse `Body`, or to the raw input without any validation/parsing.
 
 Example:
 
@@ -406,6 +413,8 @@ $ restish api my-op 123 --detail=true --authorization=foo <body.json
 # Via URL:
 $ restish api/my-op/123?detail=true -H "Authorization: foo" <body.json
 ```
+
+> :whale: You can use `RawBody []byte` without a corresponding `Body` field in order to support file uploads.
 
 #### Validation
 
