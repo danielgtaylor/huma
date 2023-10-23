@@ -387,7 +387,7 @@ The special struct field `Body` will be treated as the input request body and ca
 
 | Tag           | Description               | Example                                  |
 | ------------- | ------------------------- | ---------------------------------------- |
-| `contenttype` | Override the content type | `contenttype:"application/octet-stream"` |
+| `contentType` | Override the content type | `contentType:"application/octet-stream"` |
 | `required`    | Mark the body as required | `required:"true"`                        |
 
 `RawBody []byte` can also be used alongside `Body` or standalone to provide access to the `[]byte` used to validate & parse `Body`, or to the raw input without any validation/parsing.
