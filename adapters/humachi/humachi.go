@@ -94,6 +94,11 @@ func (c *chiContext) BodyWriter() io.Writer {
 	return c.w
 }
 
+// NewContext creates a new Huma context from an HTTP request and response.
+func NewContext(op *huma.Operation, r *http.Request, w http.ResponseWriter) huma.Context {
+	return &chiContext{op: op, r: r, w: w}
+}
+
 type chiAdapter struct {
 	router chi.Router
 }
@@ -106,6 +111,11 @@ func (a *chiAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 
 func (a *chiAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a.router.ServeHTTP(w, r)
+}
+
+// NewAdapter creates a new adapter for the given chi router.
+func NewAdapter(r chi.Router) huma.Adapter {
+	return &chiAdapter{router: r}
 }
 
 // New creates a new Huma API using the latest v5.x.x version of Chi.

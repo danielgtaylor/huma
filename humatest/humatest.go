@@ -4,18 +4,17 @@
 package humatest
 
 import (
-	"context"
+	"bytes"
+	"encoding/json"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
-	"net/url"
+	"reflect"
 	"strings"
-	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/queryparam"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -27,103 +26,14 @@ type TB interface {
 	Logf(format string, args ...any)
 }
 
-type testContext struct {
-	op *huma.Operation
-	r  *http.Request
-	w  http.ResponseWriter
-}
-
-// NewContext creates a new test context from a request/response pair.
+// NewContext creates a new test context from an HTTP request and response.
 func NewContext(op *huma.Operation, r *http.Request, w http.ResponseWriter) huma.Context {
-	return &testContext{op, r, w}
+	return humachi.NewContext(op, r, w)
 }
 
-func (c *testContext) Operation() *huma.Operation {
-	return c.op
-}
-
-func (c *testContext) Context() context.Context {
-	return c.r.Context()
-}
-
-func (c *testContext) Method() string {
-	return c.r.Method
-}
-
-func (c *testContext) Host() string {
-	return c.r.Host
-}
-
-func (c *testContext) URL() url.URL {
-	return *c.r.URL
-}
-
-func (c *testContext) Param(name string) string {
-	return chi.URLParam(c.r, name)
-}
-
-func (c *testContext) Query(name string) string {
-	return queryparam.Get(c.r.URL.RawQuery, name)
-}
-
-func (c *testContext) Header(name string) string {
-	return c.r.Header.Get(name)
-}
-
-func (c *testContext) EachHeader(cb func(name, value string)) {
-	for name, values := range c.r.Header {
-		for _, value := range values {
-			cb(name, value)
-		}
-	}
-}
-
-func (c *testContext) BodyReader() io.Reader {
-	return c.r.Body
-}
-
-func (c *testContext) GetMultipartForm() (*multipart.Form, error) {
-	err := c.r.ParseMultipartForm(8 * 1024)
-	return c.r.MultipartForm, err
-}
-
-func (c *testContext) SetReadDeadline(deadline time.Time) error {
-	return http.NewResponseController(c.w).SetReadDeadline(deadline)
-}
-
-func (c *testContext) SetStatus(code int) {
-	c.w.WriteHeader(code)
-}
-
-func (c *testContext) AppendHeader(name string, value string) {
-	c.w.Header().Add(name, value)
-}
-
-func (c *testContext) SetHeader(name string, value string) {
-	c.w.Header().Set(name, value)
-}
-
-func (c *testContext) BodyWriter() io.Writer {
-	return c.w
-}
-
-type testAdapter struct {
-	router chi.Router
-}
-
-// NewAdapter creates a new adapter for the given chi router.
+// NewAdapter creates a new test adapter from a chi router.
 func NewAdapter(r chi.Router) huma.Adapter {
-	return &testAdapter{router: r}
-}
-
-func (a *testAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
-	a.router.MethodFunc(op.Method, op.Path, func(w http.ResponseWriter, r *http.Request) {
-		handler(&testContext{op: op, r: r, w: w})
-	})
-}
-
-func (a *testAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	a.router.ServeHTTP(w, r)
+	return humachi.NewAdapter(r)
 }
 
 // TestAPI is a `huma.API` with additional methods specifically for testing.
@@ -131,33 +41,69 @@ type TestAPI interface {
 	huma.API
 
 	// Do a request against the API. Args, if provided, should be string headers
-	// like `Content-Type: application/json` or an `io.Reader` for the request
-	// body. Anything else will panic.
+	// like `Content-Type: application/json`, an `io.Reader` for the request
+	// body, or a slice/map/struct which will be serialized to JSON and sent
+	// as the request body. Anything else will panic.
 	Do(method, path string, args ...any) *httptest.ResponseRecorder
 
 	// Get performs a GET request against the API. Args, if provided, should be
-	// string headers like `Content-Type: application/json` or an `io.Reader`
-	// for the request body. Anything else will panic.
+	// string headers like `Content-Type: application/json`, an `io.Reader`
+	// for the request body, or a slice/map/struct which will be serialized to
+	// JSON and sent as the request body. Anything else will panic.
+	//
+	// 	// Make a GET request
+	// 	api.Get("/foo")
+	//
+	// 	// Make a GET request with a custom header.
+	// 	api.Get("/foo", "X-My-Header: my-value")
 	Get(path string, args ...any) *httptest.ResponseRecorder
 
 	// Post performs a POST request against the API. Args, if provided, should be
-	// string headers like `Content-Type: application/json` or an `io.Reader`
-	// for the request body. Anything else will panic.
+	// string headers like `Content-Type: application/json`, an `io.Reader`
+	// for the request body, or a slice/map/struct which will be serialized to
+	// JSON and sent as the request body. Anything else will panic.
+	//
+	// 	// Make a POST request
+	// 	api.Post("/foo", bytes.NewReader(`{"foo": "bar"}`))
+	//
+	// 	// Make a POST request with a custom header.
+	// 	api.Post("/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
 	Post(path string, args ...any) *httptest.ResponseRecorder
 
 	// Put performs a PUT request against the API. Args, if provided, should be
-	// string headers like `Content-Type: application/json` or an `io.Reader`
-	// for the request body. Anything else will panic.
+	// string headers like `Content-Type: application/json`, an `io.Reader`
+	// for the request body, or a slice/map/struct which will be serialized to
+	// JSON and sent as the request body. Anything else will panic.
+	//
+	// 	// Make a PUT request
+	// 	api.Put("/foo", bytes.NewReader(`{"foo": "bar"}`))
+	//
+	// 	// Make a PUT request with a custom header.
+	// 	api.Put("/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
 	Put(path string, args ...any) *httptest.ResponseRecorder
 
 	// Patch performs a PATCH request against the API. Args, if provided, should
-	// be string headers like `Content-Type: application/json` or an `io.Reader`
-	// for the request body. Anything else will panic.
+	// be string headers like `Content-Type: application/json`, an `io.Reader`
+	// for the request body, or a slice/map/struct which will be serialized to
+	// JSON and sent as the request body. Anything else will panic.
+	//
+	// 	// Make a PATCH request
+	// 	api.Patch("/foo", bytes.NewReader(`{"foo": "bar"}`))
+	//
+	// 	// Make a PATCH request with a custom header.
+	// 	api.Patch("/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
 	Patch(path string, args ...any) *httptest.ResponseRecorder
 
 	// Delete performs a DELETE request against the API. Args, if provided, should
-	// be string headers like `Content-Type: application/json` or an `io.Reader`
-	// for the request body. Anything else will panic.
+	// be string headers like `Content-Type: application/json`, an `io.Reader`
+	// for the request body, or a slice/map/struct which will be serialized to
+	// JSON and sent as the request body. Anything else will panic.
+	//
+	// 	// Make a DELETE request
+	// 	api.Delete("/foo")
+	//
+	// 	// Make a DELETE request with a custom header.
+	// 	api.Delete("/foo", "X-My-Header: my-value")
 	Delete(path string, args ...any) *httptest.ResponseRecorder
 }
 
@@ -169,22 +115,38 @@ type testAPI struct {
 func (a *testAPI) Do(method, path string, args ...any) *httptest.ResponseRecorder {
 	a.tb.Helper()
 	var b io.Reader
+	isJSON := false
 	for _, arg := range args {
+		kind := reflect.Indirect(reflect.ValueOf(arg)).Kind()
 		if reader, ok := arg.(io.Reader); ok {
 			b = reader
 			break
 		} else if _, ok := arg.(string); ok {
 			// do nothing
+		} else if kind == reflect.Struct || kind == reflect.Map || kind == reflect.Slice {
+			encoded, err := json.Marshal(arg)
+			if err != nil {
+				panic(err)
+			}
+			b = bytes.NewReader(encoded)
+			isJSON = true
 		} else {
-			panic("unsupported argument type, expected string header or io.Reader body")
+			panic("unsupported argument type, expected string header or io.Reader/slice/map/struct body")
 		}
 	}
 
 	req, _ := http.NewRequest(method, path, b)
+	if isJSON {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	for _, arg := range args {
 		if s, ok := arg.(string); ok {
 			parts := strings.Split(s, ":")
 			req.Header.Set(parts[0], strings.TrimSpace(strings.Join(parts[1:], ":")))
+
+			if strings.ToLower(parts[0]) == "host" {
+				req.Host = strings.TrimSpace(parts[1])
+			}
 		}
 	}
 	resp := httptest.NewRecorder()
@@ -227,8 +189,7 @@ func (a *testAPI) Delete(path string, args ...any) *httptest.ResponseRecorder {
 
 // NewTestAPI creates a new test API from a chi router and API config.
 func NewTestAPI(tb TB, r chi.Router, config huma.Config) TestAPI {
-	api := huma.NewAPI(config, &testAdapter{router: r})
-	return &testAPI{api, tb}
+	return Wrap(tb, humachi.New(r, config))
 }
 
 // Wrap returns a `TestAPI` wrapping the given API.
