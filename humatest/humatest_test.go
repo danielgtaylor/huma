@@ -46,11 +46,28 @@ func TestHumaTestUtils(t *testing.T) {
 
 	w := api.Put("/test/abc123?q=foo",
 		"Content-Type: application/json",
+		"Host: example.com",
 		strings.NewReader(`{"value": "hello"}`))
 
 	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Equal(t, "my-value", w.Header().Get("My-Header"))
 	assert.JSONEq(t, `{"echo":"hello"}`, w.Body.String())
+
+	// We can also serialize a slice/map/struct and the content type is set
+	// automatically for us.
+	w = api.Put("/test/abc123?q=foo",
+		map[string]any{"value": "hello"})
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, "my-value", w.Header().Get("My-Header"))
+	assert.JSONEq(t, `{"echo":"hello"}`, w.Body.String())
+
+	assert.Panics(t, func() {
+		// Cannot JSON encode a function.
+		api.Put("/test/abc123?q=foo",
+			"Content-Type: application/json",
+			map[string]any{"value": func() {}})
+	})
 }
 
 func TestContext(t *testing.T) {
