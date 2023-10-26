@@ -356,6 +356,23 @@ var bufPool = sync.Pool{
 	},
 }
 
+// transformAndWrite is a utility function to transform and write a response.
+// It is best-effort as the status code and headers may have already been sent.
+func transformAndWrite(api API, ctx Context, status int, ct string, body any) {
+	// Try to transform and then marshal/write the response.
+	// Status code was already sent, so just log the error if something fails,
+	// and do our best to stuff it into the body of the response.
+	tval, terr := api.Transform(ctx, strconv.Itoa(status), body)
+	if terr != nil {
+		ctx.BodyWriter().Write([]byte("error transforming response"))
+		panic(fmt.Sprintf("error transforming response %+v for %s %s %d: %s\n", tval, ctx.Operation().Method, ctx.Operation().Path, status, terr.Error()))
+	}
+	if merr := api.Marshal(ctx.BodyWriter(), ct, tval); merr != nil {
+		ctx.BodyWriter().Write([]byte("error marshaling response"))
+		panic(fmt.Sprintf("error marshaling response %+v for %s %s %d: %s\n", tval, ctx.Operation().Method, ctx.Operation().Path, status, merr.Error()))
+	}
+}
+
 // Register an operation handler for an API. The handler must be a function that
 // takes a context and a pointer to the input struct and returns a pointer to the
 // output struct and an error. The input struct must be a struct with fields
@@ -835,7 +852,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 			ctx.SetStatus(status)
 			ctx.SetHeader("Content-Type", ct)
-			api.Marshal(ctx, strconv.Itoa(status), ct, err)
+			transformAndWrite(api, ctx, status, ct, err)
 			return
 		}
 
@@ -903,7 +920,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			}
 
 			ctx.SetStatus(status)
-			api.Marshal(ctx, strconv.Itoa(op.DefaultStatus), ct, body)
+			transformAndWrite(api, ctx, status, ct, body)
 		} else {
 			ctx.SetStatus(status)
 		}
@@ -915,9 +932,9 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 // passed the API as the only argument. Since registration happens at
 // service startup, no errors are returned and methods should panic on error.
 //
-//	type ItemServer struct {}
+//	type ItemsHandler struct {}
 //
-//	func (s *ItemServer) RegisterListItems(api API) {
+//	func (s *ItemsHandler) RegisterListItems(api API) {
 //		huma.Register(api, huma.Operation{
 //			OperationID: "ListItems",
 //			Method: http.MethodGet,
@@ -926,9 +943,12 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 //	}
 //
 //	func main() {
-//		api := huma.NewAPI("My Service", "1.0.0")
-//		itemServer := &ItemServer{}
-//		huma.AutoRegister(api, itemServer)
+//		router := chi.NewMux()
+//		config := huma.DefaultConfig("My Service", "1.0.0")
+//		api := huma.NewExampleAPI(router, config)
+//
+//		itemsHandler := &ItemsHandler{}
+//		huma.AutoRegister(api, itemsHandler)
 //	}
 func AutoRegister(api API, server any) {
 	args := []reflect.Value{reflect.ValueOf(server), reflect.ValueOf(api)}

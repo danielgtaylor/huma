@@ -116,10 +116,15 @@ type API interface {
 	// send an `accept` header, then JSON is used.
 	Negotiate(accept string) (string, error)
 
-	// Marshal marshals the given value into the given writer. The content type
-	// is used to determine which format to use. Use `Negotiate` to get the
-	// content type from an accept header. TODO: update
-	Marshal(ctx Context, respKey string, contentType string, v any) error
+	// Transform runs the API transformers on the given value. The `status` is
+	// the key in the operation's `Responses` map that corresponds to the
+	// response being sent (e.g. "200" for a 200 OK response).
+	Transform(ctx Context, status string, v any) (any, error)
+
+	// Marshal marshals the given value into the given writer. The
+	// content type is used to determine which format to use. Use `Negotiate` to
+	// get the content type from an accept header.
+	Marshal(w io.Writer, contentType string, v any) error
 
 	// Unmarshal unmarshals the given data into the given value. The content type
 	Unmarshal(contentType string, data []byte, v any) error
@@ -193,16 +198,18 @@ func (a *api) Negotiate(accept string) (string, error) {
 	return ct, nil
 }
 
-func (a *api) Marshal(ctx Context, respKey string, ct string, v any) error {
+func (a *api) Transform(ctx Context, status string, v any) (any, error) {
 	var err error
-
 	for _, t := range a.transformers {
-		v, err = t(ctx, respKey, v)
+		v, err = t(ctx, status, v)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
+	return v, nil
+}
 
+func (a *api) Marshal(w io.Writer, ct string, v any) error {
 	f, ok := a.formats[ct]
 	if !ok {
 		start := strings.IndexRune(ct, '+') + 1
@@ -211,7 +218,7 @@ func (a *api) Marshal(ctx Context, respKey string, ct string, v any) error {
 	if !ok {
 		return fmt.Errorf("unknown content type: %s", ct)
 	}
-	return f.Marshal(ctx.BodyWriter(), v)
+	return f.Marshal(w, v)
 }
 
 func (a *api) UseMiddleware(middlewares ...func(ctx Context, next func(Context))) {

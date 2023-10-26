@@ -1,4 +1,4 @@
-package huma
+package huma_test
 
 import (
 	"encoding/json"
@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,12 +16,20 @@ func Ptr[T any](v T) *T {
 	return &v
 }
 
+func mapTo[A, B any](s []A, f func(A) B) []B {
+	r := make([]B, len(s))
+	for i, v := range s {
+		r[i] = f(v)
+	}
+	return r
+}
+
 var validateTests = []struct {
 	name  string
 	typ   reflect.Type
-	s     *Schema
+	s     *huma.Schema
 	input any
-	mode  ValidateMode
+	mode  huma.ValidateMode
 	errs  []string
 	panic string
 }{
@@ -646,7 +655,7 @@ var validateTests = []struct {
 		typ: reflect.TypeOf(struct {
 			Value string `json:"value" readOnly:"true"`
 		}{}),
-		mode:  ModeWriteToServer,
+		mode:  huma.ModeWriteToServer,
 		input: map[string]any{"value": "whoops"},
 	},
 	{
@@ -654,7 +663,7 @@ var validateTests = []struct {
 		typ: reflect.TypeOf(struct {
 			Value string `json:"value" readOnly:"true"`
 		}{}),
-		mode:  ModeWriteToServer,
+		mode:  huma.ModeWriteToServer,
 		input: map[string]any{},
 	},
 	{
@@ -662,7 +671,7 @@ var validateTests = []struct {
 		typ: reflect.TypeOf(struct {
 			Value string `json:"value" readOnly:"true"`
 		}{}),
-		mode:  ModeReadFromServer,
+		mode:  huma.ModeReadFromServer,
 		input: map[string]any{},
 		errs:  []string{"expected required property value to be present"},
 	},
@@ -671,7 +680,7 @@ var validateTests = []struct {
 		typ: reflect.TypeOf(struct {
 			Value string `json:"value" writeOnly:"true"`
 		}{}),
-		mode:  ModeReadFromServer,
+		mode:  huma.ModeReadFromServer,
 		input: map[string]any{"value": "should not be set"},
 		errs:  []string{"write only property is non-zero"},
 	},
@@ -734,30 +743,30 @@ var validateTests = []struct {
 	},
 	{
 		name: "oneOf success bool",
-		s: &Schema{
-			OneOf: []*Schema{
-				{Type: TypeBoolean},
-				{Type: TypeString},
+		s: &huma.Schema{
+			OneOf: []*huma.Schema{
+				{Type: huma.TypeBoolean},
+				{Type: huma.TypeString},
 			},
 		},
 		input: true,
 	},
 	{
 		name: "oneOf success string",
-		s: &Schema{
-			OneOf: []*Schema{
-				{Type: TypeBoolean},
-				{Type: TypeString},
+		s: &huma.Schema{
+			OneOf: []*huma.Schema{
+				{Type: huma.TypeBoolean},
+				{Type: huma.TypeString},
 			},
 		},
 		input: "hello",
 	},
 	{
 		name: "oneOf fail zero",
-		s: &Schema{
-			OneOf: []*Schema{
-				{Type: TypeBoolean},
-				{Type: TypeString},
+		s: &huma.Schema{
+			OneOf: []*huma.Schema{
+				{Type: huma.TypeBoolean},
+				{Type: huma.TypeString},
 			},
 		},
 		input: 123,
@@ -765,10 +774,10 @@ var validateTests = []struct {
 	},
 	{
 		name: "oneOf fail multi",
-		s: &Schema{
-			OneOf: []*Schema{
-				{Type: TypeNumber, Minimum: Ptr(float64(5))},
-				{Type: TypeNumber, Maximum: Ptr(float64(10))},
+		s: &huma.Schema{
+			OneOf: []*huma.Schema{
+				{Type: huma.TypeNumber, Minimum: Ptr(float64(5))},
+				{Type: huma.TypeNumber, Maximum: Ptr(float64(10))},
 			},
 		},
 		input: 8,
@@ -776,20 +785,20 @@ var validateTests = []struct {
 	},
 	{
 		name: "anyOf success",
-		s: &Schema{
-			AnyOf: []*Schema{
-				{Type: TypeNumber, Minimum: Ptr(float64(5))},
-				{Type: TypeNumber, Maximum: Ptr(float64(10))},
+		s: &huma.Schema{
+			AnyOf: []*huma.Schema{
+				{Type: huma.TypeNumber, Minimum: Ptr(float64(5))},
+				{Type: huma.TypeNumber, Maximum: Ptr(float64(10))},
 			},
 		},
 		input: 8,
 	},
 	{
 		name: "anyOf fail",
-		s: &Schema{
-			AnyOf: []*Schema{
-				{Type: TypeNumber, Minimum: Ptr(float64(5))},
-				{Type: TypeNumber, Minimum: Ptr(float64(10))},
+		s: &huma.Schema{
+			AnyOf: []*huma.Schema{
+				{Type: huma.TypeNumber, Minimum: Ptr(float64(5))},
+				{Type: huma.TypeNumber, Minimum: Ptr(float64(10))},
 			},
 		},
 		input: 1,
@@ -797,20 +806,20 @@ var validateTests = []struct {
 	},
 	{
 		name: "allOf success",
-		s: &Schema{
-			AllOf: []*Schema{
-				{Type: TypeNumber, Minimum: Ptr(float64(5))},
-				{Type: TypeNumber, Maximum: Ptr(float64(10))},
+		s: &huma.Schema{
+			AllOf: []*huma.Schema{
+				{Type: huma.TypeNumber, Minimum: Ptr(float64(5))},
+				{Type: huma.TypeNumber, Maximum: Ptr(float64(10))},
 			},
 		},
 		input: 8,
 	},
 	{
 		name: "allOf fail",
-		s: &Schema{
-			AllOf: []*Schema{
-				{Type: TypeNumber, Minimum: Ptr(float64(5))},
-				{Type: TypeNumber, Maximum: Ptr(float64(10))},
+		s: &huma.Schema{
+			AllOf: []*huma.Schema{
+				{Type: huma.TypeNumber, Minimum: Ptr(float64(5))},
+				{Type: huma.TypeNumber, Maximum: Ptr(float64(10))},
 			},
 		},
 		input: 12,
@@ -818,15 +827,15 @@ var validateTests = []struct {
 	},
 	{
 		name: "not success",
-		s: &Schema{
-			Not: &Schema{Type: TypeNumber},
+		s: &huma.Schema{
+			Not: &huma.Schema{Type: huma.TypeNumber},
 		},
 		input: "hello",
 	},
 	{
 		name: "not fail",
-		s: &Schema{
-			Not: &Schema{Type: TypeNumber},
+		s: &huma.Schema{
+			Not: &huma.Schema{Type: huma.TypeNumber},
 		},
 		input: 5,
 		errs:  []string{"expected value to not match schema"},
@@ -834,14 +843,14 @@ var validateTests = []struct {
 }
 
 func TestValidate(t *testing.T) {
-	pb := NewPathBuffer([]byte(""), 0)
-	res := &ValidateResult{}
+	pb := huma.NewPathBuffer([]byte(""), 0)
+	res := &huma.ValidateResult{}
 
 	for _, test := range validateTests {
 		t.Run(test.name, func(t *testing.T) {
-			registry := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+			registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 
-			var s *Schema
+			var s *huma.Schema
 			if test.panic != "" {
 				assert.Panics(t, func() {
 					registry.Schema(test.typ, false, "TestInput")
@@ -859,11 +868,11 @@ func TestValidate(t *testing.T) {
 			pb.Reset()
 			res.Reset()
 
-			Validate(registry, s, pb, test.mode, test.input, res)
+			huma.Validate(registry, s, pb, test.mode, test.input, res)
 
 			if len(test.errs) > 0 {
 				errs := mapTo(res.Errors, func(e error) string {
-					return e.(*ErrorDetail).Message
+					return e.(*huma.ErrorDetail).Message
 				})
 				schemaJSON, _ := json.MarshalIndent(registry.Map(), "", "  ")
 				for _, err := range test.errs {
@@ -891,7 +900,7 @@ func ExampleModelValidator() {
 	json.Unmarshal([]byte(`{"name": "abcdefg", "age": 1}`), &val)
 
 	// Validate the unmarshaled data against the type and print errors.
-	validator := NewModelValidator()
+	validator := huma.NewModelValidator()
 	errs := validator.Validate(typ, val)
 	fmt.Println(errs)
 
@@ -904,12 +913,12 @@ func ExampleModelValidator() {
 	// []
 }
 
-var BenchValidatePB *PathBuffer
-var BenchValidateRes *ValidateResult
+var BenchValidatePB *huma.PathBuffer
+var BenchValidateRes *huma.ValidateResult
 
 func BenchmarkValidate(b *testing.B) {
-	pb := NewPathBuffer([]byte(""), 0)
-	res := &ValidateResult{}
+	pb := huma.NewPathBuffer([]byte(""), 0)
+	res := &huma.ValidateResult{}
 	BenchValidatePB = pb
 	BenchValidateRes = res
 
@@ -919,11 +928,11 @@ func BenchmarkValidate(b *testing.B) {
 		}
 
 		b.Run(strings.TrimSuffix(test.name, " success"), func(b *testing.B) {
-			registry := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+			registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 			s := registry.Schema(test.typ, false, "TestInput")
 
 			input := test.input
-			if s.Type == TypeObject && s.Properties["value"] != nil {
+			if s.Type == huma.TypeObject && s.Properties["value"] != nil {
 				s = s.Properties["value"]
 				input = input.(map[string]any)["value"]
 			}
@@ -933,7 +942,7 @@ func BenchmarkValidate(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				pb.Reset()
 				res.Reset()
-				Validate(registry, s, pb, test.mode, input, res)
+				huma.Validate(registry, s, pb, test.mode, input, res)
 			}
 		})
 	}

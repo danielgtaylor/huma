@@ -1,14 +1,68 @@
-package huma
+package huma_test
 
 import (
 	"bytes"
+	"context"
+	"fmt"
+	"log"
+	"net/http"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/go-chi/chi/v5"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
+
+func ExampleCLI() {
+	// First, define your input options.
+	type Options struct {
+		Debug bool   `doc:"Enable debug logging"`
+		Host  string `doc:"Hostname to listen on."`
+		Port  int    `doc:"Port to listen on." short:"p" default:"8888"`
+	}
+
+	// Then, create the CLI.
+	cli := huma.NewCLI(func(hooks huma.Hooks, opts *Options) {
+		fmt.Printf("Options are debug:%v host:%v port%v\n",
+			opts.Debug, opts.Host, opts.Port)
+
+		// Set up the router & API
+		router := chi.NewRouter()
+		api := humachi.New(router, huma.DefaultConfig("My API", "1.0.0"))
+
+		huma.Register(api, huma.Operation{
+			OperationID: "hello",
+			Method:      http.MethodGet,
+			Path:        "/hello",
+		}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+			// TODO: implement handler
+			return nil, nil
+		})
+
+		srv := &http.Server{
+			Addr:    fmt.Sprintf("%s:%d", opts.Host, opts.Port),
+			Handler: router,
+			// TODO: Set up timeouts!
+		}
+
+		hooks.OnStart(func() {
+			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("listen: %s\n", err)
+			}
+		})
+
+		hooks.OnStop(func() {
+			srv.Shutdown(context.Background())
+		})
+	})
+
+	// Run the thing!
+	cli.Run()
+}
 
 func TestCLIPlain(t *testing.T) {
 	type Options struct {
@@ -20,7 +74,7 @@ func TestCLIPlain(t *testing.T) {
 		ingore bool
 	}
 
-	cli := NewCLI(func(hooks Hooks, options *Options) {
+	cli := huma.NewCLI(func(hooks huma.Hooks, options *Options) {
 		assert.Equal(t, true, options.Debug)
 		assert.Equal(t, "localhost", options.Host)
 		assert.Equal(t, 8001, options.Port)
@@ -46,7 +100,7 @@ func TestCLIAdvanced(t *testing.T) {
 		Port int    `doc:"Port to listen on." short:"p" default:"8000"`
 	}
 
-	cli := NewCLI(func(hooks Hooks, options *Options) {
+	cli := huma.NewCLI(func(hooks huma.Hooks, options *Options) {
 		assert.Equal(t, true, options.Debug)
 		assert.Equal(t, "localhost", options.Host)
 		assert.Equal(t, 8001, options.Port)
@@ -73,7 +127,7 @@ func TestCLIHelp(t *testing.T) {
 		Port  int
 	}
 
-	cli := NewCLI(func(hooks Hooks, options *Options) {
+	cli := huma.NewCLI(func(hooks huma.Hooks, options *Options) {
 		// Do nothing
 	})
 
@@ -91,14 +145,14 @@ func TestCLICommandWithOptions(t *testing.T) {
 		Debug bool
 	}
 
-	cli := NewCLI(func(hooks Hooks, options *Options) {
+	cli := huma.NewCLI(func(hooks huma.Hooks, options *Options) {
 		// Do nothing
 	})
 
 	wasSet := false
 	cli.Root().AddCommand(&cobra.Command{
 		Use: "custom",
-		Run: WithOptions(func(cmd *cobra.Command, args []string, options *Options) {
+		Run: huma.WithOptions(func(cmd *cobra.Command, args []string, options *Options) {
 			if options.Debug {
 				wasSet = true
 			}
@@ -116,7 +170,7 @@ func TestCLIShutdown(t *testing.T) {
 
 	started := false
 	stopping := make(chan bool, 1)
-	cli := NewCLI(func(hooks Hooks, options *Options) {
+	cli := huma.NewCLI(func(hooks huma.Hooks, options *Options) {
 		hooks.OnStart(func() {
 			started = true
 			<-stopping
@@ -142,7 +196,7 @@ func TestCLIBadType(t *testing.T) {
 	}
 
 	assert.Panics(t, func() {
-		NewCLI(func(hooks Hooks, options *Options) {})
+		huma.NewCLI(func(hooks huma.Hooks, options *Options) {})
 	})
 }
 
@@ -156,10 +210,10 @@ func TestCLIBadDefaults(t *testing.T) {
 	}
 
 	assert.Panics(t, func() {
-		NewCLI(func(hooks Hooks, options *OptionsBool) {})
+		huma.NewCLI(func(hooks huma.Hooks, options *OptionsBool) {})
 	})
 
 	assert.Panics(t, func() {
-		NewCLI(func(hooks Hooks, options *OptionsInt) {})
+		huma.NewCLI(func(hooks huma.Hooks, options *OptionsInt) {})
 	})
 }
