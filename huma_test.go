@@ -1,141 +1,85 @@
-package huma
+package huma_test
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/danielgtaylor/huma/v2/queryparam"
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/go-chi/chi/v5"
 	"github.com/goccy/go-yaml"
 	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/assert"
 )
 
-type testContext struct {
-	op *Operation
-	r  *http.Request
-	w  http.ResponseWriter
-}
+var NewExampleAdapter = humatest.NewAdapter
+var NewExampleAPI = humachi.New
 
-func (c *testContext) Operation() *Operation {
-	return c.op
-}
+// Recoverer is a really simple recovery middleware we can use during tests.
+func Recoverer(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rvr := recover(); rvr != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+			}
+		}()
 
-func (c *testContext) Matched() string {
-	return chi.RouteContext(c.r.Context()).RoutePattern()
-}
-
-func (c *testContext) Context() context.Context {
-	return c.r.Context()
-}
-
-func (c *testContext) Method() string {
-	return c.r.Method
-}
-
-func (c *testContext) Host() string {
-	return c.r.Host
-}
-
-func (c *testContext) URL() url.URL {
-	return *c.r.URL
-}
-
-func (c *testContext) Param(name string) string {
-	return chi.URLParam(c.r, name)
-}
-
-func (c *testContext) Query(name string) string {
-	return queryparam.Get(c.r.URL.RawQuery, name)
-}
-
-func (c *testContext) Header(name string) string {
-	return c.r.Header.Get(name)
-}
-
-func (c *testContext) EachHeader(cb func(name, value string)) {
-	for name, values := range c.r.Header {
-		for _, value := range values {
-			cb(name, value)
-		}
+		next.ServeHTTP(w, r)
 	}
-}
 
-func (c *testContext) Body() ([]byte, error) {
-	return io.ReadAll(c.r.Body)
-}
-
-func (c *testContext) BodyReader() io.Reader {
-	return c.r.Body
-}
-
-func (c *testContext) GetMultipartForm() (*multipart.Form, error) {
-	err := c.r.ParseMultipartForm(8 * 1024)
-	return c.r.MultipartForm, err
-}
-
-func (c *testContext) SetReadDeadline(deadline time.Time) error {
-	return http.NewResponseController(c.w).SetReadDeadline(deadline)
-}
-
-func (c *testContext) SetStatus(code int) {
-	c.w.WriteHeader(code)
-}
-
-func (c *testContext) AppendHeader(name string, value string) {
-	c.w.Header().Add(name, value)
-}
-
-func (c *testContext) SetHeader(name string, value string) {
-	c.w.Header().Set(name, value)
-}
-
-func (c *testContext) BodyWriter() io.Writer {
-	return c.w
-}
-
-type testAdapter struct {
-	router chi.Router
-}
-
-func (a *testAdapter) Handle(op *Operation, handler func(Context)) {
-	a.router.MethodFunc(op.Method, op.Path, func(w http.ResponseWriter, r *http.Request) {
-		handler(&testContext{op: op, r: r, w: w})
-	})
-}
-
-func (a *testAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	a.router.ServeHTTP(w, r)
-}
-
-func NewTestAdapter(r chi.Router, config Config) API {
-	return NewAPI(config, &testAdapter{router: r})
+	return http.HandlerFunc(fn)
 }
 
 func TestFeatures(t *testing.T) {
 	for _, feature := range []struct {
-		Name     string
-		Register func(t *testing.T, api API)
-		Method   string
-		URL      string
-		Headers  map[string]string
-		Body     string
-		Assert   func(t *testing.T, resp *httptest.ResponseRecorder)
+		Name         string
+		Transformers []huma.Transformer
+		Register     func(t *testing.T, api huma.API)
+		Method       string
+		URL          string
+		Headers      map[string]string
+		Body         string
+		Assert       func(t *testing.T, resp *httptest.ResponseRecorder)
 	}{
 		{
+			Name: "middleware",
+			Register: func(t *testing.T, api huma.API) {
+				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+					// Just a do-nothing passthrough. Shows that chaining works.
+					next(ctx)
+				})
+				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+					// Return an error response, never calling the next handler.
+					ctx.SetStatus(299)
+				})
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/middleware",
+				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+					// This should never be called because of the middleware.
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/middleware",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				// We should get the error response from the middleware.
+				assert.Equal(t, 299, resp.Code)
+			},
+		},
+		{
 			Name: "params",
-			Register: func(t *testing.T, api API) {
-				Register(api, Operation{
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
 					Path:   "/test-params/{string}/{int}",
 				}, func(ctx context.Context, input *struct {
@@ -178,8 +122,8 @@ func TestFeatures(t *testing.T) {
 		},
 		{
 			Name: "params-error",
-			Register: func(t *testing.T, api API) {
-				Register(api, Operation{
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
 					Path:   "/test-params/{int}",
 				}, func(ctx context.Context, input *struct {
@@ -210,8 +154,8 @@ func TestFeatures(t *testing.T) {
 		},
 		{
 			Name: "request-body",
-			Register: func(t *testing.T, api API) {
-				Register(api, Operation{
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
 					Method: http.MethodPut,
 					Path:   "/body",
 				}, func(ctx context.Context, input *struct {
@@ -232,8 +176,8 @@ func TestFeatures(t *testing.T) {
 		},
 		{
 			Name: "request-body-required",
-			Register: func(t *testing.T, api API) {
-				Register(api, Operation{
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
 					Method: http.MethodPut,
 					Path:   "/body",
 				}, func(ctx context.Context, input *struct {
@@ -252,8 +196,8 @@ func TestFeatures(t *testing.T) {
 		},
 		{
 			Name: "request-ptr-body-required",
-			Register: func(t *testing.T, api API) {
-				Register(api, Operation{
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
 					Method: http.MethodPut,
 					Path:   "/body",
 				}, func(ctx context.Context, input *struct {
@@ -272,8 +216,8 @@ func TestFeatures(t *testing.T) {
 		},
 		{
 			Name: "request-body-too-large",
-			Register: func(t *testing.T, api API) {
-				Register(api, Operation{
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
 					Method:       http.MethodPut,
 					Path:         "/body",
 					MaxBodyBytes: 1,
@@ -294,8 +238,8 @@ func TestFeatures(t *testing.T) {
 		},
 		{
 			Name: "request-body-bad-json",
-			Register: func(t *testing.T, api API) {
-				Register(api, Operation{
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
 					Method: http.MethodPut,
 					Path:   "/body",
 				}, func(ctx context.Context, input *struct {
@@ -315,8 +259,8 @@ func TestFeatures(t *testing.T) {
 		},
 		{
 			Name: "request-body-file-upload",
-			Register: func(t *testing.T, api API) {
-				Register(api, Operation{
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
 					Method: http.MethodPut,
 					Path:   "/file",
 				}, func(ctx context.Context, input *struct {
@@ -337,12 +281,12 @@ func TestFeatures(t *testing.T) {
 		},
 		{
 			Name: "handler-error",
-			Register: func(t *testing.T, api API) {
-				Register(api, Operation{
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
 					Path:   "/error",
 				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
-					return nil, Error403Forbidden("nope")
+					return nil, huma.Error403Forbidden("nope")
 				})
 			},
 			Method: http.MethodGet,
@@ -353,7 +297,7 @@ func TestFeatures(t *testing.T) {
 		},
 		{
 			Name: "response-headers",
-			Register: func(t *testing.T, api API) {
+			Register: func(t *testing.T, api huma.API) {
 				type Resp struct {
 					Str   string    `header:"str"`
 					Int   int       `header:"int"`
@@ -363,7 +307,7 @@ func TestFeatures(t *testing.T) {
 					Date  time.Time `header:"date"`
 				}
 
-				Register(api, Operation{
+				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
 					Path:   "/response-headers",
 				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
@@ -391,14 +335,14 @@ func TestFeatures(t *testing.T) {
 		},
 		{
 			Name: "response",
-			Register: func(t *testing.T, api API) {
+			Register: func(t *testing.T, api huma.API) {
 				type Resp struct {
 					Body struct {
 						Greeting string `json:"greeting"`
 					}
 				}
 
-				Register(api, Operation{
+				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
 					Path:   "/response",
 				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
@@ -416,12 +360,12 @@ func TestFeatures(t *testing.T) {
 		},
 		{
 			Name: "response-raw",
-			Register: func(t *testing.T, api API) {
+			Register: func(t *testing.T, api huma.API) {
 				type Resp struct {
 					Body []byte
 				}
 
-				Register(api, Operation{
+				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
 					Path:   "/response-raw",
 				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
@@ -437,13 +381,13 @@ func TestFeatures(t *testing.T) {
 		},
 		{
 			Name: "response-stream",
-			Register: func(t *testing.T, api API) {
-				Register(api, Operation{
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
 					Path:   "/stream",
-				}, func(ctx context.Context, input *struct{}) (*StreamResponse, error) {
-					return &StreamResponse{
-						Body: func(ctx Context) {
+				}, func(ctx context.Context, input *struct{}) (*huma.StreamResponse, error) {
+					return &huma.StreamResponse{
+						Body: func(ctx huma.Context) {
 							writer := ctx.BodyWriter()
 							writer.Write([]byte("hel"))
 							writer.Write([]byte("lo"))
@@ -459,13 +403,63 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
+			Name: "response-transform-error",
+			Transformers: []huma.Transformer{
+				func(ctx huma.Context, status string, v any) (any, error) {
+					return nil, fmt.Errorf("whoops")
+				},
+			},
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/response",
+				}, func(ctx context.Context, input *struct{}) (*struct{ Body string }, error) {
+					return &struct{ Body string }{"foo"}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/response",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				// Since the handler completed, this returns a 204, however while
+				// writing the body there is an error, so that is written as a message
+				// into the body and dumped via a panic.
+				assert.Equal(t, http.StatusOK, resp.Code)
+				assert.Equal(t, `error transforming response`, resp.Body.String())
+			},
+		},
+		{
+			Name: "response-marshal-error",
+			Register: func(t *testing.T, api huma.API) {
+				type Resp struct {
+					Body struct {
+						Greeting any `json:"greeting"`
+					}
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/response",
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					resp := &Resp{}
+					resp.Body.Greeting = func() {}
+					return resp, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/response",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				assert.Equal(t, `error marshaling response`, resp.Body.String())
+			},
+		},
+		{
 			Name: "dynamic-status",
-			Register: func(t *testing.T, api API) {
+			Register: func(t *testing.T, api huma.API) {
 				type Resp struct {
 					Status int
 				}
 
-				Register(api, Operation{
+				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
 					Path:   "/status",
 				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
@@ -485,8 +479,8 @@ func TestFeatures(t *testing.T) {
 			// includes the `$schema` field. It should be allowed to be passed
 			// to the new operation as input without modification.
 			Name: "round-trip-schema-field",
-			Register: func(t *testing.T, api API) {
-				Register(api, Operation{
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
 					Method: http.MethodPut,
 					Path:   "/round-trip",
 				}, func(ctx context.Context, input *struct {
@@ -503,22 +497,22 @@ func TestFeatures(t *testing.T) {
 		},
 		{
 			Name: "one-of input",
-			Register: func(t *testing.T, api API) {
+			Register: func(t *testing.T, api huma.API) {
 				// Step 1: create a custom schema
-				customSchema := &Schema{
-					OneOf: []*Schema{
+				customSchema := &huma.Schema{
+					OneOf: []*huma.Schema{
 						{
-							Type: TypeObject,
-							Properties: map[string]*Schema{
-								"foo": {Type: TypeString},
+							Type: huma.TypeObject,
+							Properties: map[string]*huma.Schema{
+								"foo": {Type: huma.TypeString},
 							},
 						},
 						{
-							Type: TypeArray,
-							Items: &Schema{
-								Type: TypeObject,
-								Properties: map[string]*Schema{
-									"foo": {Type: TypeString},
+							Type: huma.TypeArray,
+							Items: &huma.Schema{
+								Type: huma.TypeObject,
+								Properties: map[string]*huma.Schema{
+									"foo": {Type: huma.TypeString},
 								},
 							},
 						},
@@ -526,13 +520,13 @@ func TestFeatures(t *testing.T) {
 				}
 				customSchema.PrecomputeMessages()
 
-				Register(api, Operation{
+				huma.Register(api, huma.Operation{
 					Method: http.MethodPut,
 					Path:   "/one-of",
 					// Step 2: register an operation with a custom schema
-					RequestBody: &RequestBody{
+					RequestBody: &huma.RequestBody{
 						Required: true,
-						Content: map[string]*MediaType{
+						Content: map[string]*huma.MediaType{
 							"application/json": {
 								Schema: customSchema,
 							},
@@ -562,7 +556,12 @@ func TestFeatures(t *testing.T) {
 	} {
 		t.Run(feature.Name, func(t *testing.T) {
 			r := chi.NewRouter()
-			api := NewTestAdapter(r, DefaultConfig("Features Test API", "1.0.0"))
+			r.Use(Recoverer)
+			config := huma.DefaultConfig("Features Test API", "1.0.0")
+			if feature.Transformers != nil {
+				config.Transformers = append(config.Transformers, feature.Transformers...)
+			}
+			api := humatest.NewTestAPI(t, r, config)
 			feature.Register(t, api)
 
 			var body io.Reader = nil
@@ -587,8 +586,7 @@ func TestFeatures(t *testing.T) {
 }
 
 func TestOpenAPI(t *testing.T) {
-	r := chi.NewRouter()
-	api := NewTestAdapter(r, DefaultConfig("Features Test API", "1.0.0"))
+	r, api := humatest.New(t, huma.DefaultConfig("Features Test API", "1.0.0"))
 
 	type Resp struct {
 		Body struct {
@@ -596,7 +594,7 @@ func TestOpenAPI(t *testing.T) {
 		}
 	}
 
-	Register(api, Operation{
+	huma.Register(api, huma.Operation{
 		Method: http.MethodGet,
 		Path:   "/test",
 	}, func(ctx context.Context, input *struct{}) (*Resp, error) {
@@ -619,7 +617,7 @@ type ExhaustiveErrorsInputBody struct {
 	Count int    `json:"count" minimum:"1"`
 }
 
-func (b *ExhaustiveErrorsInputBody) Resolve(ctx Context) []error {
+func (b *ExhaustiveErrorsInputBody) Resolve(ctx huma.Context) []error {
 	return []error{fmt.Errorf("body resolver error")}
 }
 
@@ -628,8 +626,8 @@ type ExhaustiveErrorsInput struct {
 	Body ExhaustiveErrorsInputBody `json:"body"`
 }
 
-func (i *ExhaustiveErrorsInput) Resolve(ctx Context) []error {
-	return []error{&ErrorDetail{
+func (i *ExhaustiveErrorsInput) Resolve(ctx huma.Context) []error {
+	return []error{&huma.ErrorDetail{
 		Location: "path.id",
 		Message:  "input resolver error",
 		Value:    i.ID,
@@ -640,9 +638,8 @@ type ExhaustiveErrorsOutput struct {
 }
 
 func TestExhaustiveErrors(t *testing.T) {
-	r := chi.NewRouter()
-	app := NewTestAdapter(r, DefaultConfig("Test API", "1.0.0"))
-	Register(app, Operation{
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Register(app, huma.Operation{
 		OperationID: "test",
 		Method:      http.MethodPut,
 		Path:        "/errors/{id}",
@@ -688,15 +685,15 @@ type NestedResolversStruct struct {
 	Field2 string `json:"field2"`
 }
 
-func (b *NestedResolversStruct) Resolve(ctx Context, prefix *PathBuffer) []error {
-	return []error{&ErrorDetail{
+func (b *NestedResolversStruct) Resolve(ctx huma.Context, prefix *huma.PathBuffer) []error {
+	return []error{&huma.ErrorDetail{
 		Location: prefix.With("field2"),
 		Message:  "resolver error",
 		Value:    b.Field2,
 	}}
 }
 
-var _ ResolverWithPath = (*NestedResolversStruct)(nil)
+var _ huma.ResolverWithPath = (*NestedResolversStruct)(nil)
 
 type NestedResolversBody struct {
 	Field1 map[string][]NestedResolversStruct `json:"field1"`
@@ -707,9 +704,8 @@ type NestedResolverRequest struct {
 }
 
 func TestNestedResolverWithPath(t *testing.T) {
-	r := chi.NewRouter()
-	app := NewTestAdapter(r, DefaultConfig("Test API", "1.0.0"))
-	Register(app, Operation{
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Register(app, huma.Operation{
 		OperationID: "test",
 		Method:      http.MethodPut,
 		Path:        "/test",
@@ -727,14 +723,13 @@ func TestNestedResolverWithPath(t *testing.T) {
 
 type ResolverCustomStatus struct{}
 
-func (r *ResolverCustomStatus) Resolve(ctx Context) []error {
-	return []error{Error403Forbidden("nope")}
+func (r *ResolverCustomStatus) Resolve(ctx huma.Context) []error {
+	return []error{huma.Error403Forbidden("nope")}
 }
 
 func TestResolverCustomStatus(t *testing.T) {
-	r := chi.NewRouter()
-	app := NewTestAdapter(r, DefaultConfig("Test API", "1.0.0"))
-	Register(app, Operation{
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Register(app, huma.Operation{
 		OperationID: "test",
 		Method:      http.MethodPut,
 		Path:        "/test",
@@ -798,9 +793,9 @@ func BenchmarkSecondDecode(b *testing.B) {
 		]
 	}`)
 
-	pb := NewPathBuffer([]byte{}, 0)
-	res := &ValidateResult{}
-	registry := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+	pb := huma.NewPathBuffer([]byte{}, 0)
+	res := &huma.ValidateResult{}
+	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 	fmt.Println("name", reflect.TypeOf(MediumSized{}).Name())
 	schema := registry.Schema(reflect.TypeOf(MediumSized{}), false, "")
 
@@ -812,7 +807,7 @@ func BenchmarkSecondDecode(b *testing.B) {
 				panic(err)
 			}
 
-			Validate(registry, schema, pb, ModeReadFromServer, tmp, res)
+			huma.Validate(registry, schema, pb, huma.ModeReadFromServer, tmp, res)
 
 			var out MediumSized
 			if err := json.Unmarshal(data, &out); err != nil {
@@ -829,7 +824,7 @@ func BenchmarkSecondDecode(b *testing.B) {
 				panic(err)
 			}
 
-			Validate(registry, schema, pb, ModeReadFromServer, tmp, res)
+			huma.Validate(registry, schema, pb, huma.ModeReadFromServer, tmp, res)
 
 			var out MediumSized
 			if err := mapstructure.Decode(tmp, &out); err != nil {
@@ -838,169 +833,3 @@ func BenchmarkSecondDecode(b *testing.B) {
 		}
 	})
 }
-
-// var jsonData = []byte(`[
-//   {
-//     "desired_state": "ON",
-//     "etag": "203f7a94",
-//     "id": "bvt3",
-//     "name": "BVT channel - CNN Plus 2",
-//     "org": "t2dev",
-//     "self": "https://api.istreamplanet.com/v2/t2dev/channels/bvt3",
-// 		"created": "2021-01-01T12:00:00Z",
-// 		"count": 18273,
-// 		"rating": 5.0,
-// 		"tags": ["one", "three"],
-//     "source": {
-//       "id": "stn-dd4j42ytxmajz6xz",
-//       "self": "https://api.istreamplanet.com/v2/t2dev/sources/stn-dd4j42ytxmajz6xz"
-//     }
-//   },
-//   {
-//     "desired_state": "ON",
-//     "etag": "WgY5zNTPn3ECf_TSPAgL9Y-E9doUaRxAdjukGsCt_sQ",
-//     "id": "bvt2",
-//     "name": "BVT channel - Hulu",
-//     "org": "t2dev",
-//     "self": "https://api.istreamplanet.com/v2/t2dev/channels/bvt2",
-// 		"created": "2023-01-01T12:01:00Z",
-// 		"count": 1,
-// 		"rating": 4.5,
-// 		"tags": ["two"],
-//     "source": {
-//       "id": "stn-yuqvm3hzowrv6rph",
-//       "self": "https://api.istreamplanet.com/v2/t2dev/sources/stn-yuqvm3hzowrv6rph"
-//     }
-//   },
-//   {
-//     "desired_state": "ON",
-//     "etag": "1GaleyULVhpmHJXCJPUGSeBM2YYAZGBYKVcR5sZu5U8",
-//     "id": "bvt1",
-//     "name": "BVT channel - Hulu",
-//     "org": "t2dev",
-//     "self": "https://api.istreamplanet.com/v2/t2dev/channels/bvt1",
-// 		"created": "2023-01-01T12:00:00Z",
-// 		"count": 57,
-// 		"rating": 3.5,
-// 		"tags": ["one", "two"],
-//     "source": {
-//       "id": "stn-fc6sqodptbz5keuy",
-//       "self": "https://api.istreamplanet.com/v2/t2dev/sources/stn-fc6sqodptbz5keuy"
-//     }
-//   }
-// ]`)
-
-// type Summary struct {
-// 	DesiredState string    `json:"desired_state"`
-// 	ETag         string    `json:"etag"`
-// 	ID           string    `json:"id"`
-// 	Name         string    `json:"name"`
-// 	Org          string    `json:"org"`
-// 	Self         string    `json:"self"`
-// 	Created      time.Time `json:"created"`
-// 	Count        int       `json:"count"`
-// 	Rating       float64   `json:"rating"`
-// 	Tags         []string  `json:"tags"`
-// 	Source       struct {
-// 		ID   string `json:"id"`
-// 		Self string `json:"self"`
-// 	} `json:"source"`
-// }
-
-// func BenchmarkMarshalStructJSON(b *testing.B) {
-// 	var summaries []Summary
-// 	if err := stdjson.Unmarshal(jsonData, &summaries); err != nil {
-// 		panic(err)
-// 	}
-
-// 	b.ResetTimer()
-// 	b.ReportAllocs()
-// 	for i := 0; i < b.N; i++ {
-// 		b, _ := stdjson.Marshal(summaries)
-// 		_ = b
-// 	}
-// }
-
-// func BenchmarkMarshalAnyJSON(b *testing.B) {
-// 	var summaries any
-// 	stdjson.Unmarshal(jsonData, &summaries)
-
-// 	b.ResetTimer()
-// 	b.ReportAllocs()
-// 	for i := 0; i < b.N; i++ {
-// 		b, _ := stdjson.Marshal(summaries)
-// 		_ = b
-// 	}
-// }
-
-// func BenchmarkUnmarshalStructJSON(b *testing.B) {
-// 	var summaries []Summary
-
-// 	b.ResetTimer()
-// 	b.ReportAllocs()
-// 	for i := 0; i < b.N; i++ {
-// 		summaries = nil
-// 		stdjson.Unmarshal(jsonData, &summaries)
-// 		_ = summaries
-// 	}
-// }
-
-// func BenchmarkUnmarshalAnyJSON(b *testing.B) {
-// 	var summaries any
-
-// 	b.ResetTimer()
-// 	b.ReportAllocs()
-// 	for i := 0; i < b.N; i++ {
-// 		summaries = nil
-// 		stdjson.Unmarshal(jsonData, &summaries)
-// 		_ = summaries
-// 	}
-// }
-
-// func BenchmarkMarshalStructJSONiter(b *testing.B) {
-// 	var summaries []Summary
-// 	json.Unmarshal(jsonData, &summaries)
-
-// 	b.ResetTimer()
-// 	b.ReportAllocs()
-// 	for i := 0; i < b.N; i++ {
-// 		b, _ := json.Marshal(summaries)
-// 		_ = b
-// 	}
-// }
-
-// func BenchmarkMarshalAnyJSONiter(b *testing.B) {
-// 	var summaries any
-// 	json.Unmarshal(jsonData, &summaries)
-
-// 	b.ResetTimer()
-// 	b.ReportAllocs()
-// 	for i := 0; i < b.N; i++ {
-// 		b, _ := json.Marshal(summaries)
-// 		_ = b
-// 	}
-// }
-
-// func BenchmarkUnmarshalStructJSONiter(b *testing.B) {
-// 	var summaries []Summary
-
-// 	b.ResetTimer()
-// 	b.ReportAllocs()
-// 	for i := 0; i < b.N; i++ {
-// 		summaries = nil
-// 		json.Unmarshal(jsonData, &summaries)
-// 		_ = summaries
-// 	}
-// }
-
-// func BenchmarkUnmarshalAnyJSONiter(b *testing.B) {
-// 	var summaries any
-
-// 	b.ResetTimer()
-// 	b.ReportAllocs()
-// 	for i := 0; i < b.N; i++ {
-// 		summaries = nil
-// 		json.Unmarshal(jsonData, &summaries)
-// 		_ = summaries
-// 	}
-// }

@@ -1,4 +1,4 @@
-package huma
+package huma_test
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -431,7 +432,7 @@ func TestSchema(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+			r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 
 			if c.panics != "" {
 				assert.PanicsWithError(t, c.panics, func() {
@@ -464,7 +465,7 @@ type RecursiveInput struct {
 }
 
 func TestSchemaOld(t *testing.T) {
-	r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 
 	s := r.Schema(reflect.TypeOf(GreetingInput{}), false, "")
 	// fmt.Printf("%+v\n", s)
@@ -475,9 +476,9 @@ func TestSchemaOld(t *testing.T) {
 	r.Schema(reflect.TypeOf(RecursiveInput{}), false, "")
 
 	s2 := r.Schema(reflect.TypeOf(TestInput{}), false, "")
-	pb := NewPathBuffer(make([]byte, 0, 128), 0)
-	res := ValidateResult{}
-	Validate(r, s2, pb, ModeReadFromServer, map[string]any{
+	pb := huma.NewPathBuffer(make([]byte, 0, 128), 0)
+	res := huma.ValidateResult{}
+	huma.Validate(r, s2, pb, huma.ModeReadFromServer, map[string]any{
 		"name": "foo",
 		"sub": map[string]any{
 			"num": 1.0,
@@ -494,7 +495,7 @@ func TestSchemaGenericNaming(t *testing.T) {
 		Value T `json:"value"`
 	}
 
-	r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 	s := r.Schema(reflect.TypeOf(SchemaGeneric[int]{}), true, "")
 
 	b, _ := json.Marshal(s)
@@ -521,7 +522,7 @@ func (o *OmittableNullable[T]) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (o OmittableNullable[T]) Schema(r Registry) *Schema {
+func (o OmittableNullable[T]) Schema(r huma.Registry) *huma.Schema {
 	return r.Schema(reflect.TypeOf(o.Value), true, "")
 }
 
@@ -533,7 +534,7 @@ func TestCustomUnmarshalType(t *testing.T) {
 	var o O
 
 	// Confirm the schema is generated properly, including field constraints.
-	r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 	s := r.Schema(reflect.TypeOf(o), false, "")
 	assert.Equal(t, "integer", s.Properties["field"].Type, s)
 	assert.Equal(t, Ptr(float64(10)), s.Properties["field"].Maximum, s)
@@ -577,7 +578,7 @@ type BenchStruct struct {
 }
 
 func BenchmarkSchema(b *testing.B) {
-	r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 
 	s2 := r.Schema(reflect.TypeOf(BenchStruct{}), false, "")
 
@@ -596,9 +597,9 @@ func BenchmarkSchema(b *testing.B) {
 			"metrics": []any{1.0, 2.0, 3.0},
 		},
 	}
-	pb := NewPathBuffer(make([]byte, 0, 128), 0)
-	res := ValidateResult{}
-	Validate(r, s2, pb, ModeReadFromServer, input, &res)
+	pb := huma.NewPathBuffer(make([]byte, 0, 128), 0)
+	res := huma.ValidateResult{}
+	huma.Validate(r, s2, pb, huma.ModeReadFromServer, input, &res)
 	assert.Empty(b, res.Errors)
 
 	b.ResetTimer()
@@ -606,7 +607,7 @@ func BenchmarkSchema(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		pb.Reset()
 		res.Reset()
-		Validate(r, s2, pb, ModeReadFromServer, input, &res)
+		huma.Validate(r, s2, pb, huma.ModeReadFromServer, input, &res)
 		if len(res.Errors) > 0 {
 			b.Fatal(res.Errors)
 		}
@@ -614,7 +615,7 @@ func BenchmarkSchema(b *testing.B) {
 }
 
 func BenchmarkSchemaErrors(b *testing.B) {
-	r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 
 	s2 := r.Schema(reflect.TypeOf(BenchStruct{}), false, "")
 
@@ -630,9 +631,9 @@ func BenchmarkSchemaErrors(b *testing.B) {
 			"unexpected": 2,
 		},
 	}
-	pb := NewPathBuffer(make([]byte, 0, 128), 0)
-	res := ValidateResult{}
-	Validate(r, s2, pb, ModeReadFromServer, input, &res)
+	pb := huma.NewPathBuffer(make([]byte, 0, 128), 0)
+	res := huma.ValidateResult{}
+	huma.Validate(r, s2, pb, huma.ModeReadFromServer, input, &res)
 	assert.NotEmpty(b, res.Errors)
 
 	b.ResetTimer()
@@ -640,7 +641,7 @@ func BenchmarkSchemaErrors(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		pb.Reset()
 		res.Reset()
-		Validate(r, s2, pb, ModeReadFromServer, input, &res)
+		huma.Validate(r, s2, pb, huma.ModeReadFromServer, input, &res)
 		if len(res.Errors) == 0 {
 			b.Fatal("expected error")
 		}

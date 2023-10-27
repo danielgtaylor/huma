@@ -217,7 +217,11 @@ func WriteErr(api API, ctx Context, status int, msg string, errs ...error) error
 
 	ctx.SetHeader("Content-Type", ct)
 	ctx.SetStatus(status)
-	return api.Marshal(ctx, strconv.Itoa(status), ct, err)
+	tval, terr := api.Transform(ctx, strconv.Itoa(status), err)
+	if terr != nil {
+		return terr
+	}
+	return api.Marshal(ctx.BodyWriter(), ct, tval)
 }
 
 // Status304NotModified returns a 304. This is not really an error, but

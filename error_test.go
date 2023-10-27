@@ -1,4 +1,4 @@
-package huma
+package huma_test
 
 import (
 	"fmt"
@@ -6,23 +6,24 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/stretchr/testify/assert"
 )
 
 // Ensure the default error models satisfy these interfaces.
-var _ StatusError = (*ErrorModel)(nil)
-var _ ContentTypeFilter = (*ErrorModel)(nil)
-var _ ErrorDetailer = (*ErrorDetail)(nil)
+var _ huma.StatusError = (*huma.ErrorModel)(nil)
+var _ huma.ContentTypeFilter = (*huma.ErrorModel)(nil)
+var _ huma.ErrorDetailer = (*huma.ErrorDetail)(nil)
 
 func TestError(t *testing.T) {
-	err := &ErrorModel{
+	err := &huma.ErrorModel{
 		Status: 400,
 		Detail: "test err",
 	}
 
 	// Add some children.
-	err.Add(&ErrorDetail{
+	err.Add(&huma.ErrorDetail{
 		Message:  "test detail",
 		Location: "body.foo",
 		Value:    "bar",
@@ -44,29 +45,29 @@ func TestError(t *testing.T) {
 
 func TestErrorResponses(t *testing.T) {
 	// NotModified has a slightly different signature.
-	assert.Equal(t, 304, Status304NotModified().GetStatus())
+	assert.Equal(t, 304, huma.Status304NotModified().GetStatus())
 
 	for _, item := range []struct {
-		constructor func(msg string, errs ...error) StatusError
+		constructor func(msg string, errs ...error) huma.StatusError
 		expected    int
 	}{
-		{Error400BadRequest, 400},
-		{Error401Unauthorized, 401},
-		{Error403Forbidden, 403},
-		{Error404NotFound, 404},
-		{Error405MethodNotAllowed, 405},
-		{Error406NotAcceptable, 406},
-		{Error409Conflict, 409},
-		{Error410Gone, 410},
-		{Error412PreconditionFailed, 412},
-		{Error415UnsupportedMediaType, 415},
-		{Error422UnprocessableEntity, 422},
-		{Error429TooManyRequests, 429},
-		{Error500InternalServerError, 500},
-		{Error501NotImplemented, 501},
-		{Error502BadGateway, 502},
-		{Error503ServiceUnavailable, 503},
-		{Error504GatewayTimeout, 504},
+		{huma.Error400BadRequest, 400},
+		{huma.Error401Unauthorized, 401},
+		{huma.Error403Forbidden, 403},
+		{huma.Error404NotFound, 404},
+		{huma.Error405MethodNotAllowed, 405},
+		{huma.Error406NotAcceptable, 406},
+		{huma.Error409Conflict, 409},
+		{huma.Error410Gone, 410},
+		{huma.Error412PreconditionFailed, 412},
+		{huma.Error415UnsupportedMediaType, 415},
+		{huma.Error422UnprocessableEntity, 422},
+		{huma.Error429TooManyRequests, 429},
+		{huma.Error500InternalServerError, 500},
+		{huma.Error501NotImplemented, 501},
+		{huma.Error502BadGateway, 502},
+		{huma.Error503ServiceUnavailable, 503},
+		{huma.Error504GatewayTimeout, 504},
 	} {
 		err := item.constructor("test")
 		assert.Equal(t, item.expected, err.GetStatus())
@@ -74,12 +75,11 @@ func TestErrorResponses(t *testing.T) {
 }
 
 func TestNegotiateError(t *testing.T) {
-	r := chi.NewMux()
-	api := NewTestAdapter(r, Config{})
+	_, api := humatest.New(t, huma.Config{})
 
 	req, _ := http.NewRequest("GET", "/", nil)
 	resp := httptest.NewRecorder()
-	ctx := &testContext{nil, req, resp}
+	ctx := humatest.NewContext(nil, req, resp)
 
-	assert.Error(t, WriteErr(api, ctx, 400, "bad request"))
+	assert.Error(t, huma.WriteErr(api, ctx, 400, "bad request"))
 }
