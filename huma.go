@@ -1,3 +1,10 @@
+// Package huma provides a framework for building REST APIs in Go. It is
+// designed to be simple, fast, and easy to use. It is also designed to
+// generate OpenAPI 3.1 specifications and JSON Schema documents
+// describing the API and providing a quick & easy way to generate
+// docs, mocks, SDKs, CLI clients, and more.
+//
+// https://huma.rocks/
 package huma
 
 import (

@@ -1,3 +1,14 @@
+// Package conditional provides utilities for working with HTTP conditional
+// requests using the `If-Match`, `If-None-Match`, `If-Modified-Since`, and
+// `If-Unmodified-Since` headers along with ETags and last modified times.
+//
+// In general, conditional requests with tight integration into your data
+// store will be preferred as they are more efficient. However, this package
+// provides a simple way to get started with conditional requests and once
+// the functionality is in place the performance can be improved later. You
+// still get the benefits of not sending extra data over the wire and
+// distributed write protections that prevent different users from
+// overwriting each other's changes.
 package conditional
 
 import (

@@ -6,6 +6,9 @@
 //		// Get the value of the `key` query parameter.
 //		value := queryparam.Get(r.URL.RawQuery, "key")
 //	}
+//
+// Note that this method does not support multiple values for the same key,
+// so using `val=1,2,3` is preferable to `val=1&val=2&val=3`.
 package queryparam
 
 import (

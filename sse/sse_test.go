@@ -1,12 +1,15 @@
-package sse
+package sse_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/humatest"
+	"github.com/danielgtaylor/huma/v2/sse"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,10 +25,28 @@ type UserEvent struct {
 type UserCreatedEvent UserEvent
 type UserDeletedEvent UserEvent
 
+type DummyWriter struct {
+	writeErr error
+}
+
+func (w *DummyWriter) Header() http.Header {
+	return http.Header{}
+}
+
+func (w *DummyWriter) Write(p []byte) (n int, err error) {
+	return len(p), w.writeErr
+}
+
+func (w *DummyWriter) WriteHeader(statusCode int) {}
+
+func (w *DummyWriter) SetWriteDeadline(t time.Time) error {
+	return nil
+}
+
 func TestSSE(t *testing.T) {
 	_, api := humatest.New(t)
 
-	Register(api, huma.Operation{
+	sse.Register(api, huma.Operation{
 		OperationID: "sse",
 		Method:      http.MethodGet,
 		Path:        "/sse",
@@ -33,10 +54,10 @@ func TestSSE(t *testing.T) {
 		"message":    &DefaultMessage{},
 		"userCreate": UserCreatedEvent{},
 		"userDelete": UserDeletedEvent{},
-	}, func(ctx context.Context, input *struct{}, send Sender) {
+	}, func(ctx context.Context, input *struct{}, send sse.Sender) {
 		send.Data(DefaultMessage{Message: "Hello, world!"})
 
-		send(Message{
+		send(sse.Message{
 			ID:    5,
 			Retry: 1000,
 			Data:  UserCreatedEvent{UserID: 1, Username: "foo"},
@@ -48,7 +69,7 @@ func TestSSE(t *testing.T) {
 		send.Data("unknown event")
 
 		// Encode failure should return an error.
-		assert.Error(t, send(Message{
+		assert.Error(t, send(sse.Message{
 			Data: make(chan int),
 		}))
 	})
@@ -72,4 +93,14 @@ data: "unknown event"
 data: {"error": "encode error: json: unsupported type: chan int"}
 
 `, resp.Body.String())
+
+	// Test write error doens't panic
+	w := &DummyWriter{writeErr: fmt.Errorf("whoops")}
+	req, _ := http.NewRequest(http.MethodGet, "/sse", nil)
+	api.Adapter().ServeHTTP(w, req)
+
+	// Test inability to flush doesn't panic
+	w = &DummyWriter{}
+	req, _ = http.NewRequest(http.MethodGet, "/sse", nil)
+	api.Adapter().ServeHTTP(w, req)
 }

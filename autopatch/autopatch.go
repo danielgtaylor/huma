@@ -1,3 +1,11 @@
+// Package autopatch provides a way to automatically generate PATCH operations
+// for resources which have a GET & PUT but no PATCH. This is useful for
+// resources which are large and have many fields, but where the majority of
+// updates are only to a few fields. This allows clients to send a partial
+// update to the server without having to send the entire resource.
+//
+// JSON Merge Patch, JSON Patch, and Shorthand Merge Patch are supported as
+// input formats.
 package autopatch
 
 import (
@@ -27,11 +35,12 @@ type jsonPatchOp struct {
 
 var jsonPatchType = reflect.TypeOf([]jsonPatchOp{})
 
-// AutoPatch generates HTTP PATCH operations for any resource which has a
-// GET & PUT but no pre-existing PATCH operation. Generated PATCH operations
-// will call GET, apply either `application/merge-patch+json` or
-// `application/json-patch+json` patches, then call PUT with the updated
-// resource. This method may be safely called multiple times.
+// AutoPatch generates HTTP PATCH operations for any resource which has a GET &
+// PUT but no pre-existing PATCH operation. Generated PATCH operations will call
+// GET, apply either `application/merge-patch+json`,
+// `application/json-patch+json`, or `application/merge-patch+shorthand`
+// patches, then call PUT with the updated resource. This method may be safely
+// called multiple times.
 func AutoPatch(api huma.API) {
 	oapi := api.OpenAPI()
 	registry := oapi.Components.Schemas
