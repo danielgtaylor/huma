@@ -34,11 +34,25 @@ var jsonPatchType = reflect.TypeOf([]jsonPatchOp{})
 // resource. This method may be safely called multiple times.
 func AutoPatch(api huma.API) {
 	oapi := api.OpenAPI()
+	registry := oapi.Components.Schemas
 	for _, path := range oapi.Paths {
 		if path.Get != nil && path.Put != nil && path.Patch == nil {
-			// TODO: ensure that the GET & PUT operations are for the same resource
-			// and it is a struct.
-			generatePatch(api, path)
+			body := path.Put.RequestBody
+			if body != nil && body.Content != nil && body.Content["application/json"] != nil {
+				ct := body.Content["application/json"]
+				if ct.Schema != nil {
+					s := ct.Schema
+					if s.Ref != "" {
+						// Dereference if needed so we can find the underlying type.
+						s = registry.SchemaFromRef(s.Ref)
+					}
+					// Only objects can be patched automatically. No arrays or
+					// primitives so skip those.
+					if s.Type == "object" {
+						generatePatch(api, path)
+					}
+				}
+			}
 		}
 	}
 }
@@ -235,7 +249,7 @@ func generatePatch(api huma.API, path *huma.PathItem) {
 			}
 		default:
 			// A content type we explicitly do not support was passed.
-			huma.WriteErr(api, ctx, http.StatusUnsupportedMediaType, "Content type should be one of application/merge-patch+json or application/json-patch+json", nil)
+			huma.WriteErr(api, ctx, http.StatusUnsupportedMediaType, "Content type should be one of application/merge-patch+json or application/json-patch+json")
 			return
 		}
 
@@ -245,7 +259,7 @@ func generatePatch(api huma.API, path *huma.PathItem) {
 		}
 
 		// Write the updated data back to the server!
-		putReq, err := http.NewRequest(http.MethodPut, op.Path, bytes.NewReader(patched))
+		putReq, err := http.NewRequest(http.MethodPut, ctx.URL().Path, bytes.NewReader(patched))
 		if err != nil {
 			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to put modified resource", err)
 			return
