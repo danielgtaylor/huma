@@ -212,6 +212,7 @@ func New(tb TB, configs ...huma.Config) (chi.Router, TestAPI) {
 			},
 			Formats: map[string]huma.Format{
 				"application/json": huma.DefaultJSONFormat,
+				"json":             huma.DefaultJSONFormat,
 			},
 			DefaultFormat: "application/json",
 		})
