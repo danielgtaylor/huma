@@ -1,3 +1,6 @@
+// Package negotiation provides utilities for working with HTTP client-
+// driven content negotiation. It provides a zero-allocation utility for
+// determining the best content type for the server to encode a response.
 package negotiation
 
 import (

@@ -83,3 +83,19 @@ func TestNegotiateError(t *testing.T) {
 
 	assert.Error(t, huma.WriteErr(api, ctx, 400, "bad request"))
 }
+
+func TestTransformError(t *testing.T) {
+	config := huma.DefaultConfig("Test API", "1.0.0")
+	config.Transformers = []huma.Transformer{
+		func(ctx huma.Context, status string, v any) (any, error) {
+			return nil, fmt.Errorf("whoops")
+		},
+	}
+	_, api := humatest.New(t, config)
+
+	req, _ := http.NewRequest("GET", "/", nil)
+	resp := httptest.NewRecorder()
+	ctx := humatest.NewContext(nil, req, resp)
+
+	assert.Error(t, huma.WriteErr(api, ctx, 400, "bad request"))
+}

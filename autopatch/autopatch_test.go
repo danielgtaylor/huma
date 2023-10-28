@@ -128,6 +128,15 @@ func TestPatch(t *testing.T) {
 	)
 	assert.Equal(t, http.StatusNotModified, w.Code, w.Body.String())
 
+	// Extra headers should not be a problem, including `Accept`.
+	w = api.Patch("/things/test",
+		"Content-Type: application/merge-patch+json",
+		"Accept: application/json",
+		"X-Some-Other: value",
+		strings.NewReader(`{"price": 1.23}`),
+	)
+	assert.Equal(t, http.StatusNotModified, w.Code, w.Body.String())
+
 	app := api.Adapter()
 	// New change but with wrong manual ETag, should fail!
 	w = httptest.NewRecorder()

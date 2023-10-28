@@ -55,6 +55,8 @@ This project was inspired by [FastAPI](https://fastapi.tiangolo.com/). Logo & br
 
 # Install
 
+Install via `go get`. Note that Go 1.20 or newer is required.
+
 ```sh
 # After: go mod init ...
 go get -u github.com/danielgtaylor/huma/v2
@@ -1112,6 +1114,7 @@ type Context interface {
 	Header(name string) string
 	EachHeader(cb func(name, value string))
 	BodyReader() io.Reader
+	GetMultipartForm() (*multipart.Form, error)
 	SetReadDeadline(time.Time) error
 	SetStatus(code int)
 	SetHeader(name, value string)

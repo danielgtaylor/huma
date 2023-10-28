@@ -22,7 +22,7 @@ type Options struct {
 // ReusableParam is a reusable parameter that can go in the path or the body
 // of a request or response. The same validation applies to both places.
 type ReusableParam struct {
-	User string `json:"user" path:"user" maxLength:"10"`
+	User string `path:"user" json:"user" maxLength:"10"`
 }
 
 type MyResponse struct {
