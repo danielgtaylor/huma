@@ -179,9 +179,9 @@ http.ListenAndServe(":8888", r)
 
 ### Middleware
 
-Huma v2 has support two variants of middlewares:
+Huma has support two variants of middlewares:
 
-1. Router-specific - works at the router level, i.e. before router-specific middleware, you can use any middleware that is implemented for your router.
+1. Router-specific - works at the router level, i.e. before router-agnostic middleware, you can use any middleware that is implemented for your router.
 2. Router-agnostic - runs in the Huma processing chain, i.e. after calls to router-specific middleware.
 
 #### Router-specific
@@ -196,11 +196,11 @@ router.Use(jwtauth.Verifier(tokenAuth))
 api := humachi.New(router, defconfig)
 ```
 
-> :whale: Huma v1 middleware is compatible with Chi, so if you use that router with v2 you can continue to use the v1 middleware in a v2 application.
+> :whale: Huma v1 middleware is compatible with Chi v4, so if you use that router with Huma v2 you can continue to use the Huma v1 middleware.
 
 #### Router-agnostic
 
-You can write you own huma v2 middleware without dependency to router implementation.
+You can write you own Huma v2 middleware without any dependency to the specific router implementation.
 
 Example:
 
@@ -271,7 +271,7 @@ huma.Register(api, withBearerAuth(huma.Operation{
 })
 ```
 
-Set this up however you like. Even the `huma.Register` function can be wrapped by your organization to ensure that all operations are registered with the same settings.
+Set this up however you like. Even the `huma.Register` function can be wrapped or replaced by your organization to ensure that all operations are registered with the same settings.
 
 ### Custom OpenAPI Extensions
 
