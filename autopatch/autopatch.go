@@ -41,11 +41,24 @@ var jsonPatchType = reflect.TypeOf([]jsonPatchOp{})
 // `application/json-patch+json`, or `application/merge-patch+shorthand`
 // patches, then call PUT with the updated resource. This method may be safely
 // called multiple times.
+//
+// If you wish to disable autopatching for a specific resource, set the
+// `autopatch` operation metadata field to `false` on the GET or PUT
+// operation and it will be skipped.
 func AutoPatch(api huma.API) {
 	oapi := api.OpenAPI()
 	registry := oapi.Components.Schemas
+Outer:
 	for _, path := range oapi.Paths {
 		if path.Get != nil && path.Put != nil && path.Patch == nil {
+			for _, op := range []*huma.Operation{path.Get, path.Put} {
+				if op.Metadata != nil && op.Metadata["autopatch"] != nil {
+					if b, ok := op.Metadata["autopatch"].(bool); ok && !b {
+						// Special case: explicitly disabled.
+						continue Outer
+					}
+				}
+			}
 			body := path.Put.RequestBody
 			if body != nil && body.Content != nil && body.Content["application/json"] != nil {
 				ct := body.Content["application/json"]
@@ -58,7 +71,7 @@ func AutoPatch(api huma.API) {
 					// Only objects can be patched automatically. No arrays or
 					// primitives so skip those.
 					if s.Type == "object" {
-						generatePatch(api, path)
+						PatchResource(api, path)
 					}
 				}
 			}
@@ -66,9 +79,11 @@ func AutoPatch(api huma.API) {
 	}
 }
 
-// generatePatch is called for each resource which needs a PATCH operation to
-// be added. it registers and provides a handler for this new operation.
-func generatePatch(api huma.API, path *huma.PathItem) {
+// PatchResource is called for each resource which needs a PATCH operation to
+// be added. It registers and provides a handler for this new operation. You
+// may call this manually if you prefer to not use `AutoPatch` for all of
+// your resources and want more fine-grained control.
+func PatchResource(api huma.API, path *huma.PathItem) {
 	oapi := api.OpenAPI()
 	get := path.Get
 	put := path.Put

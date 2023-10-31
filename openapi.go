@@ -652,6 +652,10 @@ type Operation struct {
 
 	// Errors is a list of HTTP status codes that the handler may return. If
 	// not specified, then a default error response is added to the OpenAPI.
+	// This is a convenience for handlers that return a fixed set of errors
+	// where you do not wish to provide each one as an OpenAPI response object.
+	// Each error specified here is expanded into a response object with the
+	// schema generated from the type returned by `huma.NewError()`.
 	Errors []int `yaml:"-"`
 
 	// SkipValidateParams disables validation of path, query, and header
@@ -668,6 +672,11 @@ type Operation struct {
 	// useful for operations that are not intended to be used by clients but
 	// you'd still like the benefits of using Huma. Generally not recommended.
 	Hidden bool `yaml:"-"`
+
+	// Metadata is a map of arbitrary data that can be attached to the operation.
+	// This can be used to store custom data, such as custom settings for
+	// functions which generate operations.
+	Metadata map[string]any `yaml:"-"`
 
 	// --- OpenAPI fields ---
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -137,90 +136,89 @@ func TestPatch(t *testing.T) {
 	)
 	assert.Equal(t, http.StatusNotModified, w.Code, w.Body.String())
 
-	app := api.Adapter()
 	// New change but with wrong manual ETag, should fail!
-	w = httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPatch, "/things/test", strings.NewReader(`{"price": 4.56}`))
-	req.Header.Set("Content-Type", "application/merge-patch+json")
-	req.Header.Set("If-Match", "abc123")
-	app.ServeHTTP(w, req)
+	w = api.Patch("/things/test",
+		"Content-Type: application/merge-patch+json",
+		"If-Match: abc123",
+		strings.NewReader(`{"price": 4.56}`),
+	)
 	assert.Equal(t, http.StatusPreconditionFailed, w.Code, w.Body.String())
 
 	// Correct manual ETag should pass!
-	w = httptest.NewRecorder()
-	req, _ = http.NewRequest(http.MethodPatch, "/things/test", strings.NewReader(`{"price": 4.56}`))
-	req.Header.Set("Content-Type", "application/merge-patch+json")
-	req.Header.Set("If-Match", "test1.23[US123 EU456][]")
-	app.ServeHTTP(w, req)
+	w = api.Patch("/things/test",
+		"Content-Type: application/merge-patch+json",
+		"If-Match: test1.23[US123 EU456][]",
+		strings.NewReader(`{"price": 4.56}`),
+	)
 	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Equal(t, "test4.56[US123 EU456][]", w.Result().Header.Get("ETag"))
 
 	// Merge Patch: invalid
-	w = httptest.NewRecorder()
-	req, _ = http.NewRequest(http.MethodPatch, "/things/test", strings.NewReader(`{`))
-	req.Header.Set("Content-Type", "application/merge-patch+json")
-	app.ServeHTTP(w, req)
+	w = api.Patch("/things/test",
+		"Content-Type: application/merge-patch+json",
+		strings.NewReader(`{`),
+	)
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Code, w.Body.String())
 
 	// JSON Patch Test
-	w = httptest.NewRecorder()
-	req, _ = http.NewRequest(http.MethodPatch, "/things/test", strings.NewReader(`[
-		{"op": "add", "path": "/tags", "value": ["b"]},
-		{"op": "add", "path": "/tags/0", "value": "a"}
-	]`))
-	req.Header.Set("Content-Type", "application/json-patch+json")
-	app.ServeHTTP(w, req)
+	w = api.Patch("/things/test",
+		"Content-Type: application/json-patch+json",
+		strings.NewReader(`[
+			{"op": "add", "path": "/tags", "value": ["b"]},
+			{"op": "add", "path": "/tags/0", "value": "a"}
+		]`),
+	)
 	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Equal(t, "test4.56[US123 EU456][a b]", w.Result().Header.Get("ETag"))
 
 	// JSON Patch: bad JSON
-	w = httptest.NewRecorder()
-	req, _ = http.NewRequest(http.MethodPatch, "/things/test", strings.NewReader(`[`))
-	req.Header.Set("Content-Type", "application/json-patch+json")
-	app.ServeHTTP(w, req)
+	w = api.Patch("/things/test",
+		"Content-Type: application/json-patch+json",
+		strings.NewReader(`[`),
+	)
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Code, w.Body.String())
 
 	// JSON Patch: invalid patch
-	w = httptest.NewRecorder()
-	req, _ = http.NewRequest(http.MethodPatch, "/things/test", strings.NewReader(`[{"op": "unsupported"}]`))
-	req.Header.Set("Content-Type", "application/json-patch+json")
-	app.ServeHTTP(w, req)
+	w = api.Patch("/things/test",
+		"Content-Type: application/json-patch+json",
+		strings.NewReader(`[{"op": "unsupported"}]`),
+	)
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Code, w.Body.String())
 
 	// Shorthand Patch Test
-	w = httptest.NewRecorder()
-	req, _ = http.NewRequest(http.MethodPatch, "/things/test", strings.NewReader(`{tags[]: c}`))
-	req.Header.Set("Content-Type", "application/merge-patch+shorthand")
-	app.ServeHTTP(w, req)
+	w = api.Patch("/things/test",
+		"Content-Type: application/merge-patch+shorthand",
+		strings.NewReader(`{tags[]: c}`),
+	)
 	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Equal(t, "test4.56[US123 EU456][a b c]", w.Result().Header.Get("ETag"))
 
 	// Shorthand Patch: bad input
-	w = httptest.NewRecorder()
-	req, _ = http.NewRequest(http.MethodPatch, "/things/test", strings.NewReader(`[`))
-	req.Header.Set("Content-Type", "application/merge-patch+shorthand")
-	app.ServeHTTP(w, req)
+	w = api.Patch("/things/test",
+		"Content-Type: application/merge-patch+shorthand",
+		strings.NewReader(`[`),
+	)
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Code, w.Body.String())
 
 	// Bad content type
-	w = httptest.NewRecorder()
-	req, _ = http.NewRequest(http.MethodPatch, "/things/test", strings.NewReader(`{}`))
-	req.Header.Set("Content-Type", "application/unsupported-content-type")
-	app.ServeHTTP(w, req)
+	w = api.Patch("/things/test",
+		"Content-Type: application/unsupported-content-type",
+		strings.NewReader(`{}`),
+	)
 	assert.Equal(t, http.StatusUnsupportedMediaType, w.Code, w.Body.String())
 
 	// PATCH body read error
-	w = httptest.NewRecorder()
-	req, _ = http.NewRequest(http.MethodPatch, "/things/notfound", iotest.ErrReader(fmt.Errorf("test error")))
-	req.Header.Set("Content-Type", "application/merge-patch+json")
-	app.ServeHTTP(w, req)
+	w = api.Patch("/things/notfound",
+		"Content-Type: application/merge-patch+json",
+		iotest.ErrReader(fmt.Errorf("test error")),
+	)
 	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 
 	// GET error
-	w = httptest.NewRecorder()
-	req, _ = http.NewRequest(http.MethodPatch, "/things/notfound", strings.NewReader(`{}`))
-	req.Header.Set("Content-Type", "application/merge-patch+json")
-	app.ServeHTTP(w, req)
+	w = api.Patch("/things/notfound",
+		"Content-Type: application/merge-patch+json",
+		strings.NewReader(`{}`),
+	)
 	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
 }
 
@@ -253,9 +251,47 @@ func TestPatchPutNoBody(t *testing.T) {
 
 	// There should be no generated PATCH since there is nothing to
 	// write in the PUT!
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPatch, "/things/test", nil)
-	api.Adapter().ServeHTTP(w, req)
+	assert.Nil(t, api.OpenAPI().Paths["/things/{thing-id}"].Patch)
+	w := api.Patch("/things/test")
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code, w.Body.String())
+}
+
+func TestExplicitDisable(t *testing.T) {
+	_, api := humatest.New(t)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-thing",
+		Method:      http.MethodGet,
+		Path:        "/things/{thing-id}",
+		Errors:      []int{404},
+		Metadata: map[string]any{
+			"autopatch": false, //           <-- Disabled here!
+		},
+	}, func(ctx context.Context, input *struct {
+		ThingIDParam
+	}) (*struct{ Body struct{} }, error) {
+		return nil, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "put-thing",
+		Method:      http.MethodPut,
+		Path:        "/things/{thing-id}",
+		Errors:      []int{404, 412},
+	}, func(ctx context.Context, input *struct {
+		ThingIDParam
+		Body    ThingModel
+		IfMatch []string `header:"If-Match" doc:"Succeeds if the server's resource matches one of the passed values."`
+	}) (*struct{ Body struct{} }, error) {
+		return nil, nil
+	})
+
+	AutoPatch(api)
+
+	// There should be no generated PATCH since there is nothing to
+	// write in the PUT!
+	assert.Nil(t, api.OpenAPI().Paths["/things/{thing-id}"].Patch)
+	w := api.Patch("/things/test")
 	assert.Equal(t, http.StatusMethodNotAllowed, w.Code, w.Body.String())
 }
 
@@ -290,5 +326,5 @@ func TestDeprecatedPatch(t *testing.T) {
 
 	AutoPatch(api)
 
-	assert.Equal(t, true, api.OpenAPI().Paths["/things/{thing-id}"].Patch.Deprecated)
+	assert.True(t, api.OpenAPI().Paths["/things/{thing-id}"].Patch.Deprecated)
 }
