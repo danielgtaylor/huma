@@ -612,9 +612,28 @@ func TestOpenAPI(t *testing.T) {
 	}
 }
 
+type IntNot3 int
+
+func (i IntNot3) Resolve(ctx huma.Context, prefix *huma.PathBuffer) []error {
+	if i != 0 && i%3 == 0 {
+		return []error{&huma.ErrorDetail{
+			Location: prefix.String(),
+			Message:  "Value cannot be a multiple of three",
+			Value:    i,
+		}}
+	}
+	return nil
+}
+
+var _ huma.ResolverWithPath = (*IntNot3)(nil)
+
 type ExhaustiveErrorsInputBody struct {
-	Name  string `json:"name" maxLength:"10"`
-	Count int    `json:"count" minimum:"1"`
+	Name  string  `json:"name" maxLength:"10"`
+	Count IntNot3 `json:"count" minimum:"1"`
+
+	// Having a pointer which is never loaded should not cause
+	// the tests to fail when running resolvers.
+	Ptr *IntNot3 `json:"ptr,omitempty" minimum:"1"`
 }
 
 func (b *ExhaustiveErrorsInputBody) Resolve(ctx huma.Context) []error {
@@ -622,8 +641,10 @@ func (b *ExhaustiveErrorsInputBody) Resolve(ctx huma.Context) []error {
 }
 
 type ExhaustiveErrorsInput struct {
-	ID   string                    `path:"id" maxLength:"5"`
-	Body ExhaustiveErrorsInputBody `json:"body"`
+	ID     IntNot3                   `path:"id" maximum:"10"`
+	Query  IntNot3                   `query:"query"`
+	Header IntNot3                   `header:"header"`
+	Body   ExhaustiveErrorsInputBody `json:"body"`
 }
 
 func (i *ExhaustiveErrorsInput) Resolve(ctx huma.Context) []error {
@@ -634,8 +655,7 @@ func (i *ExhaustiveErrorsInput) Resolve(ctx huma.Context) []error {
 	}}
 }
 
-type ExhaustiveErrorsOutput struct {
-}
+var _ huma.Resolver = (*ExhaustiveErrorsInput)(nil)
 
 func TestExhaustiveErrors(t *testing.T) {
 	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
@@ -643,12 +663,13 @@ func TestExhaustiveErrors(t *testing.T) {
 		OperationID: "test",
 		Method:      http.MethodPut,
 		Path:        "/errors/{id}",
-	}, func(ctx context.Context, input *ExhaustiveErrorsInput) (*ExhaustiveErrorsOutput, error) {
-		return &ExhaustiveErrorsOutput{}, nil
+	}, func(ctx context.Context, input *ExhaustiveErrorsInput) (*struct{}, error) {
+		return nil, nil
 	})
 
-	req, _ := http.NewRequest(http.MethodPut, "/errors/123456", strings.NewReader(`{"name": "12345678901", "count": 0}`))
+	req, _ := http.NewRequest(http.MethodPut, "/errors/15?query=3", strings.NewReader(`{"name": "12345678901", "count": -6}`))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Header", "3")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
@@ -659,9 +680,9 @@ func TestExhaustiveErrors(t *testing.T) {
 		"detail": "validation failed",
 		"errors": [
 			{
-				"message": "expected length <= 5",
+				"message": "expected number <= 10",
 				"location": "path.id",
-				"value": "123456"
+				"value": 15
 			}, {
 				"message": "expected length <= 10",
 				"location": "body.name",
@@ -669,13 +690,29 @@ func TestExhaustiveErrors(t *testing.T) {
 			}, {
 				"message": "expected number >= 1",
 				"location": "body.count",
-				"value": 0
+				"value": -6
 			}, {
 				"message": "input resolver error",
 				"location": "path.id",
-				"value": "123456"
+				"value": 15
+			}, {
+				"message": "Value cannot be a multiple of three",
+				"location": "path.id",
+				"value": 15
+			}, {
+				"message": "Value cannot be a multiple of three",
+				"location": "query.query",
+				"value": 3
+			}, {
+				"message": "Value cannot be a multiple of three",
+				"location": "header.header",
+				"value": 3
 			}, {
 				"message": "body resolver error"
+			}, {
+				"message": "Value cannot be a multiple of three",
+				"location": "body.count",
+				"value": -6
 			}
 		]
 	}`, w.Body.String())
@@ -743,6 +780,44 @@ func TestResolverCustomStatus(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
 	assert.Contains(t, w.Body.String(), "nope")
+}
+
+func TestParamPointerPanics(t *testing.T) {
+	// For now we don't support these, so we panic rather than have subtle
+	// bugs that are hard to track down.
+	_, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	assert.Panics(t, func() {
+		huma.Register(app, huma.Operation{
+			OperationID: "bug",
+			Method:      http.MethodGet,
+			Path:        "/bug",
+		}, func(ctx context.Context, input *struct {
+			Param *string `query:"param"`
+		}) (*struct{}, error) {
+			return nil, nil
+		})
+	})
+}
+
+func TestPointerDefaultPanics(t *testing.T) {
+	// For now we don't support these, so we panic rather than have subtle
+	// bugs that are hard to track down.
+	_, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	assert.Panics(t, func() {
+		huma.Register(app, huma.Operation{
+			OperationID: "bug",
+			Method:      http.MethodGet,
+			Path:        "/bug",
+		}, func(ctx context.Context, input *struct {
+			Body struct {
+				Value *string `json:"value,omitempty" default:"foo"`
+			}
+		}) (*struct{}, error) {
+			return nil, nil
+		})
+	})
 }
 
 func BenchmarkSecondDecode(b *testing.B) {

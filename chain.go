@@ -1,5 +1,7 @@
 package huma
 
+// Middlewares is a list of middleware functions that can be attached to an
+// API and will be called for all incoming requests.
 type Middlewares []func(ctx Context, next func(Context))
 
 // Handler builds and returns a handler func from the chain of middlewares,
