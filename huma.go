@@ -89,6 +89,15 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			return nil
 		}
 
+		if f.Type.Kind() == reflect.Pointer {
+			// TODO: support pointers? The problem is that when we dynamically
+			// create an instance of the input struct the `params.Every(...)`
+			// call cannot set them as the value is `reflect.Invalid` unless
+			// dynamically allocated, but we don't know when to allocate until
+			// after the `Every` callback has run. Doable, but a bigger change.
+			panic("pointers are not supported for path/query/header parameters")
+		}
+
 		pfi := &paramFieldInfo{
 			Type:   f.Type,
 			Schema: SchemaFromField(registry, f, ""),
@@ -171,6 +180,9 @@ func findResolvers(resolverType, t reflect.Type) *findResult[bool] {
 func findDefaults(t reflect.Type) *findResult[any] {
 	return findInType(t, nil, func(sf reflect.StructField, i []int) any {
 		if d := sf.Tag.Get("default"); d != "" {
+			if sf.Type.Kind() == reflect.Pointer {
+				panic("pointers cannot have default values")
+			}
 			return jsonTagValue(sf, sf.Type, d)
 		}
 		return nil
@@ -210,6 +222,12 @@ type findResult[T comparable] struct {
 }
 
 func (r *findResult[T]) every(current reflect.Value, path []int, v T, f func(reflect.Value, T)) {
+	if current.Kind() == reflect.Invalid {
+		// Indirect from below may have resulted in no value, for example
+		// an optional field may have been omitted; just ignore it.
+		return
+	}
+
 	if len(path) == 0 {
 		f(current, v)
 		return
@@ -246,6 +264,11 @@ func jsonName(field reflect.StructField) string {
 }
 
 func (r *findResult[T]) everyPB(current reflect.Value, path []int, pb *PathBuffer, v T, f func(reflect.Value, T)) {
+	if current.Kind() == reflect.Invalid {
+		// Indirect from below may have resulted in no value, for example
+		// an optional field may have been omitted; just ignore it.
+		return
+	}
 	switch current.Kind() {
 	case reflect.Struct:
 		if len(path) == 0 {
@@ -253,12 +276,33 @@ func (r *findResult[T]) everyPB(current reflect.Value, path []int, pb *PathBuffe
 			return
 		}
 		field := current.Type().Field(path[0])
+		pops := 0
 		if !field.Anonymous {
+			// The path name can come from one of four places: path parameter,
+			// query parameter, header parameter, or body field.
 			// TODO: pre-compute type/field names? Could save a few allocations.
-			pb.Push(jsonName(field))
+			pops++
+			if path := field.Tag.Get("path"); path != "" && pb.Len() == 0 {
+				pb.Push("path")
+				pb.Push(path)
+				pops++
+			} else if query := field.Tag.Get("query"); query != "" && pb.Len() == 0 {
+				pb.Push("query")
+				pb.Push(query)
+				pops++
+			} else if header := field.Tag.Get("header"); header != "" && pb.Len() == 0 {
+				pb.Push("header")
+				pb.Push(header)
+				pops++
+			} else {
+				// The body is _always_ in a field called "Body", which turns into
+				// `body` in the path buffer, so we don't need to push it separately
+				// like the the params fields above.
+				pb.Push(jsonName(field))
+			}
 		}
 		r.everyPB(reflect.Indirect(current.Field(path[0])), path[1:], pb, v, f)
-		if !field.Anonymous {
+		for i := 0; i < pops; i++ {
 			pb.Pop()
 		}
 	case reflect.Slice:
