@@ -430,6 +430,21 @@ func transformAndWrite(api API, ctx Context, status int, ct string, body any) {
 // for the request path/query/header parameters and/or body. The output struct
 // must be a  struct with fields for the output headers and body of the
 // operation, if any.
+//
+//	huma.Register(api, huma.Operation{
+//		OperationID: "get-greeting",
+//		Method:      http.MethodGet,
+//		Path:        "/greeting/{name}",
+//		Summary:     "Get a greeting",
+//	}, func(ctx context.Context, input *GreetingInput) (*GreetingOutput, error) {
+//		if input.Name == "bob" {
+//			return nil, huma.Error404NotFound("no greeting for bob")
+//		}
+//		resp := &GreetingOutput{}
+//		resp.MyHeader = "MyValue"
+//		resp.Body.Message = fmt.Sprintf("Hello, %s!", input.Name)
+//		return resp, nil
+//	})
 func Register[I, O any](api API, op Operation, handler func(context.Context, *I) (*O, error)) {
 	oapi := api.OpenAPI()
 	registry := oapi.Components.Schemas
@@ -913,6 +928,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		outHeaders.Every(vo, func(f reflect.Value, info *headerInfo) {
 			switch f.Kind() {
 			case reflect.String:
+				if f.String() == "" {
+					// Don't set empty headers.
+					return
+				}
 				ctx.SetHeader(info.Name, f.String())
 				if info.Name == "Content-Type" {
 					ct = f.String()
@@ -926,7 +945,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			case reflect.Bool:
 				ctx.SetHeader(info.Name, strconv.FormatBool(f.Bool()))
 			default:
-				if f.Type() == timeType {
+				if f.Type() == timeType && !f.Interface().(time.Time).IsZero() {
 					ctx.SetHeader(info.Name, f.Interface().(time.Time).Format(info.TimeFormat))
 					return
 				}
