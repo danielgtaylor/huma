@@ -299,7 +299,7 @@ Anything in the `Extensions` map will be flattened during serialization so that 
 
 ### JSON Schema
 
-Using the default Huma config (or manually via the `huma.SchemaLinkTransformer`), each resource operation returns a `describedby` HTTP link relation header which references a JSON-Schema file. These schemas use the `config.SchemasPath` to the serve their content. For example:
+Using the default Huma config (or manually via the `huma.SchemaLinkTransformer`), each resource operation returns a `describedby` HTTP link relation header which references a JSON-Schema file. These schemas use the `config.SchemasPath` to serve their content. For example:
 
 ```http
 Link: </schemas/Note.json>; rel="describedby"

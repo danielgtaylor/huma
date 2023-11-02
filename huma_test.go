@@ -305,6 +305,7 @@ func TestFeatures(t *testing.T) {
 					Float float64   `header:"float"`
 					Bool  bool      `header:"bool"`
 					Date  time.Time `header:"date"`
+					Empty string    `header:"empty"`
 				}
 
 				huma.Register(api, huma.Operation{
@@ -331,6 +332,30 @@ func TestFeatures(t *testing.T) {
 				assert.Equal(t, "3.45", resp.Header().Get("Float"))
 				assert.Equal(t, "true", resp.Header().Get("Bool"))
 				assert.Equal(t, "Sun, 01 Jan 2023 12:00:00 GMT", resp.Header().Get("Date"))
+				assert.Empty(t, resp.Header().Values("Empty"))
+			},
+		},
+		{
+			Name: "response-custom-content-type",
+			Register: func(t *testing.T, api huma.API) {
+				type Resp struct {
+					ContentType string `header:"Content-Type"`
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/response-custom-ct",
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					resp := &Resp{}
+					resp.ContentType = "application/custom-type"
+					return resp, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/response-custom-ct",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNoContent, resp.Code)
+				assert.Equal(t, "application/custom-type", resp.Header().Get("Content-Type"))
 			},
 		},
 		{
@@ -905,6 +930,50 @@ func BenchmarkSecondDecode(b *testing.B) {
 			if err := mapstructure.Decode(tmp, &out); err != nil {
 				panic(err)
 			}
+		}
+	})
+}
+
+func globalHandler(ctx context.Context, input *struct {
+	Count int `query:"count"`
+}) (*struct{ Body int }, error) {
+	return &struct{ Body int }{Body: input.Count * 3 / 2}, nil
+}
+
+var BenchmarkHandlerResponse *httptest.ResponseRecorder
+
+// BenchmarkHandlerFunc compares the performance of a global handler function
+// defined via `func name(...) { ... }` versus an inline handler function
+// which is defined as `func(...) { ... }` as an argument to `huma.Register`.
+// Performance should not be impacted much (if any) between the two.
+func BenchmarkHandlerFunc(b *testing.B) {
+	_, api := humatest.New(b, huma.DefaultConfig("Test API", "1.0.0"))
+
+	huma.Register(api, huma.Operation{
+		OperationID: "global",
+		Method:      http.MethodGet,
+		Path:        "/global",
+	}, globalHandler)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "inline",
+		Method:      http.MethodGet,
+		Path:        "/inline",
+	}, func(ctx context.Context, input *struct {
+		Count int `query:"count"`
+	}) (*struct{ Body int }, error) {
+		return &struct{ Body int }{Body: input.Count * 3 / 2}, nil
+	})
+
+	b.Run("global", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			BenchmarkHandlerResponse = api.Get("/global")
+		}
+	})
+
+	b.Run("inline", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			BenchmarkHandlerResponse = api.Get("/inline")
 		}
 	})
 }
