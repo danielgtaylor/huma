@@ -81,18 +81,18 @@ import (
 
 // Options for the CLI.
 type Options struct {
-	Port int `help:"Port to listen on" default:"8888"`
+	Port int `help:"Port to listen on" short:"p" default:"8888"`
 }
 
 // GreetingInput represents the greeting operation request.
 type GreetingInput struct {
-	Name string `path:"name" doc:"Name to greet"`
+	Name string `path:"name" maxLength:"30" example:"world" doc:"Name to greet"`
 }
 
 // GreetingOutput represents the greeting operation response.
 type GreetingOutput struct {
 	Body struct {
-		Message string `json:"message" doc:"Greeting message" example:"Hello, world!"`
+		Message string `json:"message" example:"Hello, world!" doc:"Greeting message"`
 	}
 }
 
