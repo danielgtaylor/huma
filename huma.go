@@ -418,6 +418,7 @@ func transformAndWrite(api API, ctx Context, status int, ct string, body any) {
 		ctx.BodyWriter().Write([]byte("error transforming response"))
 		panic(fmt.Sprintf("error transforming response %+v for %s %s %d: %s\n", tval, ctx.Operation().Method, ctx.Operation().Path, status, terr.Error()))
 	}
+	ctx.SetStatus(status)
 	if merr := api.Marshal(ctx.BodyWriter(), ct, tval); merr != nil {
 		ctx.BodyWriter().Write([]byte("error marshaling response"))
 		panic(fmt.Sprintf("error marshaling response %+v for %s %s %d: %s\n", tval, ctx.Operation().Method, ctx.Operation().Path, status, merr.Error()))
@@ -916,7 +917,6 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				ct = ctf.ContentType(ct)
 			}
 
-			ctx.SetStatus(status)
 			ctx.SetHeader("Content-Type", ct)
 			transformAndWrite(api, ctx, status, ct, err)
 			return
@@ -989,7 +989,6 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				ctx.SetHeader("Content-Type", ct)
 			}
 
-			ctx.SetStatus(status)
 			transformAndWrite(api, ctx, status, ct, body)
 		} else {
 			ctx.SetStatus(status)
