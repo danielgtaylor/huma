@@ -277,7 +277,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 			return
 		}
 
-		if bytes.Equal(bytes.TrimSpace(patched), bytes.TrimSpace(origWriter.Body.Bytes())) {
+		if jsonpatch.Equal(patched, origWriter.Body.Bytes()) {
 			ctx.SetStatus(http.StatusNotModified)
 			return
 		}
