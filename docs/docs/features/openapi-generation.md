@@ -85,7 +85,7 @@ Anything in the `Extensions` map will be flattened during serialization so that 
 ## Dive Deeper
 
 -   Tutorial
-    -   [Your First API](/tutorial/your-first-api/) includes using the default config
+    -   [Your First API](../tutorial/your-first-api.md) includes using the default config
 -   Reference
     -   [`huma.Config`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Config) the API config
     -   [`huma.DefaultConfig`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#DefaultConfig) the default API config

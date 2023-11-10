@@ -165,6 +165,6 @@ Congratulations! You just learned:
 
 Want to learn more about how testing works? Check these out next:
 
--   [Operations](/features/operations/)
--   [Test Utilities](/features/test-utilities/)
+-   [Operations](../features/operations.md)
+-   [Test Utilities](../features/test-utilities.md)
 -   [`humatest`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/humatest) reference

@@ -49,13 +49,13 @@ Also consider setting up [shell command-line completion](https://rest.sh/#/guide
 
 Next, we need to tell Restish about your API and give it a short name, which we'll call `tutorial`. Do this using the `api configure` command. This only needs to be done one time.
 
-{{ asciinema("/terminal/restish-config.cast", rows="8") }}
+{{ asciinema("../../terminal/restish-config.cast", rows="8") }}
 
 ## Calling the API
 
 Once configured, you can call the API operations using high-level commands generated from the OpenAPI operation IDs:
 
-{{ asciinema("/terminal/restish-call.cast", rows="20") }}
+{{ asciinema("../../terminal/restish-call.cast", rows="20") }}
 
 See the help commands like `restish tutorial --help` or `restish tutorial get-greeting --help` for more details. If you set up command-line completion, you can also use tab to see all available commands.
 

@@ -51,4 +51,4 @@ You can create your own registry with custom behavior by implementing the [`huma
     -   [JSON Schema spec](https://json-schema.org/)
     -   [OpenAPI 3.1 Components Object](https://spec.openapis.org/oas/v3.1.0#components-object)
 -   See Also
-    -   [Model Validation](/features/model-validation/) utility to validate custom JSON objects
+    -   [Model Validation](./model-validation.md) utility to validate custom JSON objects

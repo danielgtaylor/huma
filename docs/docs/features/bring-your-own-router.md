@@ -59,7 +59,7 @@ graph LR
 ```
 
 -   Features
-    -   [Registering operations](/features/operations/)
+    -   [Registering operations](./operations.md)
 -   Reference
     -   [`huma.Context`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Context) a router-agnostic request/response context
     -   [`huma.Adapter`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Adapter) the router-agnostic adapter interface

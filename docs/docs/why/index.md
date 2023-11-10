@@ -5,9 +5,9 @@
 Huma is a proven production-ready technology that has been used by large successful companies and products for years including:
 
 <div style="text-align: center;">
-	<img src="/wbd.png" width="50%"/>
+	<img src="../wbd.png" width="50%"/>
 	<br/>
-	<img src="/max.png" width="22%" style="margin-right: 2%"/> <img src="/cnn.svg" width="6%" style="margin-right: 2%"/> <img src="/march-madness.svg" width="15%" style="margin-right: 2%"/> <img src="/br.svg" width="19%">
+	<img src="../max.png" width="22%" style="margin-right: 2%"/> <img src="../cnn.svg" width="6%" style="margin-right: 2%"/> <img src="../march-madness.svg" width="15%" style="margin-right: 2%"/> <img src="../br.svg" width="19%">
 </div>
 
 Huma is fast to learn, easy to use, performant, and lets your organization ship APIs and related tooling like interactive documentation, CLIs and SDKs faster and with fewer bugs caused by human-error and manual processes.
@@ -27,7 +27,7 @@ Well-known and understood standards means developers can get up to speed faster 
 [:material-arrow-right: Config & OpenAPI](../features/openapi-generation.md) <br/>
 [:material-arrow-right: JSON Schema & Registry](../features/json-schema-registry.md) <br/>
 [:material-arrow-right: Serialization](../features/response-serialization.md) <br/>
-[:material-arrow-right: PATCH formats](../features/autopatch.md)
+[:material-arrow-right: PATCH formats](../features/auto-patch.md)
 
 ### :fontawesome-brands-golang: Go is Awesome
 
