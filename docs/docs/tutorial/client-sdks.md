@@ -6,7 +6,7 @@
 
 First, grab the OpenAPI spec. Then install and use the generator to create the SDK.
 
-{{ asciinema("/terminal/build-sdk.cast", rows="14") }}
+{{ asciinema("../../terminal/build-sdk.cast", rows="14") }}
 
 ## Build the Client
 
@@ -47,7 +47,7 @@ func main() {
 
 Now you're ready to run the client:
 
-{{ asciinema("/terminal/sdk-client.cast", rows="8") }}
+{{ asciinema("../../terminal/sdk-client.cast", rows="8") }}
 
 ## Review
 

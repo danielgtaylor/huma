@@ -40,7 +40,7 @@ If your operation has no inputs or outputs, you can use `*struct{}` when registe
 ## Dive Deeper
 
 -   Tutorial
-    -   [Your First API](/tutorial/your-first-api/#operation) includes registering an operation
+    -   [Your First API](../tutorial/your-first-api.md#operation) includes registering an operation
 -   Reference
     -   [`huma.Register`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Register) registers new operations
     -   [`huma.Operation`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Operation) the operation

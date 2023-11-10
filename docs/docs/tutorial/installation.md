@@ -8,7 +8,7 @@ Huma requires [Go 1.20 or newer](https://go.dev/dl/), so install that first. You
 
 Next, open a terminal and create a new Go project, then go get the Huma dependency to it's ready to be imported:
 
-{{ asciinema("/terminal/install.cast", rows="18") }}
+{{ asciinema("../../terminal/install.cast", rows="18") }}
 
 You should now have a directory structure like this:
 

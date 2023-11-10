@@ -162,7 +162,7 @@ In another terminal window, make a request to the API using [Restish](../tutoria
 
 === "Restish"
 
-    {{ asciinema("/terminal/hello.cast", rows="13") }}
+    {{ asciinema("../../terminal/hello.cast", rows="13") }}
 
 === "Curl"
 

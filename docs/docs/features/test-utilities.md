@@ -76,7 +76,7 @@ Use whatever assertion library you want to make these checks.
 ## Dive Deeper
 
 -   Tutorial
-    -   [Writing Tests](/tutorial/writing-tests/)
+    -   [Writing Tests](../tutorial/writing-tests.md)
 -   Reference
     -   [`humatest`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/humatest)
 -   External Links

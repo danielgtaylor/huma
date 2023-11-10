@@ -39,7 +39,7 @@ Parameters have some additional validation tags:
 ## Dive Deeper
 
 -   Tutorial
-    -   [Your First API](/tutorial/your-first-api/) includes string length validation
+    -   [Your First API](../tutorial/your-first-api.md) includes string length validation
 -   Reference
     -   [`huma.Register`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Register) registers new operations
     -   [`huma.Operation`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Operation) the operation

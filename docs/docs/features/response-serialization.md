@@ -19,7 +19,7 @@ The default configuration for Huma includes support for JSON ([RFC 8259](https:/
 
 ## Custom Formats
 
-Huma supports custom serialization formats by implementing the [`huma.Format`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Format) interface. Serialization formats are set on the API configuration at API creation time and selected by client-driven [content negotiation](./#content-negotiation).
+Huma supports custom serialization formats by implementing the [`huma.Format`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Format) interface. Serialization formats are set on the API configuration at API creation time and selected by client-driven [content negotiation](#content-negotiation).
 
 Writing a new format can be very simple, by just providing a marshal and unmarshal function:
 

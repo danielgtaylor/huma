@@ -32,4 +32,4 @@ if errs != nil {
     -   [JSON Schema spec](https://json-schema.org/)
     -   [OpenAPI 3.1 spec](https://spec.openapis.org/oas/v3.1.0)
 -   See Also
-    -   [Config & OpenAPI](/features/openapi-generation/)
+    -   [Config & OpenAPI](./openapi-generation.md)

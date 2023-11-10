@@ -103,11 +103,11 @@ func main() {
 
 Make a request to the API:
 
-{{ asciinema("/terminal/post-review.cast", rows="8") }}
+{{ asciinema("../../terminal/post-review.cast", rows="8") }}
 
 You can also try sending invalid data, and see how you get exhaustive errors back from your API. Omit the `author` body field and use a rating outside the range of valid values:
 
-{{ asciinema("/terminal/post-review-error.cast", rows="28") }}
+{{ asciinema("../../terminal/post-review-error.cast", rows="28") }}
 
 ## Review
 
@@ -123,7 +123,7 @@ Congratulations! You just learned:
 
 Want to learn more about how sending data works? Check these out next:
 
--   [Request Inputs](/features/request-inputs/)
--   [Validation](/features/request-validation/)
--   [Resolvers](/features/request-resolvers/)
--   [Limits](/features/request-limits/)
+-   [Request Inputs](../features/request-inputs.md)
+-   [Validation](../features/request-validation.md)
+-   [Resolvers](../features/request-resolvers.md)
+-   [Limits](../features/request-limits.md)

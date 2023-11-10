@@ -76,7 +76,7 @@ type MyOutput struct {
 
 ## Body
 
-The special struct field `Body` will be treated as the response body and can refer to any other type or you can embed a struct or slice inline. Use a type of `[]byte` to bypass [serialization](/features/response-serialization/). A default `Content-Type` header will be set if none is present, selected via client-driven content negotiation with the server based on the registered serialization types.
+The special struct field `Body` will be treated as the response body and can refer to any other type or you can embed a struct or slice inline. Use a type of `[]byte` to bypass [serialization](./response-serialization.md). A default `Content-Type` header will be set if none is present, selected via client-driven content negotiation with the server based on the registered serialization types.
 
 Example:
 
