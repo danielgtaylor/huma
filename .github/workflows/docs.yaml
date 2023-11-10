@@ -1,8 +1,9 @@
 name: docs
 on:
+  workflow_dispatch: {}
   push:
     branches: [main]
-    paths: ["docs/**"]
+    paths: [".github/workflows/docs.yaml", "docs/**"]
 permissions:
   contents: write
 jobs:
