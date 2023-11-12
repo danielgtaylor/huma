@@ -1,3 +1,7 @@
+---
+description: Validate any custom data against a JSON Schema outside of the normal HTTP request/response flow.
+---
+
 # Model Validation
 
 ## Model Validation { .hidden }

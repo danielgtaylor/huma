@@ -1,3 +1,7 @@
+---
+description: Add hints for command-line clients like Restish to automatically configure themselves to talk to your API.
+---
+
 # CLI AutoConfig
 
 Huma includes built-in support for an OpenAPI 3 extension that enables CLI auto-configuration. This allows tools like [Restish](https://rest.sh/) to automatically configure themselves to talk to your API with the correct endpoints, authentication mechanism, etc without the user needing to know anything about your API.

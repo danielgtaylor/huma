@@ -1,3 +1,7 @@
+---
+description: Generate JSON Schemas from your Go structs and use them to validate requests and responses.
+---
+
 ## JSON Schema
 
 Using the default Huma config (or manually via the [`huma.SchemaLinkTransformer`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#SchemaLinkTransformer)), each resource operation returns a `describedby` HTTP link relation header which references a JSON-Schema file. These schemas use the [`config.SchemasPath`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Config) to serve their content. For example:

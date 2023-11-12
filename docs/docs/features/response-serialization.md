@@ -1,3 +1,7 @@
+---
+description: Use client-driven content-negotiation with default and custom formats to serialize response data.
+---
+
 # Serialization
 
 When handler functions return Go objects, they will be serialized to bytes for transmission back to the client.

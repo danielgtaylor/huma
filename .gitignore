@@ -3,3 +3,7 @@ coverage.txt
 *.test
 cpu.out
 mem.out
+**/.DS_STORE
+docs/site
+docs/__pycache__
+docs/.cache

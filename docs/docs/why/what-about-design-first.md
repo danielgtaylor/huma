@@ -1,3 +1,7 @@
+---
+description: The false dichotomy of design-first vs. code-first. Do both!
+---
+
 # What About Design First?
 
 ## Introduction

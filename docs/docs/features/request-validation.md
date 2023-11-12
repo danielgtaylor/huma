@@ -1,3 +1,7 @@
+---
+description: Built-in JSON Schema validation rules for request parameters and bodies.
+---
+
 # Request Validation
 
 ## Request Validation { .hidden }
@@ -35,6 +39,17 @@ Parameters have some additional validation tags:
 | Tag      | Description                       | Example         |
 | -------- | --------------------------------- | --------------- |
 | `hidden` | Hide parameter from documentation | `hidden:"true"` |
+
+## Advanced Validation
+
+When using custom JSON Schemas, i.e. not generated from Go structs, it's possible to utilize a few more validation rules. The following schema fields are respected by the built-in validator:
+
+-   `not` for negation
+-   `oneOf` for exclusive inputs
+-   `anyOf` for matching one-or-more
+-   `allOf` for schema unions
+
+See [`huma.Schema`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Schema) for more information. Note that it may be easier to use a custom [resolver](./request-resolvers.md) to implement some of these rules.
 
 ## Dive Deeper
 

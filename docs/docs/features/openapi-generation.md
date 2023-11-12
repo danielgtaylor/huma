@@ -1,3 +1,7 @@
+---
+description: API configuration options & OpenAPI 3.1 spec generation.
+---
+
 # Configuration & Open API
 
 ## Configuration & Open API { .hidden }

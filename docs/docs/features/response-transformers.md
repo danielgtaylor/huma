@@ -1,3 +1,7 @@
+---
+description: Modify the structured response data on the fly with response transformers.
+---
+
 # Response Transformers
 
 ## Response Transformers { .hidden }

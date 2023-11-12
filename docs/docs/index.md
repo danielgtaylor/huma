@@ -1,5 +1,6 @@
 ---
-title: Huma
+title: Huma Introduction
+description: A modern, simple, fast & flexible micro framework for building HTTP APIs in Golang backed by OpenAPI 3 and JSON Schema.
 hide:
     - navigation
 ---
@@ -32,42 +33,42 @@ The goals of this project are to provide:
 
 ## Starting Points
 
-<div class="grid cards">
-  <ul>
-    <li>
+<div class="grid cards" markdown>
+<ul markdown>
+  <li markdown>
       <h3>Why Huma</h3>
       <hr/>
       What makes Huma different and why should you use it for your next project?<br/>
       <br/>
-      <a href="./why/">→ Learn more</a>
-    </li>
-  </ul>
-  <ul>
-    <li>
-      <h3>Tutorial in 5 Minutes</h3>
-      <hr/>
-      Install <code>huma</code> and have a working API in about five minutes.<br/>
-      <br/>
-      <a href="./tutorial/installation/">→ Get started</a>
-    </li>
-  </ul>
-  <ul>
-    <li>
-      <h3>How To Guides</h3>
-      <hr/>
-      Learn how to solve specific real-world problems with Huma.<br/>
-      <br/>
-      <a href="./how-to/custom-validation/">→ Solve problems</a>
-    </li>
-  </ul>
-  <ul>
-    <li>
-      <h3>Features & Reference</h3>
-      <hr/>
-      Learn about all of Huma's features & how to use them.<br/>
-      <br/>
-      <a href="./features/">→ Feature docs</a><br/>
-      <a href="https://pkg.go.dev/github.com/danielgtaylor/huma/v2?tab=doc">→ Go reference</a>
-    </li>
-  </ul>
+      <a href="./why/">:material-arrow-right: Learn more</a>
+  </li>
+</ul>
+<ul markdown>
+  <li markdown>
+    <h3>Tutorial in 5 Minutes</h3>
+    <hr/>
+    Install <code>huma</code> and have a working API in about five minutes.<br/>
+    <br/>
+    <a href="./tutorial/installation/">:material-arrow-right: Get started</a>
+  </li>
+</ul>
+<ul markdown>
+  <li markdown>
+    <h3>How To Guides</h3>
+    <hr/>
+    Learn how to solve specific real-world problems with Huma.<br/>
+    <br/>
+    <a href="./how-to/custom-validation/">:material-arrow-right: Solve problems</a>
+  </li>
+</ul>
+<ul markdown>
+  <li markdown>
+    <h3>Features & Reference</h3>
+    <hr/>
+    Learn about all of Huma's features & how to use them.<br/>
+    <br/>
+    <a href="./features/">:material-arrow-right: Feature docs</a><br/>
+    <a href="https://pkg.go.dev/github.com/danielgtaylor/huma/v2?tab=doc">:material-arrow-right: Go reference</a>
+  </li>
+</ul>
 </div>

@@ -1,3 +1,7 @@
+---
+description: Stream events from the server to the client over HTTP using Server Sent Events.
+---
+
 # Server Sent Events (SSE)
 
 ## SSE { .hidden }

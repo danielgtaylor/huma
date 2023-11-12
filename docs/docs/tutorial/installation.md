@@ -1,3 +1,7 @@
+---
+description: Learn how to install Huma and create your first API.
+---
+
 # Installation
 
 ## Prerequisites

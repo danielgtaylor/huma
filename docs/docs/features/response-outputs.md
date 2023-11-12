@@ -1,3 +1,7 @@
+---
+description: Define and write the response status code, headers, and body.
+---
+
 # Response Outputs
 
 Responses can have an optional status code, headers, and/or body. Like inputs, they use standard Go structs which describe the entirety of the response.

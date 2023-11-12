@@ -1,3 +1,7 @@
+---
+description: Bring your own router & middleware to enable incremental adoption across a large number of organizations.
+---
+
 # BYOR (Bring Your Own Router)
 
 ## BYOR (Bring Your Own Router) { .hidden }

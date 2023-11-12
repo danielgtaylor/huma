@@ -1,3 +1,7 @@
+---
+description: Use byte slice responses to return images or other binary data.
+---
+
 # Image Response
 
 ## Image Response { .hidden }

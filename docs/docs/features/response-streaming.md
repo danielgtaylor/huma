@@ -1,3 +1,7 @@
+---
+description: Stream data back to the client using a long-lived connection to support things like Server Sent Events.
+---
+
 # Streaming
 
 ## Streaming { .hidden }

@@ -1,3 +1,7 @@
+---
+description: Learn how Huma's proven production-ready technology can help your team ship APIs faster and with fewer bugs.
+---
+
 # Why Huma?
 
 ## Production Ready
@@ -75,7 +79,7 @@ The OpenAPI & JSON Schema generation is completely customizable & extensible. Hu
 
 ## Guardrails
 
-Huma provides guardrails & automation to keep your team and your services running as smoothly as possible:
+Huma provides guardrails & automation to keep your team and your services running as smoothly as possible, based on years of hard-learned lessons from many teams of engineers with a variety of skills and experience levels running and maintaining production systems at scale for millions of users.
 
 -   Service documentation that can't get out of date
 -   Strongly-typed models & handlers with compile-time checks
