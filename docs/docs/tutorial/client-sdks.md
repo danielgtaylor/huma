@@ -1,3 +1,7 @@
+---
+description: Level up your API with a generated Go SDK and client that uses it.
+---
+
 # Client SDKs
 
 [Several tools](https://openapi.tools/#sdk) can be used to create SDKs from an OpenAPI spec. Let's use the [`oapi-codegen`](https://github.com/deepmap/oapi-codegen) Go code generator to create a Go SDK, and then build a client using that SDK.

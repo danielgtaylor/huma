@@ -1,3 +1,7 @@
+---
+description: Gracefully shut down your Huma service, enabling in-flight requests to finish.
+---
+
 # Graceful Shutdown
 
 ## Stopping the Server
@@ -82,3 +86,7 @@ func main() {
 	cli.Run()
 }
 ```
+
+!!! info "Readiness Checks"
+
+    If using something like Kubernetes with readiness checks, and if the readiness route is registered on the same router as your Huma APIs, then the above code will cause the readiness check to start failing and Kubernetes will no longer route new requests to the shutting down pod as the existing connections drain.

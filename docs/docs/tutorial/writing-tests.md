@@ -1,3 +1,7 @@
+---
+description: Level up your API with tests & code coverage using built-in test utilities.
+---
+
 # Writing Tests
 
 Huma provides a number of helpers for testing your API. The most important is the [`humatest`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/humatest) package, which allows you to run a test server and make requests against it.

@@ -1,3 +1,7 @@
+---
+description: Automatically generate PATCH operations for resources in your API.
+---
+
 # Auto Patch
 
 ## Auto Patch { .hidden }

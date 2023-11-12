@@ -1,3 +1,7 @@
+---
+description: Enable cache use & prevent distributed concurrent write conflicts with industry-standard headers.
+---
+
 # Conditional Requests
 
 ## Conditional Requests { .hidden }

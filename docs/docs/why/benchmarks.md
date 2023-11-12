@@ -1,3 +1,7 @@
+---
+description: Benchmarks for Go & Huma show that it's fast and low memory. It's a great choice over Node.js, FastAPI, or Django.
+---
+
 # Benchmarks
 
 You should always perform your own benchmarking, as your use-case may not be identical to the use-cases of others. However, here are some general benchmarks to get you started.

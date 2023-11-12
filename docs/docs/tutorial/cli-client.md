@@ -1,3 +1,7 @@
+---
+description: Level up your API with a simple but powerful generated command-line client.
+---
+
 # CLI Client
 
 It's useful to have a terminal or command-line client for your API, so you can test it out and see how it works.

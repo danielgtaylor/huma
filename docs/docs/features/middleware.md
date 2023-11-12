@@ -1,3 +1,7 @@
+---
+description: Add middleware to your API to enable things like authentication, logging, and more.
+---
+
 # Middleware
 
 ## Middleware { .hidden }

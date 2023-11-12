@@ -1,3 +1,7 @@
+---
+description: Add a CLI to your service for easy configuration and custom commands.
+---
+
 # Service CLI
 
 ## Service CLI { .hidden }

@@ -1,3 +1,7 @@
+---
+description: Register operations to handle incoming requests.
+---
+
 # Operations
 
 ## Operations { .hidden }

@@ -1,3 +1,7 @@
+---
+description: Use built-in validators and resolvers to validate input data with whatever rules you need.
+---
+
 # Custom Validation
 
 ## Built-in Validators

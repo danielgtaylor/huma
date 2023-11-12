@@ -1,3 +1,7 @@
+---
+description: Test your API with the built-in test utilities.
+---
+
 # Test Utilities
 
 Huma includes a [`humatest`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/humatest) package to make it easier to write tests for your API.
@@ -71,7 +75,7 @@ if !strings.Contains(resp.Body.String(), "some text") {
 }
 ```
 
-Use whatever assertion library you want to make these checks.
+Use whatever assertion library you want to make these checks. [`stretchr/testify`](https://github.com/stretchr/testify) is popular and easy to use.
 
 ## Dive Deeper
 

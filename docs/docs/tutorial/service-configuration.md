@@ -1,3 +1,7 @@
+---
+description: Level up your API with runtime configuration from the environment or command-line options.
+---
+
 # Service Configuration
 
 Huma includes a basic command-line and environment variable option parser that can be used to provide runtime configuration to your service. This lets you pass in things like the port the service runs on, which environment to tag logs with, secrets and endpoints for dependencies like databases, etc.

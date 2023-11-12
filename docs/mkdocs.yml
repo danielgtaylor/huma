@@ -1,12 +1,13 @@
 site_name: Huma
+site_url: https://danielgtaylor.github.io/huma
 copyright: Copyright &copy; 2020-2023 Daniel G. Taylor. Logo &amp; branding designed by Kari Taylor.
 repo_name: danielgtaylor/huma
 repo_url: https://github.com/danielgtaylor/huma
-edit_uri: edit/main/docs/
+edit_uri: edit/main/docs/docs/
 nav:
   - Home: index.md
   - "Why Huma":
-      - "Overview": why/index.md
+      - "Why Huma": why/index.md
       - "What About Design-First?": why/what-about-design-first.md
       - "Benchmarks": why/benchmarks.md
   - "Tutorial":
@@ -25,7 +26,7 @@ nav:
       - "Graceful Shutdown": how-to/graceful-shutdown.md
       - "Migrating From V1": how-to/migrate.md
   - "Features":
-      - "Overview": features/index.md
+      - "Features Overview": features/index.md
       - "The Server":
           - "Bring Your Own Router": features/bring-your-own-router.md
           - "Middleware": features/middleware.md
@@ -149,3 +150,5 @@ markdown_extensions:
 plugins:
   - search
   - macros
+  - social
+  - tags

@@ -1,3 +1,7 @@
+---
+description: Migrate your code from Huma v1 to Huma v2 in a few simple steps.
+---
+
 # Migrating From Huma V1
 
 1. Import `github.com/danielgtaylor/huma/v2` instead of `github.com/danielgtaylor/huma`.

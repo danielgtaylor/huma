@@ -1,3 +1,7 @@
+---
+description: Learn how to create and call your first Huma API.
+---
+
 # Your First API
 
 Let's build a simple API that greets people. We will take the person's name as a URL path parameter and respond with a JSON body containing a greeting message to that person. Here's the high-level API design:

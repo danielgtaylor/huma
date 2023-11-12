@@ -1,8 +1,43 @@
+---
+description: Customize the generated JSON Schema for request & response bodies.
+---
+
 # Schema Customization
 
 ## Operation Schema
 
 Schemas that are generated for input/output bodies can be customized in a couple of different ways. First, when registering your operation you can provide your own request and/or response schemas if you want to override the entire body. The automatic generation only applies when you have not provided your own schema in the OpenAPI.
+
+```go title="code.go"
+// Register an operation with a custom input body schema.
+huma.Register(api, huma.Operation{
+	OperationID: "my-operation",
+	Method:      http.MethodPut,
+	Path:        "/things/{thing-id}",
+	Summary:     "Update a thing",
+	RequestBody: &huma.RequestBody{
+		Description: "My custom request schema",
+		Content: map[string]*huma.MediaType{
+			"application/json": {
+				Schema: &huma.Schema{
+					Type: 		 huma.TypeObject,
+					Properties: map[string]*huma.Schema{
+						"foo": {
+							Type: huma.TypeString,
+							Extensions: map[string]any{
+								"x-custom-thing": "abc123",
+							},
+						},
+					},
+				},
+			},
+		},
+	},
+}, func(ctx context.Context, input *MyInput) (*MyOutput, error) {
+	// Implementation goes here...
+	return nil, nil
+})
+```
 
 ## Field Schema
 

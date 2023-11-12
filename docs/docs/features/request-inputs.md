@@ -1,3 +1,7 @@
+---
+description: Path, query, and header input parameters as well as input request body definitions & parsing.
+---
+
 # Request Inputs
 
 ## Parameters

@@ -1,3 +1,7 @@
+---
+description: An overview of Huma features and a deep dive on how to use them.
+---
+
 # Features
 
 Huma is a modern, simple, fast & flexible micro framework for building HTTP REST/RPC APIs in Golang backed by OpenAPI 3 and JSON Schema. Pronounced IPA: [/'hjuːmɑ/](https://en.wiktionary.org/wiki/Wiktionary:International_Phonetic_Alphabet). The goals of this project are to provide:
