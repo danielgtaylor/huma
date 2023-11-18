@@ -19,6 +19,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var NewExampleAdapter = humatest.NewAdapter
@@ -105,7 +106,7 @@ func TestFeatures(t *testing.T) {
 					assert.True(t, input.QueryBefore.Equal(time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)))
 					assert.True(t, input.QueryDate.Equal(time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)))
 					assert.EqualValues(t, 1, input.QueryUint)
-					assert.Equal(t, true, input.QueryBool)
+					assert.True(t, input.QueryBool)
 					assert.Equal(t, []string{"foo", "bar"}, input.QueryStrings)
 					assert.Equal(t, "baz", input.HeaderString)
 					assert.Equal(t, 789, input.HeaderInt)
@@ -272,7 +273,7 @@ func TestFeatures(t *testing.T) {
 
 				// Ensure OpenAPI spec is listed as a binary upload. This enables
 				// generated documentation to show a file upload button.
-				assert.Equal(t, api.OpenAPI().Paths["/file"].Put.RequestBody.Content["application/foo"].Schema.Format, "binary")
+				assert.Equal(t, "binary", api.OpenAPI().Paths["/file"].Put.RequestBody.Content["application/foo"].Schema.Format)
 			},
 			Method:  http.MethodPut,
 			URL:     "/file",
@@ -567,7 +568,7 @@ func TestFeatures(t *testing.T) {
 					var parsed []struct {
 						Foo string `json:"foo"`
 					}
-					assert.NoError(t, json.Unmarshal(input.RawBody, &parsed))
+					require.NoError(t, json.Unmarshal(input.RawBody, &parsed))
 					assert.Len(t, parsed, 2)
 					assert.Equal(t, "first", parsed[0].Foo)
 					assert.Equal(t, "second", parsed[1].Foo)
@@ -633,7 +634,7 @@ func TestOpenAPI(t *testing.T) {
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 
-		assert.Equal(t, w.Code, 200, w.Body.String())
+		assert.Equal(t, 200, w.Code, w.Body.String())
 	}
 }
 
@@ -846,6 +847,7 @@ func TestPointerDefaultPanics(t *testing.T) {
 }
 
 func BenchmarkSecondDecode(b *testing.B) {
+	//nolint: musttag
 	type MediumSized struct {
 		ID   int      `json:"id"`
 		Name string   `json:"name"`
@@ -857,13 +859,13 @@ func BenchmarkSecondDecode(b *testing.B) {
 			ID    int    `json:"id"`
 			Name  string `json:"name"`
 			Email string `json:"email"`
-		}
+		} `json:"owner"`
 		Categories []struct {
 			Name    string   `json:"name"`
 			Order   int      `json:"order"`
 			Visible bool     `json:"visible"`
 			Aliases []string `json:"aliases"`
-		}
+		} `json:"categories"`
 	}
 
 	data := []byte(`{

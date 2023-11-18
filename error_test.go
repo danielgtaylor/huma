@@ -9,6 +9,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Ensure the default error models satisfy these interfaces.
@@ -81,7 +82,7 @@ func TestNegotiateError(t *testing.T) {
 	resp := httptest.NewRecorder()
 	ctx := humatest.NewContext(nil, req, resp)
 
-	assert.Error(t, huma.WriteErr(api, ctx, 400, "bad request"))
+	require.Error(t, huma.WriteErr(api, ctx, 400, "bad request"))
 }
 
 func TestTransformError(t *testing.T) {
@@ -97,5 +98,5 @@ func TestTransformError(t *testing.T) {
 	resp := httptest.NewRecorder()
 	ctx := humatest.NewContext(nil, req, resp)
 
-	assert.Error(t, huma.WriteErr(api, ctx, 400, "bad request"))
+	require.Error(t, huma.WriteErr(api, ctx, 400, "bad request"))
 }

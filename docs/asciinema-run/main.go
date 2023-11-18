@@ -249,7 +249,7 @@ func (s *Script) Execute() {
 	}
 }
 
-// echo prints out output continously.
+// echo prints out output continuously.
 func echo(r io.Reader) {
 	buf := make([]byte, 1024)
 	for {

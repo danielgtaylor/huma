@@ -1102,7 +1102,7 @@ type Tag struct {
 type AddOpFunc func(oapi *OpenAPI, op *Operation)
 
 // OpenAPI is the root object of the OpenAPI document.
-type OpenAPI struct {
+type OpenAPI struct { //nolint: musttag
 	// OpenAPI is REQUIRED. This string MUST be the version number of the OpenAPI
 	// Specification that the OpenAPI document uses. The openapi field SHOULD be
 	// used by tooling to interpret the OpenAPI document. This is not related to

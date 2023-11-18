@@ -11,6 +11,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/danielgtaylor/huma/v2/sse"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type DefaultMessage struct {
@@ -69,7 +70,7 @@ func TestSSE(t *testing.T) {
 		send.Data("unknown event")
 
 		// Encode failure should return an error.
-		assert.Error(t, send(sse.Message{
+		require.Error(t, send(sse.Message{
 			Data: make(chan int),
 		}))
 	})

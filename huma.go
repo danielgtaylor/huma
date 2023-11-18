@@ -112,7 +112,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			pfi.Default = def
 		}
 
-		name := ""
+		var name string
 		var explode *bool
 		if p := f.Tag.Get("path"); p != "" {
 			pfi.Loc = "path"
@@ -560,7 +560,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		if status == 0 {
 			status = http.StatusOK
 		}
-		statusStr := fmt.Sprintf("%d", status)
+		statusStr := strconv.Itoa(status)
 		if op.Responses[statusStr] == nil {
 			op.Responses[statusStr] = &Response{}
 		}
@@ -590,7 +590,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			op.DefaultStatus = http.StatusNoContent
 		}
 	}
-	defaultStatusStr := fmt.Sprintf("%d", op.DefaultStatus)
+	defaultStatusStr := strconv.Itoa(op.DefaultStatus)
 	if op.Responses[defaultStatusStr] == nil {
 		op.Responses[defaultStatusStr] = &Response{
 			Description: http.StatusText(op.DefaultStatus),
@@ -624,7 +624,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	errType := reflect.TypeOf(exampleErr)
 	errSchema := registry.Schema(errType, true, getHint(errType, "", "Error"))
 	for _, code := range op.Errors {
-		op.Responses[fmt.Sprintf("%d", code)] = &Response{
+		op.Responses[strconv.Itoa(code)] = &Response{
 			Description: http.StatusText(code),
 			Content: map[string]*MediaType{
 				errContentType: {

@@ -75,10 +75,10 @@ func TestCLIPlain(t *testing.T) {
 	}
 
 	cli := huma.NewCLI(func(hooks huma.Hooks, options *Options) {
-		assert.Equal(t, true, options.Debug)
+		assert.True(t, options.Debug)
 		assert.Equal(t, "localhost", options.Host)
 		assert.Equal(t, 8001, options.Port)
-		assert.Equal(t, false, options.ingore)
+		assert.False(t, options.ingore)
 		hooks.OnStart(func() {
 			// Do nothing
 		})
@@ -101,7 +101,7 @@ func TestCLIAdvanced(t *testing.T) {
 	}
 
 	cli := huma.NewCLI(func(hooks huma.Hooks, options *Options) {
-		assert.Equal(t, true, options.Debug)
+		assert.True(t, options.Debug)
 		assert.Equal(t, "localhost", options.Host)
 		assert.Equal(t, 8001, options.Port)
 		hooks.OnStart(func() {
