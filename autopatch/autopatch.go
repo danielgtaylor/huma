@@ -91,7 +91,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 	jsonPatchSchema := oapi.Components.Schemas.Schema(jsonPatchType, true, "")
 
 	// Guess a name for this patch operation based on the GET operation.
-	name := ""
+	var name string
 	parts := casing.Split(get.OperationID)
 	if len(parts) > 1 && (strings.ToLower(parts[0]) == "get" || strings.ToLower(parts[0]) == "fetch") {
 		parts = parts[1:]

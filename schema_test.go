@@ -3,20 +3,21 @@ package huma_test
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"math/bits"
 	"net"
 	"net/url"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type EmbeddedChild struct {
-	// This one should be ignored as it is overriden by `Embedded`.
+	// This one should be ignored as it is overridden by `Embedded`.
 	Value string `json:"value" doc:"old doc"`
 }
 
@@ -26,7 +27,7 @@ type Embedded struct {
 }
 
 func TestSchema(t *testing.T) {
-	bitSize := fmt.Sprint(bits.UintSize)
+	bitSize := strconv.Itoa(bits.UintSize)
 
 	cases := []struct {
 		name     string
@@ -470,7 +471,7 @@ func TestSchemaOld(t *testing.T) {
 	s := r.Schema(reflect.TypeOf(GreetingInput{}), false, "")
 	// fmt.Printf("%+v\n", s)
 	assert.Equal(t, "object", s.Type)
-	assert.Equal(t, 1, len(s.Properties))
+	assert.Len(t, s.Properties, 1)
 	assert.Equal(t, "string", s.Properties["ID"].Type)
 
 	r.Schema(reflect.TypeOf(RecursiveInput{}), false, "")
@@ -504,7 +505,7 @@ func TestSchemaGenericNaming(t *testing.T) {
 	}`, string(b))
 }
 
-type OmittableNullable[T any] struct {
+type OmittableNullable[T any] struct { //nolint: musttag
 	Sent  bool
 	Null  bool
 	Value T
@@ -542,21 +543,21 @@ func TestCustomUnmarshalType(t *testing.T) {
 	// Confirm the field works as expected when loading JSON.
 	o = O{}
 	err := json.Unmarshal([]byte(`{"field": 123}`), &o)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, o.Field.Sent)
 	assert.False(t, o.Field.Null)
 	assert.Equal(t, 123, o.Field.Value)
 
 	o = O{}
 	err = json.Unmarshal([]byte(`{"field": null}`), &o)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, o.Field.Sent)
 	assert.True(t, o.Field.Null)
 	assert.Equal(t, 0, o.Field.Value)
 
 	o = O{}
 	err = json.Unmarshal([]byte(`{}`), &o)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.False(t, o.Field.Sent)
 	assert.False(t, o.Field.Null)
 	assert.Equal(t, 0, o.Field.Value)

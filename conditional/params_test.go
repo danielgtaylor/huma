@@ -8,6 +8,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHasConditional(t *testing.T) {
@@ -37,15 +38,15 @@ func TestIfMatch(t *testing.T) {
 
 	p.IfMatch = []string{`"abc123"`, `W/"def456"`}
 	p.Resolve(ctx)
-	assert.NoError(t, p.PreconditionFailed("abc123", time.Time{}))
-	assert.NoError(t, p.PreconditionFailed("def456", time.Time{}))
+	require.NoError(t, p.PreconditionFailed("abc123", time.Time{}))
+	require.NoError(t, p.PreconditionFailed("def456", time.Time{}))
 
 	err := p.PreconditionFailed("bad", time.Time{})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, http.StatusNotModified, err.GetStatus())
 
 	err = p.PreconditionFailed("", time.Time{})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, http.StatusNotModified, err.GetStatus())
 
 	// Write request
@@ -55,10 +56,10 @@ func TestIfMatch(t *testing.T) {
 
 	p.IfMatch = []string{`"abc123"`, `W/"def456"`}
 	p.Resolve(ctx)
-	assert.NoError(t, p.PreconditionFailed("abc123", time.Time{}))
+	require.NoError(t, p.PreconditionFailed("abc123", time.Time{}))
 
 	err = p.PreconditionFailed("bad", time.Time{})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, http.StatusPreconditionFailed, err.GetStatus())
 }
 
@@ -72,15 +73,15 @@ func TestIfNoneMatch(t *testing.T) {
 
 	p.IfNoneMatch = []string{`"abc123"`, `W/"def456"`}
 	p.Resolve(ctx)
-	assert.NoError(t, p.PreconditionFailed("bad", time.Time{}))
-	assert.NoError(t, p.PreconditionFailed("", time.Time{}))
+	require.NoError(t, p.PreconditionFailed("bad", time.Time{}))
+	require.NoError(t, p.PreconditionFailed("", time.Time{}))
 
 	err := p.PreconditionFailed("abc123", time.Time{})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, http.StatusNotModified, err.GetStatus())
 
 	err = p.PreconditionFailed("def456", time.Time{})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, http.StatusNotModified, err.GetStatus())
 
 	// Write request
@@ -90,15 +91,15 @@ func TestIfNoneMatch(t *testing.T) {
 
 	p.IfNoneMatch = []string{`"abc123"`, `W/"def456"`}
 	p.Resolve(ctx)
-	assert.Error(t, p.PreconditionFailed("abc123", time.Time{}))
-	assert.NoError(t, p.PreconditionFailed("bad", time.Time{}))
+	require.Error(t, p.PreconditionFailed("abc123", time.Time{}))
+	require.NoError(t, p.PreconditionFailed("bad", time.Time{}))
 
 	// Write with special `*` syntax to match any.
 	p.IfNoneMatch = []string{"*"}
-	assert.NoError(t, p.PreconditionFailed("", time.Time{}))
+	require.NoError(t, p.PreconditionFailed("", time.Time{}))
 
 	err = p.PreconditionFailed("abc123", time.Time{})
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, http.StatusPreconditionFailed, err.GetStatus())
 }
 
@@ -106,13 +107,13 @@ func TestIfModifiedSince(t *testing.T) {
 	p := Params{}
 
 	now, err := time.Parse(time.RFC3339, "2021-01-01T12:00:00Z")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	before, err := time.Parse(time.RFC3339, "2020-01-01T12:00:00Z")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	after, err := time.Parse(time.RFC3339, "2022-01-01T12:00:00Z")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Read request
 	r, _ := http.NewRequest(http.MethodGet, "https://example.com/resource", nil)
@@ -122,9 +123,9 @@ func TestIfModifiedSince(t *testing.T) {
 	p.IfModifiedSince = now
 
 	p.Resolve(ctx)
-	assert.Error(t, p.PreconditionFailed("", before))
-	assert.Error(t, p.PreconditionFailed("", now))
-	assert.NoError(t, p.PreconditionFailed("", after))
+	require.Error(t, p.PreconditionFailed("", before))
+	require.Error(t, p.PreconditionFailed("", now))
+	require.NoError(t, p.PreconditionFailed("", after))
 
 	// Write request
 	r, _ = http.NewRequest(http.MethodPut, "https://example.com/resource", nil)
@@ -135,7 +136,7 @@ func TestIfModifiedSince(t *testing.T) {
 
 	p.Resolve(ctx)
 	perr := p.PreconditionFailed("", before)
-	assert.Error(t, perr)
+	require.Error(t, perr)
 	assert.Equal(t, http.StatusPreconditionFailed, perr.GetStatus())
 }
 
@@ -143,13 +144,13 @@ func TestIfUnmodifiedSince(t *testing.T) {
 	p := Params{}
 
 	now, err := time.Parse(time.RFC3339, "2021-01-01T12:00:00Z")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	before, err := time.Parse(time.RFC3339, "2020-01-01T12:00:00Z")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	after, err := time.Parse(time.RFC3339, "2022-01-01T12:00:00Z")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Read request
 	r, _ := http.NewRequest(http.MethodGet, "https://example.com/resource", nil)
@@ -159,9 +160,9 @@ func TestIfUnmodifiedSince(t *testing.T) {
 	p.IfUnmodifiedSince = now
 
 	p.Resolve(ctx)
-	assert.NoError(t, p.PreconditionFailed("", before))
-	assert.NoError(t, p.PreconditionFailed("", now))
-	assert.Error(t, p.PreconditionFailed("", after))
+	require.NoError(t, p.PreconditionFailed("", before))
+	require.NoError(t, p.PreconditionFailed("", now))
+	require.Error(t, p.PreconditionFailed("", after))
 
 	// Write request
 	r, _ = http.NewRequest(http.MethodPut, "https://example.com/resource", nil)
@@ -172,6 +173,6 @@ func TestIfUnmodifiedSince(t *testing.T) {
 
 	p.Resolve(ctx)
 	perr := p.PreconditionFailed("", after)
-	assert.Error(t, perr)
+	require.Error(t, perr)
 	assert.Equal(t, http.StatusPreconditionFailed, perr.GetStatus())
 }

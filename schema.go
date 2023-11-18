@@ -56,7 +56,7 @@ func deref(t reflect.Type) reflect.Type {
 //	schema := huma.SchemaFromType(registry, reflect.TypeOf(MyType{}))
 //
 // Note that the registry may create references for your types.
-type Schema struct {
+type Schema struct { //nolint: musttag
 	Type                 string             `yaml:"type,omitempty"`
 	Title                string             `yaml:"title,omitempty"`
 	Description          string             `yaml:"description,omitempty"`
@@ -282,7 +282,7 @@ func jsonTagValue(f reflect.StructField, t reflect.Type, value string) any {
 
 // jsonTag returns a value of the schema's type for the given tag string.
 // Uses JSON parsing if the schema is not a string.
-func jsonTag(f reflect.StructField, name string, multi bool) any {
+func jsonTag(f reflect.StructField, name string) any {
 	t := f.Type
 	if value := f.Tag.Get(name); value != "" {
 		return jsonTagValue(f, t, value)
@@ -324,9 +324,9 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 	if enc := f.Tag.Get("encoding"); enc != "" {
 		fs.ContentEncoding = enc
 	}
-	fs.Default = jsonTag(f, "default", false)
+	fs.Default = jsonTag(f, "default")
 
-	if e := jsonTag(f, "example", false); e != nil {
+	if e := jsonTag(f, "example"); e != nil {
 		fs.Examples = []any{e}
 	}
 
