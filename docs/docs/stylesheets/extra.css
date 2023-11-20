@@ -11,6 +11,10 @@ code {
 	tab-size: 2
 }
 
+div.mermaid {
+	text-align: center;
+}
+
 
 .ap-terminal:before {
 	content: '';

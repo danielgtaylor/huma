@@ -778,6 +778,51 @@ func TestExhaustiveErrors(t *testing.T) {
 	}`, w.Body.String())
 }
 
+type MyError struct {
+	status  int
+	Message string   `json:"message"`
+	Details []string `json:"details"`
+}
+
+func (e *MyError) Error() string {
+	return e.Message
+}
+
+func (e *MyError) GetStatus() int {
+	return e.status
+}
+
+func TestCustomError(t *testing.T) {
+	orig := huma.NewError
+	defer func() {
+		huma.NewError = orig
+	}()
+	huma.NewError = func(status int, message string, errs ...error) huma.StatusError {
+		details := make([]string, len(errs))
+		for i, err := range errs {
+			details[i] = err.Error()
+		}
+		return &MyError{
+			status:  status,
+			Message: message,
+			Details: details,
+		}
+	}
+
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-error",
+		Method:      http.MethodGet,
+		Path:        "/error",
+	}, func(ctx context.Context, i *struct{}) (*struct{}, error) {
+		return nil, huma.Error404NotFound("not found", fmt.Errorf("some-other-error"))
+	})
+
+	resp := api.Get("/error", "Host: localhost")
+	assert.Equal(t, `{"$schema":"http://localhost/schemas/MyError.json","message":"not found","details":["some-other-error"]}`+"\n", resp.Body.String())
+}
+
 type NestedResolversStruct struct {
 	Field2 string `json:"field2"`
 }
