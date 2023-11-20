@@ -6,15 +6,21 @@ description: Learn how Huma's proven production-ready technology can help your t
 
 ## Production Ready
 
-Huma is a proven production-ready technology that has been used by large successful companies and products for years including:
+Huma is a proven production-ready technology that has been used by large successful companies and products with millions of customers in the live streaming video space for years.
 
+<!--
 <div style="text-align: center;">
 	<img src="../wbd.png" width="50%"/>
 	<br/>
 	<img src="../max.png" width="22%" style="margin-right: 2%"/> <img src="../cnn.svg" width="6%" style="margin-right: 2%"/> <img src="../march-madness.svg" width="15%" style="margin-right: 2%"/> <img src="../br.svg" width="19%">
 </div>
+-->
 
 Huma is fast to learn, easy to use, performant, and lets your organization ship APIs and related tooling like interactive documentation, CLIs and SDKs faster and with fewer bugs caused by human-error and manual processes.
+
+!!! quote "Daniel (Engineer @ Warner Bros Discovery)"
+
+    Huma has been vital for quickly building consistent, standards-compliant, well-documented APIs and generated clients & SDKs for our live media streaming control plane services for configuring and running live news and sporting event channels. Teams have been able to ship faster and with fewer bugs since switching to Huma.
 
 ## Compatibility
 
