@@ -45,6 +45,7 @@ nav:
               - "Limits": features/request-limits.md
           - "Responses":
               - "Response Outputs": features/response-outputs.md
+              - "Response Errors": features/response-errors.md
               - "Serialization": features/response-serialization.md
               - "Streaming": features/response-streaming.md
               - "Transformers": features/response-transformers.md

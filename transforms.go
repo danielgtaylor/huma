@@ -24,6 +24,7 @@ type SchemaLinkTransformer struct {
 	schemasPath string
 	types       map[any]struct {
 		t      reflect.Type
+		fields []int
 		ref    string
 		header string
 	}
@@ -41,6 +42,7 @@ func NewSchemaLinkTransformer(prefix, schemasPath string) *SchemaLinkTransformer
 		schemasPath: schemasPath,
 		types: map[any]struct {
 			t      reflect.Type
+			fields []int
 			ref    string
 			header string
 		}{},
@@ -92,20 +94,25 @@ func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
 				Schema: t.schemasPath + "/" + path.Base(content.Schema.Ref) + ".json",
 			}
 
+			fieldIndexes := []int{}
 			fields := []reflect.StructField{
 				reflect.TypeOf(extra).Field(0),
 			}
 			for i := 0; i < typ.NumField(); i++ {
 				f := typ.Field(i)
-				if !f.IsExported() {
-					continue
-				}
 				fields = append(fields, f)
+				if f.IsExported() {
+					// Track which fields are exported so we can copy them over. It's
+					// preferred to track/compute this here to avoid allocations in
+					// the transform function from looking up what is exported.
+					fieldIndexes = append(fieldIndexes, i)
+				}
 			}
 
 			newType := reflect.StructOf(fields)
 			info := t.types[typ]
 			info.t = newType
+			info.fields = fieldIndexes
 			info.ref = extra.Schema
 			info.header = "<" + extra.Schema + ">; rel=\"describedBy\""
 			t.types[typ] = info
@@ -134,28 +141,25 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, status string, v any) (an
 	host := ctx.Host()
 	ctx.AppendHeader("Link", info.header)
 
-	vv := reflect.Indirect(reflect.ValueOf(v))
 	tmp := reflect.New(info.t).Elem()
-	for i := 0; i < tmp.NumField(); i++ {
-		f := tmp.Field(i)
-		if !f.CanSet() {
-			continue
-		}
-		if i == 0 {
-			buf := bufPool.Get().(*bytes.Buffer)
-			if len(host) >= 9 && host[:9] == "localhost" {
-				buf.WriteString("http://")
-			} else {
-				buf.WriteString("https://")
-			}
-			buf.WriteString(host)
-			buf.WriteString(info.ref)
-			tmp.Field(i).SetString(buf.String())
-			buf.Reset()
-			bufPool.Put(buf)
-		} else {
-			tmp.Field(i).Set(vv.Field(i - 1))
-		}
+
+	// Set the `$schema` field.
+	buf := bufPool.Get().(*bytes.Buffer)
+	if len(host) >= 9 && host[:9] == "localhost" {
+		buf.WriteString("http://")
+	} else {
+		buf.WriteString("https://")
+	}
+	buf.WriteString(host)
+	buf.WriteString(info.ref)
+	tmp.Field(0).SetString(buf.String())
+	buf.Reset()
+	bufPool.Put(buf)
+
+	// Copy over all the exported fields.
+	vv := reflect.Indirect(reflect.ValueOf(v))
+	for _, i := range info.fields {
+		tmp.Field(i + 1).Set(vv.Field(i))
 	}
 
 	return tmp.Addr().Interface(), nil
