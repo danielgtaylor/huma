@@ -293,6 +293,31 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
+			Name: "request-body-unsupported-media-type",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					RawBody []byte
+					Body    struct {
+						Name string `json:"name"`
+					}
+				}) (*struct{}, error) {
+					assert.Equal(t, `{"name":"foo"}`, string(input.RawBody))
+					assert.Equal(t, "foo", input.Body.Name)
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPut,
+			URL:     "/body",
+			Headers: map[string]string{"Content-Type": "application/foo"},
+			Body:    `abcd`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnsupportedMediaType, resp.Code)
+			},
+		},
+		{
 			Name: "request-body-file-upload",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{

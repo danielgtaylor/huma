@@ -10,6 +10,7 @@ package huma
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -824,8 +825,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					// expected struct type to call the handler.
 					var parsed any
 					if err := api.Unmarshal(ctx.Header("Content-Type"), body, &parsed); err != nil {
-						// TODO: handle not acceptable
 						errStatus = http.StatusBadRequest
+						if errors.Is(err, ErrUnknownContentType) {
+							errStatus = http.StatusUnsupportedMediaType
+						}
 						res.Errors = append(res.Errors, &ErrorDetail{
 							Location: "body",
 							Message:  err.Error(),
