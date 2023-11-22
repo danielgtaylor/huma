@@ -3,6 +3,7 @@ package huma
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -18,6 +19,8 @@ import (
 )
 
 var rxSchema = regexp.MustCompile(`#/components/schemas/([^"]+)`)
+
+var ErrUnknownContentType = errors.New("unknown content type")
 
 // Resolver runs a `Resolve` function after a request has been parsed, enabling
 // you to run custom validation or other code that can modify the request and /
@@ -229,7 +232,7 @@ func (a *api) Unmarshal(contentType string, data []byte, v any) error {
 	}
 	f, ok := a.formats[ct]
 	if !ok {
-		return fmt.Errorf("unknown content type: %s", contentType)
+		return fmt.Errorf("%w: %s", ErrUnknownContentType, contentType)
 	}
 	return f.Unmarshal(data, v)
 }
