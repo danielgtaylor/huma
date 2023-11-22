@@ -454,7 +454,8 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 	case TypeObject:
 		if vv, ok := v.(map[string]any); ok {
 			handleMapString(r, s, path, mode, vv, res)
-			// TODO: handle map[any]any
+		} else if vv, ok := v.(map[any]any); ok {
+			handleMapAny(r, s, path, mode, vv, res)
 		} else {
 			res.Add(path, v, "expected object")
 			return
@@ -569,6 +570,85 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 			}
 
 			path.Push(k)
+			Validate(r, addl, path, mode, v, res)
+			path.Pop()
+		}
+	}
+}
+
+func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m map[any]any, res *ValidateResult) {
+	if s.MinProperties != nil {
+		if len(m) < *s.MinProperties {
+			res.Add(path, m, s.msgMinProperties)
+		}
+	}
+	if s.MaxProperties != nil {
+		if len(m) > *s.MaxProperties {
+			res.Add(path, m, s.msgMaxProperties)
+		}
+	}
+
+	for _, k := range s.propertyNames {
+		v := s.Properties[k]
+		for v.Ref != "" {
+			v = r.SchemaFromRef(v.Ref)
+		}
+
+		// We should be permissive by default to enable easy round-trips for the
+		// client without needing to remove read-only values.
+		// TODO: should we make this configurable?
+
+		// Be stricter for responses, enabling validation of the server if desired.
+		if mode == ModeReadFromServer && v.WriteOnly && m[k] != nil && !reflect.ValueOf(m[k]).IsZero() {
+			res.Add(path, m[k], "write only property is non-zero")
+			continue
+		}
+
+		if m[k] == nil {
+			if !s.requiredMap[k] {
+				continue
+			}
+			if (mode == ModeWriteToServer && v.ReadOnly) ||
+				(mode == ModeReadFromServer && v.WriteOnly) {
+				// These are not required for the current mode.
+				continue
+			}
+			res.Add(path, m, s.msgRequired[k])
+			continue
+		}
+
+		path.Push(k)
+		Validate(r, v, path, mode, m[k], res)
+		path.Pop()
+	}
+
+	if addl, ok := s.AdditionalProperties.(bool); ok && !addl {
+		for k := range m {
+			// No additional properties allowed.
+			var kStr string
+			if s, ok := k.(string); ok {
+				kStr = s
+			} else {
+				kStr = fmt.Sprint(k)
+			}
+			if _, ok := s.Properties[kStr]; !ok {
+				path.Push(kStr)
+				res.Add(path, m, "unexpected property")
+				path.Pop()
+			}
+		}
+	}
+
+	if addl, ok := s.AdditionalProperties.(*Schema); ok {
+		// Additional properties are allowed, but must match the given schema.
+		for k, v := range m {
+			var kStr string
+			if s, ok := k.(string); ok {
+				kStr = s
+			} else {
+				kStr = fmt.Sprint(k)
+			}
+			path.Push(kStr)
 			Validate(r, addl, path, mode, v, res)
 			path.Pop()
 		}

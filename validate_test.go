@@ -589,9 +589,25 @@ var validateTests = []struct {
 		input: map[string]any{"one": 1, "two": 2},
 	},
 	{
-		name:  "expected map item",
+		name:  "map any success",
 		typ:   reflect.TypeOf(map[string]int{}),
+		input: map[any]any{"one": 1, "two": 2},
+	},
+	{
+		name:  "map any int success",
+		typ:   reflect.TypeOf(map[int]string{}),
+		input: map[any]any{1: "one", 2: "two"},
+	},
+	{
+		name:  "expected map item",
+		typ:   reflect.TypeOf(map[any]int{}),
 		input: map[string]any{"one": 1, "two": true},
+		errs:  []string{"expected number"},
+	},
+	{
+		name:  "expected map any item",
+		typ:   reflect.TypeOf(map[any]int{}),
+		input: map[any]any{"one": 1, "two": true},
 		errs:  []string{"expected number"},
 	},
 	{
@@ -601,6 +617,15 @@ var validateTests = []struct {
 		}{}),
 		input: map[string]any{
 			"value": map[string]any{"one": 1},
+		},
+	},
+	{
+		name: "map any minProps success",
+		typ: reflect.TypeOf(struct {
+			Value map[any]int `json:"value" minProperties:"1"`
+		}{}),
+		input: map[any]any{
+			"value": map[any]any{"one": 1},
 		},
 	},
 	{
@@ -614,12 +639,31 @@ var validateTests = []struct {
 		errs: []string{"expected object with at least 1 properties"},
 	},
 	{
+		name: "expected map any minProps",
+		typ: reflect.TypeOf(struct {
+			Value map[any]int `json:"value" minProperties:"1"`
+		}{}),
+		input: map[any]any{
+			"value": map[any]any{},
+		},
+		errs: []string{"expected object with at least 1 properties"},
+	},
+	{
 		name: "map maxProps success",
 		typ: reflect.TypeOf(struct {
 			Value map[string]int `json:"value" maxProperties:"1"`
 		}{}),
 		input: map[string]any{
 			"value": map[string]any{"one": 1},
+		},
+	},
+	{
+		name: "map any maxProps success",
+		typ: reflect.TypeOf(struct {
+			Value map[any]int `json:"value" maxProperties:"1"`
+		}{}),
+		input: map[any]any{
+			"value": map[any]any{"one": 1},
 		},
 	},
 	{
@@ -633,9 +677,24 @@ var validateTests = []struct {
 		errs: []string{"expected object with at most 1 properties"},
 	},
 	{
+		name: "expected map any maxProps",
+		typ: reflect.TypeOf(struct {
+			Value map[any]int `json:"value" maxProperties:"1"`
+		}{}),
+		input: map[any]any{
+			"value": map[any]any{"one": 1, "two": 2},
+		},
+		errs: []string{"expected object with at most 1 properties"},
+	},
+	{
 		name:  "object struct success",
 		typ:   reflect.TypeOf(struct{}{}),
 		input: map[string]any{},
+	},
+	{
+		name:  "object struct any success",
+		typ:   reflect.TypeOf(struct{}{}),
+		input: map[any]any{},
 	},
 	{
 		name:  "expected object",
@@ -651,12 +710,27 @@ var validateTests = []struct {
 		input: map[string]any{},
 	},
 	{
+		name: "object any optional success",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value,omitempty"`
+		}{}),
+		input: map[any]any{},
+	},
+	{
 		name: "readOnly set success",
 		typ: reflect.TypeOf(struct {
 			Value string `json:"value" readOnly:"true"`
 		}{}),
 		mode:  huma.ModeWriteToServer,
 		input: map[string]any{"value": "whoops"},
+	},
+	{
+		name: "readOnly any set success",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" readOnly:"true"`
+		}{}),
+		mode:  huma.ModeWriteToServer,
+		input: map[any]any{"value": "whoops"},
 	},
 	{
 		name: "readOnly missing success",
@@ -667,12 +741,29 @@ var validateTests = []struct {
 		input: map[string]any{},
 	},
 	{
+		name: "readOnly any missing success",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" readOnly:"true"`
+		}{}),
+		mode:  huma.ModeWriteToServer,
+		input: map[any]any{},
+	},
+	{
 		name: "readOnly missing fail",
 		typ: reflect.TypeOf(struct {
 			Value string `json:"value" readOnly:"true"`
 		}{}),
 		mode:  huma.ModeReadFromServer,
 		input: map[string]any{},
+		errs:  []string{"expected required property value to be present"},
+	},
+	{
+		name: "readOnly any missing fail",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" readOnly:"true"`
+		}{}),
+		mode:  huma.ModeReadFromServer,
+		input: map[any]any{},
 		errs:  []string{"expected required property value to be present"},
 	},
 	{
@@ -685,11 +776,28 @@ var validateTests = []struct {
 		errs:  []string{"write only property is non-zero"},
 	},
 	{
+		name: "writeOnly any missing fail",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" writeOnly:"true"`
+		}{}),
+		mode:  huma.ModeReadFromServer,
+		input: map[any]any{"value": "should not be set"},
+		errs:  []string{"write only property is non-zero"},
+	},
+	{
 		name: "unexpected property",
 		typ: reflect.TypeOf(struct {
 			Value string `json:"value,omitempty"`
 		}{}),
 		input: map[string]any{"value2": "whoops"},
+		errs:  []string{"unexpected property"},
+	},
+	{
+		name: "unexpected property any",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value,omitempty"`
+		}{}),
+		input: map[any]any{123: "whoops"},
 		errs:  []string{"unexpected property"},
 	},
 	{
@@ -702,6 +810,15 @@ var validateTests = []struct {
 		input: map[string]any{"items": []any{map[string]any{"value": "hello"}}},
 	},
 	{
+		name: "nested any success",
+		typ: reflect.TypeOf(struct {
+			Items []struct {
+				Value string `json:"value"`
+			} `json:"items"`
+		}{}),
+		input: map[any]any{"items": []any{map[any]any{"value": "hello"}}},
+	},
+	{
 		name: "expected nested",
 		typ: reflect.TypeOf(struct {
 			Items []struct {
@@ -709,6 +826,16 @@ var validateTests = []struct {
 			} `json:"items"`
 		}{}),
 		input: map[string]any{"items": []any{map[string]any{}}},
+		errs:  []string{"expected required property value to be present"},
+	},
+	{
+		name: "expected nested any",
+		typ: reflect.TypeOf(struct {
+			Items []struct {
+				Value string `json:"value"`
+			} `json:"items"`
+		}{}),
+		input: map[any]any{"items": []any{map[any]any{}}},
 		errs:  []string{"expected required property value to be present"},
 	},
 	{
@@ -853,7 +980,7 @@ func TestValidate(t *testing.T) {
 			var s *huma.Schema
 			if test.panic != "" {
 				assert.Panics(t, func() {
-					registry.Schema(test.typ, false, "TestInput")
+					registry.Schema(test.typ, true, "TestInput")
 				})
 				return
 			} else {
@@ -861,7 +988,7 @@ func TestValidate(t *testing.T) {
 					s = test.s
 					s.PrecomputeMessages()
 				} else {
-					s = registry.Schema(test.typ, false, "TestInput")
+					s = registry.Schema(test.typ, true, "TestInput")
 				}
 			}
 
@@ -933,8 +1060,13 @@ func BenchmarkValidate(b *testing.B) {
 
 			input := test.input
 			if s.Type == huma.TypeObject && s.Properties["value"] != nil {
-				s = s.Properties["value"]
-				input = input.(map[string]any)["value"]
+				if i, ok := input.(map[string]any); ok {
+					input = i["value"]
+					s = s.Properties["value"]
+				} else if i, ok := input.(map[any]any); ok {
+					input = i["value"]
+					s = s.Properties["value"]
+				}
 			}
 
 			b.ReportAllocs()
