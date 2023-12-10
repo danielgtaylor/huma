@@ -1,4 +1,4 @@
-package humagmux
+package humamux
 
 import (
 	"context"

@@ -1,4 +1,4 @@
-package humagmux
+package humamux
 
 import (
 	"context"
@@ -93,12 +93,13 @@ type gMux struct {
 }
 
 func (a *gMux) Handle(op *huma.Operation, handler func(huma.Context)) {
-	m := op.Method
-	a.router.HandleFunc(op.Path, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == m {
+	a.router.
+		NewRoute().
+		Path(op.Path).
+		Methods(op.Method).
+		HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			handler(&gmuxContext{op: op, r: r, w: w})
-		}
-	})
+		})
 }
 
 func (a *gMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
