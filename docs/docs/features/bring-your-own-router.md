@@ -8,8 +8,9 @@ description: Bring your own router & middleware to enable incremental adoption a
 
 Huma is designed to be router-agnostic to enable incremental adoption in existing and new services across a large number of organizations. This means you can use any router you want, or even write your own. The only requirement is an implementation of a small [`huma.Adapter`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Adapter) interface. This is how Huma integrates with your router.
 
-Adapters are in the [`adapters`](https://github.com/danielgtaylor/huma/tree/main/adapters) directory and named after the router they support. Many common routers are supported out of the box:
+Adapters are in the [`adapters`](https://github.com/danielgtaylor/huma/tree/main/adapters) directory and named after the router they support. Many common routers are supported out of the box (in alphabetical order):
 
+-   [BunRouter](https://bunrouter.uptrace.dev/) via [`humabunrouter`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humabunrouter)
 -   [chi](https://github.com/go-chi/chi) via [`humachi`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humachi)
 -   [gin](https://gin-gonic.com/) via [`humagin`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humagin)
 -   [gorilla/mux](https://github.com/gorilla/mux) via [`humamux`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humamux)
