@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humabunrouter"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/danielgtaylor/huma/v2/adapters/humafiber"
 	"github.com/danielgtaylor/huma/v2/adapters/humagin"
@@ -22,6 +23,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/julienschmidt/httprouter"
 	"github.com/stretchr/testify/assert"
+	"github.com/uptrace/bunrouter"
 )
 
 // Test the various input types (path, query, header, body).
@@ -95,6 +97,8 @@ func TestAdapters(t *testing.T) {
 		{"gin", func() huma.API { return humagin.New(gin.New(), config) }},
 		{"httprouter", func() huma.API { return humahttprouter.New(httprouter.New(), config) }},
 		{"mux", func() huma.API { return humamux.New(mux.NewRouter(), config) }},
+		{"bunrouter", func() huma.API { return humabunrouter.New(bunrouter.New(), config) }},
+		{"bunroutercompat", func() huma.API { return humabunrouter.NewCompat(bunrouter.New().Compat(), config) }},
 	} {
 		t.Run(adapter.name, func(t *testing.T) {
 			testAdapter(t, adapter.new())

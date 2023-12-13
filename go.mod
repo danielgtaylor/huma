@@ -21,6 +21,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.15.0
 	github.com/stretchr/testify v1.8.3
+	github.com/uptrace/bunrouter v1.0.21
 	golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc
 	golang.org/x/net v0.17.0
 	google.golang.org/protobuf v1.30.0
