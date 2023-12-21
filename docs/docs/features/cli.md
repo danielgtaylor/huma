@@ -30,11 +30,16 @@ func main() {
 }
 ```
 
-You can then run the CLI with and see the results:
+You can then run the CLI and see the results:
 
 ```sh title="Terminal"
+// Run with defaults
 $ go run main.go
 I was run with debug:false host: port:8888
+
+// Run with options
+$ go run main.go --debug=true --host=localhost --port=8000
+I was run with debug:true host:localhost port:8000
 ```
 
 To do useful work, you will want to register a handler for the default start command and optionally a way to gracefully shutdown the server:
@@ -67,6 +72,25 @@ cli := huma.NewCLI(func(hooks huma.Hooks, opts *Options) {
 !!! info "Naming"
 
     Option fields are automatically converted to `--kebab-casing` for use on the command line. If you want to use a different name, use the `name` struct tag to override the default behavior!
+
+## Passing Options
+
+Options can be passed explicitly as command-line arguments to the service or they can be provided by environment variables prefixed with `SERVICE_`. For example, to run the service on port 8000:
+
+```bash
+# Example passing command-line args
+$ go run main.go --port=8000
+
+# Short arguments are also supported
+$ go run main.go -p 8000
+
+# Example passing by environment variables
+$ SERVICE_PORT=8000 go run main.go
+```
+
+!!! warning "Precedence"
+
+    If both environment variable and command-line arguments are present, then command-line arguments take priority.
 
 ## Custom Options
 
@@ -116,7 +140,15 @@ cli.Root().AddCommand(&cobra.Command{
 })
 ```
 
-Now you can run your service and use the new command: `go run . openapi`.
+Now you can run your service and use the new command: `go run . openapi`. Notice that it never starts the server; it just runs your command handler code. Some ideas for custom commands:
+
+-   Print the OpenAPI spec
+-   Print JSON Schemas
+-   Run database migrations
+-   Run customer scenario tests
+-   Bundle common actions into a single utility command, like adding a new user
+
+### Custom Commands with Options
 
 If you want to access your custom options struct with custom commands, use the [`huma.WithOptions(func(cmd *cobra.Command, args []string, options *YourOptions)) func(cmd *cobra.Command, args []string)`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#WithOptions) utitity function. It ensures the options are parsed and available before running your command.
 

@@ -62,14 +62,22 @@ theme:
   logo: logo.png
   favicon: favicon.png
   palette:
+    # Palette toggle for automatic mode
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+      primary: blue
+      accent: custom
+
     # Palette toggle for light mode
     - media: "(prefers-color-scheme: light)"
-      scheme: default
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
       primary: blue
       accent: custom
+
     # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
@@ -99,6 +107,9 @@ extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/danielgtaylor/huma
+  analytics:
+    provider: google
+    property: G-YCZGGQHTX1
 extra_css:
   - stylesheets/asciinema-player.css
   - stylesheets/extra.css
