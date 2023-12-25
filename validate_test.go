@@ -533,6 +533,11 @@ var validateTests = []struct {
 		input: []any{1, 2, 3},
 	},
 	{
+		name:  "array success",
+		typ:   reflect.TypeOf([]int{}),
+		input: []int{1, 2, 3},
+	},
+	{
 		name:  "expected array",
 		typ:   reflect.TypeOf([]any{}),
 		input: 1,
