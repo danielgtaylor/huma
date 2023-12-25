@@ -741,27 +741,27 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							pv = values
 						case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 							values := strings.Split(value, ",")
-							vs := make([]int64, 0, len(values))
+							vs := make([]int, 0, len(values))
 							for i := 0; i < len(values); i++ {
 								v, err := strconv.ParseInt(values[i], 10, 64)
 								if err != nil {
 									res.Add(pb, v, "invalid integer: "+values[i])
 									return
 								}
-								vs = append(vs, v)
+								vs = append(vs, int(v))
 								f.Set(reflect.ValueOf(vs))
 								pv = vs
 							}
 						case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 							values := strings.Split(value, ",")
-							vs := make([]uint64, 0, len(values))
+							vs := make([]uint, 0, len(values))
 							for i := 0; i < len(values); i++ {
 								v, err := strconv.ParseUint(values[i], 10, 64)
 								if err != nil {
 									res.Add(pb, v, "invalid integer: "+values[i])
 									return
 								}
-								vs = append(vs, v)
+								vs = append(vs, uint(v))
 								f.Set(reflect.ValueOf(vs))
 								pv = vs
 							}
@@ -775,6 +775,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 									return
 								}
 								vs = append(vs, v)
+								// TODO check this as it could panic
 								f.Set(reflect.ValueOf(vs))
 								pv = vs
 							}
