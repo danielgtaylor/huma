@@ -733,11 +733,52 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					f.SetBool(v)
 					pv = v
 				default:
-					// Special case: list of strings
-					if f.Type().Kind() == reflect.Slice && f.Type().Elem().Kind() == reflect.String {
-						values := strings.Split(value, ",")
-						f.Set(reflect.ValueOf(values))
-						pv = values
+					if f.Type().Kind() == reflect.Slice {
+						switch f.Type().Elem().Kind() {
+						case reflect.String:
+							values := strings.Split(value, ",")
+							f.Set(reflect.ValueOf(values))
+							pv = values
+						case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+							values := strings.Split(value, ",")
+							vs := make([]int64, 0, len(values))
+							for i := 0; i < len(values); i++ {
+								v, err := strconv.ParseInt(values[i], 10, 64)
+								if err != nil {
+									res.Add(pb, v, "invalid integer: "+values[i])
+									return
+								}
+								vs = append(vs, v)
+								f.Set(reflect.ValueOf(vs))
+								pv = vs
+							}
+						case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+							values := strings.Split(value, ",")
+							vs := make([]uint64, 0, len(values))
+							for i := 0; i < len(values); i++ {
+								v, err := strconv.ParseUint(values[i], 10, 64)
+								if err != nil {
+									res.Add(pb, v, "invalid integer: "+values[i])
+									return
+								}
+								vs = append(vs, v)
+								f.Set(reflect.ValueOf(vs))
+								pv = vs
+							}
+						case reflect.Float32, reflect.Float64:
+							values := strings.Split(value, ",")
+							vs := make([]float64, 0, len(values))
+							for i := 0; i < len(values); i++ {
+								v, err := strconv.ParseFloat(values[i], 64)
+								if err != nil {
+									res.Add(pb, v, "invalid float: "+values[i])
+									return
+								}
+								vs = append(vs, v)
+								f.Set(reflect.ValueOf(vs))
+								pv = vs
+							}
+						}
 						break
 					}
 
