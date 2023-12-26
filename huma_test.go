@@ -677,9 +677,6 @@ func TestFeatures(t *testing.T) {
 				feature.Assert(t, w)
 			} else {
 				cn := w.Body.String()
-				fmt.Println("---------------------------------------------------------------------")
-				fmt.Println(cn)
-				fmt.Println("---------------------------------------------------------------------")
 				assert.Less(t, w.Code, 300, cn)
 			}
 		})
