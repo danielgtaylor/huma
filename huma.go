@@ -851,22 +851,6 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							f.Set(reflect.ValueOf(vs))
 							pv = vs
 
-						case reflect.Uint8:
-							values := strings.Split(value, ",")
-							vs, err := parseArrElement(values, func(s string) (uint8, error) {
-								val, err := strconv.ParseUint(s, 10, 8)
-								if err != nil {
-									return 0, err
-								}
-								return uint8(val), nil
-							})
-							if err != nil {
-								res.Add(pb, value, "invalid integer")
-								return
-							}
-							f.Set(reflect.ValueOf(vs))
-							pv = vs
-
 						case reflect.Uint16:
 							values := strings.Split(value, ",")
 							vs, err := parseArrElement(values, func(s string) (uint16, error) {

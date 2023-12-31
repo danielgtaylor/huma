@@ -459,8 +459,6 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 			handleArray(r, s, path, mode, res, arr)
 		case []uint:
 			handleArray(r, s, path, mode, res, arr)
-		case []uint8:
-			handleArray(r, s, path, mode, res, arr)
 		case []uint16:
 			handleArray(r, s, path, mode, res, arr)
 		case []uint32:
