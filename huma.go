@@ -758,7 +758,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						case reflect.Int:
 							values := strings.Split(value, ",")
 							vs, err := parseArrElement(values, func(s string) (int, error) {
-								val, err := strconv.ParseInt(s, 10, 64)
+								val, err := strconv.ParseInt(s, 10, strconv.IntSize)
 								if err != nil {
 									return 0, err
 								}
@@ -838,7 +838,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						case reflect.Uint:
 							values := strings.Split(value, ",")
 							vs, err := parseArrElement(values, func(s string) (uint, error) {
-								val, err := strconv.ParseUint(s, 10, 64)
+								val, err := strconv.ParseUint(s, 10, strconv.IntSize)
 								if err != nil {
 									return 0, err
 								}
