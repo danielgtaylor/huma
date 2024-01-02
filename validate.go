@@ -444,8 +444,30 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		switch arr := v.(type) {
 		case []any:
 			handleArray(r, s, path, mode, res, arr)
+		// Special cases for params which are lists.
 		case []string:
-			// Special case for params which are lists.
+			handleArray(r, s, path, mode, res, arr)
+		case []int:
+			handleArray(r, s, path, mode, res, arr)
+		case []int8:
+			handleArray(r, s, path, mode, res, arr)
+		case []int16:
+			handleArray(r, s, path, mode, res, arr)
+		case []int32:
+			handleArray(r, s, path, mode, res, arr)
+		case []int64:
+			handleArray(r, s, path, mode, res, arr)
+		case []uint:
+			handleArray(r, s, path, mode, res, arr)
+		case []uint16:
+			handleArray(r, s, path, mode, res, arr)
+		case []uint32:
+			handleArray(r, s, path, mode, res, arr)
+		case []uint64:
+			handleArray(r, s, path, mode, res, arr)
+		case []float32:
+			handleArray(r, s, path, mode, res, arr)
+		case []float64:
 			handleArray(r, s, path, mode, res, arr)
 		default:
 			res.Add(path, v, "expected array")

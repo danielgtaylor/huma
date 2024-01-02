@@ -533,6 +533,61 @@ var validateTests = []struct {
 		input: []any{1, 2, 3},
 	},
 	{
+		name:  "array success",
+		typ:   reflect.TypeOf([]int{}),
+		input: []int{1, 2, 3},
+	},
+	{
+		name:  "array success",
+		typ:   reflect.TypeOf([]int8{}),
+		input: []int8{1, 2, 3},
+	},
+	{
+		name:  "array success",
+		typ:   reflect.TypeOf([]int16{}),
+		input: []int16{1, 2, 3},
+	},
+	{
+		name:  "array success",
+		typ:   reflect.TypeOf([]int32{}),
+		input: []int32{1, 2, 3},
+	},
+	{
+		name:  "array success",
+		typ:   reflect.TypeOf([]int64{}),
+		input: []int64{1, 2, 3},
+	},
+	{
+		name:  "array success",
+		typ:   reflect.TypeOf([]uint{}),
+		input: []uint{1, 2, 3},
+	},
+	{
+		name:  "array success",
+		typ:   reflect.TypeOf([]uint16{}),
+		input: []uint16{1, 2, 3},
+	},
+	{
+		name:  "array success",
+		typ:   reflect.TypeOf([]uint32{}),
+		input: []uint32{1, 2, 3},
+	},
+	{
+		name:  "array success",
+		typ:   reflect.TypeOf([]uint64{}),
+		input: []uint64{1, 2, 3},
+	},
+	{
+		name:  "array success",
+		typ:   reflect.TypeOf([]float32{}),
+		input: []float32{1.1, 2.3, 3.52},
+	},
+	{
+		name:  "array success",
+		typ:   reflect.TypeOf([]float64{}),
+		input: []float64{3.1, 2.3, 3.62},
+	},
+	{
 		name:  "expected array",
 		typ:   reflect.TypeOf([]any{}),
 		input: 1,

@@ -94,9 +94,21 @@ func TestFeatures(t *testing.T) {
 					QueryUint    uint32    `query:"uint"`
 					QueryBool    bool      `query:"bool"`
 					QueryStrings []string  `query:"strings"`
-					HeaderString string    `header:"String"`
-					HeaderInt    int       `header:"Int"`
-					HeaderDate   time.Time `header:"Date"`
+					QueryInts    []int     `query:"ints"`
+					QueryInts8   []int8    `query:"ints8"`
+					QueryInts16  []int16   `query:"ints16"`
+					QueryInts32  []int32   `query:"ints32"`
+					QueryInts64  []int64   `query:"ints64"`
+					QueryUints   []uint    `query:"uints"`
+					// QueryUints8   []uint8   `query:"uints8"`
+					QueryUints16  []uint16  `query:"uints16"`
+					QueryUints32  []uint32  `query:"uints32"`
+					QueryUints64  []uint64  `query:"uints64"`
+					QueryFloats32 []float32 `query:"floats32"`
+					QueryFloats64 []float64 `query:"floats64"`
+					HeaderString  string    `header:"String"`
+					HeaderInt     int       `header:"Int"`
+					HeaderDate    time.Time `header:"Date"`
 				}) (*struct{}, error) {
 					assert.Equal(t, "foo", input.PathString)
 					assert.Equal(t, 123, input.PathInt)
@@ -110,11 +122,22 @@ func TestFeatures(t *testing.T) {
 					assert.Equal(t, []string{"foo", "bar"}, input.QueryStrings)
 					assert.Equal(t, "baz", input.HeaderString)
 					assert.Equal(t, 789, input.HeaderInt)
+					assert.Equal(t, []int{2, 3}, input.QueryInts)
+					assert.Equal(t, []int8{4, 5}, input.QueryInts8)
+					assert.Equal(t, []int16{4, 5}, input.QueryInts16)
+					assert.Equal(t, []int32{4, 5}, input.QueryInts32)
+					assert.Equal(t, []int64{4, 5}, input.QueryInts64)
+					assert.Equal(t, []uint{1, 2}, input.QueryUints)
+					assert.Equal(t, []uint16{10, 15}, input.QueryUints16)
+					assert.Equal(t, []uint32{10, 15}, input.QueryUints32)
+					assert.Equal(t, []uint64{10, 15}, input.QueryUints64)
+					assert.Equal(t, []float32{2.2, 2.3}, input.QueryFloats32)
+					assert.Equal(t, []float64{3.2, 3.3}, input.QueryFloats64)
 					return nil, nil
 				})
 			},
 			Method: http.MethodGet,
-			URL:    "/test-params/foo/123?string=bar&int=456&before=2023-01-01T12:00:00Z&date=2023-01-01&uint=1&bool=true&strings=foo,bar",
+			URL:    "/test-params/foo/123?string=bar&int=456&before=2023-01-01T12:00:00Z&date=2023-01-01&uint=1&bool=true&strings=foo,bar&ints=2,3&ints8=4,5&ints16=4,5&ints32=4,5&ints64=4,5&uints=1,2&uints16=10,15&uints32=10,15&uints64=10,15&floats32=2.2,2.3&floats64=3.2,3.3",
 			Headers: map[string]string{
 				"string": "baz",
 				"int":    "789",
@@ -664,7 +687,8 @@ func TestFeatures(t *testing.T) {
 			if feature.Assert != nil {
 				feature.Assert(t, w)
 			} else {
-				assert.Less(t, w.Code, 300, w.Body.String())
+				cn := w.Body.String()
+				assert.Less(t, w.Code, 300, cn)
 			}
 		})
 	}
