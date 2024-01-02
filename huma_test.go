@@ -151,29 +151,53 @@ func TestFeatures(t *testing.T) {
 					Method: http.MethodGet,
 					Path:   "/test-params/{int}",
 				}, func(ctx context.Context, input *struct {
-					PathInt     string    `path:"int"`
-					QueryInt    int       `query:"int"`
-					QueryFloat  float32   `query:"float"`
-					QueryBefore time.Time `query:"before"`
-					QueryDate   time.Time `query:"date" timeFormat:"2006-01-02"`
-					QueryUint   uint32    `query:"uint"`
-					QueryBool   bool      `query:"bool"`
-					QueryReq    bool      `query:"req" required:"true"`
-					HeaderReq   string    `header:"req" required:"true"`
+					PathInt       string    `path:"int"`
+					QueryInt      int       `query:"int"`
+					QueryFloat    float32   `query:"float"`
+					QueryBefore   time.Time `query:"before"`
+					QueryDate     time.Time `query:"date" timeFormat:"2006-01-02"`
+					QueryUint     uint32    `query:"uint"`
+					QueryBool     bool      `query:"bool"`
+					QueryInts     []int     `query:"ints"`
+					QueryInts8    []int8    `query:"ints8"`
+					QueryInts16   []int16   `query:"ints16"`
+					QueryInts32   []int32   `query:"ints32"`
+					QueryInts64   []int64   `query:"ints64"`
+					QueryUints    []uint    `query:"uints"`
+					QueryUints16  []uint16  `query:"uints16"`
+					QueryUints32  []uint32  `query:"uints32"`
+					QueryUints64  []uint64  `query:"uints64"`
+					QueryFloats32 []float32 `query:"floats32"`
+					QueryFloats64 []float64 `query:"floats64"`
+					QueryReq      bool      `query:"req" required:"true"`
+					HeaderReq     string    `header:"req" required:"true"`
 				}) (*struct{}, error) {
 					return nil, nil
 				})
 			},
 			Method: http.MethodGet,
-			URL:    "/test-params/bad?int=bad&float=bad&before=bad&date=bad&uint=bad&bool=bad",
+			URL:    "/test-params/bad?int=bad&float=bad&before=bad&date=bad&uint=bad&bool=bad&ints=bad&ints8=bad&ints16=bad&ints32=bad&ints64=bad&uints=bad&uints16=bad&uints32=bad&uints64=bad&floats32=bad&floats64=bad",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+
 				assert.Contains(t, resp.Body.String(), "invalid integer")
 				assert.Contains(t, resp.Body.String(), "invalid float")
 				assert.Contains(t, resp.Body.String(), "invalid date/time")
 				assert.Contains(t, resp.Body.String(), "invalid bool")
 				assert.Contains(t, resp.Body.String(), "required query parameter is missing")
 				assert.Contains(t, resp.Body.String(), "required header parameter is missing")
+
+				assert.Contains(t, resp.Body.String(), "query.ints")
+				assert.Contains(t, resp.Body.String(), "query.ints8")
+				assert.Contains(t, resp.Body.String(), "query.ints16")
+				assert.Contains(t, resp.Body.String(), "query.ints32")
+				assert.Contains(t, resp.Body.String(), "query.ints64")
+				assert.Contains(t, resp.Body.String(), "query.uints")
+				assert.Contains(t, resp.Body.String(), "query.uints16")
+				assert.Contains(t, resp.Body.String(), "query.uints32")
+				assert.Contains(t, resp.Body.String(), "query.uints64")
+				assert.Contains(t, resp.Body.String(), "query.floats32")
+				assert.Contains(t, resp.Body.String(), "query.floats64")
 			},
 		},
 		{
