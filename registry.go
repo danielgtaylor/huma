@@ -4,8 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 )
+
+// reGenericName helps to convert `MyType[path/to.SubType]` to `MyTypeSubType`
+// when using the default schema namer.
+var reGenericName = regexp.MustCompile(`\[[^\]]+\]`)
 
 // Registry creates and stores schemas and their references, and supports
 // marshalling to JSON/YAML for use as an OpenAPI #/components/schemas object.
@@ -30,6 +35,12 @@ func DefaultSchemaNamer(t reflect.Type, hint string) string {
 	name := deref(t).Name()
 
 	// Fix up generics, if used, for nicer refs & URLs.
+	name = reGenericName.ReplaceAllStringFunc(name, func(s string) string {
+		// Convert `MyType[path/to.SubType]` to `MyType[SubType]`.
+		parts := strings.Split(s, ".")
+		return parts[len(parts)-1]
+	})
+	// Remove square brackets.
 	name = strings.ReplaceAll(name, "[", "")
 	name = strings.ReplaceAll(name, "]", "")
 
