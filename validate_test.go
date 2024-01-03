@@ -894,6 +894,18 @@ var validateTests = []struct {
 		errs:  []string{"expected required property value to be present"},
 	},
 	{
+		name: "manual object property required",
+		s: &huma.Schema{
+			Type:     huma.TypeObject,
+			Required: []string{"value"},
+			Properties: map[string]*huma.Schema{
+				"value": {Type: huma.TypeString},
+			},
+		},
+		input: map[string]any{},
+		errs:  []string{"expected required property value to be present"},
+	},
+	{
 		name: "enum success",
 		typ: reflect.TypeOf(struct {
 			Value string `json:"value" enum:"one,two"`
