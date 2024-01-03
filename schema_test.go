@@ -505,6 +505,20 @@ func TestSchemaGenericNaming(t *testing.T) {
 	}`, string(b))
 }
 
+func TestSchemaGenericNamingFromModule(t *testing.T) {
+	type SchemaGeneric[T any] struct {
+		Value T `json:"value"`
+	}
+
+	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	s := r.Schema(reflect.TypeOf(SchemaGeneric[time.Time]{}), true, "")
+
+	b, _ := json.Marshal(s)
+	assert.JSONEq(t, `{
+		"$ref": "#/components/schemas/SchemaGenericTime"
+	}`, string(b))
+}
+
 type OmittableNullable[T any] struct { //nolint: musttag
 	Sent  bool
 	Null  bool
