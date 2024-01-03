@@ -168,6 +168,28 @@ func (s *Schema) PrecomputeMessages() {
 		}
 	}
 
+	if s.propertyNames == nil {
+		s.propertyNames = make([]string, 0, len(s.Properties))
+		for name := range s.Properties {
+			s.propertyNames = append(s.propertyNames, name)
+		}
+	}
+
+	if s.requiredMap == nil {
+		s.requiredMap = map[string]bool{}
+		for _, name := range s.Required {
+			s.requiredMap[name] = true
+		}
+	}
+
+	if s.Items != nil {
+		s.Items.PrecomputeMessages()
+	}
+
+	for _, prop := range s.Properties {
+		prop.PrecomputeMessages()
+	}
+
 	for _, sub := range s.OneOf {
 		sub.PrecomputeMessages()
 	}
