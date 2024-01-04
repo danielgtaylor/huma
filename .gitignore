@@ -7,3 +7,4 @@ mem.out
 docs/site
 docs/__pycache__
 docs/.cache
+.idea/
