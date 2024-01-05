@@ -9,18 +9,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type Output[T any] struct {
-	data T
-}
+type Output[T any] struct{}
 
-type Embedded[P any] struct {
-	data P
-}
+type Embedded[P any] struct{}
 
-type EmbeddedTwo[P, V any] struct {
-	data   P
-	second V
-}
+type EmbeddedTwo[P, V any] struct{}
 
 type S struct{}
 
