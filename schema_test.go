@@ -501,7 +501,7 @@ func TestSchemaGenericNaming(t *testing.T) {
 
 	b, _ := json.Marshal(s)
 	assert.JSONEq(t, `{
-		"$ref": "#/components/schemas/SchemaGenericint"
+		"$ref": "#/components/schemas/SchemaGenericInt"
 	}`, string(b))
 }
 

@@ -4,13 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"regexp"
 	"strings"
-)
 
-// reGenericName helps to convert `MyType[path/to.SubType]` to `MyTypeSubType`
-// when using the default schema namer.
-var reGenericName = regexp.MustCompile(`\[[^\]]+\]`)
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+)
 
 // Registry creates and stores schemas and their references, and supports
 // marshalling to JSON/YAML for use as an OpenAPI #/components/schemas object.
@@ -34,15 +32,23 @@ type Registry interface {
 func DefaultSchemaNamer(t reflect.Type, hint string) string {
 	name := deref(t).Name()
 
-	// Fix up generics, if used, for nicer refs & URLs.
-	name = reGenericName.ReplaceAllStringFunc(name, func(s string) string {
-		// Convert `MyType[path/to.SubType]` to `MyType[SubType]`.
-		parts := strings.Split(s, ".")
-		return parts[len(parts)-1]
-	})
-	// Remove square brackets.
-	name = strings.ReplaceAll(name, "[", "")
-	name = strings.ReplaceAll(name, "]", "")
+	// Better support for lists, so e.g. `[]int` becomes `ListInt`.
+	name = strings.ReplaceAll(name, "[]", "List[")
+
+	result := ""
+	for _, part := range strings.FieldsFunc(name, func(r rune) bool {
+		// Split on special characters. Note that `,` is used when there are
+		// multiple inputs to a generic type.
+		return r == '[' || r == ']' || r == '*' || r == ','
+	}) {
+		// Split fully qualified names like `github.com/foo/bar.Baz` into `Baz`.
+		fqn := strings.Split(part, ".")
+		base := fqn[len(fqn)-1]
+
+		// Add to result, and uppercase for better scalar support (`int` -> `Int`).
+		result += cases.Title(language.Und, cases.NoLower).String(base)
+	}
+	name = result
 
 	if name == "" {
 		name = hint
