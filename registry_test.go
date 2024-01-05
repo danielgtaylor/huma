@@ -1,9 +1,9 @@
 package huma
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2/examples/protodemo/protodemo"
 	"github.com/stretchr/testify/assert"
@@ -17,11 +17,46 @@ type Embedded[P any] struct {
 	data P
 }
 
-func TestDefaultSchemaNamer(t *testing.T) {
-	testUser := Output[*[]Embedded[protodemo.User]]{}
+type EmbeddedTwo[P, V any] struct {
+	data   P
+	second V
+}
 
-	name := DefaultSchemaNamer(reflect.TypeOf(testUser), "hint")
-	fmt.Println(reflect.TypeOf(testUser))
-	fmt.Println(name)
-	assert.True(t, name == "Outputgithubcomdanielgtaylorhumav2Embeddedgithubcomdanielgtaylorhumav2examplesprotodemoprotodemoUser")
+type S struct{}
+
+type ü struct{}
+
+type MP4 struct{}
+
+func TestDefaultSchemaNamer(t *testing.T) {
+	type Renamed Output[*[]Embedded[protodemo.User]]
+
+	for _, example := range []struct {
+		typ  any
+		name string
+	}{
+		{int(0), "Int"},
+		{int64(0), "Int64"},
+		{S{}, "S"},
+		{time.Time{}, "Time"},
+		{Output[int]{}, "OutputInt"},
+		{Output[*int]{}, "OutputInt"},
+		{Output[[]int]{}, "OutputListInt"},
+		{Output[[]*int]{}, "OutputListInt"},
+		{Output[[][]int]{}, "OutputListListInt"},
+		{Output[map[string]int]{}, "OutputMapStringInt"},
+		{Output[map[string][]*int]{}, "OutputMapStringListInt"},
+		{Output[S]{}, "OutputS"},
+		{Output[ü]{}, "OutputÜ"},
+		{Output[MP4]{}, "OutputMP4"},
+		{Output[Embedded[*protodemo.User]]{}, "OutputEmbeddedUser"},
+		{Output[*[]Embedded[protodemo.User]]{}, "OutputListEmbeddedUser"},
+		{Output[EmbeddedTwo[[]protodemo.User, **time.Time]]{}, "OutputEmbeddedTwoListUserTime"},
+		{Renamed{}, "Renamed"},
+	} {
+		t.Run(example.name, func(t *testing.T) {
+			name := DefaultSchemaNamer(reflect.TypeOf(example.typ), "hint")
+			assert.Equal(t, example.name, name)
+		})
+	}
 }

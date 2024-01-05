@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // Registry creates and stores schemas and their references, and supports
@@ -29,15 +32,24 @@ type Registry interface {
 func DefaultSchemaNamer(t reflect.Type, hint string) string {
 	name := deref(t).Name()
 
-	// Fix up generics, if used, for nicer refs & URLs.
-	// Convert `MyType[path/to.SubType]` to `MyTypepathtoSubType`.
-	replaced := strings.Builder{}
-	for _, c := range name {
-		if !strings.ContainsRune("[*/.]", c) {
-			replaced.WriteRune(c)
-		}
+	// Better support for lists, so e.g. `[]int` becomes `ListInt`.
+	name = strings.ReplaceAll(name, "[]", "List[")
+
+	result := ""
+	for _, part := range strings.FieldsFunc(name, func(r rune) bool {
+		// Split on special characters. Note that `,` is used when there are
+		// multiple inputs to a generic type.
+		return r == '[' || r == ']' || r == '*' || r == ','
+	}) {
+		// Split fully qualified names like `github.com/foo/bar.Baz` into `Baz`.
+		fqn := strings.Split(part, ".")
+		base := fqn[len(fqn)-1]
+
+		// Add to result, and uppercase for better scalar support (`int` -> `Int`).
+		// Base is guaranteed to be at least one character long so `[1:]` is safe.
+		result += cases.Title(language.Und, cases.NoLower).String(base)
 	}
-	name = replaced.String()
+	name = result
 
 	if name == "" {
 		name = hint
