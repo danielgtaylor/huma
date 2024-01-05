@@ -46,7 +46,6 @@ func DefaultSchemaNamer(t reflect.Type, hint string) string {
 		base := fqn[len(fqn)-1]
 
 		// Add to result, and uppercase for better scalar support (`int` -> `Int`).
-		// Base is guaranteed to be at least one character long so `[1:]` is safe.
 		result += cases.Title(language.Und, cases.NoLower).String(base)
 	}
 	name = result
