@@ -17,7 +17,7 @@ func handler(ctx context.Context, input *MyInput) (*huma.StreamResponse, error) 
 			writer := ctx.BodyWriter()
 
 			// Update the write deadline to give us extra time.
-			if d, ok := bw.(interface{ SetWriteDeadline(time.Time) error }); ok {
+			if d, ok := writer.(interface{ SetWriteDeadline(time.Time) error }); ok {
 				d.SetWriteDeadline(time.Now().Add(5 * time.Second))
 			} else {
 				fmt.Println("warning: unable to set write deadline")
