@@ -1,0 +1,201 @@
+---
+description: Setting up OAuth2.0 JWT authentication for your API.
+---
+
+## Overview
+
+[OAuth 2.0](https://oauth.net/2/) is a popular open standard authentication & authorization framework that enables you to authorize requests to your API. There are three main pieces to using OAuth 2.0 with Huma:
+
+1. Issue a token (JWT) to a user
+2. Document the auth scheme and required permissions
+3. Authorize incoming requests
+
+## Issue a Token (JWT)
+
+Huma does not provide any built-in token issuing functionality. Instead, you can use any existing library or service to issue tokens. For simplicity sake, we will assume you are using a third-party service for managing users and issuing tokens, like [Auth0](https://auth0.com/) or [Okta](https://www.okta.com/). It looks something like this:
+
+```mermaid
+graph LR
+	User -->|1. Login| Auth0
+	Auth0 -->|2. Issue JWT| User
+	Auth0 -.->|Refresh JWKS| API
+	User --->|3. Make request| API
+	API -->|4. Verify JWT & Perms| Validate
+	Validate -->|5. Accept/reject| API
+	API --->|6. Success| Handler
+```
+
+You will configure the third-party service to issue JWTs from OAuth 2.0 flows like Authorization Code or Client Credentials (among others) and will be given e.g. authorization and token URLs, which will be used later in the OpenAPI and to configure clients to fetch JWTs.
+
+If **not** using a third-party service, you will need to set up a signing authority, publish your own JWKS, and issue short-lived tokens yourself. This is outside the scope of this guide, but take a look at [github.com/lestrrat-go/jwx](https://github.com/lestrrat-go/jwx) for a library that can help.
+
+## Document the Auth Scheme in OpenAPI
+
+Next, you need to document the auth scheme in your OpenAPI document. This is done using the `SecuritySchemes` component. Here is an example defining an OAuth 2.0 Authorization Code flow with the URLs mentioned above and a couple of defined scopes:
+
+```go title="main.go"
+router := chi.NewMux()
+
+config := huma.DefaultConfig("My API", "1.0.0")
+config.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
+	// Example Authorization Code flow.
+	"myAuth": {
+		Type: "oauth2",
+		Flows: &huma.OAuthFlows{
+			AuthorizationCode: &huma.OAuthFlow{
+				AuthorizationURL: "https://example.com/oauth/authorize",
+				TokenURL:         "https://example.com/oauth/token",
+				Scopes: map[string]string{
+					"scope1": "Scope 1 description...",
+					"scope2": "Scope 2 description...",
+				},
+			},
+		},
+	},
+
+	// Example alternative describing the use of JWTs without documenting how
+	// they are issued or which flows might be supported. This is simpler but
+	// tells clients less information.
+	"anotherAuth": {
+		Type:         "http",
+		Scheme:       "bearer",
+		BearerFormat: "JWT",
+	},
+}
+
+api := humachi.New(router, config)
+```
+
+When registering your operation you can refer to the auth scheme and required scopes for that operation:
+
+```go title="main.go" hl_lines="6-8"
+huma.Register(api, huma.Operation{
+	OperationID: "get-greeting",
+	Summary:     "Get a greeting",
+	Method:      http.MethodGet,
+	Path:        "/greeting/{name}",
+	Security: []map[string][]string{
+		{"myAuth": {"scope1"}},
+	},
+}, func(ctx context.Context, input *GreetingInput) (*GreetingOutput, error) {
+	// TODO: operation implementation goes here
+	return nil, nil
+})
+```
+
+!!! warning "Documentation Only"
+
+    This is documenting the auth mechanism and required scopes, but does not actually authorize incoming requests. See the next section for how to do that.
+
+## Authorize Incoming Requests
+
+Where authentication & authorization happen depends on how your service is set up. In some scenarios you may have an API gateway that handles auth and forwards requests to your service. In other scenarios you may want to handle auth in your service.
+
+### API Gateway Auth
+
+In an API gateway scenario, you typically configure the gateway to check the `Authorization` header for a token and validate it against the JWKS URL. If the token is valid, then the gateway will forward the request to your API service. There are many such gateways (e.g. [Traefik](https://traefik.io/traefik/), [Istio](https://istio.io/), etc) and ways of configuring them, but the general idea is similar between them:
+
+```mermaid
+graph LR
+	APIGateway[API Gateway]
+	AuthMiddleware[Auth Middleware]
+
+	User -->|Request| APIGateway
+	APIGateway --> AuthMiddleware
+	AuthMiddleware --> APIGateway
+	APIGateway --->|Forward| API
+```
+
+In this case, you can skip this section as your service will never see unauthorized requests and the Huma code above acts mostly as documentation for your clients.
+
+### Huma Auth Middleware
+
+Huma provides middleware functionality that can be used to authorize incoming requests within the API service itself. Here is an example that will check the `Authorization` header for a token and validate it against the JWKS URL given by your JWT issuer (e.g. Auth0/Okta). It will also check that the token has the required scopes for the operation, if any are defined.
+
+```go title="main.go"
+import (
+	"github.com/lestrrat-go/jwx/v2/jwk"
+	"github.com/lestrrat-go/jwx/v2/jwt"
+)
+
+// NewJWKSet creates an auto-refreshing key set to validate JWT signatures.
+func NewJWKSet(jwkUrl string) jwk.Set {
+    jwkCache := jwk.NewCache(context.Background())
+
+    // register a minimum refresh interval for this URL.
+    // when not specified, defaults to Cache-Control and similar resp headers
+    err := jwkCache.Register(jwkUrl, jwk.WithMinRefreshInterval(10*time.Minute))
+    if err != nil {
+        panic("failed to register jwk location")
+    }
+
+    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+    defer cancel()
+
+    // fetch once on application startup
+    _, err = jwkCache.Refresh(ctx, jwkUrl)
+    if err != nil {
+        panic("failed to fetch on startup")
+    }
+    // create the cached key set
+    return jwk.NewCachedSet(jwkCache, jwkUrl)
+}
+
+// NewAuthMiddleware creates a middleware that will authorize requests based on
+// the required scopes for the operation.
+func NewAuthMiddleware(jwksURL string) {
+	keySet := NewJWKSet(jwksURL)
+
+	return func(ctx huma.Context, next func(huma.Context)) {
+		var anyOfNeededRoles []string
+		isAuthorizationRequired := false
+		for _, opScheme := range ctx.Operation().Security {
+			var ok bool
+			if anyOfNeededRoles, ok = opScheme["myAuth"]; ok {
+				isAuthorizationRequired = true
+				break
+			}
+		}
+
+		if !isAuthorizationRequired {
+			next(ctx)
+			return
+		}
+
+		token := strings.TrimPrefix(ctx.Header("Authorization"), "Bearer ")
+
+		// Parse and validate the JWT.
+		parsed, err := jwt.ParseString(token,
+			jwt.WithKeySet(keySet),
+			jwt.WithValidate(true),
+			jwt.WithIssuer("my-issuer"),
+			jwt.WithAudience("my-audience"),
+		)
+
+		// Ensure the claims required for this operation are present.
+		scopes = parsed.Get("scopes").([]string)
+		for _ scope := range scopes {
+			if slices.Contains(anyOfNeededRoles, scope) {
+				next(ctx)
+				return
+			}
+		}
+
+		huma.WriteErr(ctx, http.StatusUnauthorized, "Unauthorized")
+	}
+}
+```
+
+Lastly, when configuring your API, be sure to include this middleware:
+
+```go title="main.go"
+api.UseMiddleware(NewAuthMiddleware("https://example.com/.well-known/jwks.json"))
+```
+
+## Optional: Client Auto-Configuration
+
+Some clients like [Restish](https://rest.sh/) support [OpenAPI-based auth auto-configuration](https://rest.sh/#/openapi?id=autoconfiguration). This means that you can configure your client to fetch the OpenAPI document and automatically configure itself to use the correct auth mechanism. This is done by adding the `x-cli-config` extension to the OpenAPI:
+
+```go title="main.go"
+config.Extensions["x-cli-config"] = huma.AutoConfig{ /* ... */ }
+```
