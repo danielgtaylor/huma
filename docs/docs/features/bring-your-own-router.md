@@ -13,6 +13,7 @@ Adapters are in the [`adapters`](https://github.com/danielgtaylor/huma/tree/main
 -   [BunRouter](https://bunrouter.uptrace.dev/) via [`humabunrouter`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humabunrouter)
 -   [chi](https://github.com/go-chi/chi) via [`humachi`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humachi)
 -   [gin](https://gin-gonic.com/) via [`humagin`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humagin)
+-   [Go 1.22+ `http.ServeMux`](https://pkg.go.dev/net/http@master#ServeMux) via [`humago`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humago) (experimental, requires `go 1.22` in `go.mod`)
 -   [gorilla/mux](https://github.com/gorilla/mux) via [`humamux`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humamux)
 -   [httprouter](https://github.com/julienschmidt/httprouter) via [`humahttprouter`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humahttprouter)
 -   [Fiber](https://gofiber.io/) via [`humafiber`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humafiber)

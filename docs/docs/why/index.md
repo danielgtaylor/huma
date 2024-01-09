@@ -51,8 +51,10 @@ Be sure to check out the [benchmarks](./benchmarks.md)!
 
 Huma is router-agnostic and includes support for a handful of popular routers and their middleware your organization may already be using today:
 
+-   [BunRouter](https://bunrouter.uptrace.dev/)
 -   [chi](https://github.com/go-chi/chi)
 -   [gin](https://gin-gonic.com/)
+-   [Go 1.22+ `http.ServeMux` (experimental)](https://pkg.go.dev/net/http@master#ServeMux)
 -   [gorilla/mux](https://github.com/gorilla/mux)
 -   [httprouter](https://github.com/julienschmidt/httprouter)
 -   [Fiber](https://gofiber.io/)
