@@ -1,5 +1,5 @@
 ---
-description: Setting up OAuth2.0 JWT authentication for your API.
+description: Setting up OAuth2.0 authorization for your API
 ---
 
 ## Overview
