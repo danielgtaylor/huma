@@ -8,7 +8,7 @@ description: Setting up OAuth2.0 authorization for your API
 
 There are three main pieces to using OAuth 2.0 with Huma:
 
-1. Issue a token (JWT) to a user
+1. Issue an access token to a client application
 2. Document the auth scheme and required permissions
 3. Authorize incoming requests
 
