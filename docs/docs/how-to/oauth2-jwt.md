@@ -26,7 +26,9 @@ graph LR
 	Validate -->|5. Accept/reject| API
 	API --->|6. Success| Handler
 
-You will configure the third-party service to issue JWTs from OAuth 2.0 flows like Authorization Code or Client Credentials (among others) and will be given e.g. authorization and token URLs, which will be used later in the OpenAPI and to configure clients to fetch JWTs.
+The access token may be issued in different flavors & formats, but for the remainder of this document we will assume they are [JWTs](https://jwt.io/).
+
+You will configure the third-party service to issue access token from OAuth 2.0 flows like Authorization Code or Client Credentials (among others) and will be given e.g. authorization and token URLs, which will be used later in the OpenAPI and to configure clients to fetch access tokens.
 
 If **not** using a third-party service, you will need to set up a signing authority, publish your own JWKS, and issue short-lived tokens yourself. This is outside the scope of this guide, but take a look at [github.com/lestrrat-go/jwx](https://github.com/lestrrat-go/jwx) for a library that can help.
 
