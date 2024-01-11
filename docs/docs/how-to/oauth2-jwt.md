@@ -4,7 +4,9 @@ description: Setting up OAuth2.0 JWT authentication for your API.
 
 ## Overview
 
-[OAuth 2.0](https://oauth.net/2/) is a popular open standard authentication & authorization framework that enables you to authorize requests to your API. There are three main pieces to using OAuth 2.0 with Huma:
+[OAuth 2.0](https://oauth.net/2/) is a popular open standard authorization framework that enables you to verify that incoming requests are authorized to use your API.
+
+There are three main pieces to using OAuth 2.0 with Huma:
 
 1. Issue a token (JWT) to a user
 2. Document the auth scheme and required permissions
