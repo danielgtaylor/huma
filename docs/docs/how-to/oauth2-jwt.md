@@ -84,9 +84,8 @@ huma.Register(api, huma.Operation{
 })
 ```
 
-!!! warning "Documentation Only"
-
-    This is documenting the auth mechanism and required scopes, but does not actually authorize incoming requests. See the next section for how to do that.
+> [!WARNING] 
+> So far, the code above is only documenting the authorization scheme and required scopes, but does not actually authorize incoming requests. The next section will explain  to achieve the latter.
 
 ## Authorize Incoming Requests
 
