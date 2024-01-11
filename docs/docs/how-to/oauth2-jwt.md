@@ -12,20 +12,19 @@ There are three main pieces to using OAuth 2.0 with Huma:
 2. Document the auth scheme and required permissions
 3. Authorize incoming requests
 
-## Issue a Token (JWT)
+## Issue an Access Token
 
-Huma does not provide any built-in token issuing functionality. Instead, you can use any existing library or service to issue tokens. For simplicity sake, we will assume you are using a third-party service for managing users and issuing tokens, like [Auth0](https://auth0.com/) or [Okta](https://www.okta.com/). It looks something like this:
+Huma does not provide any built-in access token issuing functionality. Instead, you can use any existing library or service to issue tokens. For simplicity's sake, we will assume you are using a third-party service for managing users and issuing tokens, like [Auth0](https://auth0.com/) or [Okta](https://www.okta.com/).A simplified flow chart for OAuth2.0 authorization looks something like this:
 
 ```mermaid
 graph LR
 	User -->|1. Login| Auth0
-	Auth0 -->|2. Issue JWT| User
+	Auth0 -->|2. Issue access token| User
 	Auth0 -.->|Refresh JWKS| API
 	User --->|3. Make request| API
-	API -->|4. Verify JWT & Perms| Validate
+	API -->|4. Verify access token & roles| Validate
 	Validate -->|5. Accept/reject| API
 	API --->|6. Success| Handler
-```
 
 You will configure the third-party service to issue JWTs from OAuth 2.0 flows like Authorization Code or Client Credentials (among others) and will be given e.g. authorization and token URLs, which will be used later in the OpenAPI and to configure clients to fetch JWTs.
 
