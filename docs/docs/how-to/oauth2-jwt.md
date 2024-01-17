@@ -25,6 +25,7 @@ graph LR
 	API -->|4. Verify access token & roles| Validate
 	Validate -->|5. Accept/reject| API
 	API --->|6. Success| Handler
+```
 
 The access token may be issued in different flavors & formats, but for the remainder of this document we will assume they are [JWTs](https://jwt.io/).
 
@@ -86,8 +87,9 @@ huma.Register(api, huma.Operation{
 })
 ```
 
-> [!WARNING] 
-> So far, the code above is only documenting the authorization scheme and required scopes, but does not actually authorize incoming requests. The next section will explain how to achieve the latter.
+!!! Warning
+
+    So far, the code above is only documenting the authorization scheme and required scopes, but does not actually authorize incoming requests. The next section will explain how to achieve the latter.
 
 ## Authorize Incoming Requests
 
@@ -149,11 +151,11 @@ func NewAuthMiddleware(jwksURL string) {
 	keySet := NewJWKSet(jwksURL)
 
 	return func(ctx huma.Context, next func(huma.Context)) {
-		var anyOfNeededRoles []string
+		var anyOfNeededScopes []string
 		isAuthorizationRequired := false
 		for _, opScheme := range ctx.Operation().Security {
 			var ok bool
-			if anyOfNeededRoles, ok = opScheme["myAuth"]; ok {
+			if anyOfNeededScopes, ok = opScheme["myAuth"]; ok {
 				isAuthorizationRequired = true
 				break
 			}
@@ -165,6 +167,10 @@ func NewAuthMiddleware(jwksURL string) {
 		}
 
 		token := strings.TrimPrefix(ctx.Header("Authorization"), "Bearer ")
+		if len(token) == 0 {
+			huma.WriteErr(ctx, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
 
 		// Parse and validate the JWT.
 		parsed, err := jwt.ParseString(token,
@@ -173,17 +179,21 @@ func NewAuthMiddleware(jwksURL string) {
 			jwt.WithIssuer("my-issuer"),
 			jwt.WithAudience("my-audience"),
 		)
+		if err != nil {
+			huma.WriteErr(ctx, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
 
 		// Ensure the claims required for this operation are present.
 		scopes = parsed.Get("scopes").([]string)
 		for _ scope := range scopes {
-			if slices.Contains(anyOfNeededRoles, scope) {
+			if slices.Contains(anyOfNeededScopes, scope) {
 				next(ctx)
 				return
 			}
 		}
 
-		huma.WriteErr(ctx, http.StatusUnauthorized, "Unauthorized")
+		huma.WriteErr(ctx, http.StatusForbidden, "Forbidden")
 	}
 }
 ```
@@ -193,6 +203,10 @@ Lastly, when configuring your API, be sure to include this middleware:
 ```go title="main.go"
 api.UseMiddleware(NewAuthMiddleware("https://example.com/.well-known/jwks.json"))
 ```
+
+### Supporting different Token Formats
+
+As mentioned previously, the Oauth2.0 standard does not specify the format of the access token - it merely defines how to get one. Although JWT is a very popular format, a given OAuth2.0 service or library may issue access token in different formats. The gist of what is outlined above should be adaptable to support such tokens as well, but will obviously require different methods for validation and information extraction. In the case of opaque tokens, additional interaction with an IAM server may be required inside the middleware, e.g. calling an introspection endpoint.
 
 ## Optional: Client Auto-Configuration
 
