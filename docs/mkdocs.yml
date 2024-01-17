@@ -25,6 +25,7 @@ nav:
       - "Image Response": how-to/image-response.md
       - "Graceful Shutdown": how-to/graceful-shutdown.md
       - "Migrating From V1": how-to/migrate.md
+      - "OAuth 2.0 & JWT": how-to/oauth2-jwt.md
   - "Features":
       - "Features Overview": features/index.md
       - "The Server":
