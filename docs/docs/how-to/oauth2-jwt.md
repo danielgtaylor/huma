@@ -14,7 +14,7 @@ There are three main pieces to using OAuth 2.0 with Huma:
 
 ## Issue an Access Token
 
-Huma does not provide any built-in access token issuing functionality. Instead, you can use any existing library or service to issue tokens. For simplicity's sake, we will assume you are using a third-party service for managing users and issuing tokens, like [Auth0](https://auth0.com/) or [Okta](https://www.okta.com/).A simplified flow chart for OAuth2.0 authorization looks something like this:
+Huma does not provide any built-in access token issuing functionality. Instead, you can use any existing library or service to issue tokens. For simplicity's sake, we will assume you are using a third-party service for managing users and issuing tokens, like [Auth0](https://auth0.com/) or [Okta](https://www.okta.com/). A simplified flow chart for OAuth2.0 authorization looks something like this:
 
 ```mermaid
 graph LR
