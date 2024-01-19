@@ -61,7 +61,7 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 	}
 
 	typeToEvent := make(map[reflect.Type]string, len(eventTypeMap))
-	dataSchemas := make([]*huma.Schema, len(eventTypeMap))
+	dataSchemas := make([]*huma.Schema, 0, len(eventTypeMap))
 	for k, v := range eventTypeMap {
 		vt := deref(reflect.TypeOf(v))
 		typeToEvent[vt] = k
