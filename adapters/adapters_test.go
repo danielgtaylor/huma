@@ -11,6 +11,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humabunrouter"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/danielgtaylor/huma/v2/adapters/humaecho"
 	"github.com/danielgtaylor/huma/v2/adapters/humafiber"
 	"github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/danielgtaylor/huma/v2/adapters/humahttprouter"
@@ -22,6 +23,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gorilla/mux"
 	"github.com/julienschmidt/httprouter"
+	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/uptrace/bunrouter"
 )
@@ -93,6 +95,7 @@ func TestAdapters(t *testing.T) {
 	}{
 		{"chi", func() huma.API { return humachi.New(chi.NewMux(), config) }},
 		{"chi4", func() huma.API { return humachi.NewV4(chi4.NewMux(), config) }},
+		{"echo", func() huma.API { return humaecho.New(echo.New(), config) }},
 		{"fiber", func() huma.API { return humafiber.New(fiber.New(), config) }},
 		{"gin", func() huma.API { return humagin.New(gin.New(), config) }},
 		{"httprouter", func() huma.API { return humahttprouter.New(httprouter.New(), config) }},
