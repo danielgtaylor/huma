@@ -16,14 +16,15 @@ require (
 	github.com/google/uuid v1.3.1
 	github.com/gorilla/mux v1.8.0
 	github.com/julienschmidt/httprouter v1.3.0
+	github.com/labstack/echo/v4 v4.11.4
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.15.0
-	github.com/stretchr/testify v1.8.3
+	github.com/stretchr/testify v1.8.4
 	github.com/uptrace/bunrouter v1.0.21
 	golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc
-	golang.org/x/net v0.17.0
+	golang.org/x/net v0.19.0
 	golang.org/x/text v0.14.0
 	google.golang.org/protobuf v1.30.0
 )
@@ -52,10 +53,11 @@ require (
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.4 // indirect
 	github.com/koron-go/gqlcost v0.3.0 // indirect
+	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/leodido/go-urn v1.2.4 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.19 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
@@ -73,6 +75,7 @@ require (
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.50.0 // indirect
+	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/valyala/tcplisten v1.0.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
