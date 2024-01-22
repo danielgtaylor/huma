@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync/atomic"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
+
+var seq = atomic.Int32{}
 
 // Registry creates and stores schemas and their references, and supports
 // marshalling to JSON/YAML for use as an OpenAPI #/components/schemas object.
@@ -84,7 +87,9 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 		if s, ok := r.schemas[name]; ok {
 			if _, ok := r.seen[t]; !ok {
 				// Name matches but type is different, so we have a dupe.
-				panic(fmt.Errorf("duplicate name %s does not match existing type. New type %s, have existing types %+v", name, t, r.seen))
+				name = fmt.Sprintf("%s-%d", name, seq.Add(1))
+				goto LA
+				// panic(fmt.Errorf("duplicate name %s does not match existing type. New type %s, have existing types %+v", name, t, r.seen))
 			}
 			if allowRef {
 				return &Schema{Ref: r.prefix + name}
@@ -93,6 +98,7 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 		}
 	}
 
+LA:
 	// First, register the type so refs can be created above for recursive types.
 	if getsRef {
 		r.schemas[name] = &Schema{}
