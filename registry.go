@@ -84,7 +84,8 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 		if s, ok := r.schemas[name]; ok {
 			if _, ok := r.seen[t]; !ok {
 				// Name matches but type is different, so we have a dupe.
-				panic(fmt.Errorf("duplicate name %s does not match existing type. New type %s, have existing types %+v", name, t, r.seen))
+
+				panic(fmt.Errorf("duplicate name: %s, new type: %s, existing type: %s", name, t, r.types[name]))
 			}
 			if allowRef {
 				return &Schema{Ref: r.prefix + name}
