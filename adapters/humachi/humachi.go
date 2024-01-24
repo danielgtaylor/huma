@@ -14,6 +14,10 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// MultipartMaxMemory is the maximum memory to use when parsing multipart
+// form data.
+var MultipartMaxMemory int64 = 8 * 1024
+
 type chiContext struct {
 	op *huma.Operation
 	r  *http.Request
@@ -70,7 +74,7 @@ func (c *chiContext) BodyReader() io.Reader {
 }
 
 func (c *chiContext) GetMultipartForm() (*multipart.Form, error) {
-	err := c.r.ParseMultipartForm(8 * 1024)
+	err := c.r.ParseMultipartForm(MultipartMaxMemory)
 	return c.r.MultipartForm, err
 }
 

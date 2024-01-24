@@ -13,6 +13,10 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// MultipartMaxMemory is the maximum memory to use when parsing multipart
+// form data.
+var MultipartMaxMemory int64 = 8 * 1024
+
 type echoCtx struct {
 	op   *huma.Operation
 	orig echo.Context
@@ -63,7 +67,7 @@ func (c *echoCtx) BodyReader() io.Reader {
 }
 
 func (c *echoCtx) GetMultipartForm() (*multipart.Form, error) {
-	err := c.orig.Request().ParseMultipartForm(8 * 1024)
+	err := c.orig.Request().ParseMultipartForm(MultipartMaxMemory)
 	return c.orig.Request().MultipartForm, err
 }
 

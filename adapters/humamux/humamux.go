@@ -13,6 +13,10 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// MultipartMaxMemory is the maximum memory to use when parsing multipart
+// form data.
+var MultipartMaxMemory int64 = 8 * 1024
+
 type gmuxContext struct {
 	op *huma.Operation
 	r  *http.Request
@@ -64,7 +68,7 @@ func (c *gmuxContext) BodyReader() io.Reader {
 }
 
 func (c *gmuxContext) GetMultipartForm() (*multipart.Form, error) {
-	err := c.r.ParseMultipartForm(8 * 1024)
+	err := c.r.ParseMultipartForm(MultipartMaxMemory)
 	return c.r.MultipartForm, err
 }
 
