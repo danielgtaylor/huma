@@ -15,6 +15,10 @@ import (
 	"github.com/uptrace/bunrouter"
 )
 
+// MultipartMaxMemory is the maximum memory to use when parsing multipart
+// form data.
+var MultipartMaxMemory int64 = 8 * 1024
+
 type bunContext struct {
 	op *huma.Operation
 	r  bunrouter.Request
@@ -66,7 +70,7 @@ func (c *bunContext) BodyReader() io.Reader {
 }
 
 func (c *bunContext) GetMultipartForm() (*multipart.Form, error) {
-	err := c.r.ParseMultipartForm(8 * 1024)
+	err := c.r.ParseMultipartForm(MultipartMaxMemory)
 	return c.r.MultipartForm, err
 }
 

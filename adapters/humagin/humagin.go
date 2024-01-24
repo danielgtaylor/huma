@@ -13,6 +13,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// MultipartMaxMemory is the maximum memory to use when parsing multipart
+// form data.
+var MultipartMaxMemory int64 = 8 * 1024
+
 type ginCtx struct {
 	op   *huma.Operation
 	orig *gin.Context
@@ -63,7 +67,7 @@ func (c *ginCtx) BodyReader() io.Reader {
 }
 
 func (c *ginCtx) GetMultipartForm() (*multipart.Form, error) {
-	err := c.orig.Request.ParseMultipartForm(8 * 1024)
+	err := c.orig.Request.ParseMultipartForm(MultipartMaxMemory)
 	return c.orig.Request.MultipartForm, err
 }
 
