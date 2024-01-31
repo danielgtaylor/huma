@@ -189,6 +189,9 @@ var NewError = func(status int, msg string, errs ...error) StatusError {
 		if converted, ok := errs[i].(ErrorDetailer); ok {
 			details[i] = converted.ErrorDetail()
 		} else {
+			if errs[i] == nil {
+				continue
+			}
 			details[i] = &ErrorDetail{Message: errs[i].Error()}
 		}
 	}
