@@ -1,11 +1,11 @@
 package huma
 
 import (
+	"net/url"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/danielgtaylor/huma/v2/examples/protodemo/protodemo"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,7 +22,7 @@ type ü struct{}
 type MP4 struct{}
 
 func TestDefaultSchemaNamer(t *testing.T) {
-	type Renamed Output[*[]Embedded[protodemo.User]]
+	type Renamed Output[*[]Embedded[time.Time]]
 
 	for _, example := range []struct {
 		typ  any
@@ -42,9 +42,9 @@ func TestDefaultSchemaNamer(t *testing.T) {
 		{Output[S]{}, "OutputS"},
 		{Output[ü]{}, "OutputÜ"},
 		{Output[MP4]{}, "OutputMP4"},
-		{Output[Embedded[*protodemo.User]]{}, "OutputEmbeddedUser"},
-		{Output[*[]Embedded[protodemo.User]]{}, "OutputListEmbeddedUser"},
-		{Output[EmbeddedTwo[[]protodemo.User, **time.Time]]{}, "OutputEmbeddedTwoListUserTime"},
+		{Output[Embedded[*time.Time]]{}, "OutputEmbeddedTime"},
+		{Output[*[]Embedded[time.Time]]{}, "OutputListEmbeddedTime"},
+		{Output[EmbeddedTwo[[]time.Time, **url.URL]]{}, "OutputEmbeddedTwoListTimeURL"},
 		{Renamed{}, "Renamed"},
 	} {
 		t.Run(example.name, func(t *testing.T) {
