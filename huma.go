@@ -20,13 +20,27 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"golang.org/x/exp/slices"
 )
 
 var errDeadlineUnsupported = fmt.Errorf("%w", http.ErrNotSupported)
 
 var bodyCallbackType = reflect.TypeOf(func(Context) {})
+
+// slicesIndex returns the index of the first occurrence of v in s,
+// or -1 if not present.
+func slicesIndex[E comparable](s []E, v E) int {
+	for i := range s {
+		if v == s[i] {
+			return i
+		}
+	}
+	return -1
+}
+
+// slicesContains reports whether v is present in s.
+func slicesContains[E comparable](s []E, v E) bool {
+	return slicesIndex(s, v) >= 0
+}
 
 // SetReadDeadline is a utility to set the read deadline on a response writer,
 // if possible. If not, it will not incur any allocations (unlike the stdlib
@@ -361,7 +375,7 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 			if !f.IsExported() {
 				continue
 			}
-			if slices.Contains(ignore, f.Name) {
+			if slicesContains(ignore, f.Name) {
 				continue
 			}
 			fi := append([]int{}, path...)
