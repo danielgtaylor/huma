@@ -16,7 +16,6 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
-	"github.com/goccy/go-yaml"
 	"github.com/spf13/cobra"
 )
 
@@ -70,7 +69,7 @@ func main() {
 		Use:   "openapi",
 		Short: "Print the OpenAPI spec",
 		Run: func(cmd *cobra.Command, args []string) {
-			b, _ := yaml.Marshal(api.OpenAPI())
+			b, _ := api.OpenAPI().YAML()
 			fmt.Println(string(b))
 		},
 	})
