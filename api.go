@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2/negotiation"
-	"github.com/goccy/go-yaml"
 )
 
 var rxSchema = regexp.MustCompile(`#/components/schemas/([^"]+)`)
@@ -347,7 +346,7 @@ func NewAPI(config Config, a Adapter) API {
 		}, func(ctx Context) {
 			ctx.SetHeader("Content-Type", "application/vnd.oai.openapi+yaml")
 			if specYAML == nil {
-				specYAML, _ = yaml.Marshal(newAPI.OpenAPI())
+				specYAML, _ = newAPI.OpenAPI().YAML()
 			}
 			ctx.BodyWriter().Write(specYAML)
 		})

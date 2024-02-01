@@ -16,8 +16,6 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/go-chi/chi/v5"
-	"github.com/goccy/go-yaml"
-	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -706,7 +704,7 @@ func TestFeatures(t *testing.T) {
 			}
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
-			b, _ := yaml.Marshal(api.OpenAPI())
+			b, _ := api.OpenAPI().YAML()
 			t.Log(string(b))
 			if feature.Assert != nil {
 				feature.Assert(t, w)
@@ -998,95 +996,95 @@ func TestPointerDefaultPanics(t *testing.T) {
 	})
 }
 
-func BenchmarkSecondDecode(b *testing.B) {
-	//nolint: musttag
-	type MediumSized struct {
-		ID   int      `json:"id"`
-		Name string   `json:"name"`
-		Tags []string `json:"tags"`
-		// Created time.Time `json:"created"`
-		// Updated time.Time `json:"updated"`
-		Rating float64 `json:"rating"`
-		Owner  struct {
-			ID    int    `json:"id"`
-			Name  string `json:"name"`
-			Email string `json:"email"`
-		} `json:"owner"`
-		Categories []struct {
-			Name    string   `json:"name"`
-			Order   int      `json:"order"`
-			Visible bool     `json:"visible"`
-			Aliases []string `json:"aliases"`
-		} `json:"categories"`
-	}
+// func BenchmarkSecondDecode(b *testing.B) {
+// 	//nolint: musttag
+// 	type MediumSized struct {
+// 		ID   int      `json:"id"`
+// 		Name string   `json:"name"`
+// 		Tags []string `json:"tags"`
+// 		// Created time.Time `json:"created"`
+// 		// Updated time.Time `json:"updated"`
+// 		Rating float64 `json:"rating"`
+// 		Owner  struct {
+// 			ID    int    `json:"id"`
+// 			Name  string `json:"name"`
+// 			Email string `json:"email"`
+// 		} `json:"owner"`
+// 		Categories []struct {
+// 			Name    string   `json:"name"`
+// 			Order   int      `json:"order"`
+// 			Visible bool     `json:"visible"`
+// 			Aliases []string `json:"aliases"`
+// 		} `json:"categories"`
+// 	}
 
-	data := []byte(`{
-		"id": 123,
-		"name": "Test",
-		"tags": ["one", "two", "three"],
-		"created": "2021-01-01T12:00:00Z",
-		"updated": "2021-01-01T12:00:00Z",
-		"rating": 5.0,
-		"owner": {
-			"id": 4,
-			"name": "Alice",
-			"email": "alice@example.com"
-		},
-		"categories": [
-			{
-				"name": "First",
-				"order": 1,
-				"visible": true
-			},
-			{
-				"name": "Second",
-				"order": 2,
-				"visible": false,
-				"aliases": ["foo", "bar"]
-			}
-		]
-	}`)
+// 	data := []byte(`{
+// 		"id": 123,
+// 		"name": "Test",
+// 		"tags": ["one", "two", "three"],
+// 		"created": "2021-01-01T12:00:00Z",
+// 		"updated": "2021-01-01T12:00:00Z",
+// 		"rating": 5.0,
+// 		"owner": {
+// 			"id": 4,
+// 			"name": "Alice",
+// 			"email": "alice@example.com"
+// 		},
+// 		"categories": [
+// 			{
+// 				"name": "First",
+// 				"order": 1,
+// 				"visible": true
+// 			},
+// 			{
+// 				"name": "Second",
+// 				"order": 2,
+// 				"visible": false,
+// 				"aliases": ["foo", "bar"]
+// 			}
+// 		]
+// 	}`)
 
-	pb := huma.NewPathBuffer([]byte{}, 0)
-	res := &huma.ValidateResult{}
-	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
-	fmt.Println("name", reflect.TypeOf(MediumSized{}).Name())
-	schema := registry.Schema(reflect.TypeOf(MediumSized{}), false, "")
+// 	pb := huma.NewPathBuffer([]byte{}, 0)
+// 	res := &huma.ValidateResult{}
+// 	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+// 	fmt.Println("name", reflect.TypeOf(MediumSized{}).Name())
+// 	schema := registry.Schema(reflect.TypeOf(MediumSized{}), false, "")
 
-	b.Run("json.Unmarshal", func(b *testing.B) {
-		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			var tmp any
-			if err := json.Unmarshal(data, &tmp); err != nil {
-				panic(err)
-			}
+// 	b.Run("json.Unmarshal", func(b *testing.B) {
+// 		b.ReportAllocs()
+// 		for i := 0; i < b.N; i++ {
+// 			var tmp any
+// 			if err := json.Unmarshal(data, &tmp); err != nil {
+// 				panic(err)
+// 			}
 
-			huma.Validate(registry, schema, pb, huma.ModeReadFromServer, tmp, res)
+// 			huma.Validate(registry, schema, pb, huma.ModeReadFromServer, tmp, res)
 
-			var out MediumSized
-			if err := json.Unmarshal(data, &out); err != nil {
-				panic(err)
-			}
-		}
-	})
+// 			var out MediumSized
+// 			if err := json.Unmarshal(data, &out); err != nil {
+// 				panic(err)
+// 			}
+// 		}
+// 	})
 
-	b.Run("mapstructure.Decode", func(b *testing.B) {
-		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			var tmp any
-			if err := json.Unmarshal(data, &tmp); err != nil {
-				panic(err)
-			}
+// 	b.Run("mapstructure.Decode", func(b *testing.B) {
+// 		b.ReportAllocs()
+// 		for i := 0; i < b.N; i++ {
+// 			var tmp any
+// 			if err := json.Unmarshal(data, &tmp); err != nil {
+// 				panic(err)
+// 			}
 
-			huma.Validate(registry, schema, pb, huma.ModeReadFromServer, tmp, res)
+// 			huma.Validate(registry, schema, pb, huma.ModeReadFromServer, tmp, res)
 
-			var out MediumSized
-			if err := mapstructure.Decode(tmp, &out); err != nil {
-				panic(err)
-			}
-		}
-	})
-}
+// 			var out MediumSized
+// 			if err := mapstructure.Decode(tmp, &out); err != nil {
+// 				panic(err)
+// 			}
+// 		}
+// 	})
+// }
 
 func globalHandler(ctx context.Context, input *struct {
 	Count int `query:"count"`
