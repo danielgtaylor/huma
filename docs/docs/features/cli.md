@@ -8,7 +8,7 @@ description: Add a CLI to your service for easy configuration and custom command
 
 Huma ships with a built-in lightweight utility to wrap your service with a CLI, enabling you to run it with different arguments and easily write custom commands to do things like print out the OpenAPI or run on-demand database migrations.
 
-The CLI options use a similar strategy to input & output structs, enabling you to use the same pattern for validation and documentation of command line arguments. It uses [Cobra](https://cobra.dev/) & [Viper](https://github.com/spf13/viper) under the hood, enabling automatic environment variable binding and more.
+The CLI options use a similar strategy to input & output structs, enabling you to use the same pattern for validation and documentation of command line arguments. It uses [Cobra](https://cobra.dev/) under the hood, enabling custom commands and including automatic environment variable binding and more.
 
 ```go title="main.go"
 // First, define your input options.
@@ -170,4 +170,3 @@ If you want to access your custom options struct with custom commands, use the [
     -   [`huma.API`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#API) the API instance
 -   External Links
     -   [Cobra](https://cobra.dev/) CLI library
-    -   [Viper](https://github.com/spf13/viper) Configuration library
