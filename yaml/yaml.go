@@ -2,6 +2,8 @@
 // Copyright (c) 2022 itchyny, MIT licensed.
 
 // Package yaml implements a converter from JSON to YAML.
+//
+//nolint:all
 package yaml
 
 import (

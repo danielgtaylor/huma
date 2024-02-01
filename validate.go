@@ -771,6 +771,8 @@ var xvalues = [256]byte{
 }
 
 // xtob converts hex characters x1 and x2 into a byte.
+//
+//nolint:unparam
 func xtob(x1, x2 byte) (byte, bool) {
 	b1 := xvalues[x1]
 	b2 := xvalues[x2]
