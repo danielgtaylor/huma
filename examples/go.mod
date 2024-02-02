@@ -17,7 +17,7 @@ require (
 require (
 	github.com/Jeffail/gabs/v2 v2.6.1 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
-	github.com/danielgtaylor/casing v0.0.0-20210126043903-4e55e6373ac3 // indirect
+	github.com/danielgtaylor/casing v1.0.0 // indirect
 	github.com/danielgtaylor/mexpr v1.9.0 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
 	github.com/fatih/color v1.15.0 // indirect
@@ -25,7 +25,7 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.5.0 // indirect
 	github.com/goccy/go-yaml v1.11.2 // indirect
-	github.com/graphql-go/graphql v0.8.0 // indirect
+	github.com/graphql-go/graphql v0.8.1 // indirect
 	github.com/graphql-go/handler v0.2.3 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

@@ -99,8 +99,9 @@ github.com/coreos/go-semver v0.3.0/go.mod h1:nnelYz7RCh+5ahJtPPxZlU+153eP4D4r3Ee
 github.com/coreos/go-systemd/v22 v22.3.2/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
 github.com/cpuguy83/go-md2man/v2 v2.0.1/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
 github.com/cpuguy83/go-md2man/v2 v2.0.3/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
-github.com/danielgtaylor/casing v0.0.0-20210126043903-4e55e6373ac3 h1:qDsADtCM9A6UfvHje3eD91dufI9nVSwHWEqqhAvh28U=
 github.com/danielgtaylor/casing v0.0.0-20210126043903-4e55e6373ac3/go.mod h1:eFdYmNxcuLDrRNW0efVoxSaApmvGXfHZ9k2CT/RSUF0=
+github.com/danielgtaylor/casing v1.0.0 h1:uX+PewTv0zbXeTluwRwlyPMRQEduVP9svLHpbDsQYkw=
+github.com/danielgtaylor/casing v1.0.0/go.mod h1:eFdYmNxcuLDrRNW0efVoxSaApmvGXfHZ9k2CT/RSUF0=
 github.com/danielgtaylor/huma v1.14.2 h1:Ftqdchm9dVItD+ZAy4gmSgA8oYrvqRgVHCshZbuzS8Q=
 github.com/danielgtaylor/huma v1.14.2/go.mod h1:I/19C1eNQd7ojMIQvynPe3lbuD5KfQEinH+ivIqjqmg=
 github.com/danielgtaylor/mexpr v1.9.0 h1:9ZDghCLBJ88ZTUkDn/cxyK4KmAJvStCEe+ECN2EoMa4=
@@ -241,8 +242,9 @@ github.com/googleapis/gax-go/v2 v2.1.0/go.mod h1:Q3nei7sK6ybPYH7twZdmQpAd1MKb7pf
 github.com/googleapis/gax-go/v2 v2.1.1/go.mod h1:hddJymUZASv3XPyGkUpKj8pPO47Rmb0eJc8R6ouapiM=
 github.com/googleapis/google-cloud-go-testing v0.0.0-20200911160855-bcd43fbb19e8/go.mod h1:dvDLG8qkwmyD9a/MJJN3XJcT3xFxOKAvTZGvuZmac9g=
 github.com/graphql-go/graphql v0.7.9/go.mod h1:k6yrAYQaSP59DC5UVxbgxESlmVyojThKdORUqGDGmrI=
-github.com/graphql-go/graphql v0.8.0 h1:JHRQMeQjofwqVvGwYnr8JnPTY0AxgVy1HpHSGPLdH0I=
 github.com/graphql-go/graphql v0.8.0/go.mod h1:nKiHzRM0qopJEwCITUuIsxk9PlVlwIiiI8pnJEhordQ=
+github.com/graphql-go/graphql v0.8.1 h1:p7/Ou/WpmulocJeEx7wjQy611rtXGQaAcXGqanuMMgc=
+github.com/graphql-go/graphql v0.8.1/go.mod h1:nKiHzRM0qopJEwCITUuIsxk9PlVlwIiiI8pnJEhordQ=
 github.com/graphql-go/handler v0.2.3 h1:CANh8WPnl5M9uA25c2GBhPqJhE53Fg0Iue/fRNla71E=
 github.com/graphql-go/handler v0.2.3/go.mod h1:leLF6RpV5uZMN1CdImAxuiayrYYhOk33bZciaUGaXeU=
 github.com/grpc-ecosystem/grpc-gateway v1.16.0/go.mod h1:BDjrQk3hbvj6Nolgz8mAMFbcEtjT1g+wF4CSlocrBnw=
