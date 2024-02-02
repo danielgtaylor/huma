@@ -185,11 +185,13 @@ func NewAuthMiddleware(jwksURL string) func(ctx huma.Context, next func(huma.Con
 		}
 
 		// Ensure the claims required for this operation are present.
-		scopes = parsed.Get("scopes").([]string)
-		for _ scope := range scopes {
-			if slices.Contains(anyOfNeededScopes, scope) {
-				next(ctx)
-				return
+		scopes, _ := parsed.Get("scopes")
+		if scopes, ok := scopes.([]string); ok {
+			for _, scope := range scopes {
+				if slices.Contains(anyOfNeededScopes, scope) {
+					next(ctx)
+					return
+				}
 			}
 		}
 
