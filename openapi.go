@@ -1,12 +1,81 @@
 package huma
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"time"
 
-	"github.com/goccy/go-yaml"
+	"github.com/danielgtaylor/huma/v2/yaml"
 )
+
+type omitType int
+
+const (
+	// omitNever means the field will always be included.
+	omitNever omitType = iota
+
+	// omitEmpty means the field will be omitted if it is empty.
+	omitEmpty
+
+	// omitNil means the field will be omitted if it is nil. This is used for
+	// fields which are `any` and may be the zero value of the type.
+	omitNil
+)
+
+type jsonFieldInfo struct {
+	name  string
+	value any
+	omit  omitType
+}
+
+// isEmptyValue returns true if the given value is empty. This is a copy of
+// isEmptyValue from encoding/json to help determine when to write a field
+// with `omitempty` set.
+func isEmptyValue(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
+		return v.Len() == 0
+	case reflect.Bool:
+		return !v.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return v.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return v.Float() == 0
+	case reflect.Interface, reflect.Pointer:
+		return v.IsNil()
+	}
+	return false
+}
+
+// marshalJSON marshals a list of fields and their values into JSON. It supports
+// inlined extensions.
+func marshalJSON(fields []jsonFieldInfo, extensions map[string]any) ([]byte, error) {
+	value := make(map[string]any, len(extensions)+len(fields))
+
+	for _, v := range fields {
+		if v.omit == omitNil && v.value == nil {
+			continue
+		}
+		if v.omit == omitEmpty {
+			if isEmptyValue(reflect.ValueOf(v.value)) {
+				continue
+			}
+		}
+
+		value[v.name] = v.value
+	}
+
+	for k, v := range extensions {
+		value[k] = v
+	}
+
+	return json.Marshal(value)
+}
 
 // Contact information to get support for the API.
 //
@@ -28,6 +97,14 @@ type Contact struct {
 	Extensions map[string]any `yaml:",inline"`
 }
 
+func (c *Contact) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"name", c.Name, omitEmpty},
+		{"url", c.URL, omitEmpty},
+		{"email", c.Email, omitEmpty},
+	}, c.Extensions)
+}
+
 // License name & link for using the API.
 //
 //	name: Apache 2.0
@@ -47,6 +124,14 @@ type License struct {
 	// Extensions (user-defined properties), if any. Values in this map will
 	// be marshalled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
+}
+
+func (l *License) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"name", l.Name, omitNever},
+		{"identifier", l.Identifier, omitEmpty},
+		{"url", l.URL, omitEmpty},
+	}, l.Extensions)
 }
 
 // Info object that provides metadata about the API. The metadata MAY be used by
@@ -89,6 +174,17 @@ type Info struct {
 	Extensions map[string]any `yaml:",inline"`
 }
 
+func (i *Info) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"title", i.Title, omitNever},
+		{"description", i.Description, omitEmpty},
+		{"termsOfService", i.TermsOfService, omitEmpty},
+		{"contact", i.Contact, omitEmpty},
+		{"license", i.License, omitEmpty},
+		{"version", i.Version, omitNever},
+	}, i.Extensions)
+}
+
 // ServerVariable for server URL template substitution.
 type ServerVariable struct {
 	// Enumeration of string values to be used if the substitution options are from a limited set. The array MUST NOT be empty.
@@ -103,6 +199,14 @@ type ServerVariable struct {
 	// Extensions (user-defined properties), if any. Values in this map will
 	// be marshalled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
+}
+
+func (v *ServerVariable) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"enum", v.Enum, omitEmpty},
+		{"default", v.Default, omitNever},
+		{"description", v.Description, omitEmpty},
+	}, v.Extensions)
 }
 
 // Server URL, optionally with variables.
@@ -127,6 +231,14 @@ type Server struct {
 	// Extensions (user-defined properties), if any. Values in this map will
 	// be marshalled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
+}
+
+func (s *Server) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"url", s.URL, omitNever},
+		{"description", s.Description, omitEmpty},
+		{"variables", s.Variables, omitEmpty},
+	}, s.Extensions)
 }
 
 // Example value of a request param or body or response header or body.
@@ -170,6 +282,16 @@ type Example struct {
 	// Extensions (user-defined properties), if any. Values in this map will
 	// be marshalled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
+}
+
+func (e *Example) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"$ref", e.Ref, omitEmpty},
+		{"summary", e.Summary, omitEmpty},
+		{"description", e.Description, omitEmpty},
+		{"value", e.Value, omitNil},
+		{"externalValue", e.ExternalValue, omitEmpty},
+	}, e.Extensions)
 }
 
 // Encoding is a single encoding definition applied to a single schema property.
@@ -254,6 +376,16 @@ type Encoding struct {
 	Extensions map[string]any `yaml:",inline"`
 }
 
+func (e *Encoding) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"contentType", e.ContentType, omitEmpty},
+		{"headers", e.Headers, omitEmpty},
+		{"style", e.Style, omitEmpty},
+		{"explode", e.Explode, omitEmpty},
+		{"allowReserved", e.AllowReserved, omitEmpty},
+	}, e.Extensions)
+}
+
 // MediaType object provides schema and examples for the media type identified
 // by its key.
 //
@@ -296,6 +428,15 @@ type MediaType struct {
 	// Extensions (user-defined properties), if any. Values in this map will
 	// be marshalled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
+}
+
+func (m *MediaType) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"schema", m.Schema, omitEmpty},
+		{"example", m.Example, omitNil},
+		{"examples", m.Examples, omitEmpty},
+		{"encoding", m.Encoding, omitEmpty},
+	}, m.Extensions)
 }
 
 // Param Describes a single operation parameter.
@@ -394,6 +535,24 @@ type Param struct {
 	Extensions map[string]any `yaml:",inline"`
 }
 
+func (p *Param) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"$ref", p.Ref, omitEmpty},
+		{"name", p.Name, omitEmpty},
+		{"in", p.In, omitEmpty},
+		{"description", p.Description, omitEmpty},
+		{"required", p.Required, omitEmpty},
+		{"deprecated", p.Deprecated, omitEmpty},
+		{"allowEmptyValue", p.AllowEmptyValue, omitEmpty},
+		{"style", p.Style, omitEmpty},
+		{"explode", p.Explode, omitEmpty},
+		{"allowReserved", p.AllowReserved, omitEmpty},
+		{"schema", p.Schema, omitEmpty},
+		{"example", p.Example, omitNil},
+		{"examples", p.Examples, omitEmpty},
+	}, p.Extensions)
+}
+
 // Header object follows the structure of the Parameter Object with the
 // following changes:
 //
@@ -444,6 +603,15 @@ type RequestBody struct {
 	// Extensions (user-defined properties), if any. Values in this map will
 	// be marshalled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
+}
+
+func (r *RequestBody) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"$ref", r.Ref, omitEmpty},
+		{"description", r.Description, omitEmpty},
+		{"content", r.Content, omitNever},
+		{"required", r.Required, omitEmpty},
+	}, r.Extensions)
 }
 
 // Link object represents a possible design-time link for a response. The
@@ -542,6 +710,18 @@ type Link struct {
 	Extensions map[string]any `yaml:",inline"`
 }
 
+func (l *Link) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"$ref", l.Ref, omitEmpty},
+		{"operationRef", l.OperationRef, omitEmpty},
+		{"operationId", l.OperationID, omitEmpty},
+		{"parameters", l.Parameters, omitEmpty},
+		{"requestBody", l.RequestBody, omitNil},
+		{"description", l.Description, omitEmpty},
+		{"server", l.Server, omitEmpty},
+	}, l.Extensions)
+}
+
 // Response describes a single response from an API Operation, including
 // design-time, static links to operations based on the response.
 //
@@ -580,6 +760,16 @@ type Response struct {
 	// Extensions (user-defined properties), if any. Values in this map will
 	// be marshalled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
+}
+
+func (r *Response) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"$ref", r.Ref, omitEmpty},
+		{"description", r.Description, omitEmpty},
+		{"headers", r.Headers, omitEmpty},
+		{"content", r.Content, omitEmpty},
+		{"links", r.Links, omitEmpty},
+	}, r.Extensions)
 }
 
 // Operation describes a single API operation on a path.
@@ -750,6 +940,23 @@ type Operation struct {
 	Extensions map[string]any `yaml:",inline"`
 }
 
+func (o *Operation) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"tags", o.Tags, omitEmpty},
+		{"summary", o.Summary, omitEmpty},
+		{"description", o.Description, omitEmpty},
+		{"externalDocs", o.ExternalDocs, omitEmpty},
+		{"operationId", o.OperationID, omitEmpty},
+		{"parameters", o.Parameters, omitEmpty},
+		{"requestBody", o.RequestBody, omitEmpty},
+		{"responses", o.Responses, omitEmpty},
+		{"callbacks", o.Callbacks, omitEmpty},
+		{"deprecated", o.Deprecated, omitEmpty},
+		{"security", o.Security, omitEmpty},
+		{"servers", o.Servers, omitEmpty},
+	}, o.Extensions)
+}
+
 // PathItem describes the operations available on a single path. A Path Item MAY
 // be empty, due to ACL constraints. The path itself is still exposed to the
 // documentation viewer but they will not know which operations and parameters
@@ -839,6 +1046,24 @@ type PathItem struct {
 	Extensions map[string]any `yaml:",inline"`
 }
 
+func (p *PathItem) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"$ref", p.Ref, omitEmpty},
+		{"summary", p.Summary, omitEmpty},
+		{"description", p.Description, omitEmpty},
+		{"get", p.Get, omitEmpty},
+		{"put", p.Put, omitEmpty},
+		{"post", p.Post, omitEmpty},
+		{"delete", p.Delete, omitEmpty},
+		{"options", p.Options, omitEmpty},
+		{"head", p.Head, omitEmpty},
+		{"patch", p.Patch, omitEmpty},
+		{"trace", p.Trace, omitEmpty},
+		{"servers", p.Servers, omitEmpty},
+		{"parameters", p.Parameters, omitEmpty},
+	}, p.Extensions)
+}
+
 // OAuthFlow stores configuration details for a supported OAuth Flow.
 //
 //	type: oauth2
@@ -878,6 +1103,15 @@ type OAuthFlow struct {
 	Extensions map[string]any `yaml:",inline"`
 }
 
+func (o *OAuthFlow) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"authorizationUrl", o.AuthorizationURL, omitNever},
+		{"tokenUrl", o.TokenURL, omitNever},
+		{"refreshUrl", o.RefreshURL, omitEmpty},
+		{"scopes", o.Scopes, omitNever},
+	}, o.Extensions)
+}
+
 // OAuthFlows allows configuration of the supported OAuth Flows.
 type OAuthFlows struct {
 	// Implicit is the configuration for the OAuth Implicit flow.
@@ -897,6 +1131,15 @@ type OAuthFlows struct {
 	// Extensions (user-defined properties), if any. Values in this map will
 	// be marshalled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
+}
+
+func (o *OAuthFlows) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"implicit", o.Implicit, omitEmpty},
+		{"password", o.Password, omitEmpty},
+		{"clientCredentials", o.ClientCredentials, omitEmpty},
+		{"authorizationCode", o.AuthorizationCode, omitEmpty},
+	}, o.Extensions)
 }
 
 // SecurityScheme defines a security scheme that can be used by the operations.
@@ -951,6 +1194,19 @@ type SecurityScheme struct {
 	// Extensions (user-defined properties), if any. Values in this map will
 	// be marshalled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
+}
+
+func (s *SecurityScheme) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"type", s.Type, omitNever},
+		{"description", s.Description, omitEmpty},
+		{"name", s.Name, omitEmpty},
+		{"in", s.In, omitEmpty},
+		{"scheme", s.Scheme, omitEmpty},
+		{"bearerFormat", s.BearerFormat, omitEmpty},
+		{"flows", s.Flows, omitEmpty},
+		{"openIdConnectUrl", s.OpenIDConnectURL, omitEmpty},
+	}, s.Extensions)
 }
 
 // Components holds a set of reusable objects for different aspects of the OAS.
@@ -1061,6 +1317,21 @@ type Components struct {
 	Extensions map[string]any `yaml:",inline"`
 }
 
+func (c *Components) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"schemas", c.Schemas, omitEmpty},
+		{"responses", c.Responses, omitEmpty},
+		{"parameters", c.Parameters, omitEmpty},
+		{"examples", c.Examples, omitEmpty},
+		{"requestBodies", c.RequestBodies, omitEmpty},
+		{"headers", c.Headers, omitEmpty},
+		{"securitySchemes", c.SecuritySchemes, omitEmpty},
+		{"links", c.Links, omitEmpty},
+		{"callbacks", c.Callbacks, omitEmpty},
+		{"pathItems", c.PathItems, omitEmpty},
+	}, c.Extensions)
+}
+
 // ExternalDocs allows referencing an external resource for extended
 // documentation.
 //
@@ -1080,6 +1351,13 @@ type ExternalDocs struct {
 	Extensions map[string]any `yaml:",inline"`
 }
 
+func (e *ExternalDocs) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"description", e.Description, omitEmpty},
+		{"url", e.URL, omitNever},
+	}, e.Extensions)
+}
+
 // Tag adds metadata to a single tag that is used by the Operation Object. It is
 // not mandatory to have a Tag Object per tag defined in the Operation Object
 // instances.
@@ -1097,6 +1375,14 @@ type Tag struct {
 	// Extensions (user-defined properties), if any. Values in this map will
 	// be marshalled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
+}
+
+func (t *Tag) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"name", t.Name, omitNever},
+		{"description", t.Description, omitEmpty},
+		{"externalDocs", t.ExternalDocs, omitEmpty},
+	}, t.Extensions)
 }
 
 type AddOpFunc func(oapi *OpenAPI, op *Operation)
@@ -1209,11 +1495,27 @@ func (o *OpenAPI) AddOperation(op *Operation) {
 }
 
 func (o *OpenAPI) MarshalJSON() ([]byte, error) {
-	// JSON doesn't support the `,inline` field tag, so we go through the YAML
-	// marshaller instead. It's not quite as fast, but this operation should
-	// only happen once on server load.
-	// Note: it does mean the individual structs above cannot be marshalled
-	// directly to JSON - you must marshal the entire OpenAPI struct with the
-	// exception of individual schemas.
-	return yaml.MarshalWithOptions(o, yaml.JSON())
+	return marshalJSON([]jsonFieldInfo{
+		{"openapi", o.OpenAPI, omitNever},
+		{"info", o.Info, omitNever},
+		{"jsonSchemaDialect", o.JSONSchemaDialect, omitEmpty},
+		{"servers", o.Servers, omitEmpty},
+		{"paths", o.Paths, omitEmpty},
+		{"webhooks", o.Webhooks, omitEmpty},
+		{"components", o.Components, omitEmpty},
+		{"security", o.Security, omitEmpty},
+		{"tags", o.Tags, omitEmpty},
+		{"externalDocs", o.ExternalDocs, omitEmpty},
+	}, o.Extensions)
+}
+
+// YAML returns the OpenAPI represented as YAML without needing to include a
+// library to serialize YAML.
+func (o *OpenAPI) YAML() ([]byte, error) {
+	specJSON, err := json.Marshal(o)
+	buf := bytes.NewBuffer([]byte{})
+	if err == nil {
+		err = yaml.Convert(buf, bytes.NewReader(specJSON))
+	}
+	return buf.Bytes(), err
 }

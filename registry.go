@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
+	"unicode/utf8"
 )
 
 // Registry creates and stores schemas and their references, and supports
@@ -46,7 +44,9 @@ func DefaultSchemaNamer(t reflect.Type, hint string) string {
 		base := fqn[len(fqn)-1]
 
 		// Add to result, and uppercase for better scalar support (`int` -> `Int`).
-		result += cases.Title(language.Und, cases.NoLower).String(base)
+		// Use unicode-aware uppercase to support non-ASCII characters.
+		r, size := utf8.DecodeRuneInString(base)
+		result += strings.ToUpper(string(r)) + base[size:]
 	}
 	name = result
 

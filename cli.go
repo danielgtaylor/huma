@@ -12,8 +12,6 @@ import (
 
 	"github.com/danielgtaylor/casing"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 )
 
 // CLI is an optional command-line interface for a Huma service. It is provided
@@ -75,7 +73,6 @@ type option struct {
 type cli[Options any] struct {
 	root     *cobra.Command
 	optInfo  []option
-	cfg      *viper.Viper
 	onParsed func(Hooks, *Options)
 	start    func()
 	stop     func()
@@ -88,6 +85,7 @@ func (c *cli[Options]) Run() {
 	c.root.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		// Load config from args/env/files
 		v := reflect.ValueOf(&o).Elem()
+		flags := c.root.PersistentFlags()
 		for _, opt := range c.optInfo {
 			f := v
 			for _, i := range opt.path {
@@ -95,11 +93,14 @@ func (c *cli[Options]) Run() {
 			}
 			switch opt.typ.Kind() {
 			case reflect.String:
-				f.Set(reflect.ValueOf(c.cfg.GetString(opt.name)))
+				s, _ := flags.GetString(opt.name)
+				f.Set(reflect.ValueOf(s))
 			case reflect.Int, reflect.Int64:
-				f.Set(reflect.ValueOf(c.cfg.GetInt64(opt.name)).Convert(opt.typ))
+				i, _ := flags.GetInt64(opt.name)
+				f.Set(reflect.ValueOf(i).Convert(opt.typ))
 			case reflect.Bool:
-				f.Set(reflect.ValueOf(c.cfg.GetBool(opt.name)))
+				b, _ := flags.GetBool(opt.name)
+				f.Set(reflect.ValueOf(b))
 			}
 		}
 
@@ -130,8 +131,9 @@ func (c *cli[O]) OnStop(fn func()) {
 	c.stop = fn
 }
 
-func (c *cli[O]) setupOptions(flags *pflag.FlagSet, t reflect.Type, path []int) {
+func (c *cli[O]) setupOptions(t reflect.Type, path []int) {
 	var err error
+	flags := c.root.PersistentFlags()
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 
@@ -147,7 +149,7 @@ func (c *cli[O]) setupOptions(flags *pflag.FlagSet, t reflect.Type, path []int) 
 
 		if field.Anonymous {
 			// Embedded struct. This enables composition from e.g. company defaults.
-			c.setupOptions(flags, deref(field.Type), currentPath)
+			c.setupOptions(deref(field.Type), currentPath)
 			continue
 		}
 
@@ -156,35 +158,39 @@ func (c *cli[O]) setupOptions(flags *pflag.FlagSet, t reflect.Type, path []int) 
 			name = casing.Kebab(field.Name)
 		}
 
+		envName := "SERVICE_" + casing.Snake(name, strings.ToUpper)
+		defaultValue := field.Tag.Get("default")
+		if v := os.Getenv(envName); v != "" {
+			// Env vars will override the default value, which is used to document
+			// what the value is if no options are passed.
+			defaultValue = v
+		}
+
 		c.optInfo = append(c.optInfo, option{name, field.Type, currentPath})
 		switch field.Type.Kind() {
 		case reflect.String:
-			c.cfg.SetDefault(name, field.Tag.Get("default"))
-			flags.StringP(name, field.Tag.Get("short"), field.Tag.Get("default"), field.Tag.Get("doc"))
+			flags.StringP(name, field.Tag.Get("short"), defaultValue, field.Tag.Get("doc"))
 		case reflect.Int, reflect.Int64:
 			var def int64
-			if d := field.Tag.Get("default"); d != "" {
-				def, err = strconv.ParseInt(d, 10, 64)
+			if defaultValue != "" {
+				def, err = strconv.ParseInt(defaultValue, 10, 64)
 				if err != nil {
 					panic(err)
 				}
 			}
-			c.cfg.SetDefault(name, def)
 			flags.Int64P(name, field.Tag.Get("short"), def, field.Tag.Get("doc"))
 		case reflect.Bool:
 			var def bool
-			if d := field.Tag.Get("default"); d != "" {
-				def, err = strconv.ParseBool(d)
+			if defaultValue != "" {
+				def, err = strconv.ParseBool(defaultValue)
 				if err != nil {
 					panic(err)
 				}
 			}
-			c.cfg.SetDefault(name, def)
 			flags.BoolP(name, field.Tag.Get("short"), def, field.Tag.Get("doc"))
 		default:
 			panic("Unsupported option type: " + field.Type.Kind().String())
 		}
-		c.cfg.BindPFlag(name, flags.Lookup(name))
 	}
 }
 
@@ -233,16 +239,10 @@ func NewCLI[O any](onParsed func(Hooks, *O)) CLI {
 			Use: "myapp",
 		},
 		onParsed: onParsed,
-		cfg:      viper.New(),
 	}
 
-	cfg := c.cfg
-	cfg.SetEnvPrefix("SERVICE")
-	cfg.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-	cfg.AutomaticEnv()
-
 	var o O
-	c.setupOptions(c.root.PersistentFlags(), reflect.TypeOf(o), []int{})
+	c.setupOptions(reflect.TypeOf(o), []int{})
 
 	c.root.Run = func(cmd *cobra.Command, args []string) {
 		done := make(chan struct{}, 1)

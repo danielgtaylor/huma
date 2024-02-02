@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"syscall"
 	"testing"
 	"time"
@@ -85,6 +86,35 @@ func TestCLIPlain(t *testing.T) {
 	})
 
 	cli.Root().SetArgs([]string{"--debug", "--host", "localhost", "--port", "8001"})
+	cli.Run()
+}
+
+func TestCLIEnv(t *testing.T) {
+	type Options struct {
+		Debug bool
+		Host  string
+		Port  int
+	}
+
+	os.Setenv("SERVICE_DEBUG", "true")
+	os.Setenv("SERVICE_HOST", "localhost")
+	os.Setenv("SERVICE_PORT", "8001")
+	defer func() {
+		os.Unsetenv("SERVICE_DEBUG")
+		os.Unsetenv("SERVICE_HOST")
+		os.Unsetenv("SERVICE_PORT")
+	}()
+
+	cli := huma.NewCLI(func(hooks huma.Hooks, options *Options) {
+		assert.True(t, options.Debug)
+		assert.Equal(t, "localhost", options.Host)
+		assert.Equal(t, 8001, options.Port)
+		hooks.OnStart(func() {
+			// Do nothing
+		})
+	})
+
+	cli.Root().SetArgs([]string{})
 	cli.Run()
 }
 

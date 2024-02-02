@@ -12,8 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/goccy/go-yaml"
 )
 
 // ErrSchemaInvalid is sent when there is a problem building the schema.
@@ -115,6 +113,46 @@ type Schema struct { //nolint: musttag
 	msgRequired         map[string]string `yaml:"-"`
 }
 
+// MarshalJSON marshals the schema into JSON, respecting the `Extensions` map
+// to marshal extensions inline.
+func (s *Schema) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"type", s.Type, omitEmpty},
+		{"title", s.Title, omitEmpty},
+		{"description", s.Description, omitEmpty},
+		{"$ref", s.Ref, omitEmpty},
+		{"format", s.Format, omitEmpty},
+		{"contentEncoding", s.ContentEncoding, omitEmpty},
+		{"default", s.Default, omitNil},
+		{"examples", s.Examples, omitEmpty},
+		{"items", s.Items, omitEmpty},
+		{"additionalProperties", s.AdditionalProperties, omitNil},
+		{"properties", s.Properties, omitEmpty},
+		{"enum", s.Enum, omitEmpty},
+		{"minimum", s.Minimum, omitEmpty},
+		{"exclusiveMinimum", s.ExclusiveMinimum, omitEmpty},
+		{"maximum", s.Maximum, omitEmpty},
+		{"exclusiveMaximum", s.ExclusiveMaximum, omitEmpty},
+		{"multipleOf", s.MultipleOf, omitEmpty},
+		{"minLength", s.MinLength, omitEmpty},
+		{"maxLength", s.MaxLength, omitEmpty},
+		{"pattern", s.Pattern, omitEmpty},
+		{"minItems", s.MinItems, omitEmpty},
+		{"maxItems", s.MaxItems, omitEmpty},
+		{"uniqueItems", s.UniqueItems, omitEmpty},
+		{"required", s.Required, omitEmpty},
+		{"minProperties", s.MinProperties, omitEmpty},
+		{"maxProperties", s.MaxProperties, omitEmpty},
+		{"readOnly", s.ReadOnly, omitEmpty},
+		{"writeOnly", s.WriteOnly, omitEmpty},
+		{"deprecated", s.Deprecated, omitEmpty},
+		{"oneOf", s.OneOf, omitEmpty},
+		{"anyOf", s.AnyOf, omitEmpty},
+		{"allOf", s.AllOf, omitEmpty},
+		{"not", s.Not, omitEmpty},
+	}, s.Extensions)
+}
+
 // PrecomputeMessages tries to precompute as many validation error messages
 // as possible so that new strings aren't allocated during request validation.
 func (s *Schema) PrecomputeMessages() {
@@ -205,12 +243,6 @@ func (s *Schema) PrecomputeMessages() {
 	if sub := s.Not; sub != nil {
 		sub.PrecomputeMessages()
 	}
-}
-
-// MarshalJSON marshals the schema into JSON, respecting the `Extensions` map
-// to marshal extensions inline.
-func (s *Schema) MarshalJSON() ([]byte, error) {
-	return yaml.MarshalWithOptions(s, yaml.JSON())
 }
 
 func boolTag(f reflect.StructField, tag string) bool {

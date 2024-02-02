@@ -430,12 +430,66 @@ var validateTests = []struct {
 		input: map[string]any{"value": "123e4567-e89b-12d3-a456-426655440000"},
 	},
 	{
+		name: "uuid success prefix",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" format:"uuid"`
+		}{}),
+		input: map[string]any{"value": "urn:uuid:123e4567-e89b-12d3-a456-426655440000"},
+	},
+	{
+		name: "uuid success braces",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" format:"uuid"`
+		}{}),
+		input: map[string]any{"value": "{123e4567-e89b-12d3-a456-426655440000}"},
+	},
+	{
 		name: "expected uuid",
 		typ: reflect.TypeOf(struct {
 			Value string `json:"value" format:"uuid"`
 		}{}),
 		input: map[string]any{"value": "bad"},
 		errs:  []string{"expected string to be RFC 4122 uuid: invalid UUID length: 3"},
+	},
+	{
+		name: "expected uuid prefix",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" format:"uuid"`
+		}{}),
+		input: map[string]any{"value": "urn:test:123e4567-e89b-12d3-a456-426655440000"},
+		errs:  []string{"expected string to be RFC 4122 uuid: invalid urn prefix: \"urn:test:\""},
+	},
+	{
+		name: "expected uuid bracket",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" format:"uuid"`
+		}{}),
+		input: map[string]any{"value": "[123e4567-e89b-12d3-a456-426655440000]"},
+		errs:  []string{"expected string to be RFC 4122 uuid: invalid bracketed UUID format"},
+	},
+	{
+		name: "expected uuid format",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" format:"uuid"`
+		}{}),
+		input: map[string]any{"value": "12345678gabc1234abcd1234abcd1234"},
+		errs:  []string{"expected string to be RFC 4122 uuid: invalid UUID format"},
+	},
+	{
+		name: "expected uuid format",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" format:"uuid"`
+		}{}),
+		input: map[string]any{"value": "12345678gabc1234abcd1234abcd12345678"},
+		errs:  []string{"expected string to be RFC 4122 uuid: invalid UUID format"},
+	},
+	{
+		name: "expected uuid format",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" format:"uuid"`
+		}{}),
+		input: map[string]any{"value": "\n23e4567-e89b-12d3-a456-426655440000"},
+		errs:  []string{"expected string to be RFC 4122 uuid: invalid UUID format"},
 	},
 	{
 		name: "uritemplate success",

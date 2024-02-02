@@ -7,9 +7,9 @@ import (
 	"reflect"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/adapters/humafiber"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/danielgtaylor/huma/v2/examples/protodemo/protodemo"
-	"github.com/gofiber/fiber/v2"
+	"github.com/go-chi/chi/v5"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -37,7 +37,7 @@ type PutUserOutput struct {
 }
 
 func main() {
-	r := fiber.New()
+	r := chi.NewMux()
 
 	// Define our custom formats.
 	jsonFormat := huma.Format{
@@ -77,7 +77,7 @@ func main() {
 	}
 
 	// Create the API with those formats.
-	api := humafiber.New(r, huma.Config{
+	api := humachi.New(r, huma.Config{
 		OpenAPI: &huma.OpenAPI{
 			Info: &huma.Info{
 				Title:   "My API",
@@ -109,5 +109,5 @@ func main() {
 		}, nil
 	})
 
-	r.Listen(":3000")
+	http.ListenAndServe(":3000", r)
 }

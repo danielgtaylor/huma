@@ -12,8 +12,6 @@ import (
 	"testing"
 	"time"
 
-	humav1 "github.com/danielgtaylor/huma"
-	"github.com/danielgtaylor/huma/responses"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-chi/chi/v5"
 )
@@ -316,49 +314,49 @@ func BenchmarkRawChiFast(b *testing.B) {
 	}
 }
 
-func BenchmarkHumaV1Chi(t *testing.B) {
-	type GreetingInput struct {
-		ID          string `path:"id"`
-		ContentType string `header:"Content-Type"`
-		Num         int    `query:"num"`
-		Body        struct {
-			Suffix string `json:"suffix" maxLength:"5"`
-		}
-	}
+// func BenchmarkHumaV1Chi(t *testing.B) {
+// 	type GreetingInput struct {
+// 		ID          string `path:"id"`
+// 		ContentType string `header:"Content-Type"`
+// 		Num         int    `query:"num"`
+// 		Body        struct {
+// 			Suffix string `json:"suffix" maxLength:"5"`
+// 		}
+// 	}
 
-	type GreetingOutput struct {
-		Greeting    string `json:"greeting"`
-		Suffix      string `json:"suffix"`
-		Length      int    `json:"length"`
-		ContentType string `json:"content_type"`
-		Num         int    `json:"num"`
-	}
+// 	type GreetingOutput struct {
+// 		Greeting    string `json:"greeting"`
+// 		Suffix      string `json:"suffix"`
+// 		Length      int    `json:"length"`
+// 		ContentType string `json:"content_type"`
+// 		Num         int    `json:"num"`
+// 	}
 
-	app := humav1.New("My API", "1.0.0")
+// 	app := humav1.New("My API", "1.0.0")
 
-	app.Resource("/foo/{id}").Post("greet", "Get a greeting",
-		responses.OK().Model(&GreetingOutput{}).Headers("ETag", "Last-Modified"),
-	).Run(func(ctx humav1.Context, input GreetingInput) {
-		ctx.Header().Set("ETag", "abc123")
-		ctx.Header().Set("Last-Modified", lastModified.Format(http.TimeFormat))
-		resp := &GreetingOutput{}
-		resp.Greeting = "Hello, " + input.ID + input.Body.Suffix
-		resp.Suffix = input.Body.Suffix
-		resp.Length = len(resp.Greeting)
-		resp.ContentType = input.ContentType
-		resp.Num = input.Num
-		ctx.WriteModel(http.StatusOK, resp)
-	})
+// 	app.Resource("/foo/{id}").Post("greet", "Get a greeting",
+// 		responses.OK().Model(&GreetingOutput{}).Headers("ETag", "Last-Modified"),
+// 	).Run(func(ctx humav1.Context, input GreetingInput) {
+// 		ctx.Header().Set("ETag", "abc123")
+// 		ctx.Header().Set("Last-Modified", lastModified.Format(http.TimeFormat))
+// 		resp := &GreetingOutput{}
+// 		resp.Greeting = "Hello, " + input.ID + input.Body.Suffix
+// 		resp.Suffix = input.Body.Suffix
+// 		resp.Length = len(resp.Greeting)
+// 		resp.ContentType = input.ContentType
+// 		resp.Num = input.Num
+// 		ctx.WriteModel(http.StatusOK, resp)
+// 	})
 
-	reqBody := strings.NewReader(`{"suffix": "!"}`)
-	req, _ := http.NewRequest(http.MethodPost, "/foo/123?num=5", reqBody)
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	t.ResetTimer()
-	t.ReportAllocs()
-	for i := 0; i < t.N; i++ {
-		reqBody.Seek(0, 0)
-		w.Body.Reset()
-		app.ServeHTTP(w, req)
-	}
-}
+// 	reqBody := strings.NewReader(`{"suffix": "!"}`)
+// 	req, _ := http.NewRequest(http.MethodPost, "/foo/123?num=5", reqBody)
+// 	req.Header.Set("Content-Type", "application/json")
+// 	w := httptest.NewRecorder()
+// 	t.ResetTimer()
+// 	t.ReportAllocs()
+// 	for i := 0; i < t.N; i++ {
+// 		reqBody.Seek(0, 0)
+// 		w.Body.Reset()
+// 		app.ServeHTTP(w, req)
+// 	}
+// }
