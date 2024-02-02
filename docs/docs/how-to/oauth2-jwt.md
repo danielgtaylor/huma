@@ -147,7 +147,7 @@ func NewJWKSet(jwkUrl string) jwk.Set {
 
 // NewAuthMiddleware creates a middleware that will authorize requests based on
 // the required scopes for the operation.
-func NewAuthMiddleware(jwksURL string) {
+func NewAuthMiddleware(jwksURL string) func(ctx huma.Context, next func(huma.Context)) {
 	keySet := NewJWKSet(jwksURL)
 
 	return func(ctx huma.Context, next func(huma.Context)) {
