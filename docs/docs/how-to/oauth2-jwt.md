@@ -147,7 +147,7 @@ func NewJWKSet(jwkUrl string) jwk.Set {
 
 // NewAuthMiddleware creates a middleware that will authorize requests based on
 // the required scopes for the operation.
-func NewAuthMiddleware(jwksURL string) func(ctx huma.Context, next func(huma.Context)) {
+func NewAuthMiddleware(api huma.API, jwksURL string) func(ctx huma.Context, next func(huma.Context)) {
 	keySet := NewJWKSet(jwksURL)
 
 	return func(ctx huma.Context, next func(huma.Context)) {
@@ -168,7 +168,7 @@ func NewAuthMiddleware(jwksURL string) func(ctx huma.Context, next func(huma.Con
 
 		token := strings.TrimPrefix(ctx.Header("Authorization"), "Bearer ")
 		if len(token) == 0 {
-			huma.WriteErr(ctx, http.StatusUnauthorized, "Unauthorized")
+			huma.WriteErr(api, ctx, http.StatusUnauthorized, "Unauthorized")
 			return
 		}
 
@@ -180,7 +180,7 @@ func NewAuthMiddleware(jwksURL string) func(ctx huma.Context, next func(huma.Con
 			jwt.WithAudience("my-audience"),
 		)
 		if err != nil {
-			huma.WriteErr(ctx, http.StatusUnauthorized, "Unauthorized")
+			huma.WriteErr(api, ctx, http.StatusUnauthorized, "Unauthorized")
 			return
 		}
 
@@ -195,7 +195,7 @@ func NewAuthMiddleware(jwksURL string) func(ctx huma.Context, next func(huma.Con
 			}
 		}
 
-		huma.WriteErr(ctx, http.StatusForbidden, "Forbidden")
+		huma.WriteErr(api, ctx, http.StatusForbidden, "Forbidden")
 	}
 }
 ```
@@ -203,7 +203,7 @@ func NewAuthMiddleware(jwksURL string) func(ctx huma.Context, next func(huma.Con
 Lastly, when configuring your API, be sure to include this middleware:
 
 ```go title="main.go"
-api.UseMiddleware(NewAuthMiddleware("https://example.com/.well-known/jwks.json"))
+api.UseMiddleware(NewAuthMiddleware(api, "https://example.com/.well-known/jwks.json"))
 ```
 
 ### Supporting different Token Formats
