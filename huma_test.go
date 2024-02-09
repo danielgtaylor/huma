@@ -957,6 +957,36 @@ func TestResolverCustomStatus(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "nope")
 }
 
+type ResolverCalls struct {
+	Calls int
+}
+
+func (r *ResolverCalls) Resolve(ctx huma.Context) []error {
+	r.Calls++
+	return nil
+}
+
+func TestResolverCompositionCalledOnce(t *testing.T) {
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodPut,
+		Path:        "/test",
+	}, func(ctx context.Context, input *struct {
+		ResolverCalls
+	}) (*struct{}, error) {
+		// Exactly one call should have been made to the resolver.
+		assert.Equal(t, 1, input.Calls)
+		return nil, nil
+	})
+
+	req, _ := http.NewRequest(http.MethodPut, "/test", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+}
+
 func TestParamPointerPanics(t *testing.T) {
 	// For now we don't support these, so we panic rather than have subtle
 	// bugs that are hard to track down.

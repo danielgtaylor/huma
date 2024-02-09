@@ -182,10 +182,8 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 
 func findResolvers(resolverType, t reflect.Type) *findResult[bool] {
 	return findInType(t, func(t reflect.Type, path []int) bool {
-		if reflect.PtrTo(t).Implements(resolverType) {
-			return true
-		}
-		if reflect.PtrTo(t).Implements(resolverWithPathType) {
+		tp := reflect.PtrTo(t)
+		if tp.Implements(resolverType) || tp.Implements(resolverWithPathType) {
 			return true
 		}
 		return false
@@ -362,9 +360,15 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 	t = deref(t)
 	zero := reflect.Zero(reflect.TypeOf((*T)(nil)).Elem()).Interface()
 
+	ignoreAnonymous := false
 	if onType != nil {
 		if v := onType(t, path); v != zero {
 			result.Paths = append(result.Paths, findResultPath[T]{path, v})
+
+			// Found what we were looking for in the type, no need to go deeper.
+			// We do still want to potentially process each non-anonymous field,
+			// so only skip anonymous ones.
+			ignoreAnonymous = true
 		}
 	}
 
@@ -376,6 +380,9 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 				continue
 			}
 			if slicesContains(ignore, f.Name) {
+				continue
+			}
+			if ignoreAnonymous && f.Anonymous {
 				continue
 			}
 			fi := append([]int{}, path...)
