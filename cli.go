@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/danielgtaylor/casing"
 	"github.com/spf13/cobra"
@@ -173,7 +174,13 @@ func (c *cli[O]) setupOptions(t reflect.Type, path []int) {
 		case reflect.Int, reflect.Int64:
 			var def int64
 			if defaultValue != "" {
-				def, err = strconv.ParseInt(defaultValue, 10, 64)
+				if field.Tag.Get("format") == "duration" {
+					var t time.Duration
+					t, err = time.ParseDuration(defaultValue)
+					def = int64(t)
+				} else {
+					def, err = strconv.ParseInt(defaultValue, 10, 64)
+				}
 				if err != nil {
 					panic(err)
 				}

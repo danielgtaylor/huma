@@ -230,6 +230,19 @@ func TestCLIBadType(t *testing.T) {
 	})
 }
 
+func TestCLIDefaultFormat(t *testing.T) {
+	type OptionsDuration struct {
+		Timeout time.Duration `default:"5s" format:"duration"`
+	}
+
+	cli := huma.NewCLI(func(hooks huma.Hooks, options *OptionsDuration) {
+		assert.Equal(t, 5*time.Second, options.Timeout)
+	})
+
+	cli.Root().SetArgs([]string{})
+	cli.Run()
+}
+
 func TestCLIBadDefaults(t *testing.T) {
 	type OptionsBool struct {
 		Debug bool `default:"notabool"`
