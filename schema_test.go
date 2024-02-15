@@ -26,6 +26,26 @@ type Embedded struct {
 	Value string `json:"value" doc:"new doc"`
 }
 
+type CustomSchema struct{}
+
+func (c CustomSchema) Schema(r huma.Registry) *huma.Schema {
+	return &huma.Schema{
+		Type: "string",
+	}
+}
+
+var _ huma.SchemaProvider = CustomSchema{}
+
+type BadRefSchema struct{}
+
+func (c BadRefSchema) Schema(r huma.Registry) *huma.Schema {
+	return &huma.Schema{
+		Ref: "bad",
+	}
+}
+
+var _ huma.SchemaProvider = BadRefSchema{}
+
 func TestSchema(t *testing.T) {
 	bitSize := strconv.Itoa(bits.UintSize)
 
@@ -277,6 +297,22 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-default-string-pointer",
+			input: struct {
+				Value *string `json:"value,omitempty" default:"foo"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "string",
+						"default": "foo"
+					}
+				},
+				"additionalProperties": false
+			}`,
+		},
+		{
 			name: "field-default-array-string",
 			input: struct {
 				Value []string `json:"value" default:"foo,bar"`
@@ -318,6 +354,57 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-default-duration",
+			input: struct {
+				Value time.Duration `json:"value" default:"5000"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "integer",
+						"format": "int64",
+						"default": 5000
+					}
+				},
+				"additionalProperties": false,
+				"required": ["value"]
+			}`,
+		},
+		{
+			name: "field-example-custom",
+			input: struct {
+				Value CustomSchema `json:"value" example:"foo"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "string",
+						"examples": ["foo"]
+					}
+				},
+				"additionalProperties": false,
+				"required": ["value"]
+			}`,
+		},
+		{
+			name: "field-enum-custom",
+			input: struct {
+				Value OmittableNullable[string] `json:"value,omitempty" enum:"foo,bar"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "string",
+						"enum": ["foo", "bar"]
+					}
+				},
+				"additionalProperties": false
+			}`,
+		},
+		{
 			name: "field-any",
 			input: struct {
 				Value any `json:"value" doc:"Some value"`
@@ -331,6 +418,31 @@ func TestSchema(t *testing.T) {
 				},
 				"additionalProperties": false,
 				"required": ["value"]
+			}`,
+		},
+		{
+			// Bad ref should not panic, but should be ignored. These could be valid
+			// custom schemas that Huma won't understand.
+			name: "field-custom-bad-ref",
+			input: struct {
+				Value  BadRefSchema `json:"value" example:"true"`
+				Value2 struct {
+					Foo BadRefSchema `json:"foo"`
+				} `json:"value2" example:"{\"foo\": true}"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"$ref": "bad"
+					},
+					"value2": {
+						"$ref": "#/components/schemas/Value2Struct",
+						"examples": [{"foo": true}]
+					}
+				},
+				"additionalProperties": false,
+				"required": ["value", "value2"]
 			}`,
 		},
 		{
@@ -420,14 +532,67 @@ func TestSchema(t *testing.T) {
 			input: struct {
 				Value int `json:"value" default:"bad"`
 			}{},
-			panics: `invalid tag for field 'Value': invalid character 'b' looking for beginning of value`,
+			panics: `invalid integer tag value 'bad' for field 'Value': invalid character 'b' looking for beginning of value`,
 		},
 		{
-			name: "panic-json-type",
+			name: "panic-json-bool",
 			input: struct {
-				Value int `json:"value" example:"true"`
+				Value bool `json:"value" default:"123"`
 			}{},
-			panics: `unable to convert bool to int for field 'Value': schema is invalid`,
+			panics: `invalid boolean tag value '123' for field 'Value': schema is invalid`,
+		},
+		{
+			name: "panic-json-int",
+			input: struct {
+				Value int `json:"value" default:"true"`
+			}{},
+			panics: `invalid number tag value 'true' for field 'Value': schema is invalid`,
+		},
+		{
+			name: "panic-json-int2",
+			input: struct {
+				Value int `json:"value" default:"1.23"`
+			}{},
+			panics: `invalid integer tag value '1.23' for field 'Value': schema is invalid`,
+		},
+		{
+			name: "panic-json-array",
+			input: struct {
+				Value []int `json:"value" default:"true"`
+			}{},
+			panics: `invalid array tag value 'true' for field 'Value': schema is invalid`,
+		},
+		{
+			name: "panic-json-array-value",
+			input: struct {
+				Value []string `json:"value" default:"[true]"`
+			}{},
+			panics: `invalid string tag value 'true' for field 'Value[0]': schema is invalid`,
+		},
+		{
+			name: "panic-json-array-value",
+			input: struct {
+				Value []int `json:"value" default:"[true]"`
+			}{},
+			panics: `invalid number tag value 'true' for field 'Value[0]': schema is invalid`,
+		},
+		{
+			name: "panic-json-object",
+			input: struct {
+				Value struct {
+					Foo string `json:"foo"`
+				} `json:"value" default:"true"`
+			}{},
+			panics: `invalid object tag value 'true' for field 'Value': schema is invalid`,
+		},
+		{
+			name: "panic-json-object-field",
+			input: struct {
+				Value struct {
+					Foo string `json:"foo"`
+				} `json:"value" default:"{\"foo\": true}"`
+			}{},
+			panics: `invalid string tag value 'true' for field 'Value.foo': schema is invalid`,
 		},
 	}
 
@@ -543,7 +708,7 @@ func (o OmittableNullable[T]) Schema(r huma.Registry) *huma.Schema {
 
 func TestCustomUnmarshalType(t *testing.T) {
 	type O struct {
-		Field OmittableNullable[int] `json:"field" maximum:"10"`
+		Field OmittableNullable[int] `json:"field" maximum:"10" example:"5"`
 	}
 
 	var o O
@@ -553,6 +718,7 @@ func TestCustomUnmarshalType(t *testing.T) {
 	s := r.Schema(reflect.TypeOf(o), false, "")
 	assert.Equal(t, "integer", s.Properties["field"].Type, s)
 	assert.Equal(t, Ptr(float64(10)), s.Properties["field"].Maximum, s)
+	assert.Equal(t, float64(5), s.Properties["field"].Examples[0], s.Properties["field"])
 
 	// Confirm the field works as expected when loading JSON.
 	o = O{}

@@ -120,7 +120,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 
 		var example any
 		if e := f.Tag.Get("example"); e != "" {
-			example = jsonTagValue(f, f.Type, f.Tag.Get("example"))
+			example = jsonTagValue(registry, f.Type.Name(), pfi.Schema, f.Tag.Get("example"))
 		}
 
 		if def := f.Tag.Get("default"); def != "" {
@@ -190,13 +190,14 @@ func findResolvers(resolverType, t reflect.Type) *findResult[bool] {
 	}, nil)
 }
 
-func findDefaults(t reflect.Type) *findResult[any] {
+func findDefaults(registry Registry, t reflect.Type) *findResult[any] {
 	return findInType(t, nil, func(sf reflect.StructField, i []int) any {
 		if d := sf.Tag.Get("default"); d != "" {
 			if sf.Type.Kind() == reflect.Pointer {
 				panic("pointers cannot have default values")
 			}
-			return jsonTagValue(sf, sf.Type, d)
+			s := registry.Schema(sf.Type, true, "")
+			return convertType(sf.Type.Name(), sf.Type, jsonTagValue(registry, sf.Name, s, d))
 		}
 		return nil
 	})
@@ -560,7 +561,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	}
 
 	resolvers := findResolvers(resolverType, inputType)
-	defaults := findDefaults(inputType)
+	defaults := findDefaults(registry, inputType)
 
 	if op.Responses == nil {
 		op.Responses = map[string]*Response{}
