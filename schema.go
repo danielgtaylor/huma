@@ -280,26 +280,64 @@ func floatTag(f reflect.StructField, tag string) *float64 {
 	return nil
 }
 
-func jsonTagValue(f reflect.StructField, t reflect.Type, value string) any {
-	// Special case: strings don't need quotes.
-	if t.Kind() == reflect.String || (t.Kind() == reflect.Pointer && t.Elem().Kind() == reflect.String) {
-		return value
-	}
-
-	// Special case: array of strings with comma-separated values and no quotes.
-	if t.Kind() == reflect.Slice && t.Elem().Kind() == reflect.String && value[0] != '[' {
-		values := []string{}
-		for _, s := range strings.Split(value, ",") {
-			values = append(values, strings.TrimSpace(s))
+// ensureType panics if the given value does not match the JSON Schema type.
+func ensureType(r Registry, fieldName string, s *Schema, value string, v any) {
+	if s.Ref != "" {
+		s = r.SchemaFromRef(s.Ref)
+		if s == nil {
+			// We may not have access to this type, e.g. custom schema provided
+			// by the user with remote refs. Skip validation.
+			return
 		}
-		return values
 	}
 
-	var v any
-	if err := json.Unmarshal([]byte(value), &v); err != nil {
-		panic(fmt.Errorf("invalid tag for field '%s': %w", f.Name, err))
-	}
+	switch s.Type {
+	case TypeBoolean:
+		if _, ok := v.(bool); !ok {
+			panic(fmt.Errorf("invalid boolean tag value '%s' for field '%s': %w", value, fieldName, ErrSchemaInvalid))
+		}
+	case TypeInteger, TypeNumber:
+		if _, ok := v.(float64); !ok {
+			panic(fmt.Errorf("invalid number tag value '%s' for field '%s': %w", value, fieldName, ErrSchemaInvalid))
+		}
 
+		if s.Type == TypeInteger {
+			if v.(float64) != float64(int(v.(float64))) {
+				panic(fmt.Errorf("invalid integer tag value '%s' for field '%s': %w", value, fieldName, ErrSchemaInvalid))
+			}
+		}
+	case TypeString:
+		if _, ok := v.(string); !ok {
+			panic(fmt.Errorf("invalid string tag value '%s' for field '%s': %w", value, fieldName, ErrSchemaInvalid))
+		}
+	case TypeArray:
+		if _, ok := v.([]any); !ok {
+			panic(fmt.Errorf("invalid array tag value '%s' for field '%s': %w", value, fieldName, ErrSchemaInvalid))
+		}
+
+		if s.Items != nil {
+			for i, item := range v.([]any) {
+				b, _ := json.Marshal(item)
+				ensureType(r, fieldName+"["+strconv.Itoa(i)+"]", s.Items, string(b), item)
+			}
+		}
+	case TypeObject:
+		if _, ok := v.(map[string]any); !ok {
+			panic(fmt.Errorf("invalid object tag value '%s' for field '%s': %w", value, fieldName, ErrSchemaInvalid))
+		}
+
+		for name, prop := range s.Properties {
+			if val, ok := v.(map[string]any)[name]; ok {
+				b, _ := json.Marshal(val)
+				ensureType(r, fieldName+"."+name, prop, string(b), val)
+			}
+		}
+	}
+}
+
+// convertType panics if the given value does not match or cannot be converted
+// to the field's Go type.
+func convertType(fieldName string, t reflect.Type, v any) any {
 	vv := reflect.ValueOf(v)
 	tv := reflect.TypeOf(v)
 	if v != nil && tv != t {
@@ -310,14 +348,14 @@ func jsonTagValue(f reflect.StructField, t reflect.Type, value string) any {
 			tmp := reflect.MakeSlice(t, 0, vv.Len())
 			for i := 0; i < vv.Len(); i++ {
 				if !vv.Index(i).Elem().Type().ConvertibleTo(t.Elem()) {
-					panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", vv.Index(i).Interface(), t.Elem(), f.Name, ErrSchemaInvalid))
+					panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", vv.Index(i).Interface(), t.Elem(), fieldName, ErrSchemaInvalid))
 				}
 
 				tmp = reflect.Append(tmp, vv.Index(i).Elem().Convert(t.Elem()))
 			}
 			v = tmp.Interface()
 		} else if !tv.ConvertibleTo(deref(t)) {
-			panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", tv, t, f.Name, ErrSchemaInvalid))
+			panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", tv, t, fieldName, ErrSchemaInvalid))
 		}
 
 		converted := reflect.ValueOf(v).Convert(deref(t))
@@ -330,16 +368,47 @@ func jsonTagValue(f reflect.StructField, t reflect.Type, value string) any {
 		}
 		v = converted.Interface()
 	}
+	return v
+}
+
+func jsonTagValue(r Registry, fieldName string, s *Schema, value string) any {
+	if s.Ref != "" {
+		s = r.SchemaFromRef(s.Ref)
+		if s == nil {
+			return nil
+		}
+	}
+
+	// Special case: strings don't need quotes.
+	if s.Type == TypeString {
+		return value
+	}
+
+	// Special case: array of strings with comma-separated values and no quotes.
+	if s.Type == TypeArray && s.Items != nil && s.Items.Type == TypeString && value[0] != '[' {
+		values := []string{}
+		for _, s := range strings.Split(value, ",") {
+			values = append(values, strings.TrimSpace(s))
+		}
+		return values
+	}
+
+	var v any
+	if err := json.Unmarshal([]byte(value), &v); err != nil {
+		panic(fmt.Errorf("invalid %s tag value '%s' for field '%s': %w", s.Type, value, fieldName, err))
+	}
+
+	ensureType(r, fieldName, s, value, v)
 
 	return v
 }
 
 // jsonTag returns a value of the schema's type for the given tag string.
 // Uses JSON parsing if the schema is not a string.
-func jsonTag(f reflect.StructField, name string) any {
+func jsonTag(r Registry, f reflect.StructField, s *Schema, name string) any {
 	t := f.Type
 	if value := f.Tag.Get(name); value != "" {
-		return jsonTagValue(f, t, value)
+		return convertType(f.Name, t, jsonTagValue(r, f.Name, s, value))
 	}
 	return nil
 }
@@ -378,20 +447,22 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 	if enc := f.Tag.Get("encoding"); enc != "" {
 		fs.ContentEncoding = enc
 	}
-	fs.Default = jsonTag(f, "default")
+	fs.Default = jsonTag(registry, f, fs, "default")
 
-	if e := jsonTag(f, "example"); e != nil {
-		fs.Examples = []any{e}
+	if value := f.Tag.Get("example"); value != "" {
+		if e := jsonTagValue(registry, f.Name, fs, value); e != nil {
+			fs.Examples = []any{e}
+		}
 	}
 
 	if enum := f.Tag.Get("enum"); enum != "" {
-		fType := f.Type
-		if fs.Type == TypeArray {
-			fType = fType.Elem()
+		s := fs
+		if s.Type == TypeArray {
+			s = s.Items
 		}
 		enumValues := []any{}
 		for _, e := range strings.Split(enum, ",") {
-			enumValues = append(enumValues, jsonTagValue(f, fType, e))
+			enumValues = append(enumValues, jsonTagValue(registry, f.Name, s, e))
 		}
 		if fs.Type == TypeArray {
 			fs.Items.Enum = enumValues

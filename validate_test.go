@@ -960,11 +960,32 @@ var validateTests = []struct {
 		errs:  []string{"expected required property value to be present"},
 	},
 	{
-		name: "enum success",
+		name: "enum string success",
 		typ: reflect.TypeOf(struct {
 			Value string `json:"value" enum:"one,two"`
 		}{}),
 		input: map[string]any{"value": "one"},
+	},
+	{
+		name: "enum int success",
+		typ: reflect.TypeOf(struct {
+			Value int `json:"value" enum:"1,5,9"`
+		}{}),
+		input: map[string]any{"value": 1.0},
+	},
+	{
+		name: "enum uint16 success",
+		typ: reflect.TypeOf(struct {
+			Value uint16 `json:"value" enum:"1,5,9"`
+		}{}),
+		input: map[string]any{"value": 1.0},
+	},
+	{
+		name: "enum array success",
+		typ: reflect.TypeOf(struct {
+			Value []int `json:"value" enum:"1,5,9"`
+		}{}),
+		input: map[string]any{"value": []any{1.0}},
 	},
 	{
 		name: "expected enum",

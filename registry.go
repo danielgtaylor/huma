@@ -112,6 +112,9 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 }
 
 func (r *mapRegistry) SchemaFromRef(ref string) *Schema {
+	if !strings.HasPrefix(ref, r.prefix) {
+		return nil
+	}
 	return r.schemas[ref[len(r.prefix):]]
 }
 
