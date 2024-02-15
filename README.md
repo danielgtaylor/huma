@@ -11,7 +11,7 @@
 A modern, simple, fast & flexible micro framework for building HTTP REST/RPC APIs in Go backed by OpenAPI 3 and JSON Schema. Pronounced IPA: [/'hjuːmɑ/](https://en.wiktionary.org/wiki/Wiktionary:International_Phonetic_Alphabet). The goals of this project are to provide:
 
 - Incremental adoption for teams with existing services
-  - Bring your own router, middleware, and logging/metrics
+  - Bring your own router (including Go 1.22+), middleware, and logging/metrics
   - Extensible OpenAPI & JSON Schema layer to document existing routes
 - A modern REST or HTTP RPC API backend framework for Go developers
   - Described by [OpenAPI 3.1](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md) & [JSON Schema](https://json-schema.org/)
@@ -27,7 +27,7 @@ Features include:
   - Request body
   - Responses (including errors)
   - Response headers
-- JSON Errors using [RFC7807](https://tools.ietf.org/html/rfc7807) and `application/problem+json` by default (but can be changed)
+- JSON Errors using [RFC9457](https://datatracker.ietf.org/doc/html/rfc9457) and `application/problem+json` by default (but can be changed)
 - Per-operation request size limits with sane defaults
 - [Content negotiation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Content_negotiation) between server and client
   - Support for JSON ([RFC 8259](https://tools.ietf.org/html/rfc8259)) and CBOR ([RFC 7049](https://tools.ietf.org/html/rfc7049)) content types via the `Accept` header with the default config.
@@ -52,6 +52,14 @@ Features include:
 - Generates JSON Schema for each resource using optional `describedby` link relation headers as well as optional `$schema` properties in returned objects that integrate into editors for validation & completion.
 
 This project was inspired by [FastAPI](https://fastapi.tiangolo.com/). Logo & branding designed by Kari Taylor.
+
+> This is by far my favorite web framework for Go. It is inspired by FastAPI, which is also amazing, and conforms to many RFCs for common web things ... I really like the feature set, the fact that it [can use] Chi, and the fact that it is still somehow relatively simple to use. I've tried other frameworks and they do not spark joy for me. - [Jeb_Jenky](https://www.reddit.com/r/golang/comments/zhitcg/comment/izmg6vk/?utm_source=reddit&utm_medium=web2x&context=3)
+
+> After working with #Golang for over a year, I stumbled upon Huma, the #FastAPI-inspired web framework. It’s the Christmas miracle I’ve been hoping for! This framework has everything! - [Hana Mohan](https://twitter.com/unamashana/status/1733088066053583197)
+
+> I love Huma. Thank you, sincerely, for this awesome package. I’ve been using it for some time now and it’s been great! - [plscott](https://www.reddit.com/r/golang/comments/1aoshey/comment/kq6hcpd/?utm_source=reddit&utm_medium=web2x&context=3)
+
+> Thank you Daniel for Huma. Superbly useful project and saves us a lot of time and hassle thanks to the OpenAPI gen — similar to FastAPI in Python. - [WolvesOfAllStreets](https://www.reddit.com/r/golang/comments/1aqj99d/comment/kqfqcml/?utm_source=reddit&utm_medium=web2x&context=3)
 
 # Install
 
@@ -146,3 +154,11 @@ Even though the example is tiny you can also see some generated documentation at
 See the [https://huma.rocks/](https://huma.rocks/) website for full documentation in a presentation that's easier to navigate and search then this README. You can find the source for the site in the `docs` directory of this repo.
 
 Official Go package documentation can always be found at https://pkg.go.dev/github.com/danielgtaylor/huma/v2.
+
+# Articles & Mentions
+
+- [APIs in Go with Huma 2.0](https://dgt.hashnode.dev/apis-in-go-with-huma-20)
+- [Reducing Go Dependencies: A case study of dependency reduction in Huma](https://dgt.hashnode.dev/reducing-go-dependencies)
+- [Golang News & Libs & Jobs shared on Twitter/X](https://twitter.com/golangch/status/1752175499701264532)
+- Featured in [Go Weekly #495](https://golangweekly.com/issues/495)
+- [Bump.sh Deploying Docs from Huma](https://docs.bump.sh/guides/bump-sh-tutorials/huma/)

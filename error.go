@@ -44,8 +44,8 @@ func (e *ErrorDetail) ErrorDetail() *ErrorDetail {
 	return e
 }
 
-// ErrorModel defines a basic error message model based on RFC 7807 Problem
-// Details for HTTP APIs (https://datatracker.ietf.org/doc/html/rfc7807). It
+// ErrorModel defines a basic error message model based on RFC 9457 Problem
+// Details for HTTP APIs (https://datatracker.ietf.org/doc/html/rfc9457). It
 // is augmented with an `errors` field of `huma.ErrorDetail` objects that
 // can help provide exhaustive & descriptive errors.
 //
@@ -122,7 +122,7 @@ func (e *ErrorModel) GetStatus() int {
 
 // ContentType provides a filter to adjust response content types. This is
 // used to ensure e.g. `application/problem+json` content types defined in
-// RFC 7807 Problem Details for HTTP APIs are used in responses to clients.
+// RFC 9457 Problem Details for HTTP APIs are used in responses to clients.
 func (e *ErrorModel) ContentType(ct string) string {
 	if ct == "application/json" {
 		return "application/problem+json"

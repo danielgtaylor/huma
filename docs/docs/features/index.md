@@ -23,7 +23,7 @@ Features include:
     -   Request body
     -   Responses (including errors)
     -   Response headers
--   JSON Errors using [RFC7807](https://tools.ietf.org/html/rfc7807) and `application/problem+json` by default (but can be changed)
+-   JSON Errors using [RFC9457](https://tools.ietf.org/html/rfc9457) and `application/problem+json` by default (but can be changed)
 -   Per-operation request size limits with sane defaults
 -   [Content negotiation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Content_negotiation) between server and client
     -   Support for JSON ([RFC 8259](https://tools.ietf.org/html/rfc8259)) and CBOR ([RFC 7049](https://tools.ietf.org/html/rfc7049)) content types via the `Accept` header with the default config.
