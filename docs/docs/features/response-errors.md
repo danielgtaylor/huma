@@ -26,7 +26,7 @@ The error functions are named like `Error{code}{name}` and accept a message and 
 
 ## Error Model
 
-Errors use [RFC 7807 Problem Details for HTTP APIs](https://tools.ietf.org/html/rfc7807) with a content type like `application/problem+json` and return a structure that looks like:
+Errors use [RFC 9457 Problem Details for HTTP APIs](https://tools.ietf.org/html/rfc9457) with a content type like `application/problem+json` and return a structure that looks like:
 
 ```http title="HTTP Response"
 HTTP/2.0 422 Unprocessable Entity
@@ -150,4 +150,4 @@ To change the default content type that is returned, you can also implement the 
     -   [`huma.ContentTypeFilter`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ContentTypeFilter) interface for custom content types
 -   External Links
     -   [HTTP Status Codes](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status)
-    -   [RFC 7807](https://tools.ietf.org/html/rfc7807) Problem Details for HTTP APIs
+    -   [RFC 9457](https://tools.ietf.org/html/rfc9457) Problem Details for HTTP APIs
