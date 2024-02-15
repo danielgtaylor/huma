@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/danielgtaylor/casing"
 	"github.com/spf13/cobra"
@@ -48,6 +49,8 @@ type Hooks interface {
 type contextKey string
 
 var optionsKey contextKey = "huma/cli/options"
+
+var durationType = reflect.TypeOf((*time.Duration)(nil)).Elem()
 
 // WithOptions is a helper for custom commands that need to access the options.
 //
@@ -96,7 +99,12 @@ func (c *cli[Options]) Run() {
 				s, _ := flags.GetString(opt.name)
 				f.Set(reflect.ValueOf(s))
 			case reflect.Int, reflect.Int64:
-				i, _ := flags.GetInt64(opt.name)
+				var i any
+				if opt.typ == durationType {
+					i, _ = flags.GetDuration(opt.name)
+				} else {
+					i, _ = flags.GetInt64(opt.name)
+				}
 				f.Set(reflect.ValueOf(i).Convert(opt.typ))
 			case reflect.Bool:
 				b, _ := flags.GetBool(opt.name)
@@ -173,12 +181,22 @@ func (c *cli[O]) setupOptions(t reflect.Type, path []int) {
 		case reflect.Int, reflect.Int64:
 			var def int64
 			if defaultValue != "" {
-				def, err = strconv.ParseInt(defaultValue, 10, 64)
+				if field.Type == durationType {
+					var t time.Duration
+					t, err = time.ParseDuration(defaultValue)
+					def = int64(t)
+				} else {
+					def, err = strconv.ParseInt(defaultValue, 10, 64)
+				}
 				if err != nil {
 					panic(err)
 				}
 			}
-			flags.Int64P(name, field.Tag.Get("short"), def, field.Tag.Get("doc"))
+			if field.Type == durationType {
+				flags.DurationP(name, field.Tag.Get("short"), time.Duration(def), field.Tag.Get("doc"))
+			} else {
+				flags.Int64P(name, field.Tag.Get("short"), def, field.Tag.Get("doc"))
+			}
 		case reflect.Bool:
 			var def bool
 			if defaultValue != "" {

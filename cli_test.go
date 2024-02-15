@@ -126,14 +126,16 @@ func TestCLIAdvanced(t *testing.T) {
 	type Options struct {
 		// Example of option composition via embedded type.
 		DebugOption
-		Host string `doc:"Hostname to listen on."`
-		Port int    `doc:"Port to listen on." short:"p" default:"8000"`
+		Host    string        `doc:"Hostname to listen on."`
+		Port    int           `doc:"Port to listen on." short:"p" default:"8000"`
+		Timeout time.Duration `doc:"Request timeout." default:"5s"`
 	}
 
 	cli := huma.NewCLI(func(hooks huma.Hooks, options *Options) {
 		assert.True(t, options.Debug)
 		assert.Equal(t, "localhost", options.Host)
 		assert.Equal(t, 8001, options.Port)
+		assert.Equal(t, 10*time.Second, options.Timeout)
 		hooks.OnStart(func() {
 			// Do nothing
 		})
@@ -145,7 +147,7 @@ func TestCLIAdvanced(t *testing.T) {
 		customPreRun = true
 	}
 
-	cli.Root().SetArgs([]string{"--debug", "--host", "localhost", "--port", "8001"})
+	cli.Root().SetArgs([]string{"--debug", "--host", "localhost", "--port", "8001", "--timeout", "10s"})
 	cli.Run()
 	assert.True(t, customPreRun)
 }
