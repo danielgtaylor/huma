@@ -101,6 +101,7 @@ Custom options are defined by adding to your options struct. The following types
 | `bool`          | `true`, `false`                   |
 | `int` / `int64` | `1234`, `5`, `-1`                 |
 | `string`        | `prod`, `http://api.example.tld/` |
+| `time.Duration` | `500ms`, `3s`, `1h30m`            |
 
 The following struct tags are available:
 
