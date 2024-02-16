@@ -612,10 +612,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			if op.Responses[statusStr].Content == nil {
 				op.Responses[statusStr].Content = map[string]*MediaType{}
 			}
-			if _, ok := op.Responses[statusStr].Content["application/json"]; !ok {
+			if len(op.Responses[statusStr].Content) == 0 {
 				op.Responses[statusStr].Content["application/json"] = &MediaType{}
 			}
-			if op.Responses[statusStr].Content["application/json"].Schema == nil {
+			if op.Responses[statusStr].Content["application/json"] != nil && op.Responses[statusStr].Content["application/json"].Schema == nil {
 				op.Responses[statusStr].Content["application/json"].Schema = outSchema
 			}
 		}
