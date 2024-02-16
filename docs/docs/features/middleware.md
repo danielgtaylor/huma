@@ -73,9 +73,35 @@ func NewHumaAPI() huma.API {
 }
 ```
 
+### Errors
+
+If your middleware encounters an error, you can stop the processing of the next middleware or operation handler by skipping the call to `next` and writing an error response.
+
+The [`huma.WriteErr(api, ctx, status, message, ...error)`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#WriteErr) function can be used to write nice structured error responses which respect client-driven content negotiation for marshaling:
+
+```go title="code.go"
+func MyMiddleware(ctx huma.Context, next func(ctx huma.Context)) {
+	// If there is a query parameter "error=true", then return an error
+	if ctx.Query("error") == "true" {
+		huma.WriteErr(api, ctx, http.StatusInternalServerError,
+			"Some friendly message", fmt.Errorf("error detail"),
+		)
+		return
+	}
+
+	// Otherwise, just continue as normal.
+	next(ctx)
+})
+```
+
+!!! info "Error Details"
+
+    The [`huma.ErrorDetail`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ErrorDetail) struct can be used to provide more information about the error, such as the location of the error and the value which was seen.
+
 ## Dive Deeper
 
 -   Reference
     -   [`huma.Context`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Context) a router-agnostic request/response context
     -   [`huma.Middlewares`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Middlewares) the API instance
+    -   [`huma.WriteErr`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#WriteErr) function to write error responses
     -   [`huma.API`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#API) the API instance
