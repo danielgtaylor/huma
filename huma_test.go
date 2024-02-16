@@ -509,6 +509,42 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
+			Name: "response-image",
+			Register: func(t *testing.T, api huma.API) {
+				type Resp struct {
+					ContentType string `header:"Content-Type"`
+					Body        []byte
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/response-image",
+					Responses: map[string]*huma.Response{
+						"200": {
+							Description: "Image response",
+							Content: map[string]*huma.MediaType{
+								"image/png": {
+									Schema: &huma.Schema{Type: "string", Format: "binary"},
+								},
+							},
+						},
+					},
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					return &Resp{ContentType: "image/png", Body: []byte("abc")}, nil
+				})
+
+				// Ensure the OpenAPI spec is correct.
+				assert.Len(t, api.OpenAPI().Paths["/response-image"].Get.Responses["200"].Content, 1)
+				assert.NotEmpty(t, "binary", api.OpenAPI().Paths["/response-image"].Get.Responses["200"].Content["image/png"])
+			},
+			Method: http.MethodGet,
+			URL:    "/response-image",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				assert.Equal(t, `abc`, resp.Body.String())
+			},
+		},
+		{
 			Name: "response-stream",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
