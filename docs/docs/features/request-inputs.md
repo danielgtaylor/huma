@@ -40,10 +40,30 @@ The special struct field `Body` will be treated as the input request body and ca
 
 | Tag           | Description               | Example                                  |
 | ------------- | ------------------------- | ---------------------------------------- |
-| `contentType` | Override the content type | `contentType:"application/octet-stream"` |
+| `contentType` | Override the content type | `contentType:"application/my-type+json"` |
 | `required`    | Mark the body as required | `required:"true"`                        |
 
-`RawBody []byte` can also be used alongside `Body` or standalone to provide access to the `[]byte` used to validate & parse `Body`, or to the raw input without any validation/parsing.
+`RawBody []byte` can also be used alongside `Body` to provide access to the `[]byte` used to validate & parse `Body`.
+
+### Other Body Types
+
+Sometimes, you want to bypass the normal body parsing and instead read the raw body conents directly. This is useful for unstructured data, file uploads, or other binary data. You can use `RawBody []byte` **without** a `Body` field to access the raw body bytes without any parsing/validation being applied. For example, to accept some `text/plain` input:
+
+```go title="code.go"
+huma.Register(api, huma.Operation{
+	OperationID: "post-plain-text",
+	Method:      http.MethodPost,
+	Path:        "/text",
+	Summary:     "Example to post plain text input",
+}, func(ctx context.Context, input struct {
+	RawBody []string `contentType:"text/plain"`
+}) (*struct{}, error) {
+	fmt.Println("Got input:", input.RawBody)
+	return nil, nil
+}
+```
+
+This enables you to also do your own parsing of the input, if needed.
 
 ## Request Example
 
