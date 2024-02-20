@@ -377,6 +377,7 @@ func NewAPI(config Config, a Adapter) API {
       apiDescriptionUrl="` + config.OpenAPIPath + `.yaml"
       router="hash"
       layout="sidebar"
+      tryItCredentialsPolicy="same-origin"
     />
 
   </body>
