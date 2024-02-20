@@ -668,7 +668,15 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 			}
 		}
 		s.Type = TypeObject
-		s.AdditionalProperties = false
+
+		additionalProps := false
+		if f, ok := t.FieldByName("_"); ok {
+			if _, ok := f.Tag.Lookup("additionalProperties"); ok {
+				additionalProps = boolTag(f, "additionalProperties")
+			}
+		}
+		s.AdditionalProperties = additionalProps
+
 		s.Properties = props
 		s.propertyNames = propNames
 		s.Required = required

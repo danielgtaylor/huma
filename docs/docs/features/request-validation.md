@@ -6,7 +6,14 @@ description: Built-in JSON Schema validation rules for request parameters and bo
 
 ## Request Validation { .hidden }
 
-Go struct tags are used to annotate inputs/output structs with information that gets turned into [JSON Schema](https://json-schema.org/) for documentation and validation.
+Go struct tags are used to annotate inputs/output structs with information that gets turned into [JSON Schema](https://json-schema.org/) for documentation and validation. For example:
+
+```go title="code.go"
+type Person struct {
+    Name string `json:"name" doc:"Person's name" minLength:"1" maxLength:"80"`
+    Age  uint   `json:"age,omitempty" doc:"Person's age" maximum:"120"`
+}
+```
 
 The standard `json` tag is supported and can be used to rename a field and mark fields as optional using `omitempty`. The following additional tags are supported on model fields:
 
@@ -39,6 +46,24 @@ Parameters have some additional validation tags:
 | Tag      | Description                       | Example         |
 | -------- | --------------------------------- | --------------- |
 | `hidden` | Hide parameter from documentation | `hidden:"true"` |
+
+## Strict vs. Loose Field Validation
+
+By default, Huma is strict about which fields are allowed in an object, making use of the `additionalProperties: false` JSON Schema setting. This means if a client sends a field that is not defined in the schema, the request will be rejected with an error. This can help to prevent typos and other issues and is recommended for most APIs.
+
+If you need to allow additional fields, for example when using a third-party service which will call your system and you only care about a few fields, you can use the `additionalProperties:"true"` field tag on the struct by assigning it to a dummy `_` field.
+
+```go title="code.go"
+type PartialInput struct {
+	_      struct{} `json:"-" additionalProperties:"true"`
+	Field1 string   `json:"field1"`
+	Field2 bool     `json:"field2"`
+}
+```
+
+!!! info "Note"
+
+    The use of `struct{}` is optional but efficient. It is used to avoid allocating memory for the dummy field as an empty object requires no space.
 
 ## Advanced Validation
 
