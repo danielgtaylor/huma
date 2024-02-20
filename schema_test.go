@@ -141,6 +141,23 @@ func TestSchema(t *testing.T) {
 			expected: `{"type": "object", "additionalProperties": {"type": "string"}}`,
 		},
 		{
+			name: "additionalProps",
+			input: struct {
+				_     struct{} `json:"-" additionalProperties:"true"`
+				Value string   `json:"value"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "string"
+					}
+				},
+				"required": ["value"],
+				"additionalProperties": true
+			}`,
+		},
+		{
 			name: "field-int",
 			input: struct {
 				Value int `json:"value" minimum:"1" exclusiveMinimum:"0" maximum:"10" exclusiveMaximum:"11" multipleOf:"2"`
