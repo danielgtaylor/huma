@@ -75,12 +75,16 @@ func NewHumaAPI() huma.API {
 
 ### Cookies
 
-You can use the `huma.Context` interface along with `huma.ReadCookies` to access cookies from middleware, and can also write cookies by adding `Set-Cookie` headers in the response:
+You can use the `huma.Context` interface along with [`huma.ReadCookie`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ReadCookie) or [`huma.ReadCookies`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ReadCookies) to access cookies from middleware, and can also write cookies by adding `Set-Cookie` headers in the response:
 
 ```go
 func MyMiddleware(ctx huma.Context, next func(huma.Context)) {
+	// Read a cookie by name.
+	sessionCookie := huma.ReadCookie(ctx, "session")
+	fmt.Println(sessionCookie)
+
 	// Read all the cookies from the request.
-	cookies := huma.ReadCookies(ctx, "")
+	cookies := huma.ReadCookies(ctx)
 	fmt.Println(cookies)
 
 	// Set a cookie in the response. Using `ctx.AppendHeader` won't overwrite
@@ -130,6 +134,7 @@ func MyMiddleware(ctx huma.Context, next func(ctx huma.Context)) {
 -   Reference
     -   [`huma.Context`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Context) a router-agnostic request/response context
     -   [`huma.Middlewares`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Middlewares) the API instance
+    -   [`huma.ReadCookie`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ReadCookie) reads a named cookie from a request
     -   [`huma.ReadCookies`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ReadCookies) reads cookies from a request
     -   [`huma.WriteErr`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#WriteErr) function to write error responses
     -   [`huma.API`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#API) the API instance

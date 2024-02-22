@@ -75,6 +75,30 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
+			Name: "middleware-cookie",
+			Register: func(t *testing.T, api huma.API) {
+				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+					cookie, err := huma.ReadCookie(ctx, "foo")
+					assert.NoError(t, err)
+					assert.Equal(t, "bar", cookie.Value)
+
+					next(ctx)
+				})
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/middleware",
+				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+					// This should never be called because of the middleware.
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/middleware",
+			Headers: map[string]string{
+				"Cookie": "foo=bar",
+			},
+		},
+		{
 			Name: "params",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{

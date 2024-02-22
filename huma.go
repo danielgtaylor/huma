@@ -782,7 +782,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				if cookies == nil {
 					// Only parse the cookie headers once, on-demand.
 					cookies = map[string]*http.Cookie{}
-					for _, c := range ReadCookies(ctx, "") {
+					for _, c := range ReadCookies(ctx) {
 						cookies[c.Name] = c
 					}
 				}

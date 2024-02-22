@@ -1,21 +1,36 @@
 package huma
 
 import (
+	"fmt"
 	"net/http"
 	"net/textproto"
 	"strings"
 )
 
-// ReadCookies reads all cookies from the request headers. If a filter is
-// provided, only cookies with that name are parsed & returned.
-func ReadCookies(ctx Context, filter string) []*http.Cookie {
+// ReadCookie reads a single cookie from the request headers by name. If
+// multiple cookies with the same name exist, the first is returned.
+func ReadCookie(ctx Context, name string) (*http.Cookie, error) {
 	headers := []string{}
 	ctx.EachHeader(func(name, value string) {
 		if strings.EqualFold(name, "cookie") {
 			headers = append(headers, value)
 		}
 	})
-	return readCookies(headers, filter)
+	for _, c := range readCookies(headers, name) {
+		return c, nil
+	}
+	return nil, fmt.Errorf("%w: %s", http.ErrNoCookie, name)
+}
+
+// ReadCookies reads all cookies from the request headers.
+func ReadCookies(ctx Context) []*http.Cookie {
+	headers := []string{}
+	ctx.EachHeader(func(name, value string) {
+		if strings.EqualFold(name, "cookie") {
+			headers = append(headers, value)
+		}
+	})
+	return readCookies(headers, "")
 }
 
 // Everything below this line is copied from the Go standard library. None of
