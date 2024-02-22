@@ -62,9 +62,10 @@ huma.Register(api, huma.Operation{
 
 Headers are set by fields on the response struct. Here are the available tags:
 
-| Tag      | Description                 | Example                  |
-| -------- | --------------------------- | ------------------------ |
-| `header` | Name of the response header | `header:"Authorization"` |
+| Tag          | Description                 | Example                                      |
+| ------------ | --------------------------- | -------------------------------------------- |
+| `header`     | Name of the response header | `header:"Authorization"`                     |
+| `timeFormat` | Format of a `time.Time`     | `timeFormat:"Mon, 02 Jan 2006 15:04:05 GMT"` |
 
 Here's an example of a response with several headers of different types:
 
@@ -76,6 +77,48 @@ type MyOutput struct {
 	MyHeader     int       `header:"My-Header"`
 }
 ```
+
+If the field type implements the [`fmt.Stringer`](https://pkg.go.dev/fmt#Stringer) interface then that will be used to convert the value to a string.
+
+### Set vs. Append
+
+By default, headers are set on the response, which overwrites any existing header of the same name. If you want to append to an existing header, you can use an array of values instead of a single value.
+
+```go title="code.go"
+type MyOutput struct {
+	MyHeader []string `header:"My-Header"`
+}
+```
+
+If you want to append just one header, you can use a slice with a single value.
+
+### Cookies
+
+You can set cookies in the response by using the [`Set-Cookie`](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie) header. The [`http.Cookie`](https://pkg.go.dev/net/http#Cookie) type can be used to represent the cookie without needing to manually convert it to a string.
+
+```go title="code.go"
+type MyOutput struct {
+	SetCookie http.Cookie `header:"Set-Cookie"`
+}
+
+huma.Register(api, huma.Operation{
+	OperationID: "set-cookie",
+	Method:      http.MethodGet,
+	Path:        "/set-cookie",
+	Summary:     "Set a cookie",
+}, func(ctx context.Context, *struct{}) (*MyOutput, error) {
+	// Create a response and set the cookie
+	resp := &MyOutput{
+		SetCookie: http.Cookie{
+			Name:  "session",
+			Value: "123",
+		},
+	}
+	return resp, nil
+}
+```
+
+You can set multiple cookies by using a slice like `[]http.Cookie` instead.
 
 ## Body
 
