@@ -406,7 +406,10 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 					result.Paths = append(result.Paths, findResultPath[T]{fi, v})
 				}
 			}
-			if recurseFields {
+			if f.Anonymous || recurseFields || deref(f.Type).Kind() != reflect.Struct {
+				// Always process embedded structs and named fields which are not
+				// structs. If `recurseFields` is true then we also process named
+				// struct fields recursively.
 				_findInType(f.Type, fi, result, onType, onField, recurseFields, ignore...)
 			}
 		}
