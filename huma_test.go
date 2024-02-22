@@ -79,7 +79,7 @@ func TestFeatures(t *testing.T) {
 			Register: func(t *testing.T, api huma.API) {
 				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
 					cookie, err := huma.ReadCookie(ctx, "foo")
-					assert.NoError(t, err)
+					require.NoError(t, err)
 					assert.Equal(t, "bar", cookie.Value)
 
 					next(ctx)
