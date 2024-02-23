@@ -25,6 +25,9 @@ import (
 var errDeadlineUnsupported = fmt.Errorf("%w", http.ErrNotSupported)
 
 var bodyCallbackType = reflect.TypeOf(func(Context) {})
+var cookieType = reflect.TypeOf((*http.Cookie)(nil)).Elem()
+var fmtStringerType = reflect.TypeOf((*fmt.Stringer)(nil)).Elem()
+var stringType = reflect.TypeOf("")
 
 // slicesIndex returns the index of the first occurrence of v in s,
 // or -1 if not present.
@@ -114,13 +117,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		}
 
 		pfi := &paramFieldInfo{
-			Type:   f.Type,
-			Schema: SchemaFromField(registry, f, ""),
-		}
-
-		var example any
-		if e := f.Tag.Get("example"); e != "" {
-			example = jsonTagValue(registry, f.Type.Name(), pfi.Schema, f.Tag.Get("example"))
+			Type: f.Type,
 		}
 
 		if def := f.Tag.Get("default"); def != "" {
@@ -143,8 +140,24 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		} else if h := f.Tag.Get("header"); h != "" {
 			pfi.Loc = "header"
 			name = h
+		} else if c := f.Tag.Get("cookie"); c != "" {
+			pfi.Loc = "cookie"
+			name = c
+
+			if f.Type == cookieType {
+				// Special case: this will be parsed from a string input to a
+				// `http.Cookie` struct.
+				f.Type = stringType
+			}
 		} else {
 			return nil
+		}
+
+		pfi.Schema = SchemaFromField(registry, f, "")
+
+		var example any
+		if e := f.Tag.Get("example"); e != "" {
+			example = jsonTagValue(registry, f.Type.Name(), pfi.Schema, f.Tag.Get("example"))
 		}
 
 		// While discouraged, make it possible to make query/header params required.
@@ -177,7 +190,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			})
 		}
 		return pfi
-	}, "Body")
+	}, false, "Body")
 }
 
 func findResolvers(resolverType, t reflect.Type) *findResult[bool] {
@@ -187,7 +200,7 @@ func findResolvers(resolverType, t reflect.Type) *findResult[bool] {
 			return true
 		}
 		return false
-	}, nil)
+	}, nil, true)
 }
 
 func findDefaults(registry Registry, t reflect.Type) *findResult[any] {
@@ -200,7 +213,7 @@ func findDefaults(registry Registry, t reflect.Type) *findResult[any] {
 			return convertType(sf.Type.Name(), sf.Type, jsonTagValue(registry, sf.Name, s, d))
 		}
 		return nil
-	})
+	}, true)
 }
 
 type headerInfo struct {
@@ -223,7 +236,7 @@ func findHeaders(t reflect.Type) *findResult[*headerInfo] {
 			}
 		}
 		return &headerInfo{sf, header, timeFormat}
-	}, "Status", "Body")
+	}, false, "Status", "Body")
 }
 
 type findResultPath[T comparable] struct {
@@ -351,13 +364,13 @@ func (r *findResult[T]) EveryPB(pb *PathBuffer, v reflect.Value, f func(reflect.
 	}
 }
 
-func findInType[T comparable](t reflect.Type, onType func(reflect.Type, []int) T, onField func(reflect.StructField, []int) T, ignore ...string) *findResult[T] {
+func findInType[T comparable](t reflect.Type, onType func(reflect.Type, []int) T, onField func(reflect.StructField, []int) T, recurseFields bool, ignore ...string) *findResult[T] {
 	result := &findResult[T]{}
-	_findInType(t, []int{}, result, onType, onField, ignore...)
+	_findInType(t, []int{}, result, onType, onField, recurseFields, ignore...)
 	return result
 }
 
-func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T], onType func(reflect.Type, []int) T, onField func(reflect.StructField, []int) T, ignore ...string) {
+func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T], onType func(reflect.Type, []int) T, onField func(reflect.StructField, []int) T, recurseFields bool, ignore ...string) {
 	t = deref(t)
 	zero := reflect.Zero(reflect.TypeOf((*T)(nil)).Elem()).Interface()
 
@@ -393,12 +406,17 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 					result.Paths = append(result.Paths, findResultPath[T]{fi, v})
 				}
 			}
-			_findInType(f.Type, fi, result, onType, onField, ignore...)
+			if f.Anonymous || recurseFields || deref(f.Type).Kind() != reflect.Struct {
+				// Always process embedded structs and named fields which are not
+				// structs. If `recurseFields` is true then we also process named
+				// struct fields recursively.
+				_findInType(f.Type, fi, result, onType, onField, recurseFields, ignore...)
+			}
 		}
 	case reflect.Slice:
-		_findInType(t.Elem(), path, result, onType, onField, ignore...)
+		_findInType(t.Elem(), path, result, onType, onField, recurseFields, ignore...)
 	case reflect.Map:
-		_findInType(t.Elem(), path, result, onType, onField, ignore...)
+		_findInType(t.Elem(), path, result, onType, onField, recurseFields, ignore...)
 	}
 }
 
@@ -460,6 +478,42 @@ func parseArrElement[T any](values []string, parse func(string) (T, error)) ([]T
 	}
 
 	return result, nil
+}
+
+// writeHeader is a utility function to write a header value to the response.
+// the `write` function should be either `ctx.SetHeader` or `ctx.AppendHeader`.
+func writeHeader(write func(string, string), info *headerInfo, f reflect.Value) {
+	switch f.Kind() {
+	case reflect.String:
+		if f.String() == "" {
+			// Don't set empty headers.
+			return
+		}
+		write(info.Name, f.String())
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		write(info.Name, strconv.FormatInt(f.Int(), 10))
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		write(info.Name, strconv.FormatUint(f.Uint(), 10))
+	case reflect.Float32, reflect.Float64:
+		write(info.Name, strconv.FormatFloat(f.Float(), 'f', -1, 64))
+	case reflect.Bool:
+		write(info.Name, strconv.FormatBool(f.Bool()))
+	default:
+		if f.Type() == timeType && !f.Interface().(time.Time).IsZero() {
+			write(info.Name, f.Interface().(time.Time).Format(info.TimeFormat))
+			return
+		}
+
+		// If the field value has a `String() string` method, use it.
+		if f.CanAddr() {
+			if s, ok := f.Addr().Interface().(fmt.Stringer); ok {
+				write(info.Name, s.String())
+				return
+			}
+		}
+
+		write(info.Name, fmt.Sprintf("%v", f.Interface()))
+	}
 }
 
 // Register an operation handler for an API. The handler must be a function that
@@ -639,10 +693,19 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			op.Responses[defaultStatusStr].Headers = map[string]*Param{}
 		}
 		v := entry.Value
+		f := v.Field
+		if f.Type.Kind() == reflect.Slice {
+			f.Type = deref(f.Type.Elem())
+		}
+		if reflect.PointerTo(f.Type).Implements(fmtStringerType) {
+			// Special case: this field will be written as a string by calling
+			// `.String()` on the value.
+			f.Type = stringType
+		}
 		op.Responses[defaultStatusStr].Headers[v.Name] = &Header{
 			// We need to generate the schema from the field to get validation info
 			// like min/max and enums. Useful to let the client know possible values.
-			Schema: SchemaFromField(registry, v.Field, getHint(outputType, v.Field.Name, op.OperationID+defaultStatusStr+v.Name)),
+			Schema: SchemaFromField(registry, f, getHint(outputType, f.Name, op.OperationID+defaultStatusStr+v.Name)),
 		}
 	}
 
@@ -703,6 +766,8 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 		errStatus := http.StatusUnprocessableEntity
 
+		var cookies map[string]*http.Cookie
+
 		v := reflect.ValueOf(&input).Elem()
 		inputParams.Every(v, func(f reflect.Value, p *paramFieldInfo) {
 			var value string
@@ -713,6 +778,24 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				value = ctx.Query(p.Name)
 			case "header":
 				value = ctx.Header(p.Name)
+			case "cookie":
+				if cookies == nil {
+					// Only parse the cookie headers once, on-demand.
+					cookies = map[string]*http.Cookie{}
+					for _, c := range ReadCookies(ctx) {
+						cookies[c.Name] = c
+					}
+				}
+				if c, ok := cookies[p.Name]; ok {
+					// Special case: http.Cookie type, meaning we want the entire parsed
+					// cookie struct, not just the value.
+					if f.Type() == cookieType {
+						f.Set(reflect.ValueOf(cookies[p.Name]).Elem())
+						return
+					}
+
+					value = c.Value
+				}
 			}
 
 			pb.Reset()
@@ -1144,31 +1227,16 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		ct := ""
 		vo := reflect.ValueOf(output).Elem()
 		outHeaders.Every(vo, func(f reflect.Value, info *headerInfo) {
-			switch f.Kind() {
-			case reflect.String:
-				if f.String() == "" {
-					// Don't set empty headers.
-					return
+			if f.Kind() == reflect.Slice {
+				for i := 0; i < f.Len(); i++ {
+					writeHeader(ctx.AppendHeader, info, f.Index(i))
 				}
-				ctx.SetHeader(info.Name, f.String())
-				if info.Name == "Content-Type" {
+			} else {
+				if f.Kind() == reflect.String && info.Name == "Content-Type" {
+					// Track custom content type.
 					ct = f.String()
 				}
-			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				ctx.SetHeader(info.Name, strconv.FormatInt(f.Int(), 10))
-			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-				ctx.SetHeader(info.Name, strconv.FormatUint(f.Uint(), 10))
-			case reflect.Float32, reflect.Float64:
-				ctx.SetHeader(info.Name, strconv.FormatFloat(f.Float(), 'f', -1, 64))
-			case reflect.Bool:
-				ctx.SetHeader(info.Name, strconv.FormatBool(f.Bool()))
-			default:
-				if f.Type() == timeType && !f.Interface().(time.Time).IsZero() {
-					ctx.SetHeader(info.Name, f.Interface().(time.Time).Format(info.TimeFormat))
-					return
-				}
-
-				ctx.SetHeader(info.Name, fmt.Sprintf("%v", f.Interface()))
+				writeHeader(ctx.SetHeader, info, f)
 			}
 		})
 

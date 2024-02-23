@@ -75,6 +75,30 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
+			Name: "middleware-cookie",
+			Register: func(t *testing.T, api huma.API) {
+				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+					cookie, err := huma.ReadCookie(ctx, "foo")
+					require.NoError(t, err)
+					assert.Equal(t, "bar", cookie.Value)
+
+					next(ctx)
+				})
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/middleware",
+				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+					// This should never be called because of the middleware.
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/middleware",
+			Headers: map[string]string{
+				"Cookie": "foo=bar",
+			},
+		},
+		{
 			Name: "params",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
@@ -98,14 +122,17 @@ func TestFeatures(t *testing.T) {
 					QueryInts64  []int64   `query:"ints64"`
 					QueryUints   []uint    `query:"uints"`
 					// QueryUints8   []uint8   `query:"uints8"`
-					QueryUints16  []uint16  `query:"uints16"`
-					QueryUints32  []uint32  `query:"uints32"`
-					QueryUints64  []uint64  `query:"uints64"`
-					QueryFloats32 []float32 `query:"floats32"`
-					QueryFloats64 []float64 `query:"floats64"`
-					HeaderString  string    `header:"String"`
-					HeaderInt     int       `header:"Int"`
-					HeaderDate    time.Time `header:"Date"`
+					QueryUints16  []uint16    `query:"uints16"`
+					QueryUints32  []uint32    `query:"uints32"`
+					QueryUints64  []uint64    `query:"uints64"`
+					QueryFloats32 []float32   `query:"floats32"`
+					QueryFloats64 []float64   `query:"floats64"`
+					HeaderString  string      `header:"String"`
+					HeaderInt     int         `header:"Int"`
+					HeaderDate    time.Time   `header:"Date"`
+					CookieValue   string      `cookie:"one"`
+					CookieInt     int         `cookie:"two"`
+					CookieFull    http.Cookie `cookie:"three"`
 				}) (*struct{}, error) {
 					assert.Equal(t, "foo", input.PathString)
 					assert.Equal(t, 123, input.PathInt)
@@ -130,8 +157,14 @@ func TestFeatures(t *testing.T) {
 					assert.Equal(t, []uint64{10, 15}, input.QueryUints64)
 					assert.Equal(t, []float32{2.2, 2.3}, input.QueryFloats32)
 					assert.Equal(t, []float64{3.2, 3.3}, input.QueryFloats64)
+					assert.Equal(t, "foo", input.CookieValue)
+					assert.Equal(t, 123, input.CookieInt)
+					assert.Equal(t, "bar", input.CookieFull.Value)
 					return nil, nil
 				})
+
+				// `http.Cookie` should be treated as a string.
+				assert.Equal(t, "string", api.OpenAPI().Paths["/test-params/{string}/{int}"].Get.Parameters[26].Schema.Type)
 			},
 			Method: http.MethodGet,
 			URL:    "/test-params/foo/123?string=bar&int=456&before=2023-01-01T12:00:00Z&date=2023-01-01&uint=1&bool=true&strings=foo,bar&ints=2,3&ints8=4,5&ints16=4,5&ints32=4,5&ints64=4,5&uints=1,2&uints16=10,15&uints32=10,15&uints64=10,15&floats32=2.2,2.3&floats64=3.2,3.3",
@@ -139,6 +172,7 @@ func TestFeatures(t *testing.T) {
 				"string": "baz",
 				"int":    "789",
 				"date":   "Mon, 01 Jan 2023 12:00:00 GMT",
+				"cookie": "one=foo; two=123; three=bar",
 			},
 		},
 		{
@@ -437,6 +471,71 @@ func TestFeatures(t *testing.T) {
 				assert.Equal(t, "true", resp.Header().Get("Bool"))
 				assert.Equal(t, "Sun, 01 Jan 2023 12:00:00 GMT", resp.Header().Get("Date"))
 				assert.Empty(t, resp.Header().Values("Empty"))
+			},
+		},
+		{
+			Name: "response-cookie",
+			Register: func(t *testing.T, api huma.API) {
+				type Resp struct {
+					SetCookie http.Cookie `header:"Set-Cookie"`
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/response-cookie",
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					resp := &Resp{}
+					resp.SetCookie = http.Cookie{
+						Name:  "foo",
+						Value: "bar",
+					}
+					return resp, nil
+				})
+
+				// `http.Cookie` should be treated as a string.
+				assert.Equal(t, "string", api.OpenAPI().Paths["/response-cookie"].Get.Responses["204"].Headers["Set-Cookie"].Schema.Type)
+			},
+			Method: http.MethodGet,
+			URL:    "/response-cookie",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNoContent, resp.Code)
+				assert.Equal(t, "foo=bar", resp.Header().Get("Set-Cookie"))
+			},
+		},
+		{
+			Name: "response-cookies",
+			Register: func(t *testing.T, api huma.API) {
+				type Resp struct {
+					SetCookie []http.Cookie `header:"Set-Cookie"`
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/response-cookies",
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					resp := &Resp{}
+					resp.SetCookie = []http.Cookie{
+						{
+							Name:  "foo",
+							Value: "bar",
+						},
+						{
+							Name:  "baz",
+							Value: "123",
+						},
+					}
+					return resp, nil
+				})
+
+				// `[]http.Cookie` should be treated as a string.
+				assert.Equal(t, "string", api.OpenAPI().Paths["/response-cookies"].Get.Responses["204"].Headers["Set-Cookie"].Schema.Type)
+			},
+			Method: http.MethodGet,
+			URL:    "/response-cookies",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNoContent, resp.Code)
+				assert.Equal(t, "foo=bar", resp.Header()["Set-Cookie"][0])
+				assert.Equal(t, "baz=123", resp.Header()["Set-Cookie"][1])
 			},
 		},
 		{

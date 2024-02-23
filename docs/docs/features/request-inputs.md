@@ -13,6 +13,7 @@ Requests can have parameters and/or a body as input to the handler function. Inp
 | `path`     | Name of the path parameter            | `path:"thing-id"`        |
 | `query`    | Name of the query string parameter    | `query:"q"`              |
 | `header`   | Name of the header parameter          | `header:"Authorization"` |
+| `cookie`   | Name of the cookie parameter          | `cookie:"session"`       |
 | `required` | Mark a query/header param as required | `required:"true"`        |
 
 !!! info "Required"
@@ -33,6 +34,16 @@ The following parameter types are supported out of the box:
 | slice, e.g. `[]int` | `1,2,3`, `tag1,tag2`   |
 
 For example, if the parameter is a query param and the type is `[]string` it might look like `?tags=tag1,tag2` in the URI.
+
+For cookies, the default behavior is to read the cookie _value_ from the request and convert it to one of the types above. If you want to access the entire cookie, you can use `http.Cookie` as the type instead:
+
+```go title="code.go"
+type MyInput struct {
+	Session http.Cookie `cookie:"session"`
+}
+```
+
+Then you can access e.g. `input.Session.Name` or `input.Session.Value`.
 
 ## Request Body
 
