@@ -157,6 +157,36 @@ If you want to access your custom options struct with custom commands, use the [
 
     You can also overwite `cli.Root().Run` to completely customize how you run the server. Or just ditch the `cli` package altogether!
 
+## App Name & Version
+
+You can set the app name and version to be used in the help output and version command. By default, the app name is the name of the binary and the version is unset. You can set them using the root [`cobra.Command`](https://pkg.go.dev/github.com/spf13/cobra#Command)'s `Use` and `Version` fields:
+
+```go title="main.go"
+// cli := huma.NewCLI(...)
+
+cmd := cli.Root()
+cmd.Use = "appname"
+cmd.Version = "1.0.1"
+
+cmd.Run()
+```
+
+Then you will see something like this:
+
+```sh title="Terminal"
+$ go run ./demo --help
+Usage:
+  appname [flags]
+
+Flags:
+  -h, --help            help for appname
+  -p, --port int         (default 8888)
+  -v, --version         version for appname
+
+$ go run ./demo --version
+appname version 1.0.1
+```
+
 ## Dive Deeper
 
 -   Tutorial
