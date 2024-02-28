@@ -163,6 +163,7 @@ func TestCLIHelp(t *testing.T) {
 		// Do nothing
 	})
 
+	cli.Root().Use = "myapp"
 	cli.Root().SetArgs([]string{"--help"})
 	buf := bytes.NewBuffer(nil)
 	cli.Root().SetOut(buf)
