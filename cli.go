@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -254,7 +255,7 @@ func (c *cli[O]) setupOptions(t reflect.Type, path []int) {
 func NewCLI[O any](onParsed func(Hooks, *O)) CLI {
 	c := &cli[O]{
 		root: &cobra.Command{
-			Use: "myapp",
+			Use: filepath.Base(os.Args[0]),
 		},
 		onParsed: onParsed,
 	}
