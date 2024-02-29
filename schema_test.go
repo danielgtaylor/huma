@@ -11,9 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/danielgtaylor/huma/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/danielgtaylor/huma/v2"
 )
 
 type EmbeddedChild struct {
@@ -701,7 +702,7 @@ func TestSchemaGenericNamingFromModule(t *testing.T) {
 	}`, string(b))
 }
 
-type OmittableNullable[T any] struct { //nolint: musttag
+type OmittableNullable[T any] struct {
 	Sent  bool
 	Null  bool
 	Value T
@@ -735,25 +736,25 @@ func TestCustomUnmarshalType(t *testing.T) {
 	s := r.Schema(reflect.TypeOf(o), false, "")
 	assert.Equal(t, "integer", s.Properties["field"].Type, s)
 	assert.Equal(t, Ptr(float64(10)), s.Properties["field"].Maximum, s)
-	assert.Equal(t, float64(5), s.Properties["field"].Examples[0], s.Properties["field"])
+	assert.InDelta(t, float64(5), s.Properties["field"].Examples[0], 0, s.Properties["field"])
 
 	// Confirm the field works as expected when loading JSON.
 	o = O{}
-	err := json.Unmarshal([]byte(`{"field": 123}`), &o)
+	err := json.Unmarshal([]byte(`{"field": 123}`), &o) //nolint:musttag
 	require.NoError(t, err)
 	assert.True(t, o.Field.Sent)
 	assert.False(t, o.Field.Null)
 	assert.Equal(t, 123, o.Field.Value)
 
 	o = O{}
-	err = json.Unmarshal([]byte(`{"field": null}`), &o)
+	err = json.Unmarshal([]byte(`{"field": null}`), &o) //nolint:musttag
 	require.NoError(t, err)
 	assert.True(t, o.Field.Sent)
 	assert.True(t, o.Field.Null)
 	assert.Equal(t, 0, o.Field.Value)
 
 	o = O{}
-	err = json.Unmarshal([]byte(`{}`), &o)
+	err = json.Unmarshal([]byte(`{}`), &o) //nolint:musttag
 	require.NoError(t, err)
 	assert.False(t, o.Field.Sent)
 	assert.False(t, o.Field.Null)

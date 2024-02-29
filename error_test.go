@@ -1,15 +1,16 @@
 package huma_test
 
 import (
-	"fmt"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/humatest"
 )
 
 // Ensure the default error models satisfy these interfaces.
@@ -30,7 +31,7 @@ func TestError(t *testing.T) {
 		Value:    "bar",
 	})
 
-	err.Add(fmt.Errorf("plain error"))
+	err.Add(errors.New("plain error"))
 
 	// Confirm errors were added.
 	assert.Equal(t, "test err", err.Error())
@@ -89,7 +90,7 @@ func TestTransformError(t *testing.T) {
 	config := huma.DefaultConfig("Test API", "1.0.0")
 	config.Transformers = []huma.Transformer{
 		func(ctx huma.Context, status string, v any) (any, error) {
-			return nil, fmt.Errorf("whoops")
+			return nil, errors.New("whoops")
 		},
 	}
 	_, api := humatest.New(t, config)

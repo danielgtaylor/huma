@@ -2,15 +2,17 @@ package autopatch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"testing"
 	"testing/iotest"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/humatest"
-	"github.com/stretchr/testify/assert"
 )
 
 type SaleModel struct {
@@ -210,7 +212,7 @@ func TestPatch(t *testing.T) {
 	// PATCH body read error
 	w = api.Patch("/things/notfound",
 		"Content-Type: application/merge-patch+json",
-		iotest.ErrReader(fmt.Errorf("test error")),
+		iotest.ErrReader(errors.New("test error")),
 	)
 	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 

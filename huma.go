@@ -20,6 +20,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 var errDeadlineUnsupported = fmt.Errorf("%w", http.ErrNotSupported)
@@ -195,7 +197,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 
 func findResolvers(resolverType, t reflect.Type) *findResult[bool] {
 	return findInType(t, func(t reflect.Type, path []int) bool {
-		tp := reflect.PtrTo(t)
+		tp := reflect.PointerTo(t)
 		if tp.Implements(resolverType) || tp.Implements(resolverWithPathType) {
 			return true
 		}
@@ -1047,6 +1049,18 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							return
 						}
 						f.Set(reflect.ValueOf(t))
+						pv = value
+						break
+					}
+
+					// Special case: uuid.UUID
+					if f.Type() == uuidType {
+						u, err := uuid.Parse(value)
+						if err != nil {
+							res.Add(pb, value, "invalid UUID")
+							return
+						}
+						f.Set(reflect.ValueOf(u))
 						pv = value
 						break
 					}

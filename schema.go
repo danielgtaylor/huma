@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // ErrSchemaInvalid is sent when there is a problem building the schema.
@@ -27,10 +29,12 @@ const (
 	TypeObject  = "object"
 )
 
+// Special JSON Schema formats.
 var (
 	timeType = reflect.TypeOf(time.Time{})
 	ipType   = reflect.TypeOf(net.IP{})
 	urlType  = reflect.TypeOf(url.URL{})
+	uuidType = reflect.TypeOf(uuid.UUID{})
 )
 
 func deref(t reflect.Type) reflect.Type {
@@ -54,7 +58,7 @@ func deref(t reflect.Type) reflect.Type {
 //	schema := huma.SchemaFromType(registry, reflect.TypeOf(MyType{}))
 //
 // Note that the registry may create references for your types.
-type Schema struct { //nolint: musttag
+type Schema struct {
 	Type                 string             `yaml:"type,omitempty"`
 	Title                string             `yaml:"title,omitempty"`
 	Description          string             `yaml:"description,omitempty"`
@@ -431,8 +435,8 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 		// tags later.
 		fs.Format = "date-time-http"
 	}
-	if fmt := f.Tag.Get("format"); fmt != "" {
-		fs.Format = fmt
+	if format := f.Tag.Get("format"); format != "" {
+		fs.Format = format
 	}
 	if timeFmt := f.Tag.Get("timeFormat"); timeFmt != "" {
 		switch timeFmt {
@@ -557,9 +561,16 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 	s := Schema{}
 	t = deref(t)
 
-	if t == ipType {
-		// Special case: IP address.
+	// Handle special cases.
+	switch t {
+	case timeType:
+		return &Schema{Type: TypeString, Format: "date-time"}
+	case urlType:
+		return &Schema{Type: TypeString, Format: "uri"}
+	case ipType:
 		return &Schema{Type: TypeString, Format: "ipv4"}
+	case uuidType:
+		return &Schema{Type: TypeString, Format: "uuid"}
 	}
 
 	minZero := 0.0
@@ -615,23 +626,15 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 			s.Items = r.Schema(t.Elem(), true, t.Name()+"Item")
 
 			if t.Kind() == reflect.Array {
-				len := t.Len()
-				s.MinItems = &len
-				s.MaxItems = &len
+				l := t.Len()
+				s.MinItems = &l
+				s.MaxItems = &l
 			}
 		}
 	case reflect.Map:
 		s.Type = TypeObject
 		s.AdditionalProperties = r.Schema(t.Elem(), true, t.Name()+"Value")
 	case reflect.Struct:
-		// Handle special cases.
-		switch t {
-		case timeType:
-			return &Schema{Type: TypeString, Format: "date-time"}
-		case urlType:
-			return &Schema{Type: TypeString, Format: "uri"}
-		}
-
 		required := []string{}
 		requiredMap := map[string]bool{}
 		propNames := []string{}

@@ -3,7 +3,7 @@ package huma_test
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,12 +11,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/danielgtaylor/huma/v2/humatest"
-	"github.com/go-chi/chi/v5"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 var NewExampleAdapter = humatest.NewAdapter
@@ -103,10 +105,11 @@ func TestFeatures(t *testing.T) {
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
-					Path:   "/test-params/{string}/{int}",
+					Path:   "/test-params/{string}/{int}/{uuid}",
 				}, func(ctx context.Context, input *struct {
 					PathString   string    `path:"string"`
 					PathInt      int       `path:"int"`
+					PathUUID     uuid.UUID `path:"uuid"`
 					QueryString  string    `query:"string"`
 					QueryInt     int       `query:"int"`
 					QueryDefault float32   `query:"def" default:"135" example:"5"`
@@ -136,9 +139,10 @@ func TestFeatures(t *testing.T) {
 				}) (*struct{}, error) {
 					assert.Equal(t, "foo", input.PathString)
 					assert.Equal(t, 123, input.PathInt)
+					assert.Equal(t, uuid.MustParse("fba4f46b-4539-4d19-8e3f-a0e629a243b5"), input.PathUUID)
 					assert.Equal(t, "bar", input.QueryString)
 					assert.Equal(t, 456, input.QueryInt)
-					assert.EqualValues(t, 135, input.QueryDefault)
+					assert.InDelta(t, 135, input.QueryDefault, 0)
 					assert.True(t, input.QueryBefore.Equal(time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)))
 					assert.True(t, input.QueryDate.Equal(time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)))
 					assert.EqualValues(t, 1, input.QueryUint)
@@ -164,10 +168,10 @@ func TestFeatures(t *testing.T) {
 				})
 
 				// `http.Cookie` should be treated as a string.
-				assert.Equal(t, "string", api.OpenAPI().Paths["/test-params/{string}/{int}"].Get.Parameters[26].Schema.Type)
+				assert.Equal(t, "string", api.OpenAPI().Paths["/test-params/{string}/{int}/{uuid}"].Get.Parameters[27].Schema.Type)
 			},
 			Method: http.MethodGet,
-			URL:    "/test-params/foo/123?string=bar&int=456&before=2023-01-01T12:00:00Z&date=2023-01-01&uint=1&bool=true&strings=foo,bar&ints=2,3&ints8=4,5&ints16=4,5&ints32=4,5&ints64=4,5&uints=1,2&uints16=10,15&uints32=10,15&uints64=10,15&floats32=2.2,2.3&floats64=3.2,3.3",
+			URL:    "/test-params/foo/123/fba4f46b-4539-4d19-8e3f-a0e629a243b5?string=bar&int=456&before=2023-01-01T12:00:00Z&date=2023-01-01&uint=1&bool=true&strings=foo,bar&ints=2,3&ints8=4,5&ints16=4,5&ints32=4,5&ints64=4,5&uints=1,2&uints16=10,15&uints32=10,15&uints64=10,15&floats32=2.2,2.3&floats64=3.2,3.3",
 			Headers: map[string]string{
 				"string": "baz",
 				"int":    "789",
@@ -180,9 +184,10 @@ func TestFeatures(t *testing.T) {
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
-					Path:   "/test-params/{int}",
+					Path:   "/test-params/{int}/{uuid}",
 				}, func(ctx context.Context, input *struct {
 					PathInt       string    `path:"int"`
+					PathUUID      uuid.UUID `path:"uuid"`
 					QueryInt      int       `query:"int"`
 					QueryFloat    float32   `query:"float"`
 					QueryBefore   time.Time `query:"before"`
@@ -207,11 +212,12 @@ func TestFeatures(t *testing.T) {
 				})
 			},
 			Method: http.MethodGet,
-			URL:    "/test-params/bad?int=bad&float=bad&before=bad&date=bad&uint=bad&bool=bad&ints=bad&ints8=bad&ints16=bad&ints32=bad&ints64=bad&uints=bad&uints16=bad&uints32=bad&uints64=bad&floats32=bad&floats64=bad",
+			URL:    "/test-params/bad/not-a-uuid?int=bad&float=bad&before=bad&date=bad&uint=bad&bool=bad&ints=bad&ints8=bad&ints16=bad&ints32=bad&ints64=bad&uints=bad&uints16=bad&uints32=bad&uints64=bad&floats32=bad&floats64=bad",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
 
 				assert.Contains(t, resp.Body.String(), "invalid integer")
+				assert.Contains(t, resp.Body.String(), "invalid UUID")
 				assert.Contains(t, resp.Body.String(), "invalid float")
 				assert.Contains(t, resp.Body.String(), "invalid date/time")
 				assert.Contains(t, resp.Body.String(), "invalid bool")
@@ -670,7 +676,7 @@ func TestFeatures(t *testing.T) {
 			Name: "response-transform-error",
 			Transformers: []huma.Transformer{
 				func(ctx huma.Context, status string, v any) (any, error) {
-					return nil, fmt.Errorf("whoops")
+					return nil, errors.New("whoops")
 				},
 			},
 			Register: func(t *testing.T, api huma.API) {
@@ -902,7 +908,7 @@ type ExhaustiveErrorsInputBody struct {
 }
 
 func (b *ExhaustiveErrorsInputBody) Resolve(ctx huma.Context) []error {
-	return []error{fmt.Errorf("body resolver error")}
+	return []error{errors.New("body resolver error")}
 }
 
 type ExhaustiveErrorsInput struct {
@@ -1021,7 +1027,7 @@ func TestCustomError(t *testing.T) {
 		Method:      http.MethodGet,
 		Path:        "/error",
 	}, func(ctx context.Context, i *struct{}) (*struct{}, error) {
-		return nil, huma.Error404NotFound("not found", fmt.Errorf("some-other-error"))
+		return nil, huma.Error404NotFound("not found", errors.New("some-other-error"))
 	})
 
 	resp := api.Get("/error", "Host: localhost")
@@ -1123,7 +1129,7 @@ func TestResolverCompositionCalledOnce(t *testing.T) {
 }
 
 func TestParamPointerPanics(t *testing.T) {
-	// For now we don't support these, so we panic rather than have subtle
+	// For now, we don't support these, so we panic rather than have subtle
 	// bugs that are hard to track down.
 	_, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
 
@@ -1141,7 +1147,7 @@ func TestParamPointerPanics(t *testing.T) {
 }
 
 func TestPointerDefaultPanics(t *testing.T) {
-	// For now we don't support these, so we panic rather than have subtle
+	// For now, we don't support these, so we panic rather than have subtle
 	// bugs that are hard to track down.
 	_, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
 
