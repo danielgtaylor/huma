@@ -371,7 +371,7 @@ func NewAPI(config Config, a Adapter) API {
             integrity="sha256-yIhuSFMJJ6mp2XTUAb4SiSYneP3Qav8Uu+7NBhGJW5A="
             crossorigin="anonymous"></script>
   </head>
-  <body>
+  <body style="height: 100vh;">
 
     <elements-api
       apiDescriptionUrl="` + config.OpenAPIPath + `.yaml"
