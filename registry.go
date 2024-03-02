@@ -67,7 +67,7 @@ type mapRegistry struct {
 func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema {
 	t = deref(t)
 	getsRef := t.Kind() == reflect.Struct
-	if t == timeType || t == uuidType {
+	if t == timeType {
 		// Special case: time.Time and uuid.UUID are always strings.
 		getsRef = false
 	}

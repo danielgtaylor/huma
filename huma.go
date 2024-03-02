@@ -10,6 +10,7 @@ package huma
 import (
 	"bytes"
 	"context"
+	"encoding"
 	"errors"
 	"fmt"
 	"io"
@@ -20,8 +21,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 var errDeadlineUnsupported = fmt.Errorf("%w", http.ErrNotSupported)
@@ -1053,14 +1052,12 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						break
 					}
 
-					// Special case: uuid.UUID
-					if f.Type() == uuidType {
-						u, err := uuid.Parse(value)
-						if err != nil {
-							res.Add(pb, value, "invalid UUID")
+					// Last resort: use the `encoding.TextUnmarshaler` interface.
+					if fn, ok := f.Addr().Interface().(encoding.TextUnmarshaler); ok {
+						if err := fn.UnmarshalText([]byte(value)); err != nil {
+							res.Add(pb, value, "invalid "+p.Name)
 							return
 						}
-						f.Set(reflect.ValueOf(u))
 						pv = value
 						break
 					}
