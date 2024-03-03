@@ -802,7 +802,7 @@ func validateUUID(s string) error {
 	// UUID enclosed in braces
 	case 36 + 2:
 		if s[0] != '{' || s[len(s)-1] != '}' {
-			return fmt.Errorf("invalid bracketed UUID format")
+			return errors.New("invalid bracketed UUID format")
 		}
 		s = s[1 : len(s)-1]
 

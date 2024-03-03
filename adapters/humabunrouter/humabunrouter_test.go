@@ -3,6 +3,7 @@ package humabunrouter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,8 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/danielgtaylor/huma/v2"
 	"github.com/uptrace/bunrouter"
+
+	"github.com/danielgtaylor/huma/v2"
 )
 
 var lastModified = time.Now()
@@ -284,7 +286,7 @@ func BenchmarkRawBunRouterFast(b *testing.B) {
 		}
 
 		if len(input.Suffix) > 5 {
-			return fmt.Errorf("suffix too long")
+			return errors.New("suffix too long")
 		}
 
 		w.Header().Set("Content-Type", "application/json")

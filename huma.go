@@ -10,6 +10,7 @@ package huma
 import (
 	"bytes"
 	"context"
+	"encoding"
 	"errors"
 	"fmt"
 	"io"
@@ -195,7 +196,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 
 func findResolvers(resolverType, t reflect.Type) *findResult[bool] {
 	return findInType(t, func(t reflect.Type, path []int) bool {
-		tp := reflect.PtrTo(t)
+		tp := reflect.PointerTo(t)
 		if tp.Implements(resolverType) || tp.Implements(resolverWithPathType) {
 			return true
 		}
@@ -1047,6 +1048,16 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							return
 						}
 						f.Set(reflect.ValueOf(t))
+						pv = value
+						break
+					}
+
+					// Last resort: use the `encoding.TextUnmarshaler` interface.
+					if fn, ok := f.Addr().Interface().(encoding.TextUnmarshaler); ok {
+						if err := fn.UnmarshalText([]byte(value)); err != nil {
+							res.Add(pb, value, "invalid value: "+err.Error())
+							return
+						}
 						pv = value
 						break
 					}
