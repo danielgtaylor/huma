@@ -1055,7 +1055,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					// Last resort: use the `encoding.TextUnmarshaler` interface.
 					if fn, ok := f.Addr().Interface().(encoding.TextUnmarshaler); ok {
 						if err := fn.UnmarshalText([]byte(value)); err != nil {
-							res.Add(pb, value, "invalid "+p.Name)
+							res.Add(pb, value, "invalid value: "+err.Error())
 							return
 						}
 						pv = value

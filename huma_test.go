@@ -227,7 +227,7 @@ func TestFeatures(t *testing.T) {
 				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
 
 				assert.Contains(t, resp.Body.String(), "invalid integer")
-				assert.Contains(t, resp.Body.String(), "invalid uuid")
+				assert.Contains(t, resp.Body.String(), "invalid value: invalid UUID length: 10")
 				assert.Contains(t, resp.Body.String(), "invalid float")
 				assert.Contains(t, resp.Body.String(), "invalid date/time")
 				assert.Contains(t, resp.Body.String(), "invalid bool")
