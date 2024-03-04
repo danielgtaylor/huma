@@ -22,7 +22,7 @@ Response: 201 Created
 
 Add a new operation to our API that allows users to submit reviews of our product.
 
-```go title="main.go" linenums="1" hl_lines="30-37 58-67"
+```go title="main.go" linenums="1" hl_lines="25-32 57-68"
 package main
 
 import (
@@ -38,11 +38,6 @@ import (
 // Options for the CLI.
 type Options struct {
 	Port int `help:"Port to listen on" short:"p" default:"8888"`
-}
-
-// GreetingInput represents the greeting operation request.
-type GreetingInput struct {
-	Name string `path:"name" maxLength:"30" example:"world" doc:"Name to greet"`
 }
 
 // GreetingOutput represents the greeting operation response.
@@ -71,20 +66,26 @@ func main() {
 		// Register GET /greeting/{name}
 		huma.Register(api, huma.Operation{
 			OperationID: "get-greeting",
-			Summary:     "Get a greeting",
 			Method:      http.MethodGet,
 			Path:        "/greeting/{name}",
-		}, func(ctx context.Context, input *GreetingInput) (*GreetingOutput, error) {
+			Summary:     "Get a greeting",
+			Description: "Get a greeting for a person by name.",
+			Tags:        []string{"Greetings"},
+		}, func(ctx context.Context, input *struct{
+			Name string `path:"name" maxLength:"30" example:"world" doc:"Name to greet"`
+		}) (*GreetingOutput, error) {
 			resp := &GreetingOutput{}
 			resp.Body.Message = fmt.Sprintf("Hello, %s!", input.Name)
 			return resp, nil
 		})
 
+		// Register POST /reviews
 		huma.Register(api, huma.Operation{
 			OperationID:   "post-review",
-			Summary:       "Post a review",
 			Method:        http.MethodPost,
 			Path:          "/reviews",
+			Summary:       "Post a review",
+			Tags:          []string{"Reviews"},
 			DefaultStatus: http.StatusCreated,
 		}, func(ctx context.Context, i *ReviewInput) (*struct{}, error) {
 			// TODO: save review in data store.

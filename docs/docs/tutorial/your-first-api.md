@@ -16,41 +16,12 @@ Response:
 }
 ```
 
-## Request Input
+## Response Output
 
-Start by making a new file `main.go` and adding the greet operation's request input model:
+Start by making a new file `main.go` and adding the greet operation's response output model, which has a body with a `message` field for the greeting message:
 
 ```go title="main.go" linenums="1"
 package main
-
-// GreetingInput represents the greeting operation request.
-type GreetingInput struct {
-	Name string `path:"name" maxLength:"30" example:"world" doc:"Name to greet"`
-}
-```
-
-The `path` tag tells Huma that this field should be read from the URL path, which we will use when registering the operation. The `maxLength` tag tells Huma that the name should be no longer than 30 characters.
-
-You should now have a directory structure that looks like:
-
-```title="Directory Structure"
-my-api/
-  |-- go.mod
-  |-- go.sum
-	|-- main.go
-```
-
-## Response Output
-
-Next, let's add the response output model, which has a body with a `message` field for the greeting message.
-
-```go title="main.go" linenums="1" hl_lines="8-13"
-package main
-
-// GreetingInput represents the greeting operation request.
-type GreetingInput struct {
-	Name string `path:"name" maxLength:"30" example:"world" doc:"Name to greet"`
-}
 
 // GreetingOutput represents the greeting operation response.
 type GreetingOutput struct {
@@ -62,11 +33,22 @@ type GreetingOutput struct {
 
 Requests and responses may define a field `Body` which will be used to marshal or unmarshal the request or response body.
 
+The `example` and `doc` tags are used to generate friendly API documentation via OpenAPI.
+
+You should now have a directory structure that looks like:
+
+```title="Directory Structure"
+my-api/
+  |-- go.mod
+  |-- go.sum
+	|-- main.go
+```
+
 ## Router & API
 
 Let's create a router, which will handle getting incoming requests to the correct operation handler, and a new API instance where we can register our operation.
 
-```go title="main.go" linenums="1" hl_lines="3-9 23-32"
+```go title="main.go" linenums="1" hl_lines="3-9 18-27"
 package main
 
 import (
@@ -76,11 +58,6 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
 )
-
-// GreetingInput represents the greeting operation request.
-type GreetingInput struct {
-	Name string `path:"name" maxLength:"30" example:"world" doc:"Name to greet"`
-}
 
 // GreetingOutput represents the greeting operation response.
 type GreetingOutput struct {
@@ -101,11 +78,22 @@ func main() {
 }
 ```
 
+!!! info "Router"
+
+    We are using the [Chi](https://github.com/go-chi/chi) for this example, but if you want to use the built-in Go 1.22+ router, you can do this instead:
+
+    ```go title="main.go"
+    router := http.NewServeMux()
+    api := humago.New(router, huma.DefaultConfig("My API", "1.0.0"))
+    ```
+
+    Lots of other routers are [supported too](../features/bring-your-own-router/).
+
 ## Operation
 
-Register the operation with the Huma API instance, including how it maps to a URL and some human-friendly documentation. The handler function will take in the `GreetingInput` and return the `GreetingOutput` models we built above.
+Register the operation with the Huma API instance, including how it maps to a URL. The handler function will take in a struct that defines its inputs (in this case a path parameter named `name`) and return the `GreetingOutput` model we built above.
 
-```go title="main.go" linenums="1" hl_lines="4-5 30-40"
+```go title="main.go" linenums="1" hl_lines="4-5 25-32"
 package main
 
 import (
@@ -118,11 +106,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// GreetingInput represents the greeting operation request.
-type GreetingInput struct {
-	Name string `path:"name" maxLength:"30" example:"world" doc:"Name to greet"`
-}
-
 // GreetingOutput represents the greeting operation response.
 type GreetingOutput struct {
 	Body struct {
@@ -131,17 +114,14 @@ type GreetingOutput struct {
 }
 
 func main() {
-	// Create a new router & API
+	// Create a new router & API.
 	router := chi.NewMux()
 	api := humachi.New(router, huma.DefaultConfig("My API", "1.0.0"))
 
-	// Register GET /greeting/{name}
-	huma.Register(api, huma.Operation{
-		OperationID: "get-greeting",
-		Summary:     "Get a greeting",
-		Method:      http.MethodGet,
-		Path:        "/greeting/{name}",
-	}, func(ctx context.Context, input *GreetingInput) (*GreetingOutput, error) {
+	// Register GET /greeting/{name} handler.
+	huma.Get(api, "/greeting/{name}", func(ctx context.Context, input *struct{
+		Name string `path:"name" maxLength:"30" example:"world" doc:"Name to greet"`
+	}) (*GreetingOutput, error) {
 		resp := &GreetingOutput{}
 		resp.Body.Message = fmt.Sprintf("Hello, %s!", input.Name)
 		return resp, nil
@@ -151,6 +131,8 @@ func main() {
 	http.ListenAndServe("127.0.0.1:8888", router)
 }
 ```
+
+The `path` tag tells Huma that this field should be read from the URL path. The `maxLength` tag tells Huma that the name should be no longer than 30 characters.
 
 Congratulations! This is a fully functional Huma API!
 
@@ -188,6 +170,58 @@ Go to [http://localhost:8888/docs](http://localhost:8888/docs) to see the intera
 Using the panel at the top right of the documentation page you can send a request to the API and see the response.
 
 These docs are generated from the OpenAPI specification, which is available at [http://localhost:8888/openapi.json](http://localhost:8888/openapi.json). You can use this file to generate documentation, client libraries, commandline clients, mock servers, and more.
+
+### Enhancing Documentation
+
+You can use `huma.Register` to add more information to the OpenAPI specification, such as descriptions with Markdown, examples, tags, and more. The `huma.Operation` struct provides full access to the OpenAPI including the ability to add extensions. See the [`huma.Operation`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Operation) struct for more details.
+
+```go title="main.go" linenums="1" hl_lines="26-33"
+package main
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/go-chi/chi/v5"
+)
+
+// GreetingOutput represents the greeting operation response.
+type GreetingOutput struct {
+	Body struct {
+		Message string `json:"message" example:"Hello, world!" doc:"Greeting message"`
+	}
+}
+
+func main() {
+	// Create a new router & API
+	router := chi.NewMux()
+	api := humachi.New(router, huma.DefaultConfig("My API", "1.0.0"))
+
+	// Register GET /greeting/{name}
+	huma.Register(api, huma.Operation{
+		OperationID: "get-greeting",
+		Method:      http.MethodGet,
+		Path:        "/greeting/{name}",
+		Summary:     "Get a greeting",
+		Description: "Get a greeting for a person by name.",
+		Tags:        []string{"Greetings"},
+	}, func(ctx context.Context, input *struct{
+		Name string `path:"name" maxLength:"30" example:"world" doc:"Name to greet"`
+	}) (*GreetingOutput, error) {
+		resp := &GreetingOutput{}
+		resp.Body.Message = fmt.Sprintf("Hello, %s!", input.Name)
+		return resp, nil
+	})
+
+	// Start the server!
+	http.ListenAndServe("127.0.0.1:8888", router)
+}
+```
+
+Now restart the server and take a look at your updated docs!
 
 ## Review
 
