@@ -97,10 +97,11 @@ func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
 			}
 			for i := 0; i < typ.NumField(); i++ {
 				f := typ.Field(i)
-				fields = append(fields, f)
 				if f.IsExported() {
-					// Track which fields are exported so we can copy them over. It's
-					// preferred to track/compute this here to avoid allocations in
+					fields = append(fields, f)
+
+					// Track which fields are exported, so we can copy them over.
+					// It's preferred to track/compute this here to avoid allocations in
 					// the transform function from looking up what is exported.
 					fieldIndexes = append(fieldIndexes, i)
 				}
@@ -155,8 +156,13 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, status string, v any) (an
 
 	// Copy over all the exported fields.
 	vv := reflect.Indirect(reflect.ValueOf(v))
-	for _, i := range info.fields {
-		tmp.Field(i + 1).Set(vv.Field(i))
+	for i, j := range info.fields {
+		// Field 0 is the $schema field, so we need to offset the index by one.
+		// There might have been unexported fields in the struct declared in the schema,
+		// but these have been filtered out when creating the new type.
+		// Therefore, the field with index i on the new type maps to the field with index j
+		// in the original struct.
+		tmp.Field(i + 1).Set(vv.Field(j))
 	}
 
 	return tmp.Addr().Interface(), nil
