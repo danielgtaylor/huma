@@ -704,7 +704,7 @@ func TestFeatures(t *testing.T) {
 			Name: "response-transform-error",
 			Transformers: []huma.Transformer{
 				func(ctx huma.Context, status string, v any) (any, error) {
-					return nil, errors.ErrUnsupported
+					return nil, http.ErrNotSupported
 				},
 			},
 			Register: func(t *testing.T, api huma.API) {
@@ -714,7 +714,7 @@ func TestFeatures(t *testing.T) {
 						if err := recover(); err != nil {
 							// Ensure the error is the one we expect, possibly wrapped with
 							// additional info.
-							assert.ErrorIs(t, err.(error), errors.ErrUnsupported)
+							assert.ErrorIs(t, err.(error), http.ErrNotSupported)
 						}
 						called = true
 					}()
