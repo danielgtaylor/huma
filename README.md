@@ -23,7 +23,7 @@ Features include:
 
 - Declarative interface on top of your router of choice:
   - Operation & model documentation
-  - Request params (path, query, or header)
+  - Request params (path, query, header, or cookie)
   - Request body
   - Responses (including errors)
   - Response headers
@@ -61,6 +61,8 @@ This project was inspired by [FastAPI](https://fastapi.tiangolo.com/). Logo & br
 
 > Thank you Daniel for Huma. Superbly useful project and saves us a lot of time and hassle thanks to the OpenAPI gen — similar to FastAPI in Python. - [WolvesOfAllStreets](https://www.reddit.com/r/golang/comments/1aqj99d/comment/kqfqcml/?utm_source=reddit&utm_medium=web2x&context=3)
 
+> Huma is wonderful, I've started working with it recently, and it's a pleasure, so thank you very much for your efforts 🙏 - [callmemicah](https://www.reddit.com/r/golang/comments/1b32ts4/comment/ksvr9h7/?utm_source=reddit&utm_medium=web2x&context=3)
+
 # Install
 
 Install via `go get`. Note that Go 1.20 or newer is required.
@@ -87,14 +89,9 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Options for the CLI.
+// Options for the CLI. Pass `--port` or set the `SERVICE_PORT` env var.
 type Options struct {
 	Port int `help:"Port to listen on" short:"p" default:"8888"`
-}
-
-// GreetingInput represents the greeting operation request.
-type GreetingInput struct {
-	Name string `path:"name" maxLength:"30" example:"world" doc:"Name to greet"`
 }
 
 // GreetingOutput represents the greeting operation response.
@@ -111,13 +108,10 @@ func main() {
 		router := chi.NewMux()
 		api := humachi.New(router, huma.DefaultConfig("My API", "1.0.0"))
 
-		// Register GET /greeting/{name}
-		huma.Register(api, huma.Operation{
-			OperationID: "get-greeting",
-			Summary:     "Get a greeting",
-			Method:      http.MethodGet,
-			Path:        "/greeting/{name}",
-		}, func(ctx context.Context, input *GreetingInput) (*GreetingOutput, error) {
+		// Add the operation handler to the API.
+		huma.Get(api, "/greeting/{name}", func(ctx context.Context, input *struct{
+			Name string `path:"name" maxLength:"30" example:"world" doc:"Name to greet"`
+		}) (*GreetingOutput, error) {
 			resp := &GreetingOutput{}
 			resp.Body.Message = fmt.Sprintf("Hello, %s!", input.Name)
 			return resp, nil
@@ -134,6 +128,9 @@ func main() {
 }
 ```
 
+> [!TIP]
+> Replace `chi.NewMux()` → `http.NewServeMux()` and `humachi.New` → `humago.New` to use the standard library router from Go 1.22+. Just make sure your `go.mod` has `go 1.22` or newer listed in it. Everything else stays the same! Switch whenever you are ready.
+
 You can test it with `go run greet.go` (optionally pass `--port` to change the default) and make a sample request using [Restish](https://rest.sh/) (or `curl`):
 
 ```sh
@@ -149,6 +146,8 @@ HTTP/1.1 200 OK
 
 Even though the example is tiny you can also see some generated documentation at http://localhost:8888/docs. The generated OpenAPI is available at http://localhost:8888/openapi.json or http://localhost:8888/openapi.yaml.
 
+Check out the [Huma tutorial](https://huma.rocks/tutorial/installation/) for a step-by-step guide to get started.
+
 # Documentation
 
 See the [https://huma.rocks/](https://huma.rocks/) website for full documentation in a presentation that's easier to navigate and search then this README. You can find the source for the site in the `docs` directory of this repo.
@@ -162,3 +161,8 @@ Official Go package documentation can always be found at https://pkg.go.dev/gith
 - [Golang News & Libs & Jobs shared on Twitter/X](https://twitter.com/golangch/status/1752175499701264532)
 - Featured in [Go Weekly #495](https://golangweekly.com/issues/495)
 - [Bump.sh Deploying Docs from Huma](https://docs.bump.sh/guides/bump-sh-tutorials/huma/)
+- Mentioned in [Composable HTTP Handlers Using Generics](https://www.willem.dev/articles/generic-http-handlers/)
+
+Be sure to star the project if you find it useful!
+
+[![Star History Chart](https://api.star-history.com/svg?repos=danielgtaylor/huma&type=Date)](https://star-history.com/#danielgtaylor/huma&Date)

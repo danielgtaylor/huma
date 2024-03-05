@@ -20,12 +20,6 @@ nav:
           - "Writing Tests": tutorial/writing-tests.md
           - "CLI Client": tutorial/cli-client.md
           - "Client SDKs": tutorial/client-sdks.md
-  - "How To Guides":
-      - "Custom Validation": how-to/custom-validation.md
-      - "Image Response": how-to/image-response.md
-      - "Graceful Shutdown": how-to/graceful-shutdown.md
-      - "Migrating From V1": how-to/migrate.md
-      - "OAuth 2.0 & JWT": how-to/oauth2-jwt.md
   - "Features":
       - "Features Overview": features/index.md
       - "The Server":
@@ -57,6 +51,12 @@ nav:
           - "Test Utilities": features/test-utilities.md
       - "Clients":
           - "CLI AutoConfig": features/cli-auto-config.md
+  - "How To Guides":
+      - "Custom Validation": how-to/custom-validation.md
+      - "Image Response": how-to/image-response.md
+      - "Graceful Shutdown": how-to/graceful-shutdown.md
+      - "Migrating From V1": how-to/migrate.md
+      - "OAuth 2.0 & JWT": how-to/oauth2-jwt.md
   - "Go Reference": "https://pkg.go.dev/github.com/danielgtaylor/huma/v2?tab=doc"
 theme:
   name: material

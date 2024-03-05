@@ -1194,6 +1194,44 @@ func TestPointerDefaultPanics(t *testing.T) {
 	})
 }
 
+func TestConvenienceMethods(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	path := "/things"
+	type Input struct {
+		Owner string `path:"owner"`
+		Repo  string `path:"repo"`
+	}
+
+	huma.Get(api, path, func(ctx context.Context, input *Input) (*struct {
+		Body []struct{}
+	}, error) {
+		return nil, nil
+	})
+	assert.Equal(t, "list-things", api.OpenAPI().Paths[path].Get.OperationID)
+
+	huma.Post(api, path, func(ctx context.Context, input *Input) (*struct{}, error) {
+		return nil, nil
+	})
+	assert.Equal(t, "post-things", api.OpenAPI().Paths[path].Post.OperationID)
+
+	path = path + "/{thing-id}"
+	huma.Put(api, path, func(ctx context.Context, input *Input) (*struct{}, error) {
+		return nil, nil
+	})
+	assert.Equal(t, "put-things-by-thing-id", api.OpenAPI().Paths[path].Put.OperationID)
+
+	huma.Patch(api, path, func(ctx context.Context, input *Input) (*struct{}, error) {
+		return nil, nil
+	})
+	assert.Equal(t, "patch-things-by-thing-id", api.OpenAPI().Paths[path].Patch.OperationID)
+
+	huma.Delete(api, path, func(ctx context.Context, input *Input) (*struct{}, error) {
+		return nil, nil
+	})
+	assert.Equal(t, "delete-things-by-thing-id", api.OpenAPI().Paths[path].Delete.OperationID)
+}
+
 // func BenchmarkSecondDecode(b *testing.B) {
 // 	//nolint: musttag
 // 	type MediumSized struct {
