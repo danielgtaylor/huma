@@ -704,10 +704,23 @@ func TestFeatures(t *testing.T) {
 			Name: "response-transform-error",
 			Transformers: []huma.Transformer{
 				func(ctx huma.Context, status string, v any) (any, error) {
-					return nil, errors.New("whoops")
+					return nil, http.ErrNotSupported
 				},
 			},
 			Register: func(t *testing.T, api huma.API) {
+				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+					called := false
+					defer func() {
+						if err := recover(); err != nil {
+							// Ensure the error is the one we expect, possibly wrapped with
+							// additional info.
+							assert.ErrorIs(t, err.(error), http.ErrNotSupported)
+						}
+						called = true
+					}()
+					next(ctx)
+					assert.True(t, called)
+				})
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
 					Path:   "/response",
