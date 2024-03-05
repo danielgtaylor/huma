@@ -87,7 +87,7 @@ func main() {
     api := humago.New(router, huma.DefaultConfig("My API", "1.0.0"))
     ```
 
-    Lots of other routers are [supported too](../features/bring-your-own-router/).
+    Lots of other routers are [supported too](../../features/bring-your-own-router/).
 
 ## Operation
 
