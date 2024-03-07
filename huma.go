@@ -1380,36 +1380,11 @@ var GenerateSummary = func(method, path string, response any) string {
 	return strings.ToUpper(phrase[:1]) + phrase[1:]
 }
 
-// GenerateDescription generates an operation description from the method,
-// path, and response type. The description is used to describe an operation
-// in the OpenAPI spec. The generated description is capitalized and includes
-// the method and path, with any path parameters replaced by their names.
-//
-// Examples:
-//
-//   - GET /things` -> `Lists the things.`
-//   - GET /things/{thing-id} -> `Gets the things by thing id.`
-//   - PUT /things/{thingId}/favorite -> `Puts the things by thing id favorite.`
-//
-// This function can be overridden to provide custom operation descriptions.
-var GenerateDescription = func(method, path string, response any) string {
-	action := method
-	body, hasBody := deref(reflect.TypeOf(response)).FieldByName("Body")
-	if hasBody && method == http.MethodGet && deref(body.Type).Kind() == reflect.Slice {
-		// Special case: GET with a slice response body is a list operation.
-		action = "list"
-	}
-	path = reRemoveIDs.ReplaceAllString(path, "by-$1")
-	phrase := strings.ReplaceAll(casing.Kebab(strings.ToLower(action)+"s the "+path, strings.ToLower, casing.Initialism), "-", " ") + "."
-	return strings.ToUpper(phrase[:1]) + phrase[1:]
-}
-
 func convenience[I, O any](api API, method, path string, handler func(context.Context, *I) (*O, error)) {
 	var o *O
 	Register(api, Operation{
 		OperationID: GenerateOperationID(method, path, o),
 		Summary:     GenerateSummary(method, path, o),
-		Description: GenerateDescription(method, path, o),
 		Method:      method,
 		Path:        path,
 	}, handler)
