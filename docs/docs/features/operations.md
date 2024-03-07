@@ -71,7 +71,7 @@ huma.Get(api, "/things/{thing-id}", func(ctx context.Context, input *YourInput) 
 })
 ```
 
-The generated operation ID for the above example would be `get-things-by-thing-id`. Override `huma.GenerateOperationID(method, path string, response any)` to customize the generated operation IDs.
+In the example above, the generated operation ID is `get-things-by-thing-id` with a summary of `Get things by id`. To customize these, override `huma.GenerateOperationID(method, path string, response any)` for operation IDs and `huma.GenerateSummary(method, path string, response any)` for summaries.
 
 This makes it easy to get started, particularly if coming from other frameworks, and you can simply switch to using `huma.Register` if/when you need to set additional fields on the operation.
 
