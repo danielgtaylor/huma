@@ -36,8 +36,10 @@ type ResolverWithPath interface {
 	Resolve(ctx Context, prefix *PathBuffer) []error
 }
 
-var resolverType = reflect.TypeOf((*Resolver)(nil)).Elem()
-var resolverWithPathType = reflect.TypeOf((*ResolverWithPath)(nil)).Elem()
+var (
+	resolverType         = reflect.TypeOf((*Resolver)(nil)).Elem()
+	resolverWithPathType = reflect.TypeOf((*ResolverWithPath)(nil)).Elem()
+)
 
 // Adapter is an interface that allows the API to be used with different HTTP
 // routers and frameworks. It is designed to work with the standard library
@@ -106,6 +108,23 @@ type Context interface {
 
 	// BodyWriter returns the response body writer.
 	BodyWriter() io.Writer
+}
+
+type (
+	humaContext Context
+	subContext  struct {
+		humaContext
+		ctx context.Context
+	}
+)
+
+func (c subContext) Context() context.Context {
+	return c.ctx
+}
+
+// WithContext returns a new context with the given key and value set. This is
+func WithContext(ctx Context, key, value any) Context {
+	return subContext{ctx: context.WithValue(ctx.Context(), key, value), humaContext: ctx}
 }
 
 // Transformer is a function that can modify a response body before it is
