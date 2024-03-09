@@ -86,6 +86,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/danielgtaylor/huma/v2/humacli"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -103,7 +104,7 @@ type GreetingOutput struct {
 
 func main() {
 	// Create a CLI app which takes a port option.
-	cli := huma.NewCLI(func(hooks huma.Hooks, options *Options) {
+	cli := humacli.New(func(hooks humacli.Hooks, options *Options) {
 		// Create a new router & API
 		router := chi.NewMux()
 		api := humachi.New(router, huma.DefaultConfig("My API", "1.0.0"))
@@ -159,7 +160,7 @@ Official Go package documentation can always be found at https://pkg.go.dev/gith
 - [APIs in Go with Huma 2.0](https://dgt.hashnode.dev/apis-in-go-with-huma-20)
 - [Reducing Go Dependencies: A case study of dependency reduction in Huma](https://dgt.hashnode.dev/reducing-go-dependencies)
 - [Golang News & Libs & Jobs shared on Twitter/X](https://twitter.com/golangch/status/1752175499701264532)
-- Featured in [Go Weekly #495](https://golangweekly.com/issues/495)
+- Featured in Go Weekly [#495](https://golangweekly.com/issues/495) & [#498](https://golangweekly.com/issues/498)
 - [Bump.sh Deploying Docs from Huma](https://docs.bump.sh/guides/bump-sh-tutorials/huma/)
 - Mentioned in [Composable HTTP Handlers Using Generics](https://www.willem.dev/articles/generic-http-handlers/)
 

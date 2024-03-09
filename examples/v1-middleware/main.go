@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/middleware"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/danielgtaylor/huma/v2/humacli"
 	"github.com/go-chi/chi"
 )
 
@@ -32,7 +33,7 @@ type GreetingOutput struct {
 
 func main() {
 	// Create a CLI app which takes a port option.
-	cli := huma.NewCLI(func(hooks huma.Hooks, opts *Options) {
+	cli := humacli.New(func(hooks humacli.Hooks, opts *Options) {
 		// Create a Chi v4.x.x router instance.
 		router := chi.NewMux()
 

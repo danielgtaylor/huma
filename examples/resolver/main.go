@@ -15,6 +15,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/danielgtaylor/huma/v2/humacli"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -48,7 +49,7 @@ var _ huma.ResolverWithPath = (*IntNot3)(nil)
 func main() {
 	// Create the CLI, passing a function to be called with your custom options
 	// after they have been parsed.
-	cli := huma.NewCLI(func(hooks huma.Hooks, options *Options) {
+	cli := humacli.New(func(hooks humacli.Hooks, options *Options) {
 		router := chi.NewMux()
 
 		api := humachi.New(router, huma.DefaultConfig("My API", "1.0.0"))

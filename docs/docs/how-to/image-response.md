@@ -20,6 +20,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/danielgtaylor/huma/v2/humacli"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -36,7 +37,7 @@ type ImageOutput struct {
 
 func main() {
 	// Create a CLI app which takes a port option.
-	cli := huma.NewCLI(func(hooks huma.Hooks, options *Options) {
+	cli := humacli.New(func(hooks humacli.Hooks, options *Options) {
 		// Create a new router & API
 		router := chi.NewMux()
 		api := humachi.New(router, huma.DefaultConfig("My API", "1.0.0"))
