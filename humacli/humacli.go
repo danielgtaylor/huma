@@ -186,7 +186,7 @@ func (c *cli[O]) setupOptions(t reflect.Type, path []int) {
 
 		envName := "SERVICE_" + casing.Snake(name, strings.ToUpper)
 		defaultValue := field.Tag.Get("default")
-		if v := os.Getenv(envName); v != "" {
+		if v, ok := os.LookupEnv(envName); ok {
 			// Env vars will override the default value, which is used to document
 			// what the value is if no options are passed.
 			defaultValue = v
