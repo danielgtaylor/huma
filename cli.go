@@ -78,6 +78,6 @@ func WithOptions[Options any](f func(cmd *cobra.Command, args []string, options 
 //
 // Deprecated: use `humacli.New` instead.
 func NewCLI[O any](onParsed func(Hooks, *O)) CLI {
-	log.Print("huma.NewCLI is deprecated, use humacli.New instead")
+	log.Println("huma.NewCLI is deprecated, use humacli.New instead")
 	return humacli.New(onParsed)
 }
