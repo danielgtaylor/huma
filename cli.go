@@ -32,7 +32,7 @@ type Hooks = humacli.Hooks
 //
 // Deprecated: use `humacli.WithOptions` instead.
 func WithOptions[Options any](f func(cmd *cobra.Command, args []string, options *Options)) func(*cobra.Command, []string) {
-	log.Print("huma.WithOptions is deprecated, use humacli.WithOptions instead")
+	log.Println("huma.WithOptions is deprecated, use humacli.WithOptions instead")
 	return humacli.WithOptions(f)
 }
 
