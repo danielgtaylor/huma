@@ -1,3 +1,6 @@
+//go:build !humanewclipackage
+// +build !humanewclipackage
+
 package huma
 
 import (
