@@ -51,6 +51,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/danielgtaylor/huma/v2/humacli"
 	"github.com/go-chi/chi/v5"
 	"github.com/spf13/cobra"
 )
@@ -81,7 +82,7 @@ type PetID struct {
 func main() {
 	var api huma.API
 
-	cli := huma.NewCLI(func(hooks huma.Hooks, options *struct{}) {
+	cli := humacli.New(func(hooks humacli.Hooks, options *struct{}) {
 		router := chi.NewMux()
 		api := humachi.New(router, huma.DefaultConfig("Pet Store", "1.0.0"))
 

@@ -20,7 +20,7 @@ type Options struct {
 
 func main() {
 	// Then, create the CLI.
-	cli := huma.NewCLI(func(hooks huma.Hooks, opts *Options) {
+	cli := humacli.New(func(hooks humacli.Hooks, opts *Options) {
 		fmt.Printf("I was run with debug:%v host:%v port%v\n",
 			opts.Debug, opts.Host, opts.Port)
 	})
@@ -45,7 +45,7 @@ I was run with debug:true host:localhost port:8000
 To do useful work, you will want to register a handler for the default start command and optionally a way to gracefully shutdown the server:
 
 ```go title="main.go"
-cli := huma.NewCLI(func(hooks huma.Hooks, opts *Options) {
+cli := humacli.New(func(hooks humacli.Hooks, opts *Options) {
 	// Set up the router and API
 	// ...
 
@@ -162,7 +162,7 @@ If you want to access your custom options struct with custom commands, use the [
 You can set the app name and version to be used in the help output and version command. By default, the app name is the name of the binary and the version is unset. You can set them using the root [`cobra.Command`](https://pkg.go.dev/github.com/spf13/cobra#Command)'s `Use` and `Version` fields:
 
 ```go title="main.go"
-// cli := huma.NewCLI(...)
+// cli := humacli.New(...)
 
 cmd := cli.Root()
 cmd.Use = "appname"
@@ -194,10 +194,10 @@ appname version 1.0.1
 -   How-To
     -   [Graceful Shutdown](../how-to/graceful-shutdown.md) on service stop
 -   Reference
-    -   [`huma.CLI`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#CLI) the CLI instance
-    -   [`huma.NewCLI`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#NewCLI) creates a new CLI instance
-    -   [`huma.Hooks`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Hooks) for startup / shutdown
-    -   [`huma.WithOptions`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#WithOptions) wraps a command with options parsing
+    -   [`humacli.CLI`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/humacli#CLI) the CLI instance
+    -   [`humacli.New`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/humacli#New) creates a new CLI instance
+    -   [`humacli.Hooks`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/humacli#Hooks) for startup / shutdown
+    -   [`humacli.WithOptions`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/humacli#WithOptions) wraps a command with options parsing
     -   [`huma.API`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#API) the API instance
 -   External Links
     -   [Cobra](https://cobra.dev/) CLI library

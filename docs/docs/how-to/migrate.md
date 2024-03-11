@@ -11,6 +11,6 @@ description: Migrate your code from Huma v1 to Huma v2 in a few simple steps.
 1. Rewrite handlers to be like `func(context.Context, *Input) (*Output, error)`
     1. Return errors instead of `ctx.WriteError(...)`
     1. Return instances instead of `ctx.WriteModel(...)`
-1. Define options via a struct and use `huma.NewCLI` to wrap the service
+1. Define options via a struct and use `humacli.New` to wrap the service
 
 Note that GraphQL support from Huma v1 has been removed. Take a look at alternative tools like [https://www.npmjs.com/package/openapi-to-graphql](https://www.npmjs.com/package/openapi-to-graphql) which will automatically generate a GraphQL endpoint from Huma's generated OpenAPI spec.
