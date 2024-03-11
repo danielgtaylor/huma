@@ -53,9 +53,31 @@ huma.Register(api, huma.Operation{
     $ restish your-api your-operation-name --param=value ...
     ```
 
+### Convenience Methods
+
+A number of convenience methods are provided if you don't want to use the `huma.Operation` struct directly. The following are available:
+
+-   `huma.Get`
+-   `huma.Post`
+-   `huma.Put`
+-   `huma.Patch`
+-   `huma.Delete`
+
+These methods are equivalent to using `huma.Register` with the `Method` field set to the corresponding HTTP method, and they generate the operation ID for you based on the path. For example:
+
+```go title="code.go"
+huma.Get(api, "/things/{thing-id}", func(ctx context.Context, input *YourInput) (*YourOutput, error) {
+    // ... Implementation goes here ...
+})
+```
+
+In the example above, the generated operation ID is `get-things-by-thing-id` with a summary of `Get things by id`. To customize these, override `huma.GenerateOperationID(method, path string, response any)` for operation IDs and `huma.GenerateSummary(method, path string, response any)` for summaries.
+
+This makes it easy to get started, particularly if coming from other frameworks, and you can simply switch to using `huma.Register` if/when you need to set additional fields on the operation.
+
 ## Handler Function
 
-The operation handler function always has the following generic format, where `Input` and `Output` are custom structs defined by the developer that represent the entirety of the request (path/query/header params & body) and response (headers & body), respectively:
+The operation handler function _always_ has the following generic format, where `Input` and `Output` are custom structs defined by the developer that represent the entirety of the request (path/query/header/cookie params & body) and response (headers & body), respectively:
 
 ```go title="code.go"
 func(context.Context, *Input) (*Output, error)

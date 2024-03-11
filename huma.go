@@ -10,16 +10,20 @@ package huma
 import (
 	"bytes"
 	"context"
+	"encoding"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/danielgtaylor/casing"
 )
 
 var errDeadlineUnsupported = fmt.Errorf("%w", http.ErrNotSupported)
@@ -195,7 +199,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 
 func findResolvers(resolverType, t reflect.Type) *findResult[bool] {
 	return findInType(t, func(t reflect.Type, path []int) bool {
-		tp := reflect.PtrTo(t)
+		tp := reflect.PointerTo(t)
 		if tp.Implements(resolverType) || tp.Implements(resolverWithPathType) {
 			return true
 		}
@@ -457,12 +461,12 @@ func transformAndWrite(api API, ctx Context, status int, ct string, body any) {
 	tval, terr := api.Transform(ctx, strconv.Itoa(status), body)
 	if terr != nil {
 		ctx.BodyWriter().Write([]byte("error transforming response"))
-		panic(fmt.Sprintf("error transforming response %+v for %s %s %d: %s\n", tval, ctx.Operation().Method, ctx.Operation().Path, status, terr.Error()))
+		panic(fmt.Errorf("error transforming response %+v for %s %s %d: %w\n", tval, ctx.Operation().Method, ctx.Operation().Path, status, terr))
 	}
 	ctx.SetStatus(status)
 	if merr := api.Marshal(ctx.BodyWriter(), ct, tval); merr != nil {
 		ctx.BodyWriter().Write([]byte("error marshaling response"))
-		panic(fmt.Sprintf("error marshaling response %+v for %s %s %d: %s\n", tval, ctx.Operation().Method, ctx.Operation().Path, status, merr.Error()))
+		panic(fmt.Errorf("error marshaling response %+v for %s %s %d: %w\n", tval, ctx.Operation().Method, ctx.Operation().Path, status, merr))
 	}
 }
 
@@ -519,8 +523,8 @@ func writeHeader(write func(string, string), info *headerInfo, f reflect.Value) 
 // Register an operation handler for an API. The handler must be a function that
 // takes a context and a pointer to the input struct and returns a pointer to the
 // output struct and an error. The input struct must be a struct with fields
-// for the request path/query/header parameters and/or body. The output struct
-// must be a  struct with fields for the output headers and body of the
+// for the request path/query/header/cookie parameters and/or body. The output
+// struct must be a struct with fields for the output headers and body of the
 // operation, if any.
 //
 //	huma.Register(api, huma.Operation{
@@ -1051,6 +1055,16 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						break
 					}
 
+					// Last resort: use the `encoding.TextUnmarshaler` interface.
+					if fn, ok := f.Addr().Interface().(encoding.TextUnmarshaler); ok {
+						if err := fn.UnmarshalText([]byte(value)); err != nil {
+							res.Add(pb, value, "invalid value: "+err.Error())
+							return
+						}
+						pv = value
+						break
+					}
+
 					panic("unsupported param type " + p.Type.String())
 				}
 
@@ -1315,4 +1329,166 @@ func AutoRegister(api API, server any) {
 			m.Func.Call(args)
 		}
 	}
+}
+
+var reRemoveIDs = regexp.MustCompile(`\{([^}]+)\}`)
+
+// GenerateOperationID generates an operation ID from the method, path,
+// and response type. The operation ID is used to uniquely identify an
+// operation in the OpenAPI spec. The generated ID is kebab-cased and
+// includes the method and path, with any path parameters replaced by
+// their names.
+//
+// Examples:
+//
+//   - GET /things` -> `list-things
+//   - GET /things/{thing-id} -> get-things-by-thing-id
+//   - PUT /things/{thingId}/favorite -> put-things-by-thing-id-favorite
+//
+// This function can be overridden to provide custom operation IDs.
+var GenerateOperationID = func(method, path string, response any) string {
+	action := method
+	body, hasBody := deref(reflect.TypeOf(response)).FieldByName("Body")
+	if hasBody && method == http.MethodGet && deref(body.Type).Kind() == reflect.Slice {
+		// Special case: GET with a slice response body is a list operation.
+		action = "list"
+	}
+	return casing.Kebab(action + "-" + reRemoveIDs.ReplaceAllString(path, "by-$1"))
+}
+
+// GenerateSummary generates an operation summary from the method, path,
+// and response type. The summary is used to describe an operation in the
+// OpenAPI spec. The generated summary is capitalized and includes the
+// method and path, with any path parameters replaced by their names.
+//
+// Examples:
+//
+//   - GET /things` -> `List things`
+//   - GET /things/{thing-id} -> `Get things by thing id`
+//   - PUT /things/{thingId}/favorite -> `Put things by thing id favorite`
+//
+// This function can be overridden to provide custom operation summaries.
+var GenerateSummary = func(method, path string, response any) string {
+	action := method
+	body, hasBody := deref(reflect.TypeOf(response)).FieldByName("Body")
+	if hasBody && method == http.MethodGet && deref(body.Type).Kind() == reflect.Slice {
+		// Special case: GET with a slice response body is a list operation.
+		action = "list"
+	}
+	path = reRemoveIDs.ReplaceAllString(path, "by-$1")
+	phrase := strings.ReplaceAll(casing.Kebab(strings.ToLower(action)+" "+path, strings.ToLower, casing.Initialism), "-", " ")
+	return strings.ToUpper(phrase[:1]) + phrase[1:]
+}
+
+func convenience[I, O any](api API, method, path string, handler func(context.Context, *I) (*O, error)) {
+	var o *O
+	Register(api, Operation{
+		OperationID: GenerateOperationID(method, path, o),
+		Summary:     GenerateSummary(method, path, o),
+		Method:      method,
+		Path:        path,
+	}, handler)
+}
+
+// Get HTTP operation handler for an API. The handler must be a function that
+// takes a context and a pointer to the input struct and returns a pointer to the
+// output struct and an error. The input struct must be a struct with fields
+// for the request path/query/header/cookie parameters and/or body. The output
+// struct must be a struct with fields for the output headers and body of the
+// operation, if any.
+//
+//	huma.Get(api, "/things", func(ctx context.Context, input *struct{
+//		Body []Thing
+//	}) (*ListThingOutput, error) {
+//		// TODO: list things from DB...
+//		resp := &PostThingOutput{}
+//		resp.Body = []Thing{{ID: "1", Name: "Thing 1"}}
+//		return resp, nil
+//	})
+//
+// This is a convenience wrapper around `huma.Register`.
+func Get[I, O any](api API, path string, handler func(context.Context, *I) (*O, error)) {
+	convenience(api, http.MethodGet, path, handler)
+}
+
+// Post HTTP operation handler for an API. The handler must be a function that
+// takes a context and a pointer to the input struct and returns a pointer to the
+// output struct and an error. The input struct must be a struct with fields
+// for the request path/query/header/cookie parameters and/or body. The output
+// struct must be a struct with fields for the output headers and body of the
+// operation, if any.
+//
+//	huma.Post(api, "/things", func(ctx context.Context, input *struct{
+//		Body Thing
+//	}) (*PostThingOutput, error) {
+//		// TODO: save thing to DB...
+//		resp := &PostThingOutput{}
+//		resp.Location = "/things/" + input.Body.ID
+//		return resp, nil
+//	})
+//
+// This is a convenience wrapper around `huma.Register`.
+func Post[I, O any](api API, path string, handler func(context.Context, *I) (*O, error)) {
+	convenience(api, http.MethodPost, path, handler)
+}
+
+// Put HTTP operation handler for an API. The handler must be a function that
+// takes a context and a pointer to the input struct and returns a pointer to the
+// output struct and an error. The input struct must be a struct with fields
+// for the request path/query/header/cookie parameters and/or body. The output
+// struct must be a struct with fields for the output headers and body of the
+// operation, if any.
+//
+//	huma.Put(api, "/things/{thing-id}", func(ctx context.Context, input *struct{
+//		ID string `path:"thing-id"`
+//		Body Thing
+//	}) (*PutThingOutput, error) {
+//		// TODO: save thing to DB...
+//		resp := &PutThingOutput{}
+//		return resp, nil
+//	})
+//
+// This is a convenience wrapper around `huma.Register`.
+func Put[I, O any](api API, path string, handler func(context.Context, *I) (*O, error)) {
+	convenience(api, http.MethodPut, path, handler)
+}
+
+// Patch HTTP operation handler for an API. The handler must be a function that
+// takes a context and a pointer to the input struct and returns a pointer to the
+// output struct and an error. The input struct must be a struct with fields
+// for the request path/query/header/cookie parameters and/or body. The output
+// struct must be a struct with fields for the output headers and body of the
+// operation, if any.
+//
+//	huma.Patch(api, "/things/{thing-id}", func(ctx context.Context, input *struct{
+//		ID string `path:"thing-id"`
+//		Body ThingPatch
+//	}) (*PatchThingOutput, error) {
+//		// TODO: save thing to DB...
+//		resp := &PutThingOutput{}
+//		return resp, nil
+//	})
+//
+// This is a convenience wrapper around `huma.Register`.
+func Patch[I, O any](api API, path string, handler func(context.Context, *I) (*O, error)) {
+	convenience(api, http.MethodPatch, path, handler)
+}
+
+// Delete HTTP operation handler for an API. The handler must be a function that
+// takes a context and a pointer to the input struct and returns a pointer to the
+// output struct and an error. The input struct must be a struct with fields
+// for the request path/query/header/cookie parameters and/or body. The output
+// struct must be a struct with fields for the output headers and body of the
+// operation, if any.
+//
+//	huma.Delete(api, "/things/{thing-id}", func(ctx context.Context, input *struct{
+//		ID string `path:"thing-id"`
+//	}) (*struct{}, error) {
+//		// TODO: remove thing from DB...
+//		return nil, nil
+//	})
+//
+// This is a convenience wrapper around `huma.Register`.
+func Delete[I, O any](api API, path string, handler func(context.Context, *I) (*O, error)) {
+	convenience(api, http.MethodDelete, path, handler)
 }

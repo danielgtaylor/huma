@@ -3,7 +3,6 @@ package huma
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"reflect"
 	"time"
@@ -1388,7 +1387,7 @@ func (t *Tag) MarshalJSON() ([]byte, error) {
 type AddOpFunc func(oapi *OpenAPI, op *Operation)
 
 // OpenAPI is the root object of the OpenAPI document.
-type OpenAPI struct { //nolint: musttag
+type OpenAPI struct {
 	// OpenAPI is REQUIRED. This string MUST be the version number of the OpenAPI
 	// Specification that the OpenAPI document uses. The openapi field SHOULD be
 	// used by tooling to interpret the OpenAPI document. This is not related to
@@ -1486,7 +1485,7 @@ func (o *OpenAPI) AddOperation(op *Operation) {
 	case http.MethodTrace:
 		item.Trace = op
 	default:
-		panic(fmt.Sprintf("unknown method %s", op.Method))
+		panic("unknown method " + op.Method)
 	}
 
 	for _, f := range o.OnAddOperation {

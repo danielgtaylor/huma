@@ -2,16 +2,17 @@ package sse_test
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/danielgtaylor/huma/v2/sse"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type DefaultMessage struct {
@@ -96,7 +97,7 @@ data: {"error": "encode error: json: unsupported type: chan int"}
 `, resp.Body.String())
 
 	// Test write error doens't panic
-	w := &DummyWriter{writeErr: fmt.Errorf("whoops")}
+	w := &DummyWriter{writeErr: errors.New("whoops")}
 	req, _ := http.NewRequest(http.MethodGet, "/sse", nil)
 	api.Adapter().ServeHTTP(w, req)
 
