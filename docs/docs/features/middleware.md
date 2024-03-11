@@ -73,6 +73,29 @@ func NewHumaAPI() huma.API {
 }
 ```
 
+### Context Values
+
+The `huma.Context` interface provides a `Context()` method to retrieve the underlying request `context.Context` value. This can be used to retrieve context values in middleware and operation handlers, such as request-scoped loggers, metrics, or user information.
+
+```go title="code.go"
+if v, ok := ctx.Context().Value("some-key").(string); ok {
+	// Do something with `v`!
+}
+```
+
+You can also wrap the `huma.Context` to provide additional or override functionality. Some utilities are provided for this, including [`huma.WithValue`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#WithValue):
+
+```go title="code.go"
+func MyMiddleware(ctx huma.Context, next func(huma.Context)) {
+	// Wrap the context to add a value.
+	ctx = huma.WithValue(ctx, "some-key", "some-value")
+
+	// Call the next middleware in the chain. This eventually calls the
+	// operation handler as well.
+	next(ctx)
+}
+```
+
 ### Cookies
 
 You can use the `huma.Context` interface along with [`huma.ReadCookie`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ReadCookie) or [`huma.ReadCookies`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ReadCookies) to access cookies from middleware, and can also write cookies by adding `Set-Cookie` headers in the response:

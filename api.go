@@ -114,17 +114,26 @@ type (
 	humaContext Context
 	subContext  struct {
 		humaContext
-		ctx context.Context
+		override context.Context
 	}
 )
 
 func (c subContext) Context() context.Context {
-	return c.ctx
+	return c.override
 }
 
-// WithContext returns a new context with the given key and value set. This is
-func WithContext(ctx Context, key, value any) Context {
-	return subContext{ctx: context.WithValue(ctx.Context(), key, value), humaContext: ctx}
+// WithContext returns a new `huma.Context` with the underlying `context.Context`
+// replaced with the given one. This is useful for middleware that needs to
+// modify the request context.
+func WithContext(ctx Context, override context.Context) Context {
+	return subContext{humaContext: ctx, override: override}
+}
+
+// WithValue returns a new `huma.Context` with the given key and value set in
+// the underlying `context.Context`. This is useful for middleware that needs to
+// set request-scoped values.
+func WithValue(ctx Context, key, value any) Context {
+	return WithContext(ctx, context.WithValue(ctx.Context(), key, value))
 }
 
 // Transformer is a function that can modify a response body before it is
