@@ -8,8 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/danielgtaylor/huma/v2"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/danielgtaylor/huma/v2"
 )
 
 func Ptr[T any](v T) *T {
@@ -1016,6 +1017,33 @@ var validateTests = []struct {
 		}{}),
 		input: map[string]any{"value": ""},
 		errs:  []string{"expected length >= 1"},
+	},
+	{
+		name: "dependentRequired empty success ",
+		typ: reflect.TypeOf(struct {
+			Value     string `json:"value,omitempty" dependentRequired:"dependent"`
+			Dependent string `json:"dependent,omitempty"`
+		}{}),
+		input: map[string]any{},
+		errs:  nil,
+	},
+	{
+		name: "dependentRequired filled success",
+		typ: reflect.TypeOf(struct {
+			Value     string `json:"value,omitempty" dependentRequired:"dependent"`
+			Dependent string `json:"dependent,omitempty"`
+		}{}),
+		input: map[string]any{"value": "abc", "dependent": "123"},
+		errs:  nil,
+	},
+	{
+		name: "dependentRequired failure",
+		typ: reflect.TypeOf(struct {
+			Value     string `json:"value,omitempty" dependentRequired:"dependent"`
+			Dependent string `json:"dependent,omitempty"`
+		}{}),
+		input: map[string]any{"value": "abc"},
+		errs:  []string{"expected property dependent to be present when value is present"},
 	},
 	{
 		name: "oneOf success bool",
