@@ -656,10 +656,10 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		s.Type = TypeObject
 		s.AdditionalProperties = r.Schema(t.Elem(), true, t.Name()+"Value")
 	case reflect.Struct:
-		required := []string{}
+		var required []string
 		requiredMap := map[string]bool{}
+		var propNames []string
 		fieldSet := map[string]struct{}{}
-		propNames := []string{}
 		props := map[string]*Schema{}
 		dependentRequiredMap := map[string][]string{}
 		for _, info := range getFields(t) {

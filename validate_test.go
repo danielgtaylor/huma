@@ -1039,11 +1039,19 @@ var validateTests = []struct {
 	{
 		name: "dependentRequired failure",
 		typ: reflect.TypeOf(struct {
-			Value     string `json:"value,omitempty" dependentRequired:"dependent"`
-			Dependent string `json:"dependent,omitempty"`
+			Value1     string `json:"value1,omitempty" dependentRequired:"dependent1,dependent3"`
+			Dependent1 string `json:"dependent1,omitempty"`
+			Value2     string `json:"value2,omitempty" dependentRequired:"dependent2,dependent3"`
+			Dependent2 string `json:"dependent2,omitempty"`
+			Dependent3 string `json:"dependent3,omitempty"`
 		}{}),
-		input: map[string]any{"value": "abc"},
-		errs:  []string{"expected property dependent to be present when value is present"},
+		input: map[string]any{"value1": "abc", "value2": "123"},
+		errs: []string{
+			"expected property dependent1 to be present when value1 is present",
+			"expected property dependent3 to be present when value1 is present",
+			"expected property dependent2 to be present when value2 is present",
+			"expected property dependent3 to be present when value2 is present",
+		},
 	},
 	{
 		name: "oneOf success bool",
@@ -1174,6 +1182,7 @@ func TestValidate(t *testing.T) {
 
 			huma.Validate(registry, s, pb, test.mode, test.input, res)
 
+			assert.Len(t, res.Errors, len(test.errs))
 			if len(test.errs) > 0 {
 				errs := mapTo(res.Errors, func(e error) string {
 					return e.(*huma.ErrorDetail).Message
