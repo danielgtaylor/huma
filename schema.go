@@ -639,6 +639,8 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 			f := info.Field
 
 			if _, ok := fieldSet[f.Name]; ok {
+				// This field was overridden by an ancestor type, so we
+				// should ignore it.
 				continue
 			}
 
