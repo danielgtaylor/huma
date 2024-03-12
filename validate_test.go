@@ -235,6 +235,13 @@ var validateTests = []struct {
 		input: map[string]any{"value": "a"},
 	},
 	{
+		name: "non ascii max length success",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" maxLength:"2"`
+		}{}),
+		input: map[string]any{"value": "аб"},
+	},
+	{
 		name: "max length fail",
 		typ: reflect.TypeOf(struct {
 			Value string `json:"value" maxLength:"1"`
