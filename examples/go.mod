@@ -11,7 +11,7 @@ require (
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-chi/chi/v5 v5.0.12
 	github.com/spf13/cobra v1.8.0
-	google.golang.org/protobuf v1.32.0
+	google.golang.org/protobuf v1.33.0
 )
 
 require (
