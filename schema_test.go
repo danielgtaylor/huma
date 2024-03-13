@@ -502,6 +502,24 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-embed-override",
+			input: struct {
+				Embedded
+				Value string `json:"override" doc:"override"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["override"],
+				"properties": {
+					"override": {
+						"type": "string",
+						"description": "override"
+					}
+				}
+			}`,
+		},
+		{
 			name: "field-pointer-example",
 			input: struct {
 				Int *int64  `json:"int" example:"123"`

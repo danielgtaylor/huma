@@ -501,10 +501,10 @@ type fieldInfo struct {
 
 // getFields performs a breadth-first search for all fields including embedded
 // ones. It may return multiple fields with the same name, the first of which
-// represents the outer-most declaration.
+// represents the outermost declaration.
 func getFields(typ reflect.Type) []fieldInfo {
 	fields := make([]fieldInfo, 0, typ.NumField())
-	embedded := []reflect.StructField{}
+	var embedded []reflect.StructField
 
 	for i := 0; i < typ.NumField(); i++ {
 		f := typ.Field(i)
@@ -632,10 +632,19 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 	case reflect.Struct:
 		required := []string{}
 		requiredMap := map[string]bool{}
+		fieldSet := map[string]struct{}{}
 		propNames := []string{}
 		props := map[string]*Schema{}
 		for _, info := range getFields(t) {
 			f := info.Field
+
+			if _, ok := fieldSet[f.Name]; ok {
+				// This field was overridden by an ancestor type, so we
+				// should ignore it.
+				continue
+			}
+
+			fieldSet[f.Name] = struct{}{}
 
 			name := f.Name
 			omit := false
@@ -647,11 +656,6 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 			}
 			if name == "-" {
 				// This field is deliberately ignored.
-				continue
-			}
-			if props[name] != nil {
-				// This field was overridden by an ancestor type, so we
-				// should ignore it.
 				continue
 			}
 
