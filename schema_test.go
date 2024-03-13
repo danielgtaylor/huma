@@ -443,6 +443,7 @@ func TestSchema(t *testing.T) {
 			input: struct {
 				Value     string `json:"value,omitempty" dependentRequired:"dependent"`
 				Dependent string `json:"dependent,omitempty"`
+				Ignored   string `json:"ignored,omitempty" dependentRequired:""`
 			}{},
 			expected: `{
 				"type": "object",
@@ -451,6 +452,9 @@ func TestSchema(t *testing.T) {
 						"type": "string"
 					},
 					"dependent": {
+						"type": "string"
+					},
+					"ignored": {
 						"type": "string"
 					}
 				},

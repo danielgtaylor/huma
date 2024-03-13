@@ -1019,7 +1019,7 @@ var validateTests = []struct {
 		errs:  []string{"expected length >= 1"},
 	},
 	{
-		name: "dependentRequired empty success ",
+		name: "dependentRequired empty success",
 		typ: reflect.TypeOf(struct {
 			Value     string `json:"value,omitempty" dependentRequired:"dependent"`
 			Dependent string `json:"dependent,omitempty"`
@@ -1034,6 +1034,15 @@ var validateTests = []struct {
 			Dependent string `json:"dependent,omitempty"`
 		}{}),
 		input: map[string]any{"value": "abc", "dependent": "123"},
+		errs:  nil,
+	},
+	{
+		name: "dependentRequired ignored success",
+		typ: reflect.TypeOf(struct {
+			Value     string `json:"value,omitempty" dependentRequired:""`
+			Dependent string `json:"dependent,omitempty"`
+		}{}),
+		input: map[string]any{},
 		errs:  nil,
 	},
 	{
