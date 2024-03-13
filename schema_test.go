@@ -439,6 +439,32 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-dependent-required",
+			input: struct {
+				Value     string `json:"value,omitempty" dependentRequired:"dependent"`
+				Dependent string `json:"dependent,omitempty"`
+				Ignored   string `json:"ignored,omitempty" dependentRequired:""`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "string"
+					},
+					"dependent": {
+						"type": "string"
+					},
+					"ignored": {
+						"type": "string"
+					}
+				},
+				"dependentRequired": {
+					"value": ["dependent"]
+				},
+				"additionalProperties": false
+			}`,
+		},
+		{
 			// Bad ref should not panic, but should be ignored. These could be valid
 			// custom schemas that Huma won't understand.
 			name: "field-custom-bad-ref",
@@ -629,6 +655,16 @@ func TestSchema(t *testing.T) {
 				} `json:"value" default:"{\"foo\": true}"`
 			}{},
 			panics: `invalid string tag value 'true' for field 'Value.foo': schema is invalid`,
+		},
+		{
+			name: "panic-dependent-required",
+			input: struct {
+				Value1    string `json:"value1,omitempty" dependentRequired:"missing1,missing2"`
+				Value2    string `json:"value2,omitempty" dependentRequired:"missing2"`
+				Value3    string `json:"value3,omitempty" dependentRequired:"dependent"`
+				Dependent string `json:"dependent,omitempty"`
+			}{},
+			panics: `dependent field 'missing1' for field 'value1' does not exist; dependent field 'missing2' for field 'value1' does not exist; dependent field 'missing2' for field 'value2' does not exist`,
 		},
 	}
 

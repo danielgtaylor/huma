@@ -565,6 +565,16 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 			continue
 		}
 
+		if m[k] != nil && s.DependentRequired[k] != nil {
+			for _, dependent := range s.DependentRequired[k] {
+				if m[dependent] != nil {
+					continue
+				}
+
+				res.Add(path, m, s.msgDependentRequired[k][dependent])
+			}
+		}
+
 		path.Push(k)
 		Validate(r, v, path, mode, m[k], res)
 		path.Pop()

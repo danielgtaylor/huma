@@ -56,36 +56,37 @@ func deref(t reflect.Type) reflect.Type {
 //
 // Note that the registry may create references for your types.
 type Schema struct {
-	Type                 string             `yaml:"type,omitempty"`
-	Title                string             `yaml:"title,omitempty"`
-	Description          string             `yaml:"description,omitempty"`
-	Ref                  string             `yaml:"$ref,omitempty"`
-	Format               string             `yaml:"format,omitempty"`
-	ContentEncoding      string             `yaml:"contentEncoding,omitempty"`
-	Default              any                `yaml:"default,omitempty"`
-	Examples             []any              `yaml:"examples,omitempty"`
-	Items                *Schema            `yaml:"items,omitempty"`
-	AdditionalProperties any                `yaml:"additionalProperties,omitempty"`
-	Properties           map[string]*Schema `yaml:"properties,omitempty"`
-	Enum                 []any              `yaml:"enum,omitempty"`
-	Minimum              *float64           `yaml:"minimum,omitempty"`
-	ExclusiveMinimum     *float64           `yaml:"exclusiveMinimum,omitempty"`
-	Maximum              *float64           `yaml:"maximum,omitempty"`
-	ExclusiveMaximum     *float64           `yaml:"exclusiveMaximum,omitempty"`
-	MultipleOf           *float64           `yaml:"multipleOf,omitempty"`
-	MinLength            *int               `yaml:"minLength,omitempty"`
-	MaxLength            *int               `yaml:"maxLength,omitempty"`
-	Pattern              string             `yaml:"pattern,omitempty"`
-	MinItems             *int               `yaml:"minItems,omitempty"`
-	MaxItems             *int               `yaml:"maxItems,omitempty"`
-	UniqueItems          bool               `yaml:"uniqueItems,omitempty"`
-	Required             []string           `yaml:"required,omitempty"`
-	MinProperties        *int               `yaml:"minProperties,omitempty"`
-	MaxProperties        *int               `yaml:"maxProperties,omitempty"`
-	ReadOnly             bool               `yaml:"readOnly,omitempty"`
-	WriteOnly            bool               `yaml:"writeOnly,omitempty"`
-	Deprecated           bool               `yaml:"deprecated,omitempty"`
-	Extensions           map[string]any     `yaml:",inline"`
+	Type                 string              `yaml:"type,omitempty"`
+	Title                string              `yaml:"title,omitempty"`
+	Description          string              `yaml:"description,omitempty"`
+	Ref                  string              `yaml:"$ref,omitempty"`
+	Format               string              `yaml:"format,omitempty"`
+	ContentEncoding      string              `yaml:"contentEncoding,omitempty"`
+	Default              any                 `yaml:"default,omitempty"`
+	Examples             []any               `yaml:"examples,omitempty"`
+	Items                *Schema             `yaml:"items,omitempty"`
+	AdditionalProperties any                 `yaml:"additionalProperties,omitempty"`
+	Properties           map[string]*Schema  `yaml:"properties,omitempty"`
+	Enum                 []any               `yaml:"enum,omitempty"`
+	Minimum              *float64            `yaml:"minimum,omitempty"`
+	ExclusiveMinimum     *float64            `yaml:"exclusiveMinimum,omitempty"`
+	Maximum              *float64            `yaml:"maximum,omitempty"`
+	ExclusiveMaximum     *float64            `yaml:"exclusiveMaximum,omitempty"`
+	MultipleOf           *float64            `yaml:"multipleOf,omitempty"`
+	MinLength            *int                `yaml:"minLength,omitempty"`
+	MaxLength            *int                `yaml:"maxLength,omitempty"`
+	Pattern              string              `yaml:"pattern,omitempty"`
+	MinItems             *int                `yaml:"minItems,omitempty"`
+	MaxItems             *int                `yaml:"maxItems,omitempty"`
+	UniqueItems          bool                `yaml:"uniqueItems,omitempty"`
+	Required             []string            `yaml:"required,omitempty"`
+	MinProperties        *int                `yaml:"minProperties,omitempty"`
+	MaxProperties        *int                `yaml:"maxProperties,omitempty"`
+	ReadOnly             bool                `yaml:"readOnly,omitempty"`
+	WriteOnly            bool                `yaml:"writeOnly,omitempty"`
+	Deprecated           bool                `yaml:"deprecated,omitempty"`
+	Extensions           map[string]any      `yaml:",inline"`
+	DependentRequired    map[string][]string `yaml:"dependentRequired,omitempty"`
 
 	OneOf []*Schema `yaml:"oneOf,omitempty"`
 	AnyOf []*Schema `yaml:"anyOf,omitempty"`
@@ -98,20 +99,21 @@ type Schema struct {
 
 	// Precomputed validation messages. These prevent allocations during
 	// validation and are known at schema creation time.
-	msgEnum             string            `yaml:"-"`
-	msgMinimum          string            `yaml:"-"`
-	msgExclusiveMinimum string            `yaml:"-"`
-	msgMaximum          string            `yaml:"-"`
-	msgExclusiveMaximum string            `yaml:"-"`
-	msgMultipleOf       string            `yaml:"-"`
-	msgMinLength        string            `yaml:"-"`
-	msgMaxLength        string            `yaml:"-"`
-	msgPattern          string            `yaml:"-"`
-	msgMinItems         string            `yaml:"-"`
-	msgMaxItems         string            `yaml:"-"`
-	msgMinProperties    string            `yaml:"-"`
-	msgMaxProperties    string            `yaml:"-"`
-	msgRequired         map[string]string `yaml:"-"`
+	msgEnum              string                       `yaml:"-"`
+	msgMinimum           string                       `yaml:"-"`
+	msgExclusiveMinimum  string                       `yaml:"-"`
+	msgMaximum           string                       `yaml:"-"`
+	msgExclusiveMaximum  string                       `yaml:"-"`
+	msgMultipleOf        string                       `yaml:"-"`
+	msgMinLength         string                       `yaml:"-"`
+	msgMaxLength         string                       `yaml:"-"`
+	msgPattern           string                       `yaml:"-"`
+	msgMinItems          string                       `yaml:"-"`
+	msgMaxItems          string                       `yaml:"-"`
+	msgMinProperties     string                       `yaml:"-"`
+	msgMaxProperties     string                       `yaml:"-"`
+	msgRequired          map[string]string            `yaml:"-"`
+	msgDependentRequired map[string]map[string]string `yaml:"-"`
 }
 
 // MarshalJSON marshals the schema into JSON, respecting the `Extensions` map
@@ -142,6 +144,7 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 		{"maxItems", s.MaxItems, omitEmpty},
 		{"uniqueItems", s.UniqueItems, omitEmpty},
 		{"required", s.Required, omitEmpty},
+		{"dependentRequired", s.DependentRequired, omitEmpty},
 		{"minProperties", s.MinProperties, omitEmpty},
 		{"maxProperties", s.MaxProperties, omitEmpty},
 		{"readOnly", s.ReadOnly, omitEmpty},
@@ -204,6 +207,20 @@ func (s *Schema) PrecomputeMessages() {
 		}
 		for _, name := range s.Required {
 			s.msgRequired[name] = "expected required property " + name + " to be present"
+		}
+	}
+
+	if s.DependentRequired != nil {
+		if s.msgDependentRequired == nil {
+			s.msgDependentRequired = map[string]map[string]string{}
+		}
+		for name, dependents := range s.DependentRequired {
+			for _, dependent := range dependents {
+				if s.msgDependentRequired[name] == nil {
+					s.msgDependentRequired[name] = map[string]string{}
+				}
+				s.msgDependentRequired[name][dependent] = "expected property " + dependent + " to be present when " + name + " is present"
+			}
 		}
 	}
 
@@ -471,6 +488,7 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 			fs.Enum = enumValues
 		}
 	}
+
 	fs.Minimum = floatTag(f, "minimum")
 	fs.ExclusiveMinimum = floatTag(f, "exclusiveMinimum")
 	fs.Maximum = floatTag(f, "maximum")
@@ -630,11 +648,12 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		s.Type = TypeObject
 		s.AdditionalProperties = r.Schema(t.Elem(), true, t.Name()+"Value")
 	case reflect.Struct:
-		required := []string{}
+		var required []string
 		requiredMap := map[string]bool{}
+		var propNames []string
 		fieldSet := map[string]struct{}{}
-		propNames := []string{}
 		props := map[string]*Schema{}
+		dependentRequiredMap := map[string][]string{}
 		for _, info := range getFields(t) {
 			f := info.Field
 
@@ -659,6 +678,10 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 				continue
 			}
 
+			if dr := f.Tag.Get("dependentRequired"); strings.TrimSpace(dr) != "" {
+				dependentRequiredMap[name] = strings.Split(dr, ",")
+			}
+
 			fs := SchemaFromField(r, f, t.Name()+f.Name+"Struct")
 			if fs != nil {
 				props[name] = fs
@@ -671,9 +694,23 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		}
 		s.Type = TypeObject
 
+		// Check if the dependent fields exists. If they don't, panic with the correct message.
+		var errs []string
+		for field, dependents := range dependentRequiredMap {
+			for _, dependent := range dependents {
+				if _, ok := props[dependent]; ok {
+					continue
+				}
+				errs = append(errs, fmt.Sprintf("dependent field '%s' for field '%s' does not exist", dependent, field))
+			}
+		}
+		if errs != nil {
+			panic(errors.New(strings.Join(errs, "; ")))
+		}
+
 		additionalProps := false
 		if f, ok := t.FieldByName("_"); ok {
-			if _, ok := f.Tag.Lookup("additionalProperties"); ok {
+			if _, ok = f.Tag.Lookup("additionalProperties"); ok {
 				additionalProps = boolTag(f, "additionalProperties")
 			}
 		}
@@ -682,6 +719,7 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		s.Properties = props
 		s.propertyNames = propNames
 		s.Required = required
+		s.DependentRequired = dependentRequiredMap
 		s.requiredMap = requiredMap
 		s.PrecomputeMessages()
 	case reflect.Interface:

@@ -52,6 +52,7 @@ nav:
       - "Clients":
           - "CLI AutoConfig": features/cli-auto-config.md
   - "How To Guides":
+      - "Conditional Fields": how-to/conditional-fields.md
       - "Custom Validation": how-to/custom-validation.md
       - "Image Response": how-to/image-response.md
       - "Graceful Shutdown": how-to/graceful-shutdown.md

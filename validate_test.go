@@ -8,8 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/danielgtaylor/huma/v2"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/danielgtaylor/huma/v2"
 )
 
 func Ptr[T any](v T) *T {
@@ -1018,6 +1019,50 @@ var validateTests = []struct {
 		errs:  []string{"expected length >= 1"},
 	},
 	{
+		name: "dependentRequired empty success",
+		typ: reflect.TypeOf(struct {
+			Value     string `json:"value,omitempty" dependentRequired:"dependent"`
+			Dependent string `json:"dependent,omitempty"`
+		}{}),
+		input: map[string]any{},
+		errs:  nil,
+	},
+	{
+		name: "dependentRequired filled success",
+		typ: reflect.TypeOf(struct {
+			Value     string `json:"value,omitempty" dependentRequired:"dependent"`
+			Dependent string `json:"dependent,omitempty"`
+		}{}),
+		input: map[string]any{"value": "abc", "dependent": "123"},
+		errs:  nil,
+	},
+	{
+		name: "dependentRequired ignored success",
+		typ: reflect.TypeOf(struct {
+			Value     string `json:"value,omitempty" dependentRequired:""`
+			Dependent string `json:"dependent,omitempty"`
+		}{}),
+		input: map[string]any{},
+		errs:  nil,
+	},
+	{
+		name: "dependentRequired failure",
+		typ: reflect.TypeOf(struct {
+			Value1     string `json:"value1,omitempty" dependentRequired:"dependent1,dependent3"`
+			Dependent1 string `json:"dependent1,omitempty"`
+			Value2     string `json:"value2,omitempty" dependentRequired:"dependent2,dependent3"`
+			Dependent2 string `json:"dependent2,omitempty"`
+			Dependent3 string `json:"dependent3,omitempty"`
+		}{}),
+		input: map[string]any{"value1": "abc", "value2": "123"},
+		errs: []string{
+			"expected property dependent1 to be present when value1 is present",
+			"expected property dependent3 to be present when value1 is present",
+			"expected property dependent2 to be present when value2 is present",
+			"expected property dependent3 to be present when value2 is present",
+		},
+	},
+	{
 		name: "oneOf success bool",
 		s: &huma.Schema{
 			OneOf: []*huma.Schema{
@@ -1146,6 +1191,7 @@ func TestValidate(t *testing.T) {
 
 			huma.Validate(registry, s, pb, test.mode, test.input, res)
 
+			assert.Len(t, res.Errors, len(test.errs))
 			if len(test.errs) > 0 {
 				errs := mapTo(res.Errors, func(e error) string {
 					return e.(*huma.ErrorDetail).Message
