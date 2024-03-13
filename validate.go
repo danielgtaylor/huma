@@ -565,8 +565,8 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 			continue
 		}
 
-		if m[k] != nil && s.dependentRequiredMap[k] != nil {
-			for _, dependent := range s.dependentRequiredMap[k] {
+		if m[k] != nil && s.DependentRequired[k] != nil {
+			for _, dependent := range s.DependentRequired[k] {
 				if m[dependent] != nil {
 					continue
 				}

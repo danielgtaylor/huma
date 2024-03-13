@@ -93,10 +93,9 @@ type Schema struct {
 	AllOf []*Schema `yaml:"allOf,omitempty"`
 	Not   *Schema   `yaml:"not,omitempty"`
 
-	patternRe            *regexp.Regexp      `yaml:"-"`
-	requiredMap          map[string]bool     `yaml:"-"`
-	dependentRequiredMap map[string][]string `yaml:"-"`
-	propertyNames        []string            `yaml:"-"`
+	patternRe     *regexp.Regexp  `yaml:"-"`
+	requiredMap   map[string]bool `yaml:"-"`
+	propertyNames []string        `yaml:"-"`
 
 	// Precomputed validation messages. These prevent allocations during
 	// validation and are known at schema creation time.
@@ -236,13 +235,6 @@ func (s *Schema) PrecomputeMessages() {
 		s.requiredMap = map[string]bool{}
 		for _, name := range s.Required {
 			s.requiredMap[name] = true
-		}
-	}
-
-	if s.dependentRequiredMap == nil {
-		s.dependentRequiredMap = map[string][]string{}
-		for name, dependents := range s.DependentRequired {
-			s.dependentRequiredMap[name] = dependents
 		}
 	}
 
@@ -686,13 +678,8 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 				continue
 			}
 
-			if dr := f.Tag.Get("dependentRequired"); dr != "" {
-				dependents := strings.Split(dr, ",")
-				switch len(dependents) {
-				case 0:
-				default:
-					dependentRequiredMap[name] = dependents
-				}
+			if dr := f.Tag.Get("dependentRequired"); strings.TrimSpace(dr) != "" {
+				dependentRequiredMap[name] = strings.Split(dr, ",")
 			}
 
 			fs := SchemaFromField(r, f, t.Name()+f.Name+"Struct")
@@ -720,7 +707,6 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		s.Required = required
 		s.DependentRequired = dependentRequiredMap
 		s.requiredMap = requiredMap
-		s.dependentRequiredMap = dependentRequiredMap
 		s.PrecomputeMessages()
 	case reflect.Interface:
 		// Interfaces mean any object.
