@@ -694,9 +694,23 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		}
 		s.Type = TypeObject
 
+		// Check if the dependent fields exists. If they don't, panic with the correct message.
+		var errs []string
+		for field, dependents := range dependentRequiredMap {
+			for _, dependent := range dependents {
+				if _, ok := props[dependent]; ok {
+					continue
+				}
+				errs = append(errs, fmt.Sprintf("dependent field '%s' for field '%s' does not exist", dependent, field))
+			}
+		}
+		if errs != nil {
+			panic(errors.New(strings.Join(errs, "; ")))
+		}
+
 		additionalProps := false
 		if f, ok := t.FieldByName("_"); ok {
-			if _, ok := f.Tag.Lookup("additionalProperties"); ok {
+			if _, ok = f.Tag.Lookup("additionalProperties"); ok {
 				additionalProps = boolTag(f, "additionalProperties")
 			}
 		}
