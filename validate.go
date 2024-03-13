@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 	"unsafe"
 )
 
@@ -412,12 +413,12 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		}
 
 		if s.MinLength != nil {
-			if len(str) < *s.MinLength {
+			if utf8.RuneCountInString(str) < *s.MinLength {
 				res.Addf(path, str, s.msgMinLength)
 			}
 		}
 		if s.MaxLength != nil {
-			if len(str) > *s.MaxLength {
+			if utf8.RuneCountInString(str) > *s.MaxLength {
 				res.Add(path, str, s.msgMaxLength)
 			}
 		}
