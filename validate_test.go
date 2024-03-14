@@ -1063,6 +1063,50 @@ var validateTests = []struct {
 		},
 	},
 	{
+		name: "dependentRequired empty success any",
+		typ: reflect.TypeOf(struct {
+			Value     string `json:"value,omitempty" dependentRequired:"dependent"`
+			Dependent string `json:"dependent,omitempty"`
+		}{}),
+		input: map[any]any{},
+		errs:  nil,
+	},
+	{
+		name: "dependentRequired filled success any",
+		typ: reflect.TypeOf(struct {
+			Value     string `json:"value,omitempty" dependentRequired:"dependent"`
+			Dependent string `json:"dependent,omitempty"`
+		}{}),
+		input: map[any]any{"value": "abc", "dependent": "123"},
+		errs:  nil,
+	},
+	{
+		name: "dependentRequired ignored success any",
+		typ: reflect.TypeOf(struct {
+			Value     string `json:"value,omitempty" dependentRequired:""`
+			Dependent string `json:"dependent,omitempty"`
+		}{}),
+		input: map[any]any{},
+		errs:  nil,
+	},
+	{
+		name: "dependentRequired failure any",
+		typ: reflect.TypeOf(struct {
+			Value1     string `json:"value1,omitempty" dependentRequired:"dependent1,dependent3"`
+			Dependent1 string `json:"dependent1,omitempty"`
+			Value2     string `json:"value2,omitempty" dependentRequired:"dependent2,dependent3"`
+			Dependent2 string `json:"dependent2,omitempty"`
+			Dependent3 string `json:"dependent3,omitempty"`
+		}{}),
+		input: map[any]any{"value1": "abc", "value2": "123"},
+		errs: []string{
+			"expected property dependent1 to be present when value1 is present",
+			"expected property dependent3 to be present when value1 is present",
+			"expected property dependent2 to be present when value2 is present",
+			"expected property dependent3 to be present when value2 is present",
+		},
+	},
+	{
 		name: "oneOf success bool",
 		s: &huma.Schema{
 			OneOf: []*huma.Schema{
