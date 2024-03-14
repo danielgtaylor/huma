@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -696,7 +697,13 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 
 		// Check if the dependent fields exists. If they don't, panic with the correct message.
 		var errs []string
-		for field, dependents := range dependentRequiredMap {
+		depKeys := make([]string, 0, len(dependentRequiredMap))
+		for field := range dependentRequiredMap {
+			depKeys = append(depKeys, field)
+		}
+		sort.Strings(depKeys)
+		for _, field := range depKeys {
+			dependents := dependentRequiredMap[field]
 			for _, dependent := range dependents {
 				if _, ok := props[dependent]; ok {
 					continue
