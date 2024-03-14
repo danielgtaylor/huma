@@ -18,6 +18,7 @@ type Registry interface {
 	SchemaFromRef(ref string) *Schema
 	TypeFromRef(ref string) reflect.Type
 	Map() map[string]*Schema
+	SetStructVisibility(reflect.Type, string, bool, bool, bool)
 }
 
 // DefaultSchemaNamer provides schema names for types. It uses the type name
@@ -62,6 +63,15 @@ type mapRegistry struct {
 	types   map[string]reflect.Type
 	seen    map[reflect.Type]bool
 	namer   func(reflect.Type, string) string
+}
+
+func (r *mapRegistry) SetStructVisibility(t reflect.Type, hint string, readOnly bool, writeOnly bool, deprecated bool) {
+	name := r.namer(t, hint)
+	if s, ok := r.schemas[name]; ok {
+		s.ReadOnly = readOnly
+		s.WriteOnly = writeOnly
+		s.Deprecated = deprecated
+	}
 }
 
 func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema {

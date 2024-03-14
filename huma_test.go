@@ -288,6 +288,29 @@ func TestFeatures(t *testing.T) {
 			Body: `{"name":"foo"}`,
 		},
 		{
+			Name: "request-body-nested-struct-readOnly",
+			Register: func(t *testing.T, api huma.API) {
+				type NestedStruct struct {
+					Foo struct {
+						Bar string `json:"bar"`
+					} `json:"foo" readOnly:"true"`
+					Value string `json:"value"`
+				}
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					Body *NestedStruct
+				}) (*struct{}, error) {
+					assert.Equal(t, true, true)
+					return nil, nil
+				})
+			},
+			Method: http.MethodPost,
+			URL:    "/body",
+			Body:   `{"value":"test"}`,
+		},
+		{
 			Name: "request-body-defaults",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{

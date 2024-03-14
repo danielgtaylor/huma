@@ -507,6 +507,11 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 	fs.Deprecated = boolTag(f, "deprecated")
 	fs.PrecomputeMessages()
 
+	if f.Type.Kind() == reflect.Struct &&
+		(fs.ReadOnly || fs.WriteOnly || fs.Deprecated) {
+		registry.SetStructVisibility(f.Type, hint, fs.ReadOnly, fs.WriteOnly, fs.Deprecated)
+	}
+
 	return fs
 }
 
