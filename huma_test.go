@@ -302,7 +302,6 @@ func TestFeatures(t *testing.T) {
 				}, func(ctx context.Context, input *struct {
 					Body *NestedStruct
 				}) (*struct{}, error) {
-					assert.Equal(t, true, true)
 					return nil, nil
 				})
 			},
