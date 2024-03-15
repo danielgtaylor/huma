@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
 	"strings"
 	"testing"
 	"time"
@@ -263,6 +264,26 @@ func TestFeatures(t *testing.T) {
 			URL:    "/test-params/255.255.0.0",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusInternalServerError, resp.Code)
+			},
+		},
+		{
+			Name: "param-bypass-validation",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method:             http.MethodGet,
+					Path:               "/test",
+					SkipValidateParams: true,
+				}, func(ctx context.Context, input *struct {
+					Search uint `query:"search" required:"true"`
+				}) (*struct{}, error) {
+					// ... do custom validation here ...
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNoContent, resp.Code)
 			},
 		},
 		{
@@ -886,6 +907,8 @@ func TestFeatures(t *testing.T) {
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
 			b, _ := api.OpenAPI().YAML()
+			t.Log(string(b))
+			b, _ = httputil.DumpResponse(w.Result(), true)
 			t.Log(string(b))
 			if feature.Assert != nil {
 				feature.Assert(t, w)

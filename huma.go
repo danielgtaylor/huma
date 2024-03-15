@@ -810,7 +810,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				value = p.Default
 			}
 
-			if p.Required && value == "" {
+			if !op.SkipValidateParams && p.Required && value == "" {
 				// Path params are always required.
 				res.Add(pb, "", "required "+p.Loc+" parameter is missing")
 				return
