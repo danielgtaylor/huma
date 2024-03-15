@@ -229,6 +229,11 @@ type API interface {
 
 	// Middlewares returns a slice of middleware handler functions.
 	Middlewares() Middlewares
+
+	// Prefix return the potential huma router prefix. The prefix shall be managed
+	// by the router (chi.Mx.Mount(prefix, mx)).
+	// Prefix interface method is only used for OpenAPI documentation generation.
+	Prefix() string
 }
 
 // Format represents a request / response format. It is used to marshal and
@@ -248,7 +253,10 @@ type api struct {
 	formatKeys   []string
 	transformers []Transformer
 	middlewares  Middlewares
+	prefix       string
 }
+
+func (a *api) Prefix() string { return a.prefix }
 
 func (a *api) Adapter() Adapter {
 	return a.adapter
@@ -339,6 +347,7 @@ func NewAPI(config Config, a Adapter) API {
 		adapter:      a,
 		formats:      map[string]Format{},
 		transformers: config.Transformers,
+		prefix:       config.APIPrefix,
 	}
 
 	if config.OpenAPI == nil {

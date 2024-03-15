@@ -754,7 +754,9 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	}
 
 	if !op.Hidden {
-		oapi.AddOperation(&op)
+		_op := op
+		_op.Path = api.Prefix() + op.Path
+		oapi.AddOperation(&_op)
 	}
 
 	a := api.Adapter()
