@@ -1079,10 +1079,10 @@ func (p *PathItem) MarshalJSON() ([]byte, error) {
 //	      write:pets: modify pets in your account
 //	      read:pets: read your pets
 type OAuthFlow struct {
-	// AuthorizationURL is REQUIRED. The authorization URL to be used for this
-	// flow. This MUST be in the form of a URL. The OAuth2 standard requires the
-	// use of TLS.
-	AuthorizationURL string `yaml:"authorizationUrl"`
+	// AuthorizationURL is REQUIRED for `implicit` and `authorizationCode` flows.
+	// The authorization URL to be used for this flow. This MUST be in the form of
+	// a URL. The OAuth2 standard requires the use of TLS.
+	AuthorizationURL string `yaml:"authorizationUrl,omitempty"`
 
 	// TokenURL is REQUIRED. The token URL to be used for this flow. This MUST be
 	// in the form of a URL. The OAuth2 standard requires the use of TLS.
@@ -1104,7 +1104,7 @@ type OAuthFlow struct {
 
 func (o *OAuthFlow) MarshalJSON() ([]byte, error) {
 	return marshalJSON([]jsonFieldInfo{
-		{"authorizationUrl", o.AuthorizationURL, omitNever},
+		{"authorizationUrl", o.AuthorizationURL, omitEmpty},
 		{"tokenUrl", o.TokenURL, omitNever},
 		{"refreshUrl", o.RefreshURL, omitEmpty},
 		{"scopes", o.Scopes, omitNever},
