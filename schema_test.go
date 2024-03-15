@@ -298,6 +298,25 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-readonly-struct",
+			input: struct {
+				Value struct {
+					Foo string `json:"foo"`
+				} `json:"value" readOnly:"true"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"$ref": "#/components/schemas/ValueStruct",
+						"readOnly": true
+					}
+				},
+				"additionalProperties": false,
+				"required": ["value"]
+			}`,
+		},
+		{
 			name: "field-default-string",
 			input: struct {
 				Value string `json:"value" default:"foo"`
