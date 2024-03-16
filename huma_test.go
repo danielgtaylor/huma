@@ -490,6 +490,8 @@ func TestFeatures(t *testing.T) {
 							b, err := io.ReadAll(r)
 							assert.Nil(t, err)
 
+							_ = r.Close()
+
 							assert.Equal(t, "test.txt", f.Filename)
 							assert.Equal(t, "text/plain", f.Header.Get("Content-Type"))
 							assert.Equal(t, "Hello, World!", string(b))
@@ -531,6 +533,8 @@ Hello, World!
 
 							b, err := io.ReadAll(r)
 							assert.Nil(t, err)
+
+							_ = r.Close()
 
 							// get the last char of name
 							index := name[len(name)-1:]
