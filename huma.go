@@ -615,10 +615,14 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							Schema: &Schema{
 								Type: "object",
 								Properties: map[string]*Schema{
+									"name": {
+										Type:        "string",
+										Description: "general purpose name for multipart form value",
+									},
 									"filename": {
 										Type:        "string",
 										Format:      "binary",
-										Description: "File to be uploaded",
+										Description: "filename of the file being uploaded",
 									},
 								},
 							},
