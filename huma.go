@@ -591,25 +591,54 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		}
 	}
 	rawBodyIndex := -1
+	rawBodyMultipart := false
 	if f, ok := inputType.FieldByName("RawBody"); ok {
 		rawBodyIndex = f.Index[0]
 		if op.RequestBody == nil {
 			contentType := "application/octet-stream"
+
+			if f.Type.String() == "multipart.Form" {
+				contentType = "multipart/form-data"
+				rawBodyMultipart = true
+			}
+
 			if c := f.Tag.Get("contentType"); c != "" {
 				contentType = c
 			}
 
-			op.RequestBody = &RequestBody{
-				Required: true,
-				Content: map[string]*MediaType{
-					contentType: {
-						Schema: &Schema{
-							Type:   "string",
-							Format: "binary",
+			switch contentType {
+			case "multipart/form-data":
+				op.RequestBody = &RequestBody{
+					Required: true,
+					Content: map[string]*MediaType{
+						"multipart/form-data": {
+							Schema: &Schema{
+								Type: "object",
+								Properties: map[string]*Schema{
+									"filename": {
+										Type:        "string",
+										Format:      "binary",
+										Description: "File to be uploaded",
+									},
+								},
+							},
 						},
 					},
-				},
+				}
+			default:
+				op.RequestBody = &RequestBody{
+					Required: true,
+					Content: map[string]*MediaType{
+						contentType: {
+							Schema: &Schema{
+								Type:   "string",
+								Format: "binary",
+							},
+						},
+					},
+				}
 			}
+
 		}
 	}
 
@@ -1083,110 +1112,123 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				ctx.SetReadDeadline(time.Time{})
 			}
 
-			buf := bufPool.Get().(*bytes.Buffer)
-			reader := ctx.BodyReader()
-			if reader == nil {
-				reader = bytes.NewReader(nil)
-			}
-			if closer, ok := reader.(io.Closer); ok {
-				defer closer.Close()
-			}
-			if op.MaxBodyBytes > 0 {
-				reader = io.LimitReader(reader, op.MaxBodyBytes)
-			}
-			count, err := io.Copy(buf, reader)
-			if op.MaxBodyBytes > 0 {
-				if count == op.MaxBodyBytes {
-					buf.Reset()
-					bufPool.Put(buf)
-					WriteErr(api, ctx, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body is too large limit=%d bytes", op.MaxBodyBytes), res.Errors...)
+			if rawBodyMultipart {
+				form, err := ctx.GetMultipartForm()
+				if err != nil {
+					WriteErr(api, ctx, http.StatusInternalServerError, "cannot read multipart form", err)
 					return
 				}
-			}
-			if err != nil {
-				buf.Reset()
-				bufPool.Put(buf)
-
-				if e, ok := err.(net.Error); ok && e.Timeout() {
-					WriteErr(api, ctx, http.StatusRequestTimeout, "request body read timeout", res.Errors...)
-					return
+				if form == nil {
+					WriteErr(api, ctx, http.StatusInternalServerError, "cannot read multipart form")
 				}
-
-				WriteErr(api, ctx, http.StatusInternalServerError, "cannot read request body", err)
-				return
-			}
-			body := buf.Bytes()
-
-			if rawBodyIndex != -1 {
 				f := v.Field(rawBodyIndex)
-				f.SetBytes(body)
-			}
-
-			if len(body) == 0 {
-				if op.RequestBody != nil && op.RequestBody.Required {
-					buf.Reset()
-					bufPool.Put(buf)
-					WriteErr(api, ctx, http.StatusBadRequest, "request body is required", res.Errors...)
-					return
-				}
+				f.Set(reflect.ValueOf(*form))
 			} else {
-				parseErrCount := 0
-				if inputBodyIndex != -1 && !op.SkipValidateBody {
-					// Validate the input. First, parse the body into []any or map[string]any
-					// or equivalent, which can be easily validated. Then, convert to the
-					// expected struct type to call the handler.
-					var parsed any
-					if err := api.Unmarshal(ctx.Header("Content-Type"), body, &parsed); err != nil {
-						errStatus = http.StatusBadRequest
-						if errors.Is(err, ErrUnknownContentType) {
-							errStatus = http.StatusUnsupportedMediaType
-						}
-						res.Errors = append(res.Errors, &ErrorDetail{
-							Location: "body",
-							Message:  err.Error(),
-							Value:    body,
-						})
-						parseErrCount++
-					} else {
-						pb.Reset()
-						pb.Push("body")
-						count := len(res.Errors)
-						Validate(oapi.Components.Schemas, inSchema, pb, ModeWriteToServer, parsed, res)
-						parseErrCount = len(res.Errors) - count
-						if parseErrCount > 0 {
-							errStatus = http.StatusUnprocessableEntity
-						}
+				buf := bufPool.Get().(*bytes.Buffer)
+				reader := ctx.BodyReader()
+				if reader == nil {
+					reader = bytes.NewReader(nil)
+				}
+				if closer, ok := reader.(io.Closer); ok {
+					defer closer.Close()
+				}
+				if op.MaxBodyBytes > 0 {
+					reader = io.LimitReader(reader, op.MaxBodyBytes)
+				}
+				count, err := io.Copy(buf, reader)
+				if op.MaxBodyBytes > 0 {
+					if count == op.MaxBodyBytes {
+						buf.Reset()
+						bufPool.Put(buf)
+						WriteErr(api, ctx, http.StatusRequestEntityTooLarge, fmt.Sprintf("request body is too large limit=%d bytes", op.MaxBodyBytes), res.Errors...)
+						return
 					}
 				}
+				if err != nil {
+					buf.Reset()
+					bufPool.Put(buf)
 
-				if inputBodyIndex != -1 {
-					// We need to get the body into the correct type now that it has been
-					// validated. Benchmarks on Go 1.20 show that using `json.Unmarshal` a
-					// second time is faster than `mapstructure.Decode` or any of the other
-					// common reflection-based approaches when using real-world medium-sized
-					// JSON payloads with lots of strings.
-					f := v.Field(inputBodyIndex)
-					if err := api.Unmarshal(ctx.Header("Content-Type"), body, f.Addr().Interface()); err != nil {
-						if parseErrCount == 0 {
-							// Hmm, this should have worked... validator missed something?
+					if e, ok := err.(net.Error); ok && e.Timeout() {
+						WriteErr(api, ctx, http.StatusRequestTimeout, "request body read timeout", res.Errors...)
+						return
+					}
+
+					WriteErr(api, ctx, http.StatusInternalServerError, "cannot read request body", err)
+					return
+				}
+				body := buf.Bytes()
+
+				if rawBodyIndex != -1 {
+					f := v.Field(rawBodyIndex)
+					f.SetBytes(body)
+				}
+
+				if len(body) == 0 {
+					if op.RequestBody != nil && op.RequestBody.Required {
+						buf.Reset()
+						bufPool.Put(buf)
+						WriteErr(api, ctx, http.StatusBadRequest, "request body is required", res.Errors...)
+						return
+					}
+				} else {
+					parseErrCount := 0
+					if inputBodyIndex != -1 && !op.SkipValidateBody {
+						// Validate the input. First, parse the body into []any or map[string]any
+						// or equivalent, which can be easily validated. Then, convert to the
+						// expected struct type to call the handler.
+						var parsed any
+						if err := api.Unmarshal(ctx.Header("Content-Type"), body, &parsed); err != nil {
+							errStatus = http.StatusBadRequest
+							if errors.Is(err, ErrUnknownContentType) {
+								errStatus = http.StatusUnsupportedMediaType
+							}
 							res.Errors = append(res.Errors, &ErrorDetail{
 								Location: "body",
 								Message:  err.Error(),
-								Value:    string(body),
+								Value:    body,
+							})
+							parseErrCount++
+						} else {
+							pb.Reset()
+							pb.Push("body")
+							count := len(res.Errors)
+							Validate(oapi.Components.Schemas, inSchema, pb, ModeWriteToServer, parsed, res)
+							parseErrCount = len(res.Errors) - count
+							if parseErrCount > 0 {
+								errStatus = http.StatusUnprocessableEntity
+							}
+						}
+					}
+
+					if inputBodyIndex != -1 {
+						// We need to get the body into the correct type now that it has been
+						// validated. Benchmarks on Go 1.20 show that using `json.Unmarshal` a
+						// second time is faster than `mapstructure.Decode` or any of the other
+						// common reflection-based approaches when using real-world medium-sized
+						// JSON payloads with lots of strings.
+						f := v.Field(inputBodyIndex)
+						if err := api.Unmarshal(ctx.Header("Content-Type"), body, f.Addr().Interface()); err != nil {
+							if parseErrCount == 0 {
+								// Hmm, this should have worked... validator missed something?
+								res.Errors = append(res.Errors, &ErrorDetail{
+									Location: "body",
+									Message:  err.Error(),
+									Value:    string(body),
+								})
+							}
+						} else {
+							// Set defaults for any fields that were not in the input.
+							defaults.Every(v, func(item reflect.Value, def any) {
+								if item.IsZero() {
+									item.Set(reflect.Indirect(reflect.ValueOf(def)))
+								}
 							})
 						}
-					} else {
-						// Set defaults for any fields that were not in the input.
-						defaults.Every(v, func(item reflect.Value, def any) {
-							if item.IsZero() {
-								item.Set(reflect.Indirect(reflect.ValueOf(def)))
-							}
-						})
 					}
-				}
 
-				buf.Reset()
-				bufPool.Put(buf)
+					buf.Reset()
+					bufPool.Put(buf)
+				}
 			}
 		}
 
