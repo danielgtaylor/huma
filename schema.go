@@ -77,6 +77,7 @@ type Schema struct {
 	MinLength            *int                `yaml:"minLength,omitempty"`
 	MaxLength            *int                `yaml:"maxLength,omitempty"`
 	Pattern              string              `yaml:"pattern,omitempty"`
+	PatternDescription   string              `yaml:"patternDescription,omitempty"`
 	MinItems             *int                `yaml:"minItems,omitempty"`
 	MaxItems             *int                `yaml:"maxItems,omitempty"`
 	UniqueItems          bool                `yaml:"uniqueItems,omitempty"`
@@ -141,6 +142,7 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 		{"minLength", s.MinLength, omitEmpty},
 		{"maxLength", s.MaxLength, omitEmpty},
 		{"pattern", s.Pattern, omitEmpty},
+		{"patternDescription", s.PatternDescription, omitEmpty},
 		{"minItems", s.MinItems, omitEmpty},
 		{"maxItems", s.MaxItems, omitEmpty},
 		{"uniqueItems", s.UniqueItems, omitEmpty},
@@ -187,7 +189,11 @@ func (s *Schema) PrecomputeMessages() {
 	}
 	if s.Pattern != "" {
 		s.patternRe = regexp.MustCompile(s.Pattern)
-		s.msgPattern = "expected string to match pattern " + s.Pattern
+		if s.PatternDescription != "" {
+			s.msgPattern = "expected string to be " + s.PatternDescription
+		} else {
+			s.msgPattern = "expected string to match pattern " + s.Pattern
+		}
 	}
 	if s.MinItems != nil {
 		s.msgMinItems = fmt.Sprintf("expected array length >= %d", *s.MinItems)
@@ -498,6 +504,7 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 	fs.MinLength = intTag(f, "minLength")
 	fs.MaxLength = intTag(f, "maxLength")
 	fs.Pattern = f.Tag.Get("pattern")
+	fs.PatternDescription = f.Tag.Get("patternDescription")
 	fs.MinItems = intTag(f, "minItems")
 	fs.MaxItems = intTag(f, "maxItems")
 	fs.UniqueItems = boolTag(f, "uniqueItems")
