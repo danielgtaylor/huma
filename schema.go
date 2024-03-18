@@ -142,6 +142,7 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 		{"minLength", s.MinLength, omitEmpty},
 		{"maxLength", s.MaxLength, omitEmpty},
 		{"pattern", s.Pattern, omitEmpty},
+		{"patternDescription", s.PatternDescription, omitEmpty},
 		{"minItems", s.MinItems, omitEmpty},
 		{"maxItems", s.MaxItems, omitEmpty},
 		{"uniqueItems", s.UniqueItems, omitEmpty},
