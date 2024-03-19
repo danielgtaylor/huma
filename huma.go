@@ -370,11 +370,11 @@ func (r *findResult[T]) EveryPB(pb *PathBuffer, v reflect.Value, f func(reflect.
 
 func findInType[T comparable](t reflect.Type, onType func(reflect.Type, []int) T, onField func(reflect.StructField, []int) T, recurseFields bool, ignore ...string) *findResult[T] {
 	result := &findResult[T]{}
-	_findInType(t, []int{}, result, onType, onField, recurseFields, make(map[reflect.Type]bool), ignore...)
+	_findInType(t, []int{}, result, onType, onField, recurseFields, make(map[reflect.Type]struct{}), ignore...)
 	return result
 }
 
-func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T], onType func(reflect.Type, []int) T, onField func(reflect.StructField, []int) T, recurseFields bool, visited map[reflect.Type]bool, ignore ...string) {
+func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T], onType func(reflect.Type, []int) T, onField func(reflect.StructField, []int) T, recurseFields bool, visited map[reflect.Type]struct{}, ignore ...string) {
 	t = deref(t)
 	zero := reflect.Zero(reflect.TypeOf((*T)(nil)).Elem()).Interface()
 
@@ -392,10 +392,10 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 
 	switch t.Kind() {
 	case reflect.Struct:
-		if visited[t] {
+		if _, ok := visited[t]; ok {
 			return
 		}
-		visited[t] = true
+		visited[t] = struct{}{}
 		for i := 0; i < t.NumField(); i++ {
 			f := t.Field(i)
 			if !f.IsExported() {

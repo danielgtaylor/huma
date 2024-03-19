@@ -17,6 +17,24 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 )
 
+type RecursiveChildKey struct {
+	Key  string             `json:"key"`
+	Self *RecursiveChildKey `json:"self,omitempty"`
+}
+
+type RecursiveChild struct {
+	RecursiveChildLoop
+}
+
+type RecursiveChildLoop struct {
+	*RecursiveChild
+	Slice   []*RecursiveChildLoop                    `json:"slice"`
+	Array   [1]*RecursiveChildLoop                   `json:"array"`
+	Map     map[RecursiveChildKey]RecursiveChildLoop `json:"map"`
+	ByValue RecursiveChildKey                        `json:"byValue"`
+	ByRef   *RecursiveChildKey                       `json:"byRef"`
+}
+
 type EmbeddedChild struct {
 	// This one should be ignored as it is overridden by `Embedded`.
 	Value string `json:"value" doc:"old doc"`
@@ -586,6 +604,39 @@ func TestSchema(t *testing.T) {
 					}
 				}
 			}`,
+		},
+		{
+			name:  "recursive-embedded-structure",
+			input: RecursiveChild{},
+			expected: `{
+				"additionalProperties":false,
+				"properties":{
+					"array":{
+						"items":{
+							"$ref":"#/components/schemas/RecursiveChildLoop"},
+							"type":"array"
+						},
+					"byRef":{
+						"$ref":"#/components/schemas/RecursiveChildKey"
+					},
+					"byValue":{
+						"$ref":"#/components/schemas/RecursiveChildKey"
+					},
+					"map":{
+						"additionalProperties":{
+							"$ref":"#/components/schemas/RecursiveChildLoop"
+						},
+						"type":"object"
+					},
+					"slice":{
+						"items":{
+							"$ref":"#/components/schemas/RecursiveChildLoop"
+						},
+						"type":"array"}
+					},
+					"required":["slice","array","map","byValue","byRef"],
+					"type":"object"
+				}`,
 		},
 		{
 			name: "panic-bool",
