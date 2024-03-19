@@ -266,6 +266,14 @@ var validateTests = []struct {
 		errs:  []string{"expected string to match pattern ^[a-z]+$"},
 	},
 	{
+		name: "pattern custom message fail",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" pattern:"^[a-z]+$" patternDescription:"alphabetical"`
+		}{}),
+		input: map[string]any{"value": "b@2"},
+		errs:  []string{"expected string to be alphabetical"},
+	},
+	{
 		name: "pattern invalid",
 		typ: reflect.TypeOf(struct {
 			Value string `json:"value" pattern:"^[a-"`

@@ -538,6 +538,13 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 
 	for _, k := range s.propertyNames {
 		v := s.Properties[k]
+
+		// Schemas are generated such that the read/write-only properties are set
+		// alongside the `$ref`, if it is present (i.e. for objects). If not,
+		// then the read/write-only properties are set directly on the schema and
+		// the `for` loop never runs.
+		readOnly := v.ReadOnly
+		writeOnly := v.WriteOnly
 		for v.Ref != "" {
 			v = r.SchemaFromRef(v.Ref)
 		}
@@ -547,7 +554,7 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		// TODO: should we make this configurable?
 
 		// Be stricter for responses, enabling validation of the server if desired.
-		if mode == ModeReadFromServer && v.WriteOnly && m[k] != nil && !reflect.ValueOf(m[k]).IsZero() {
+		if mode == ModeReadFromServer && writeOnly && m[k] != nil && !reflect.ValueOf(m[k]).IsZero() {
 			res.Add(path, m[k], "write only property is non-zero")
 			continue
 		}
@@ -556,8 +563,8 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 			if !s.requiredMap[k] {
 				continue
 			}
-			if (mode == ModeWriteToServer && v.ReadOnly) ||
-				(mode == ModeReadFromServer && v.WriteOnly) {
+			if (mode == ModeWriteToServer && readOnly) ||
+				(mode == ModeReadFromServer && writeOnly) {
 				// These are not required for the current mode.
 				continue
 			}
@@ -619,6 +626,13 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 
 	for _, k := range s.propertyNames {
 		v := s.Properties[k]
+
+		// Schemas are generated such that the read/write-only properties are set
+		// alongside the `$ref`, if it is present (i.e. for objects). If not,
+		// then the read/write-only properties are set directly on the schema and
+		// the `for` loop never runs.
+		readOnly := v.ReadOnly
+		writeOnly := v.WriteOnly
 		for v.Ref != "" {
 			v = r.SchemaFromRef(v.Ref)
 		}
@@ -628,7 +642,7 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 		// TODO: should we make this configurable?
 
 		// Be stricter for responses, enabling validation of the server if desired.
-		if mode == ModeReadFromServer && v.WriteOnly && m[k] != nil && !reflect.ValueOf(m[k]).IsZero() {
+		if mode == ModeReadFromServer && writeOnly && m[k] != nil && !reflect.ValueOf(m[k]).IsZero() {
 			res.Add(path, m[k], "write only property is non-zero")
 			continue
 		}
@@ -637,8 +651,8 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 			if !s.requiredMap[k] {
 				continue
 			}
-			if (mode == ModeWriteToServer && v.ReadOnly) ||
-				(mode == ModeReadFromServer && v.WriteOnly) {
+			if (mode == ModeWriteToServer && readOnly) ||
+				(mode == ModeReadFromServer && writeOnly) {
 				// These are not required for the current mode.
 				continue
 			}
