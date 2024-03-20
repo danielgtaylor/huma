@@ -1118,16 +1118,12 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 			if rawBodyMultipart {
 				form, err := ctx.GetMultipartForm()
-				if err != nil {
-					WriteErr(api, ctx, http.StatusInternalServerError, "cannot read multipart form", err)
-					return
+				if err != nil || form == nil {
+					WriteErr(api, ctx, http.StatusUnprocessableEntity, "cannot read multipart form", err)
+				} else {
+					f := v.Field(rawBodyIndex)
+					f.Set(reflect.ValueOf(*form))
 				}
-				if form == nil {
-					WriteErr(api, ctx, http.StatusInternalServerError, "cannot read multipart form")
-					return
-				}
-				f := v.Field(rawBodyIndex)
-				f.Set(reflect.ValueOf(*form))
 			} else {
 				buf := bufPool.Get().(*bytes.Buffer)
 				reader := ctx.BodyReader()

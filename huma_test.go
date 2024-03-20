@@ -590,6 +590,46 @@ Content of example2.txt.
 --AnotherBoundary--`,
 		},
 		{
+			Name: "request-body-multipart-wrong-content-type",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody multipart.Form
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPut,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "wrong/type"},
+			Body:    `some-data`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+			},
+		},
+		{
+			Name: "request-body-multipart-invalid-data",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody multipart.Form
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPut,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body:    `invalid`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+			},
+		},
+		{
 			Name: "handler-error",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
