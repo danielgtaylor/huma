@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -501,6 +502,140 @@ func TestFeatures(t *testing.T) {
 			URL:     "/file",
 			Headers: map[string]string{"Content-Type": "application/foo"},
 			Body:    `some-data`,
+		},
+		{
+			Name: "request-body-multipart-file",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody multipart.Form
+				}) (*struct{}, error) {
+					for name, fh := range input.RawBody.File {
+						for _, f := range fh {
+							r, err := f.Open()
+							require.NoError(t, err)
+
+							b, err := io.ReadAll(r)
+							require.NoError(t, err)
+
+							_ = r.Close()
+
+							assert.Equal(t, "test.txt", f.Filename)
+							assert.Equal(t, "text/plain", f.Header.Get("Content-Type"))
+							assert.Equal(t, "Hello, World!", string(b))
+						}
+						assert.Equal(t, "file", name)
+					}
+					return nil, nil
+				})
+
+				// Ensure OpenAPI spec is listed as a multipart/form-data upload with
+				// the appropriate schema.
+				mpContent := api.OpenAPI().Paths["/upload"].Post.RequestBody.Content["multipart/form-data"]
+				assert.Equal(t, "object", mpContent.Schema.Type)
+				assert.Equal(t, "binary", mpContent.Schema.Properties["filename"].Format)
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+Hello, World!
+--SimpleBoundary--`,
+		},
+		{
+			Name: "request-body-multipart-files",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload-files",
+				}, func(ctx context.Context, input *struct {
+					RawBody multipart.Form
+				}) (*struct{}, error) {
+					for name, fh := range input.RawBody.File {
+						for _, f := range fh {
+							r, err := f.Open()
+							require.NoError(t, err)
+
+							b, err := io.ReadAll(r)
+							require.NoError(t, err)
+
+							_ = r.Close()
+
+							// get the last char of name
+							index := name[len(name)-1:]
+							assert.Equal(t, "example"+index+".txt", f.Filename)
+							assert.Equal(t, "text/plain", f.Header.Get("Content-Type"))
+							assert.Equal(t, "Content of example"+index+".txt.", string(b))
+						}
+					}
+					return nil, nil
+				})
+
+				// Ensure OpenAPI spec is listed as a multipart/form-data upload with
+				// the appropriate schema.
+				mpContent := api.OpenAPI().Paths["/upload-files"].Post.RequestBody.Content["multipart/form-data"]
+				assert.Equal(t, "object", mpContent.Schema.Type)
+				assert.Equal(t, "binary", mpContent.Schema.Properties["filename"].Format)
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload-files",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=AnotherBoundary"},
+			Body: `--AnotherBoundary
+Content-Disposition: form-data; name="file1"; filename="example1.txt"
+Content-Type: text/plain
+
+Content of example1.txt.
+--AnotherBoundary
+Content-Disposition: form-data; name="file2"; filename="example2.txt"
+Content-Type: text/plain
+
+Content of example2.txt.
+--AnotherBoundary--`,
+		},
+		{
+			Name: "request-body-multipart-wrong-content-type",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody multipart.Form
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPut,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "wrong/type"},
+			Body:    `some-data`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+			},
+		},
+		{
+			Name: "request-body-multipart-invalid-data",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody multipart.Form
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPut,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body:    `invalid`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+			},
 		},
 		{
 			Name: "handler-error",

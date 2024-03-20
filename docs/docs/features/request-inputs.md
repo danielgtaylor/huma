@@ -58,7 +58,7 @@ The special struct field `Body` will be treated as the input request body and ca
 
 ### Other Body Types
 
-Sometimes, you want to bypass the normal body parsing and instead read the raw body conents directly. This is useful for unstructured data, file uploads, or other binary data. You can use `RawBody []byte` **without** a `Body` field to access the raw body bytes without any parsing/validation being applied. For example, to accept some `text/plain` input:
+Sometimes, you want to bypass the normal body parsing and instead read the raw body contents directly. This is useful for unstructured data, file uploads, or other binary data. You can use `RawBody []byte` **without** a `Body` field to access the raw body bytes without any parsing/validation being applied. For example, to accept some `text/plain` input:
 
 ```go title="code.go"
 huma.Register(api, huma.Operation{
@@ -75,6 +75,30 @@ huma.Register(api, huma.Operation{
 ```
 
 This enables you to also do your own parsing of the input, if needed.
+
+### Multipart Form Data
+
+Multipart form data is supported by using a `RawBody` with a type of  
+`multipart.Form` type in the input struct. This will parse the request using
+Go standard library multipart processing implementation. 
+
+For example:
+
+```go title="code.go"
+huma.Register(api, huma.Operation{
+	OperationID: "upload-files",
+    Method:      http.MethodPost,
+    Path:        "/upload",
+    Summary:     "Example to upload a file",
+}, func(ctx context.Context, input struct {
+    RawBody multipart.Form
+}) (*struct{}, error) {
+    // Process multipart form here.
+    return nil, nil
+})
+```
+
+This will be useful for supporting file uploads.
 
 ## Request Example
 
