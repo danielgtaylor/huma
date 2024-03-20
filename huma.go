@@ -1124,6 +1124,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				}
 				if form == nil {
 					WriteErr(api, ctx, http.StatusInternalServerError, "cannot read multipart form")
+					return
 				}
 				f := v.Field(rawBodyIndex)
 				f.Set(reflect.ValueOf(*form))

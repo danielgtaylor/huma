@@ -507,10 +507,10 @@ func TestFeatures(t *testing.T) {
 					for name, fh := range input.RawBody.File {
 						for _, f := range fh {
 							r, err := f.Open()
-							assert.Nil(t, err)
+							require.NoError(t, err)
 
 							b, err := io.ReadAll(r)
-							assert.Nil(t, err)
+							require.NoError(t, err)
 
 							_ = r.Close()
 
@@ -551,10 +551,10 @@ Hello, World!
 					for name, fh := range input.RawBody.File {
 						for _, f := range fh {
 							r, err := f.Open()
-							assert.Nil(t, err)
+							require.NoError(t, err)
 
 							b, err := io.ReadAll(r)
-							assert.Nil(t, err)
+							require.NoError(t, err)
 
 							_ = r.Close()
 
