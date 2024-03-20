@@ -528,9 +528,14 @@ type fieldInfo struct {
 // getFields performs a breadth-first search for all fields including embedded
 // ones. It may return multiple fields with the same name, the first of which
 // represents the outermost declaration.
-func getFields(typ reflect.Type) []fieldInfo {
+func getFields(typ reflect.Type, visited map[reflect.Type]struct{}) []fieldInfo {
 	fields := make([]fieldInfo, 0, typ.NumField())
 	var embedded []reflect.StructField
+
+	if _, ok := visited[typ]; ok {
+		return fields
+	}
+	visited[typ] = struct{}{}
 
 	for i := 0; i < typ.NumField(); i++ {
 		f := typ.Field(i)
@@ -552,7 +557,7 @@ func getFields(typ reflect.Type) []fieldInfo {
 			newTyp = newTyp.Elem()
 		}
 		if newTyp.Kind() == reflect.Struct {
-			fields = append(fields, getFields(newTyp)...)
+			fields = append(fields, getFields(newTyp, visited)...)
 		}
 	}
 
@@ -662,7 +667,7 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		fieldSet := map[string]struct{}{}
 		props := map[string]*Schema{}
 		dependentRequiredMap := map[string][]string{}
-		for _, info := range getFields(t) {
+		for _, info := range getFields(t, make(map[reflect.Type]struct{})) {
 			f := info.Field
 
 			if _, ok := fieldSet[f.Name]; ok {

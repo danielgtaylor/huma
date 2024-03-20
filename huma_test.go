@@ -46,6 +46,14 @@ type UUID struct {
 	uuid.UUID
 }
 
+// Node is a custom type for testing recursive definition for huma.Register
+type Node struct {
+	Name  string          `json:"name"`
+	Nodes []Node          `json:"nodes,omitempty"`
+	Left  *Node           `json:"left,omitempty"`
+	Named map[string]Node `json:"named,omitempty"`
+}
+
 func (UUID) Schema(r huma.Registry) *huma.Schema {
 	return &huma.Schema{Type: huma.TypeString, Format: "uuid"}
 }
@@ -848,6 +856,28 @@ func TestFeatures(t *testing.T) {
 			Method: http.MethodPut,
 			URL:    "/round-trip",
 			Body:   `{"$schema": "...", "name": "foo"}`,
+		},
+		{
+			Name: "recursive schema",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/recursive-schema",
+				}, func(ctx context.Context, input *struct {
+					Body Node
+				}) (*struct {
+					Body Node
+				}, error) {
+					return input, nil
+				})
+			},
+			Method: http.MethodPost,
+			URL:    "/recursive-schema",
+			Body:   `{"name": "root", "nodes": [{"name": "child"}], "left": {"name": "left"}, "named": {"child1": {"name": "child1"}}}`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				assert.JSONEq(t, `{"name": "root", "nodes": [{"name": "child"}], "left": {"name": "left"}, "named": {"child1": {"name": "child1"}}}`, resp.Body.String())
+			},
 		},
 		{
 			Name: "one-of input",
