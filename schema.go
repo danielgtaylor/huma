@@ -691,6 +691,12 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 				continue
 			}
 
+			if boolTag(f, "hidden") {
+				// This field is deliberately ignored. It may still exist, but won't
+				// be documented.
+				continue
+			}
+
 			if dr := f.Tag.Get("dependentRequired"); strings.TrimSpace(dr) != "" {
 				dependentRequiredMap[name] = strings.Split(dr, ",")
 			}
