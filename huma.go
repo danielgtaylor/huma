@@ -600,54 +600,48 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	if f, ok := inputType.FieldByName("RawBody"); ok {
 		rawBodyIndex = f.Index[0]
 		if op.RequestBody == nil {
-			contentType := "application/octet-stream"
-
-			if f.Type.String() == "multipart.Form" {
-				contentType = "multipart/form-data"
-				rawBodyMultipart = true
+			op.RequestBody = &RequestBody{
+				Required: true,
+				Content:  map[string]*MediaType{},
 			}
+		}
 
-			if c := f.Tag.Get("contentType"); c != "" {
-				contentType = c
-			}
+		contentType := "application/octet-stream"
 
-			switch contentType {
-			case "multipart/form-data":
-				op.RequestBody = &RequestBody{
-					Required: true,
-					Content: map[string]*MediaType{
-						"multipart/form-data": {
-							Schema: &Schema{
-								Type: "object",
-								Properties: map[string]*Schema{
-									"name": {
-										Type:        "string",
-										Description: "general purpose name for multipart form value",
-									},
-									"filename": {
-										Type:        "string",
-										Format:      "binary",
-										Description: "filename of the file being uploaded",
-									},
-								},
-							},
+		if f.Type.String() == "multipart.Form" {
+			contentType = "multipart/form-data"
+			rawBodyMultipart = true
+		}
+
+		if c := f.Tag.Get("contentType"); c != "" {
+			contentType = c
+		}
+
+		switch contentType {
+		case "multipart/form-data":
+			op.RequestBody.Content["multipart/form-data"] = &MediaType{
+				Schema: &Schema{
+					Type: "object",
+					Properties: map[string]*Schema{
+						"name": {
+							Type:        "string",
+							Description: "general purpose name for multipart form value",
+						},
+						"filename": {
+							Type:        "string",
+							Format:      "binary",
+							Description: "filename of the file being uploaded",
 						},
 					},
-				}
-			default:
-				op.RequestBody = &RequestBody{
-					Required: true,
-					Content: map[string]*MediaType{
-						contentType: {
-							Schema: &Schema{
-								Type:   "string",
-								Format: "binary",
-							},
-						},
-					},
-				}
+				},
 			}
-
+		default:
+			op.RequestBody.Content[contentType] = &MediaType{
+				Schema: &Schema{
+					Type:   "string",
+					Format: "binary",
+				},
+			}
 		}
 	}
 
@@ -1124,7 +1118,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			if rawBodyMultipart {
 				form, err := ctx.GetMultipartForm()
 				if err != nil || form == nil {
-					WriteErr(api, ctx, http.StatusUnprocessableEntity, "cannot read multipart form", err)
+					res.Errors = append(res.Errors, &ErrorDetail{
+						Location: "body",
+						Message:  "cannot read multipart form: " + err.Error(),
+					})
 				} else {
 					f := v.Field(rawBodyIndex)
 					f.Set(reflect.ValueOf(*form))
