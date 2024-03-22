@@ -182,15 +182,17 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			pfi.TimeFormat = timeFormat
 		}
 
-		// Document the parameter if not hidden.
-		op.Parameters = append(op.Parameters, &Param{
-			Name:     name,
-			In:       pfi.Loc,
-			Explode:  explode,
-			Required: pfi.Required,
-			Schema:   pfi.Schema,
-			Example:  example,
-		})
+		if !boolTag(f, "hidden") {
+			// Document the parameter if not hidden.
+			op.Parameters = append(op.Parameters, &Param{
+				Name:     name,
+				In:       pfi.Loc,
+				Explode:  explode,
+				Required: pfi.Required,
+				Schema:   pfi.Schema,
+				Example:  example,
+			})
+		}
 
 		return pfi
 	}, false, "Body")

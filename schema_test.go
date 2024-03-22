@@ -535,6 +535,8 @@ func TestSchema(t *testing.T) {
 				value2 string
 				// Filtered due to being an unsupported type
 				Value3 func()
+				// Filtered due to being hidden
+				Value4 string `json:"value4,omitempty" hidden:"true"`
 			}{},
 			expected: `{
 				"type": "object",
