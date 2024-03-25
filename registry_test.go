@@ -53,3 +53,20 @@ func TestDefaultSchemaNamer(t *testing.T) {
 		})
 	}
 }
+
+func TestSchemaAlias(t *testing.T) {
+	type StringContainer struct {
+		Value string
+	}
+	type StructWithStringContainer struct {
+		Name StringContainer `json:"name,omitempty"`
+	}
+	type StructWithString struct {
+		Name string `json:"name,omitempty"`
+	}
+	registry := NewMapRegistry("#/components/schemas", DefaultSchemaNamer)
+	registry.RegisterTypeAlias(reflect.TypeOf(StringContainer{}), reflect.TypeOf(""))
+	schemaWithContainer := registry.Schema(reflect.TypeOf(StructWithStringContainer{}), false, "")
+	schemaWithString := registry.Schema(reflect.TypeOf(StructWithString{}), false, "")
+	assert.Equal(t, schemaWithString, schemaWithContainer)
+}

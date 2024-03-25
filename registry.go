@@ -18,6 +18,7 @@ type Registry interface {
 	SchemaFromRef(ref string) *Schema
 	TypeFromRef(ref string) reflect.Type
 	Map() map[string]*Schema
+	RegisterTypeAlias(t reflect.Type, alias reflect.Type)
 }
 
 // DefaultSchemaNamer provides schema names for types. It uses the type name
@@ -62,10 +63,17 @@ type mapRegistry struct {
 	types   map[string]reflect.Type
 	seen    map[reflect.Type]bool
 	namer   func(reflect.Type, string) string
+	aliases map[reflect.Type]reflect.Type
 }
 
 func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema {
 	t = deref(t)
+
+	alias, ok := r.aliases[t]
+	if ok {
+		return r.Schema(alias, allowRef, hint)
+	}
+
 	getsRef := t.Kind() == reflect.Struct
 	if t == timeType {
 		// Special case: time.Time is always a string.
@@ -134,6 +142,11 @@ func (r *mapRegistry) MarshalYAML() (interface{}, error) {
 	return r.schemas, nil
 }
 
+// RegisterTypeAlias(t, alias) makes the schema generator use the `alias` type instead of `t`.
+func (r *mapRegistry) RegisterTypeAlias(t reflect.Type, alias reflect.Type) {
+	r.aliases[t] = alias
+}
+
 // NewMapRegistry creates a new registry that stores schemas in a map and
 // returns references to them using the given prefix.
 func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) string) Registry {
@@ -142,6 +155,7 @@ func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) strin
 		schemas: map[string]*Schema{},
 		types:   map[string]reflect.Type{},
 		seen:    map[reflect.Type]bool{},
+		aliases: map[reflect.Type]reflect.Type{},
 		namer:   namer,
 	}
 }
