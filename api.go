@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"reflect"
 	"regexp"
 	"strings"
@@ -176,6 +177,18 @@ type Config struct {
 
 	// Transformers are a way to modify a response body before it is serialized.
 	Transformers []Transformer
+
+	// APIPrefix allow to specify an optional, already loaded, URI prefix,
+	// thus fixing the doc rendering.
+	//
+	// rootMx, apiMx := chi.NewMux(), chi.NewMux()
+	// rootMx.Mount("/api", apiMx)
+	// cfg := huma.DefaultConfig("My API", "1.0.0")
+	// cfg.APIPrefix = "/api"
+	// api := humachi.New(apiMx, cfg)
+	// huma.AutoRegister(api, struct{})
+	// srv := http.Server{Handler: rootMx}
+	APIPrefix string
 }
 
 // API represents a Huma API wrapping a specific router.
@@ -216,6 +229,11 @@ type API interface {
 
 	// Middlewares returns a slice of middleware handler functions.
 	Middlewares() Middlewares
+
+	// Prefix return the potential huma router prefix. The prefix shall be managed
+	// by the router (chi.Mx.Mount(prefix, mx)).
+	// Prefix interface method is only used for OpenAPI documentation generation.
+	Prefix() string
 }
 
 // Format represents a request / response format. It is used to marshal and
@@ -235,7 +253,10 @@ type api struct {
 	formatKeys   []string
 	transformers []Transformer
 	middlewares  Middlewares
+	prefix       string
 }
+
+func (a *api) Prefix() string { return a.prefix }
 
 func (a *api) Adapter() Adapter {
 	return a.adapter
@@ -326,6 +347,7 @@ func NewAPI(config Config, a Adapter) API {
 		adapter:      a,
 		formats:      map[string]Format{},
 		transformers: config.Transformers,
+		prefix:       config.APIPrefix,
 	}
 
 	if config.OpenAPI == nil {
@@ -402,7 +424,7 @@ func NewAPI(config Config, a Adapter) API {
   <body style="height: 100vh;">
 
     <elements-api
-      apiDescriptionUrl="` + config.OpenAPIPath + `.yaml"
+      apiDescriptionUrl="` + filepath.Join(config.APIPrefix, config.OpenAPIPath) + `.yaml"
       router="hash"
       layout="sidebar"
       tryItCredentialsPolicy="same-origin"
@@ -422,7 +444,7 @@ func NewAPI(config Config, a Adapter) API {
 			schema := strings.TrimSuffix(ctx.Param("schema"), ".json")
 			ctx.SetHeader("Content-Type", "application/json")
 			b, _ := json.Marshal(config.OpenAPI.Components.Schemas.Map()[schema])
-			b = rxSchema.ReplaceAll(b, []byte(config.SchemasPath+`/$1.json`))
+			b = rxSchema.ReplaceAll(b, []byte(filepath.Join(config.APIPrefix, config.SchemasPath)+`/$1.json`))
 			ctx.BodyWriter().Write(b)
 		})
 	}
