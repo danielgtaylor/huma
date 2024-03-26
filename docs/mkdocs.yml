@@ -28,6 +28,7 @@ nav:
           - "Service CLI": features/cli.md
       - "OpenAPI & JSON Schema":
           - "Config & OpenAPI": features/openapi-generation.md
+          - "Generated API Docs": features/api-docs.md
           - "JSON Schema & Registry": features/json-schema-registry.md
           - "Schema Customization": features/schema-customization.md
           - "Model Validation": features/model-validation.md
