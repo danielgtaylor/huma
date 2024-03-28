@@ -104,31 +104,50 @@ func NewContext(op *huma.Operation, r *http.Request, w http.ResponseWriter) huma
 	return &goContext{op: op, r: r, w: w}
 }
 
+type Mux interface {
+	HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request))
+	ServeHTTP(http.ResponseWriter, *http.Request)
+}
+
 type goAdapter struct {
-	router *http.ServeMux
+	Mux
+	prefix string
 }
 
 func (a *goAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
-	a.router.HandleFunc(strings.ToUpper(op.Method)+" "+op.Path, func(w http.ResponseWriter, r *http.Request) {
+	a.HandleFunc(strings.ToUpper(op.Method)+" "+a.prefix+op.Path, func(w http.ResponseWriter, r *http.Request) {
 		handler(&goContext{op: op, r: r, w: w})
 	})
 }
 
-func (a *goAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	a.router.ServeHTTP(w, r)
-}
-
 // NewAdapter creates a new adapter for the given HTTP mux.
-func NewAdapter(r *http.ServeMux) huma.Adapter {
-	return &goAdapter{router: r}
+func NewAdapter(m Mux, prefix string) huma.Adapter {
+	return &goAdapter{m, prefix}
 }
 
 // New creates a new Huma API using an HTTP mux.
-func New(r *http.ServeMux, config huma.Config) huma.API {
+//
+//	mux := http.NewServeMux()
+//	api := humago.New(mux, huma.DefaultConfig("My API", "1.0.0"))
+func New(m Mux, config huma.Config) huma.API {
 	// Panic if Go version is less than 1.22
 	var v any = &http.Request{}
 	if _, ok := v.(interface{ PathValue(string) string }); !ok {
 		panic("This adapter requires Go 1.22+")
 	}
-	return huma.NewAPI(config, &goAdapter{router: r})
+	return huma.NewAPI(config, &goAdapter{m, ""})
+}
+
+// NewWithPrefix creates a new Huma API using an HTTP mux with a URL prefix.
+// This behaves similar to other router's group functionality, adding the prefix
+// before each route path (but not in the OpenAPI). The prefix should be used in
+// combination with the `OpenAPI().Servers` base path to ensure the correct URLs
+// are generated in the OpenAPI spec.
+//
+//	mux := http.NewServeMux()
+//	config := huma.DefaultConfig("My API", "1.0.0")
+//	config.Servers = []*huma.Server{{URL: "http://example.com/api"}}
+//	api := humago.NewWithPrefix(mux, "/api", config)
+func NewWithPrefix(m Mux, prefix string, config huma.Config) huma.API {
+	return huma.NewAPI(config, &goAdapter{m, prefix})
 }

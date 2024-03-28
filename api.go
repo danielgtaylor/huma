@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"path"
 	"reflect"
 	"regexp"
 	"strings"
@@ -176,6 +177,12 @@ type Config struct {
 
 	// Transformers are a way to modify a response body before it is serialized.
 	Transformers []Transformer
+
+	// CreateHooks is a list of functions that will be called before the API is
+	// created. This allows you to modify the configuration at creation time,
+	// for example if you need access to the path settings that may be changed
+	// by the user after the defaults have been set.
+	CreateHooks []func(Config) Config
 }
 
 // API represents a Huma API wrapping a specific router.
@@ -306,6 +313,17 @@ func (a *api) Middlewares() Middlewares {
 	return a.middlewares
 }
 
+// getAPIPrefix returns the API prefix from the first server URL in the OpenAPI
+// spec. If no server URL is set, then an empty string is returned.
+func getAPIPrefix(oapi *OpenAPI) string {
+	for _, server := range oapi.Servers {
+		if u, err := url.Parse(server.URL); err == nil && u.Path != "" {
+			return u.Path
+		}
+	}
+	return ""
+}
+
 // NewAPI creates a new API with the given configuration and router adapter.
 // You usually don't need to use this function directly, and can instead use
 // the `New(...)` function provided by the adapter packages which call this
@@ -321,6 +339,10 @@ func (a *api) Middlewares() Middlewares {
 //	config := huma.DefaultConfig("Example API", "1.0.0")
 //	api := huma.NewAPI(config, adapter)
 func NewAPI(config Config, a Adapter) API {
+	for i := 0; i < len(config.CreateHooks); i++ {
+		config = config.CreateHooks[i](config)
+	}
+
 	newAPI := &api{
 		config:       config,
 		adapter:      a,
@@ -385,6 +407,10 @@ func NewAPI(config Config, a Adapter) API {
 			Method: http.MethodGet,
 			Path:   config.DocsPath,
 		}, func(ctx Context) {
+			openAPIPath := config.OpenAPIPath
+			if prefix := getAPIPrefix(newAPI.OpenAPI()); prefix != "" {
+				openAPIPath = path.Join(prefix, openAPIPath)
+			}
 			ctx.SetHeader("Content-Type", "text/html")
 			ctx.BodyWriter().Write([]byte(`<!doctype html>
 <html lang="en">
@@ -402,7 +428,7 @@ func NewAPI(config Config, a Adapter) API {
   <body style="height: 100vh;">
 
     <elements-api
-      apiDescriptionUrl="` + config.OpenAPIPath + `.yaml"
+      apiDescriptionUrl="` + openAPIPath + `.yaml"
       router="hash"
       layout="sidebar"
       tryItCredentialsPolicy="same-origin"

@@ -68,8 +68,6 @@ func DefaultConfig(title, version string) Config {
 
 	registry := NewMapRegistry(schemaPrefix, DefaultSchemaNamer)
 
-	linkTransformer := NewSchemaLinkTransformer(schemaPrefix, schemasPath)
-
 	return Config{
 		OpenAPI: &OpenAPI{
 			OpenAPI: "3.1.0",
@@ -79,9 +77,6 @@ func DefaultConfig(title, version string) Config {
 			},
 			Components: &Components{
 				Schemas: registry,
-			},
-			OnAddOperation: []AddOpFunc{
-				linkTransformer.OnAddOperation,
 			},
 		},
 		OpenAPIPath: "/openapi",
@@ -94,8 +89,17 @@ func DefaultConfig(title, version string) Config {
 			"cbor":             DefaultCBORFormat,
 		},
 		DefaultFormat: "application/json",
-		Transformers: []Transformer{
-			linkTransformer.Transform,
+		CreateHooks: []func(Config) Config{
+			func(c Config) Config {
+				// Add a link transformer to the API. This adds `Link` headers and
+				// puts `$schema` fields in the response body which point to the JSON
+				// Schema that describes the response structure.
+				// This is a create hook so we get the latest schema path setting.
+				linkTransformer := NewSchemaLinkTransformer(schemaPrefix, c.SchemasPath)
+				c.OpenAPI.OnAddOperation = append(c.OpenAPI.OnAddOperation, linkTransformer.OnAddOperation)
+				c.Transformers = append(c.Transformers, linkTransformer.Transform)
+				return c
+			},
 		},
 	}
 }
