@@ -681,7 +681,9 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 			name := f.Name
 			omit := false
 			if j := f.Tag.Get("json"); j != "" {
-				name = strings.Split(j, ",")[0]
+				if n := strings.Split(j, ",")[0]; n != "" {
+					name = n
+				}
 				if strings.Contains(j, "omitempty") {
 					omit = true
 				}
