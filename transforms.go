@@ -77,6 +77,13 @@ func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
 		}
 	}
 
+	// Figure out if there should be a base path prefix. This might be set when
+	// using a sub-router / group or if the gateway consumes a part of the path.
+	schemasPath := t.schemasPath
+	if prefix := getAPIPrefix(oapi); prefix != "" {
+		schemasPath = path.Join(prefix, schemasPath)
+	}
+
 	registry := oapi.Components.Schemas
 	for _, resp := range op.Responses {
 		for _, content := range resp.Content {
@@ -88,7 +95,7 @@ func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
 			typ := deref(registry.TypeFromRef(content.Schema.Ref))
 
 			extra := schemaField{
-				Schema: t.schemasPath + "/" + path.Base(content.Schema.Ref) + ".json",
+				Schema: schemasPath + "/" + path.Base(content.Schema.Ref) + ".json",
 			}
 
 			fieldIndexes := []int{}
