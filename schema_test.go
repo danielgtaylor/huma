@@ -427,6 +427,21 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-optional-without-name",
+			input: struct {
+				Value string `json:",omitempty"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"Value": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			}`,
+		},
+		{
 			name: "field-example-custom",
 			input: struct {
 				Value CustomSchema `json:"value" example:"foo"`
