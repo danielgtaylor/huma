@@ -56,11 +56,22 @@ func (t *SchemaLinkTransformer) addSchemaField(oapi *OpenAPI, content *MediaType
 		return true
 	}
 
+	// Create an example so it's easier for users to find the schema URL when
+	// they are reading the documentation.
+	server := "https://example.com"
+	for _, s := range oapi.Servers {
+		if s.URL != "" {
+			server = s.URL
+			break
+		}
+	}
+
 	schema.Properties["$schema"] = &Schema{
 		Type:        TypeString,
 		Format:      "uri",
 		Description: "A URL to the JSON Schema for this object.",
 		ReadOnly:    true,
+		Examples:    []any{server + t.schemasPath + "/" + path.Base(content.Schema.Ref) + ".json"},
 	}
 	return false
 }
