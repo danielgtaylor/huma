@@ -91,8 +91,13 @@ func (c *echoCtx) BodyWriter() io.Writer {
 	return c.orig.Response()
 }
 
+type router interface {
+	Add(method, path string, handler echo.HandlerFunc, middlewares ...echo.MiddlewareFunc) *echo.Route
+}
+
 type echoAdapter struct {
-	router *echo.Echo
+	http.Handler
+	router router
 }
 
 func (a *echoAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
@@ -107,10 +112,14 @@ func (a *echoAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	})
 }
 
-func (a *echoAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	a.router.ServeHTTP(w, r)
+func New(r *echo.Echo, config huma.Config) huma.API {
+	return huma.NewAPI(config, &echoAdapter{Handler: r, router: r})
 }
 
-func New(r *echo.Echo, config huma.Config) huma.API {
-	return huma.NewAPI(config, &echoAdapter{router: r})
+// NewWithGroup creates a new Huma API using the provided Echo router and group,
+// letting you mount the API at a sub-path. Can be used in combination with
+// the `OpenAPI.Servers` field to set the correct base URL for the API / docs
+// / schemas / etc.
+func NewWithGroup(r *echo.Echo, g *echo.Group, config huma.Config) huma.API {
+	return huma.NewAPI(config, &echoAdapter{Handler: r, router: g})
 }

@@ -99,8 +99,17 @@ func (c *fiberCtx) BodyWriter() io.Writer {
 	return c.orig
 }
 
+type router interface {
+	Add(method, path string, handlers ...fiber.Handler) fiber.Router
+}
+
+type requestTester interface {
+	Test(*http.Request, ...int) (*http.Response, error)
+}
+
 type fiberAdapter struct {
-	router *fiber.App
+	tester requestTester
+	router router
 }
 
 func (a *fiberAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
@@ -118,7 +127,7 @@ func (a *fiberAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 func (a *fiberAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// b, _ := httputil.DumpRequest(r, true)
 	// fmt.Println(string(b))
-	resp, err := a.router.Test(r)
+	resp, err := a.tester.Test(r)
 	if err != nil {
 		panic(err)
 	}
@@ -133,5 +142,9 @@ func (a *fiberAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func New(r *fiber.App, config huma.Config) huma.API {
-	return huma.NewAPI(config, &fiberAdapter{router: r})
+	return huma.NewAPI(config, &fiberAdapter{tester: r, router: r})
+}
+
+func NewWithGroup(r *fiber.App, g *fiber.Group, config huma.Config) huma.API {
+	return huma.NewAPI(config, &fiberAdapter{tester: r, router: g})
 }
