@@ -91,8 +91,14 @@ func (c *ginCtx) BodyWriter() io.Writer {
 	return c.orig.Writer
 }
 
+// Router is an interface that wraps the Gin router's Handle method.
+type Router interface {
+	Handle(string, string, ...gin.HandlerFunc) gin.IRoutes
+}
+
 type ginAdapter struct {
-	router *gin.Engine
+	http.Handler
+	router Router
 }
 
 func (a *ginAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
@@ -106,10 +112,14 @@ func (a *ginAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	})
 }
 
-func (a *ginAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	a.router.ServeHTTP(w, r)
+func New(r *gin.Engine, config huma.Config) huma.API {
+	return huma.NewAPI(config, &ginAdapter{Handler: r, router: r})
 }
 
-func New(r *gin.Engine, config huma.Config) huma.API {
-	return huma.NewAPI(config, &ginAdapter{router: r})
+// NewWithGroup creates a new Huma API using the provided Gin router and group,
+// letting you mount the API at a sub-path. Can be used in combination with
+// the `OpenAPI.Servers` field to set the correct base URL for the API / docs
+// / schemas / etc.
+func NewWithGroup(r *gin.Engine, g *gin.RouterGroup, config huma.Config) huma.API {
+	return huma.NewAPI(config, &ginAdapter{Handler: r, router: g})
 }

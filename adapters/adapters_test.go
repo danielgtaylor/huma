@@ -87,21 +87,23 @@ func testAdapter(t *testing.T, api huma.API) {
 }
 
 func TestAdapters(t *testing.T) {
-	config := huma.DefaultConfig("Test", "1.0.0")
+	config := func() huma.Config {
+		return huma.DefaultConfig("Test", "1.0.0")
+	}
 
 	for _, adapter := range []struct {
 		name string
 		new  func() huma.API
 	}{
-		{"chi", func() huma.API { return humachi.New(chi.NewMux(), config) }},
-		{"chi4", func() huma.API { return humachi.NewV4(chi4.NewMux(), config) }},
-		{"echo", func() huma.API { return humaecho.New(echo.New(), config) }},
-		{"fiber", func() huma.API { return humafiber.New(fiber.New(), config) }},
-		{"gin", func() huma.API { return humagin.New(gin.New(), config) }},
-		{"httprouter", func() huma.API { return humahttprouter.New(httprouter.New(), config) }},
-		{"mux", func() huma.API { return humamux.New(mux.NewRouter(), config) }},
-		{"bunrouter", func() huma.API { return humabunrouter.New(bunrouter.New(), config) }},
-		{"bunroutercompat", func() huma.API { return humabunrouter.NewCompat(bunrouter.New().Compat(), config) }},
+		{"chi", func() huma.API { return humachi.New(chi.NewMux(), config()) }},
+		{"chi4", func() huma.API { return humachi.NewV4(chi4.NewMux(), config()) }},
+		{"echo", func() huma.API { return humaecho.New(echo.New(), config()) }},
+		{"fiber", func() huma.API { return humafiber.New(fiber.New(), config()) }},
+		{"gin", func() huma.API { return humagin.New(gin.New(), config()) }},
+		{"httprouter", func() huma.API { return humahttprouter.New(httprouter.New(), config()) }},
+		{"mux", func() huma.API { return humamux.New(mux.NewRouter(), config()) }},
+		{"bunrouter", func() huma.API { return humabunrouter.New(bunrouter.New(), config()) }},
+		{"bunroutercompat", func() huma.API { return humabunrouter.NewCompat(bunrouter.New().Compat(), config()) }},
 	} {
 		t.Run(adapter.name, func(t *testing.T) {
 			testAdapter(t, adapter.new())

@@ -136,6 +136,8 @@ func (a *testAPI) Do(method, path string, args ...any) *httptest.ResponseRecorde
 	}
 
 	req, _ := http.NewRequest(method, path, b)
+	req.RequestURI = path
+	req.RemoteAddr = "127.0.0.1:12345"
 	if isJSON {
 		req.Header.Set("Content-Type", "application/json")
 	}
