@@ -418,7 +418,7 @@ func NewAPI(config Config, a Adapter) API {
     <meta charset="utf-8" />
     <meta name="referrer" content="same-origin" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <title>Elements in HTML</title>
+    <title>` + config.Info.Title + ` reference</title>
     <!-- Embed elements Elements via Web Component -->
     <link href="https://unpkg.com/@stoplight/elements@8.1.0/styles.min.css" rel="stylesheet" />
     <script src="https://unpkg.com/@stoplight/elements@8.1.0/web-components.min.js"

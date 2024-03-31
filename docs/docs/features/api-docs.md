@@ -37,7 +37,7 @@ router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
     <meta charset="utf-8" />
     <meta name="referrer" content="same-origin" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <title>Elements in HTML</title>
+    <title>Docs Example reference</title>
     <!-- Embed elements Elements via Web Component -->
     <link href="https://unpkg.com/@stoplight/elements@8.0.0/styles.min.css" rel="stylesheet" />
     <script src="https://unpkg.com/@stoplight/elements@8.0.0/web-components.min.js"
