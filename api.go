@@ -412,13 +412,17 @@ func NewAPI(config Config, a Adapter) API {
 				openAPIPath = path.Join(prefix, openAPIPath)
 			}
 			ctx.SetHeader("Content-Type", "text/html")
+			title := "Elements in HTML"
+			if config.Info != nil && config.Info.Title != "" {
+				title = config.Info.Title + " Reference"
+			}
 			ctx.BodyWriter().Write([]byte(`<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="referrer" content="same-origin" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <title>Elements in HTML</title>
+    <title>` + title + `</title>
     <!-- Embed elements Elements via Web Component -->
     <link href="https://unpkg.com/@stoplight/elements@8.1.0/styles.min.css" rel="stylesheet" />
     <script src="https://unpkg.com/@stoplight/elements@8.1.0/web-components.min.js"
