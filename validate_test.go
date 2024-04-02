@@ -1213,6 +1213,18 @@ var validateTests = []struct {
 		input: 5,
 		errs:  []string{"expected value to not match schema"},
 	},
+	{
+		name:  "nullable success",
+		s:     &huma.Schema{Type: huma.TypeNumber, Nullable: true},
+		input: nil,
+	},
+	{
+		name: "nullable required field success",
+		typ: reflect.TypeOf(struct {
+			Field *int `json:"field"`
+		}{}),
+		input: map[string]any{"field": nil},
+	},
 }
 
 func TestValidate(t *testing.T) {

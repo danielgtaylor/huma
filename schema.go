@@ -58,6 +58,7 @@ func deref(t reflect.Type) reflect.Type {
 // Note that the registry may create references for your types.
 type Schema struct {
 	Type                 string              `yaml:"type,omitempty"`
+	Nullable             bool                `yaml:"-"`
 	Title                string              `yaml:"title,omitempty"`
 	Description          string              `yaml:"description,omitempty"`
 	Ref                  string              `yaml:"$ref,omitempty"`
@@ -121,8 +122,12 @@ type Schema struct {
 // MarshalJSON marshals the schema into JSON, respecting the `Extensions` map
 // to marshal extensions inline.
 func (s *Schema) MarshalJSON() ([]byte, error) {
+	var typ any = s.Type
+	if s.Nullable {
+		typ = []string{s.Type, "null"}
+	}
 	return marshalJSON([]jsonFieldInfo{
-		{"type", s.Type, omitEmpty},
+		{"type", typ, omitEmpty},
 		{"title", s.Title, omitEmpty},
 		{"description", s.Description, omitEmpty},
 		{"$ref", s.Ref, omitEmpty},
@@ -496,6 +501,11 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 		}
 	}
 
+	if value := f.Tag.Get("nullable"); value != "" {
+		// Allow field tag to override the default nullable value.
+		fs.Nullable = boolTag(f, "nullable")
+	}
+
 	fs.Minimum = floatTag(f, "minimum")
 	fs.ExclusiveMinimum = floatTag(f, "exclusiveMinimum")
 	fs.Maximum = floatTag(f, "maximum")
@@ -586,17 +596,19 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		return sp.Schema(r)
 	}
 
-	s := Schema{}
+	s := Schema{
+		Nullable: t.Kind() == reflect.Pointer,
+	}
 	t = deref(t)
 
 	// Handle special cases.
 	switch t {
 	case timeType:
-		return &Schema{Type: TypeString, Format: "date-time"}
+		return &Schema{Type: TypeString, Nullable: s.Nullable, Format: "date-time"}
 	case urlType:
-		return &Schema{Type: TypeString, Format: "uri"}
+		return &Schema{Type: TypeString, Nullable: s.Nullable, Format: "uri"}
 	case ipType:
-		return &Schema{Type: TypeString, Format: "ipv4"}
+		return &Schema{Type: TypeString, Nullable: s.Nullable, Format: "ipv4"}
 	}
 
 	minZero := 0.0
@@ -709,7 +721,11 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 				propNames = append(propNames, name)
 				if !omit {
 					required = append(required, name)
-					requiredMap[name] = true
+					if !fs.Nullable {
+						// In Go we can't easily distinguish if `null` was sent, so no
+						// need to check for a required nullable field in the validator.
+						requiredMap[name] = true
+					}
 				}
 			}
 		}

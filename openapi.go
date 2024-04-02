@@ -1518,3 +1518,126 @@ func (o *OpenAPI) YAML() ([]byte, error) {
 	}
 	return buf.Bytes(), err
 }
+
+func downgradeSpec(input any) {
+	switch value := input.(type) {
+	case map[string]any:
+		m := value
+		keys := make([]string, 0, len(m))
+		for k := range m {
+			keys = append(keys, k)
+		}
+		for _, k := range keys {
+			v := m[k]
+			if k == "openapi" && v == "3.1.0" {
+				// Update version.
+				m[k] = "3.0.3"
+				continue
+			}
+
+			if k == "type" {
+				// OpenAPI 3.1 supports type arrays, which need to be converted.
+				// This may be lossy, but we want to keep it simple.
+				// TODO: If we run into more complex cases, split into one-of?
+				if types, ok := v.([]any); ok {
+					for _, t := range types {
+						if t == "null" {
+							// The "null" type is a nullable field in 3.0.
+							m["nullable"] = true
+						}
+						// Last non-null wins.
+						m["type"] = t
+					}
+					continue
+				}
+			}
+
+			// Exclusive values were bools in 3.0.
+			if k == "exclusiveMinimum" && reflect.TypeOf(v).Kind() == reflect.Float64 {
+				m["minimum"] = v
+				m["exclusiveMinimum"] = true
+				continue
+			}
+
+			if k == "exclusiveMaximum" && reflect.TypeOf(v).Kind() == reflect.Float64 {
+				m["maximum"] = v
+				m["exclusiveMaximum"] = true
+				continue
+			}
+
+			// Provide single example for tools that read it.
+			if k == "examples" {
+				if examples, ok := v.([]any); ok {
+					if len(examples) > 0 {
+						m["example"] = examples[0]
+					}
+					if len(examples) == 1 {
+						delete(m, k)
+					}
+					continue
+				}
+			}
+
+			// Base64 / binary uploads
+			if k == "application/octet-stream" {
+				if ct, ok := v.(map[string]any); ok && len(ct) == 0 {
+					m[k] = map[string]any{
+						"schema": map[string]any{
+							"type":   "string",
+							"format": "binary",
+						},
+					}
+				}
+			}
+
+			if k == "contentEncoding" && v == "base64" {
+				delete(m, k)
+				m["format"] = "base64"
+				continue
+			}
+
+			if k == "contentMediaType" && v == "application/octet-stream" {
+				delete(m, k)
+				m["format"] = "binary"
+				continue
+			}
+
+			downgradeSpec(v)
+		}
+	case []any:
+		for _, item := range value {
+			downgradeSpec(item)
+		}
+	}
+}
+
+// Downgrade converts this OpenAPI 3.1 spec to OpenAPI 3.0.3, returning the
+// JSON []byte representation of the downgraded spec. This mostly exists
+// to provide an alternative spec for tools which are not yet 3.1 compatible.
+//
+// It reverses the changes documented at:
+// https://www.openapis.org/blog/2021/02/16/migrating-from-openapi-3-0-to-3-1-0
+func (o OpenAPI) Downgrade() ([]byte, error) {
+	b, err := o.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+
+	var v any
+	json.Unmarshal(b, &v)
+
+	downgradeSpec(v)
+
+	return json.Marshal(v)
+}
+
+// DowngradeYAML converts this OpenAPI 3.1 spec to OpenAPI 3.0.3, returning the
+// YAML []byte representation of the downgraded spec.
+func (o *OpenAPI) DowngradeYAML() ([]byte, error) {
+	specJSON, err := o.Downgrade()
+	buf := bytes.NewBuffer([]byte{})
+	if err == nil {
+		err = yaml.Convert(buf, bytes.NewReader(specJSON))
+	}
+	return buf.Bytes(), err
+}

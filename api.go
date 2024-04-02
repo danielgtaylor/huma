@@ -389,6 +389,17 @@ func NewAPI(config Config, a Adapter) API {
 			}
 			ctx.BodyWriter().Write(specJSON)
 		})
+		var specJSON30 []byte
+		a.Handle(&Operation{
+			Method: http.MethodGet,
+			Path:   config.OpenAPIPath + "-3.0.json",
+		}, func(ctx Context) {
+			ctx.SetHeader("Content-Type", "application/vnd.oai.openapi+json")
+			if specJSON30 == nil {
+				specJSON30, _ = newAPI.OpenAPI().Downgrade()
+			}
+			ctx.BodyWriter().Write(specJSON30)
+		})
 		var specYAML []byte
 		a.Handle(&Operation{
 			Method: http.MethodGet,
@@ -399,6 +410,17 @@ func NewAPI(config Config, a Adapter) API {
 				specYAML, _ = newAPI.OpenAPI().YAML()
 			}
 			ctx.BodyWriter().Write(specYAML)
+		})
+		var specYAML30 []byte
+		a.Handle(&Operation{
+			Method: http.MethodGet,
+			Path:   config.OpenAPIPath + "-3.0.yaml",
+		}, func(ctx Context) {
+			ctx.SetHeader("Content-Type", "application/vnd.oai.openapi+yaml")
+			if specYAML30 == nil {
+				specYAML30, _ = newAPI.OpenAPI().DowngradeYAML()
+			}
+			ctx.BodyWriter().Write(specYAML30)
 		})
 	}
 

@@ -54,6 +54,9 @@ func DefaultSchemaNamer(t reflect.Type, hint string) string {
 	if name == "" {
 		name = hint
 	}
+	if t.Kind() == reflect.Pointer {
+		name = "Nullable" + name
+	}
 	return name
 }
 
@@ -67,6 +70,7 @@ type mapRegistry struct {
 }
 
 func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema {
+	origType := t
 	t = deref(t)
 
 	alias, ok := r.aliases[t]
@@ -86,7 +90,7 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 		getsRef = false
 	}
 
-	name := r.namer(t, hint)
+	name := r.namer(origType, hint)
 
 	if getsRef {
 		if s, ok := r.schemas[name]; ok {
@@ -108,7 +112,7 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 		r.types[name] = t
 		r.seen[t] = true
 	}
-	s := SchemaFromType(r, t)
+	s := SchemaFromType(r, origType)
 	if getsRef {
 		r.schemas[name] = s
 	}

@@ -131,7 +131,7 @@ func TestSchema(t *testing.T) {
 		},
 		{
 			name:     "url",
-			input:    &url.URL{},
+			input:    url.URL{},
 			expected: `{"type": "string", "format": "uri"}`,
 		},
 		{
@@ -360,7 +360,7 @@ func TestSchema(t *testing.T) {
 				"type": "object",
 				"properties": {
 					"value": {
-						"type": "string",
+						"type": ["string", "null"],
 						"default": "foo"
 					}
 				},
@@ -611,12 +611,12 @@ func TestSchema(t *testing.T) {
 				"required": ["int", "str"],
 				"properties": {
 					"int": {
-						"type": "integer",
+						"type": ["integer", "null"],
 						"format": "int64",
 						"examples": [123]
 					},
 					"str": {
-						"type": "string",
+						"type": ["string", "null"],
 						"examples": ["foo"]
 					}
 				}
@@ -630,11 +630,11 @@ func TestSchema(t *testing.T) {
 				"properties":{
 					"array":{
 						"items":{
-							"$ref":"#/components/schemas/RecursiveChildLoop"},
+							"$ref":"#/components/schemas/NullableRecursiveChildLoop"},
 							"type":"array"
 						},
 					"byRef":{
-						"$ref":"#/components/schemas/RecursiveChildKey"
+						"$ref":"#/components/schemas/NullableRecursiveChildKey"
 					},
 					"byValue":{
 						"$ref":"#/components/schemas/RecursiveChildKey"
@@ -647,7 +647,7 @@ func TestSchema(t *testing.T) {
 					},
 					"slice":{
 						"items":{
-							"$ref":"#/components/schemas/RecursiveChildLoop"
+							"$ref":"#/components/schemas/NullableRecursiveChildLoop"
 						},
 						"type":"array"}
 					},
