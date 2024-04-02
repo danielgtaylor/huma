@@ -140,6 +140,11 @@ func TestSchema(t *testing.T) {
 			expected: `{"type": "string", "format": "ipv4"}`,
 		},
 		{
+			name:     "json.RawMessage",
+			input:    &json.RawMessage{},
+			expected: `{}`,
+		},
+		{
 			name:     "bytes",
 			input:    []byte("test"),
 			expected: `{"type": "string", "contentEncoding": "base64"}`,

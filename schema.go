@@ -30,9 +30,10 @@ const (
 
 // Special JSON Schema formats.
 var (
-	timeType = reflect.TypeOf(time.Time{})
-	ipType   = reflect.TypeOf(net.IP{})
-	urlType  = reflect.TypeOf(url.URL{})
+	timeType       = reflect.TypeOf(time.Time{})
+	ipType         = reflect.TypeOf(net.IP{})
+	urlType        = reflect.TypeOf(url.URL{})
+	rawMessageType = reflect.TypeOf(json.RawMessage{})
 )
 
 func deref(t reflect.Type) reflect.Type {
@@ -597,6 +598,8 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		return &Schema{Type: TypeString, Format: "uri"}
 	case ipType:
 		return &Schema{Type: TypeString, Format: "ipv4"}
+	case rawMessageType:
+		return &Schema{}
 	}
 
 	minZero := 0.0
