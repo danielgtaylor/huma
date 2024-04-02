@@ -3,6 +3,10 @@ title: Huma Introduction
 description: A modern, simple, fast & flexible micro framework for building HTTP APIs in Golang backed by OpenAPI 3 and JSON Schema.
 hide:
     - navigation
+sponsors:
+    - bclements
+    - bekabaz
+    - victoraugustolls
 ---
 
 # Huma {.hidden}

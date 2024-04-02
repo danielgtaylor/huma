@@ -61,10 +61,11 @@ This project was inspired by [FastAPI](https://fastapi.tiangolo.com/). Logo & br
 
 ## Sponsors
 
-A big thank you to our sponsors:
+A big thank you to our current & former sponsors:
 
 - [@bclements](https://github.com/bclements)
 - [@bekabaz](https://github.com/bekabaz)
+- [@victoraugustolls](https://github.com/victoraugustolls)
 
 ## Testimonials
 
