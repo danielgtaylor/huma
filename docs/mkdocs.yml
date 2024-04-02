@@ -62,6 +62,7 @@ nav:
   - "Go Reference": "https://pkg.go.dev/github.com/danielgtaylor/huma/v2?tab=doc"
 theme:
   name: material
+  custom_dir: overrides
   logo: logo.png
   favicon: favicon.png
   palette:
