@@ -501,9 +501,15 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 		}
 	}
 
-	if value := f.Tag.Get("nullable"); value != "" {
-		// Allow field tag to override the default nullable value.
-		fs.Nullable = boolTag(f, "nullable")
+	fs.Nullable = boolTag(f, "nullable")
+	if fs.Nullable && (fs.Type == TypeArray || fs.Type == TypeObject) {
+		// Nullability is only supported for scalar types for now. Objects are
+		// much more complicated because the `null` type lives within the object
+		// definition (requiring multiple copies of the object) or needs to use
+		// `anyOf` or `not` which is not supported by all code generators, or is
+		// supported poorly & generates hard-to-use code. This is less than ideal
+		// but a compromise.
+		panic(fmt.Errorf("nullable is not supported for field '%s' which is type '%s'", f.Name, fs.Type))
 	}
 
 	fs.Minimum = floatTag(f, "minimum")
@@ -596,19 +602,17 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		return sp.Schema(r)
 	}
 
-	s := Schema{
-		Nullable: t.Kind() == reflect.Pointer,
-	}
+	s := Schema{}
 	t = deref(t)
 
 	// Handle special cases.
 	switch t {
 	case timeType:
-		return &Schema{Type: TypeString, Nullable: s.Nullable, Format: "date-time"}
+		return &Schema{Type: TypeString, Format: "date-time"}
 	case urlType:
-		return &Schema{Type: TypeString, Nullable: s.Nullable, Format: "uri"}
+		return &Schema{Type: TypeString, Format: "uri"}
 	case ipType:
-		return &Schema{Type: TypeString, Nullable: s.Nullable, Format: "ipv4"}
+		return &Schema{Type: TypeString, Format: "ipv4"}
 	}
 
 	minZero := 0.0
@@ -690,19 +694,28 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 
 			fieldSet[f.Name] = struct{}{}
 
+			// Controls whether the field is required or not. This is inferred from
+			// the use of a pointer (optional) or a non-pointer (required), then
+			// can be made optional with the `omitempty` JSON tag. Finally, it can
+			// be overridden manually via the `required` tag.
+			fieldRequired := f.Type.Kind() != reflect.Pointer
+
 			name := f.Name
-			omit := false
 			if j := f.Tag.Get("json"); j != "" {
 				if n := strings.Split(j, ",")[0]; n != "" {
 					name = n
 				}
 				if strings.Contains(j, "omitempty") {
-					omit = true
+					fieldRequired = false
 				}
 			}
 			if name == "-" {
 				// This field is deliberately ignored.
 				continue
+			}
+
+			if v := f.Tag.Get("required"); v != "" {
+				fieldRequired = boolTag(f, "required")
 			}
 
 			if boolTag(f, "hidden") {
@@ -719,7 +732,7 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 			if fs != nil {
 				props[name] = fs
 				propNames = append(propNames, name)
-				if !omit {
+				if fieldRequired {
 					required = append(required, name)
 					if !fs.Nullable {
 						// In Go we can't easily distinguish if `null` was sent, so no
@@ -755,6 +768,11 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		if f, ok := t.FieldByName("_"); ok {
 			if _, ok = f.Tag.Lookup("additionalProperties"); ok {
 				additionalProps = boolTag(f, "additionalProperties")
+			}
+
+			if _, ok := f.Tag.Lookup("nullable"); ok {
+				// Allow overriding nullability per struct.
+				s.Nullable = boolTag(f, "nullable")
 			}
 		}
 		s.AdditionalProperties = additionalProps

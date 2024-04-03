@@ -563,7 +563,7 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 			continue
 		}
 
-		if m[k] == nil {
+		if _, ok := m[k]; !ok {
 			if !s.requiredMap[k] {
 				continue
 			}
@@ -573,6 +573,11 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 				continue
 			}
 			res.Add(path, m, s.msgRequired[k])
+			continue
+		}
+
+		if m[k] == nil && s.requiredMap[k] {
+			// This is a non-required field which is null, so ignore it.
 			continue
 		}
 
@@ -651,7 +656,7 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 			continue
 		}
 
-		if m[k] == nil {
+		if _, ok := m[k]; !ok {
 			if !s.requiredMap[k] {
 				continue
 			}
@@ -661,6 +666,11 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 				continue
 			}
 			res.Add(path, m, s.msgRequired[k])
+			continue
+		}
+
+		if m[k] == nil && s.requiredMap[k] {
+			// This is a non-required field which is null, so ignore it.
 			continue
 		}
 

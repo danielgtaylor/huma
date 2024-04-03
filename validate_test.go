@@ -1219,11 +1219,19 @@ var validateTests = []struct {
 		input: nil,
 	},
 	{
-		name: "nullable required field success",
+		name: "pointer required field success",
 		typ: reflect.TypeOf(struct {
-			Field *int `json:"field"`
+			Field *int `json:"field" required:"true"`
 		}{}),
 		input: map[string]any{"field": nil},
+	},
+	{
+		name: "pointer required field fail",
+		typ: reflect.TypeOf(struct {
+			Field *int `json:"field" required:"true"`
+		}{}),
+		input: map[string]any{},
+		errs:  []string{"expected required property field to be present"},
 	},
 }
 

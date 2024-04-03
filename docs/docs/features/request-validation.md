@@ -15,7 +15,40 @@ type Person struct {
 }
 ```
 
-The standard `json` tag is supported and can be used to rename a field and mark fields as optional using `omitempty`. Any field tagged with `json:"-"` will be ignored in the schema.
+## Field Naming
+
+The standard `json` tag is supported and can be used to rename a field. Any field tagged with `json:"-"` will be ignored in the schema, as if it did not exist.
+
+## Optional / Required / Nullable
+
+Fields being optional/required is determined automatically but can be overidden as needed using the logic below:
+
+1. Start with all fields as required.
+2. If the field is a pointer, it is optional.
+3. If the field uses `omitempty`, it is optional.
+4. If the field has the `required:"false"` tag, it is optional.
+5. If the field has the `required:"true"` tag, it is required.
+
+Fields are not nullable by default as most programming languages do not distinguish between `null`/`nil` and undefined and nullability makes schemas significantly more complex. For most languages a field being optional is enough to use pointers and thus allow `null`/`nil` values. If you need to explicitly allow such values, you can use the `nullable:"true"` tag:
+
+```go title="code.go"
+// Make an entire struct nullable.
+type MyStruct1 struct {
+    _ struct{} `nullable:"true"`
+    Field1 string `json:"field1"`
+    Field2 string `json:"field2"`
+}
+
+// Make a specific scalar field nullable. This is *not* supported for
+// slices, maps, or structs. Structs *must* use the method above.
+type MyStruct2 struct {
+    Field *string `json:"field" nullable:"true"`
+}
+```
+
+This will cause the `MyStruct2.Field` JSON Schema `type` to be generated as `["string", "null"]` instead of just `"string"`. Also keep in mind you can always provide a [custom schema](./schema-customization.md) if the built-in features aren't exactly what you need.
+
+## Validation Tags
 
 The following additional tags are supported on model fields:
 

@@ -360,7 +360,7 @@ func TestSchema(t *testing.T) {
 				"type": "object",
 				"properties": {
 					"value": {
-						"type": ["string", "null"],
+						"type": "string",
 						"default": "foo"
 					}
 				},
@@ -608,15 +608,14 @@ func TestSchema(t *testing.T) {
 			expected: `{
 				"type": "object",
 				"additionalProperties": false,
-				"required": ["int", "str"],
 				"properties": {
 					"int": {
-						"type": ["integer", "null"],
+						"type": "integer",
 						"format": "int64",
 						"examples": [123]
 					},
 					"str": {
-						"type": ["string", "null"],
+						"type": "string",
 						"examples": ["foo"]
 					}
 				}
@@ -630,11 +629,11 @@ func TestSchema(t *testing.T) {
 				"properties":{
 					"array":{
 						"items":{
-							"$ref":"#/components/schemas/NullableRecursiveChildLoop"},
+							"$ref":"#/components/schemas/RecursiveChildLoop"},
 							"type":"array"
 						},
 					"byRef":{
-						"$ref":"#/components/schemas/NullableRecursiveChildKey"
+						"$ref":"#/components/schemas/RecursiveChildKey"
 					},
 					"byValue":{
 						"$ref":"#/components/schemas/RecursiveChildKey"
@@ -647,11 +646,11 @@ func TestSchema(t *testing.T) {
 					},
 					"slice":{
 						"items":{
-							"$ref":"#/components/schemas/NullableRecursiveChildLoop"
+							"$ref":"#/components/schemas/RecursiveChildLoop"
 						},
 						"type":"array"}
 					},
-					"required":["slice","array","map","byValue","byRef"],
+					"required":["slice","array","map","byValue"],
 					"type":"object"
 				}`,
 		},

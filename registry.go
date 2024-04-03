@@ -54,9 +54,6 @@ func DefaultSchemaNamer(t reflect.Type, hint string) string {
 	if name == "" {
 		name = hint
 	}
-	if t.Kind() == reflect.Pointer {
-		name = "Nullable" + name
-	}
 	return name
 }
 
