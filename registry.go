@@ -67,7 +67,6 @@ type mapRegistry struct {
 }
 
 func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema {
-	origType := t
 	t = deref(t)
 
 	alias, ok := r.aliases[t]
@@ -87,7 +86,7 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 		getsRef = false
 	}
 
-	name := r.namer(origType, hint)
+	name := r.namer(t, hint)
 
 	if getsRef {
 		if s, ok := r.schemas[name]; ok {
@@ -109,7 +108,7 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 		r.types[name] = t
 		r.seen[t] = true
 	}
-	s := SchemaFromType(r, origType)
+	s := SchemaFromType(r, t)
 	if getsRef {
 		r.schemas[name] = s
 	}
