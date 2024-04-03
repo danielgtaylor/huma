@@ -622,6 +622,41 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-nullable",
+			input: struct {
+				Int *int64 `json:"int" nullable:"true"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"int": {
+						"type": ["integer", "null"],
+						"format": "int64"
+					}
+				}
+			}`,
+		},
+		{
+			name: "field-nullable-struct",
+			input: struct {
+				Field struct {
+					_   struct{} `json:"-" nullable:"true"`
+					Foo string   `json:"foo"`
+				} `json:"field"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"field": {
+						"$ref": "#/components/schemas/FieldStruct"
+					}
+				},
+				"required": ["field"]
+			}`,
+		},
+		{
 			name:  "recursive-embedded-structure",
 			input: RecursiveChild{},
 			expected: `{
@@ -751,6 +786,15 @@ func TestSchema(t *testing.T) {
 				Dependent string `json:"dependent,omitempty"`
 			}{},
 			panics: `dependent field 'missing1' for field 'value1' does not exist; dependent field 'missing2' for field 'value1' does not exist; dependent field 'missing2' for field 'value2' does not exist`,
+		},
+		{
+			name: "panic-nullable-struct",
+			input: struct {
+				Value *struct {
+					Foo string `json:"foo"`
+				} `json:"value" nullable:"true"`
+			}{},
+			panics: `nullable is not supported for field 'Value' which is type '#/components/schemas/ValueStruct'`,
 		},
 	}
 

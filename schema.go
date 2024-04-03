@@ -502,14 +502,14 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 	}
 
 	fs.Nullable = boolTag(f, "nullable")
-	if fs.Nullable && (fs.Type == TypeArray || fs.Type == TypeObject) {
+	if fs.Nullable && fs.Ref != "" {
 		// Nullability is only supported for scalar types for now. Objects are
 		// much more complicated because the `null` type lives within the object
 		// definition (requiring multiple copies of the object) or needs to use
 		// `anyOf` or `not` which is not supported by all code generators, or is
 		// supported poorly & generates hard-to-use code. This is less than ideal
-		// but a compromise.
-		panic(fmt.Errorf("nullable is not supported for field '%s' which is type '%s'", f.Name, fs.Type))
+		// but a compromise for now to support some nullability built-in.
+		panic(fmt.Errorf("nullable is not supported for field '%s' which is type '%s'", f.Name, fs.Ref))
 	}
 
 	fs.Minimum = floatTag(f, "minimum")
@@ -734,11 +734,7 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 				propNames = append(propNames, name)
 				if fieldRequired {
 					required = append(required, name)
-					if !fs.Nullable {
-						// In Go we can't easily distinguish if `null` was sent, so no
-						// need to check for a required nullable field in the validator.
-						requiredMap[name] = true
-					}
+					requiredMap[name] = true
 				}
 			}
 		}

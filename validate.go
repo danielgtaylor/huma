@@ -576,8 +576,9 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 			continue
 		}
 
-		if m[k] == nil && s.requiredMap[k] {
-			// This is a non-required field which is null, so ignore it.
+		if m[k] == nil && (!s.requiredMap[k] || s.Nullable) {
+			// This is a non-required field which is null, or a nullable field set
+			// to null, so ignore it.
 			continue
 		}
 
@@ -669,8 +670,9 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 			continue
 		}
 
-		if m[k] == nil && s.requiredMap[k] {
-			// This is a non-required field which is null, so ignore it.
+		if m[k] == nil && (!s.requiredMap[k] || s.Nullable) {
+			// This is a non-required field which is null, or a nullable field set
+			// to null, so ignore it.
 			continue
 		}
 

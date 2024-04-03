@@ -1544,9 +1544,10 @@ func downgradeSpec(input any) {
 						if t == "null" {
 							// The "null" type is a nullable field in 3.0.
 							m["nullable"] = true
+						} else {
+							// Last non-null wins.
+							m["type"] = t
 						}
-						// Last non-null wins.
-						m["type"] = t
 					}
 					continue
 				}
@@ -1596,12 +1597,6 @@ func downgradeSpec(input any) {
 				continue
 			}
 
-			if k == "contentMediaType" && v == "application/octet-stream" {
-				delete(m, k)
-				m["format"] = "binary"
-				continue
-			}
-
 			downgradeSpec(v)
 		}
 	case []any:
@@ -1619,16 +1614,15 @@ func downgradeSpec(input any) {
 // https://www.openapis.org/blog/2021/02/16/migrating-from-openapi-3-0-to-3-1-0
 func (o OpenAPI) Downgrade() ([]byte, error) {
 	b, err := o.MarshalJSON()
-	if err != nil {
-		return nil, err
+	if err == nil {
+		var v any
+		json.Unmarshal(b, &v)
+
+		downgradeSpec(v)
+
+		b, err = json.Marshal(v)
 	}
-
-	var v any
-	json.Unmarshal(b, &v)
-
-	downgradeSpec(v)
-
-	return json.Marshal(v)
+	return b, err
 }
 
 // DowngradeYAML converts this OpenAPI 3.1 spec to OpenAPI 3.0.3, returning the

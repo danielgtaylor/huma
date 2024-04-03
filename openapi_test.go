@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -167,4 +168,100 @@ x-test: 123
 `
 
 	require.Equal(t, expected, string(out))
+}
+
+func TestDowngrade(t *testing.T) {
+	// Test that we can downgrade a v3 OpenAPI document to v2.
+	v31 := &huma.OpenAPI{
+		OpenAPI: "3.1.0",
+		Info: &huma.Info{
+			Title:   "Test API",
+			Version: "1.0.0",
+		},
+		Paths: map[string]*huma.PathItem{
+			"/test": {
+				Get: &huma.Operation{
+					Responses: map[string]*huma.Response{
+						"200": {
+							Description: "OK",
+							Content: map[string]*huma.MediaType{
+								"application/json": {
+									Schema: &huma.Schema{
+										Type: "object",
+										Properties: map[string]*huma.Schema{
+											"test": {
+												Type:             "integer",
+												ExclusiveMinimum: Ptr(0.0),
+												ExclusiveMaximum: Ptr(100.0),
+												Nullable:         true,
+												Examples:         []any{100},
+											},
+											"encoding": {
+												Type:            huma.TypeString,
+												ContentEncoding: "base64",
+											},
+										},
+									},
+								},
+								"application/octet-stream": {},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	v30, err := v31.Downgrade()
+	require.NoError(t, err)
+
+	expected := `{
+		"openapi": "3.0.3",
+		"info": {
+			"title": "Test API",
+			"version": "1.0.0"
+		},
+		"paths": {
+			"/test": {
+				"get": {
+					"responses": {
+						"200": {
+							"description": "OK",
+							"content": {
+								"application/json": {
+									"schema": {
+										"type": "object",
+										"properties": {
+											"test": {
+												"type": "integer",
+												"nullable": true,
+												"minimum": 0,
+												"exclusiveMinimum": true,
+												"maximum": 100,
+												"exclusiveMaximum": true,
+												"example": 100
+											},
+											"encoding": {
+												"type": "string",
+												"format": "base64"
+											}
+										}
+									}
+								},
+								"application/octet-stream": {
+									"schema": {
+										"type": "string",
+										"format": "binary"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}`
+
+	// Check that the downgrade worked as expected.
+	assert.JSONEq(t, expected, string(v30))
 }

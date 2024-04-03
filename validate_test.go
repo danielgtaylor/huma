@@ -1019,6 +1019,20 @@ var validateTests = []struct {
 		input: map[string]any{},
 	},
 	{
+		name: "optional null success",
+		typ: reflect.TypeOf(struct {
+			Value *string `json:"value,omitempty" minLength:"1"`
+		}{}),
+		input: map[string]any{"value": nil},
+	},
+	{
+		name: "optional any null success",
+		typ: reflect.TypeOf(struct {
+			Value *string `json:"value,omitempty" minLength:"1"`
+		}{}),
+		input: map[any]any{"value": nil},
+	},
+	{
 		name: "optional fail",
 		typ: reflect.TypeOf(struct {
 			Value string `json:"value,omitempty" minLength:"1"`
@@ -1221,14 +1235,14 @@ var validateTests = []struct {
 	{
 		name: "pointer required field success",
 		typ: reflect.TypeOf(struct {
-			Field *int `json:"field" required:"true"`
+			Field *int `json:"field" required:"true" nullable:"true"`
 		}{}),
 		input: map[string]any{"field": nil},
 	},
 	{
 		name: "pointer required field fail",
 		typ: reflect.TypeOf(struct {
-			Field *int `json:"field" required:"true"`
+			Field *int `json:"field" required:"true" nullable:"true"`
 		}{}),
 		input: map[string]any{},
 		errs:  []string{"expected required property field to be present"},
