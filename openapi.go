@@ -1398,7 +1398,7 @@ type OpenAPI struct {
 	// by tooling as required.
 	Info *Info `yaml:"info"`
 
-	// JSONSchemaDialect is he default value for the $schema keyword within Schema
+	// JSONSchemaDialect is the default value for the $schema keyword within Schema
 	// Objects contained within this OAS document. This MUST be in the form of a
 	// URI.
 	JSONSchemaDialect string `yaml:"jsonSchemaDialect,omitempty"`
