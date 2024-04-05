@@ -169,7 +169,12 @@ Go to [http://localhost:8888/docs](http://localhost:8888/docs) to see the intera
 
 Using the panel at the top right of the documentation page you can send a request to the API and see the response.
 
-These docs are generated from the OpenAPI specification, which is available at [http://localhost:8888/openapi.json](http://localhost:8888/openapi.json). You can use this file to generate documentation, client libraries, commandline clients, mock servers, and more.
+These docs are generated from the OpenAPI specification. You can use this file to generate documentation, client libraries, commandline clients, mock servers, and more. Two versions are provided by Huma. It is recommended to use OpenAPI 3.1, but OpenAPI 3.0.3 is also available for compatibility with older tools:
+
+-   OpenAPI 3.1 JSON: [http://localhost:8888/openapi.json](http://localhost:8888/openapi.json)
+-   OpenAPI 3.1 YAML: [http://localhost:8888/openapi.yaml](http://localhost:8888/openapi.yaml)
+-   OpenAPI 3.0.3 JSON: [http://localhost:8888/openapi-3.0.json](http://localhost:8888/openapi-3.0.json)
+-   OpenAPI 3.0.3 YAML: [http://localhost:8888/openapi-3.0.yaml](http://localhost:8888/openapi-3.0.yaml)
 
 ### Enhancing Documentation
 

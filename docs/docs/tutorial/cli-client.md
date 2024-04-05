@@ -51,7 +51,7 @@ Also consider setting up [shell command-line completion](https://rest.sh/#/guide
 
 ## Configure your API
 
-Next, we need to tell Restish about your API and give it a short name, which we'll call `tutorial`. Do this using the `api configure` command. This only needs to be done one time.
+Next, we need to tell Restish about your API and give it a short name, which we'll call `tutorial`. Do this using the `api configure` command. This only needs to be done one time. Make sure your API is running and accessible before continuing, as this pulls the OpenAPI spec from the service.
 
 {{ asciinema("../../terminal/restish-config.cast", rows="8") }}
 

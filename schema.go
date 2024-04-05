@@ -501,15 +501,17 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 		}
 	}
 
-	fs.Nullable = boolTag(f, "nullable")
-	if fs.Nullable && fs.Ref != "" {
-		// Nullability is only supported for scalar types for now. Objects are
-		// much more complicated because the `null` type lives within the object
-		// definition (requiring multiple copies of the object) or needs to use
-		// `anyOf` or `not` which is not supported by all code generators, or is
-		// supported poorly & generates hard-to-use code. This is less than ideal
-		// but a compromise for now to support some nullability built-in.
-		panic(fmt.Errorf("nullable is not supported for field '%s' which is type '%s'", f.Name, fs.Ref))
+	if _, ok := f.Tag.Lookup("nullable"); ok {
+		fs.Nullable = boolTag(f, "nullable")
+		if fs.Nullable && fs.Ref != "" {
+			// Nullability is only supported for scalar types for now. Objects are
+			// much more complicated because the `null` type lives within the object
+			// definition (requiring multiple copies of the object) or needs to use
+			// `anyOf` or `not` which is not supported by all code generators, or is
+			// supported poorly & generates hard-to-use code. This is less than ideal
+			// but a compromise for now to support some nullability built-in.
+			panic(fmt.Errorf("nullable is not supported for field '%s' which is type '%s'", f.Name, fs.Ref))
+		}
 	}
 
 	fs.Minimum = floatTag(f, "minimum")
@@ -602,17 +604,19 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		return sp.Schema(r)
 	}
 
+	isPointer := t.Kind() == reflect.Pointer
+
 	s := Schema{}
 	t = deref(t)
 
 	// Handle special cases.
 	switch t {
 	case timeType:
-		return &Schema{Type: TypeString, Format: "date-time"}
+		return &Schema{Type: TypeString, Nullable: isPointer, Format: "date-time"}
 	case urlType:
-		return &Schema{Type: TypeString, Format: "uri"}
+		return &Schema{Type: TypeString, Nullable: isPointer, Format: "uri"}
 	case ipType:
-		return &Schema{Type: TypeString, Format: "ipv4"}
+		return &Schema{Type: TypeString, Nullable: isPointer, Format: "ipv4"}
 	}
 
 	minZero := 0.0
@@ -694,11 +698,10 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 
 			fieldSet[f.Name] = struct{}{}
 
-			// Controls whether the field is required or not. This is inferred from
-			// the use of a pointer (optional) or a non-pointer (required), then
-			// can be made optional with the `omitempty` JSON tag. Finally, it can
-			// be overridden manually via the `required` tag.
-			fieldRequired := f.Type.Kind() != reflect.Pointer
+			// Controls whether the field is required or not. All fields start as
+			// required, then can be made optional with the `omitempty` JSON tag or it
+			// can be overridden manually via the `required` tag.
+			fieldRequired := true
 
 			name := f.Name
 			if j := f.Tag.Get("json"); j != "" {
@@ -783,6 +786,13 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 		// Interfaces mean any object.
 	default:
 		return nil
+	}
+
+	switch s.Type {
+	case TypeBoolean, TypeInteger, TypeNumber, TypeString:
+		// Scalar types which are pointers are nullable by default. This can be
+		// overidden via the `nullable:"false"` field tag in structs.
+		s.Nullable = isPointer
 	}
 
 	return &s

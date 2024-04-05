@@ -80,6 +80,11 @@ func TestSchema(t *testing.T) {
 			expected: `{"type": "boolean"}`,
 		},
 		{
+			name:     "bool-pointer",
+			input:    Ptr(true),
+			expected: `{"type": ["boolean", "null"]}`,
+		},
+		{
 			name:     "int",
 			input:    1,
 			expected: `{"type": "integer", "format": "int` + bitSize + `"}`,
@@ -128,6 +133,11 @@ func TestSchema(t *testing.T) {
 			name:     "time",
 			input:    time.Now(),
 			expected: `{"type": "string", "format": "date-time"}`,
+		},
+		{
+			name:     "time-pointer",
+			input:    Ptr(time.Now()),
+			expected: `{"type": ["string", "null"], "format": "date-time"}`,
 		},
 		{
 			name:     "url",
@@ -360,7 +370,7 @@ func TestSchema(t *testing.T) {
 				"type": "object",
 				"properties": {
 					"value": {
-						"type": "string",
+						"type": ["string", "null"],
 						"default": "foo"
 					}
 				},
@@ -610,15 +620,16 @@ func TestSchema(t *testing.T) {
 				"additionalProperties": false,
 				"properties": {
 					"int": {
-						"type": "integer",
+						"type": ["integer", "null"],
 						"format": "int64",
 						"examples": [123]
 					},
 					"str": {
-						"type": "string",
+						"type": ["string", "null"],
 						"examples": ["foo"]
 					}
-				}
+				},
+				"required": ["int", "str"]
 			}`,
 		},
 		{
@@ -634,7 +645,8 @@ func TestSchema(t *testing.T) {
 						"type": ["integer", "null"],
 						"format": "int64"
 					}
-				}
+				},
+				"required": ["int"]
 			}`,
 		},
 		{
@@ -685,7 +697,7 @@ func TestSchema(t *testing.T) {
 						},
 						"type":"array"}
 					},
-					"required":["slice","array","map","byValue"],
+					"required":["slice","array","map","byValue", "byRef"],
 					"type":"object"
 				}`,
 		},
