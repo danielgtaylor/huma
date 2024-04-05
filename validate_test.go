@@ -812,6 +812,13 @@ var validateTests = []struct {
 		errs: []string{"expected object with at most 1 properties"},
 	},
 	{
+		name: "json.RawMessage success",
+		typ: reflect.TypeOf(struct {
+			Value json.RawMessage `json:"value"`
+		}{}),
+		input: map[string]any{"value": map[string]any{"some": []any{"thing"}}},
+	},
+	{
 		name:  "object struct success",
 		typ:   reflect.TypeOf(struct{}{}),
 		input: map[string]any{},
