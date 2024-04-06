@@ -720,7 +720,7 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 				continue
 			}
 
-			if v := f.Tag.Get("required"); v != "" {
+			if _, ok := f.Tag.Lookup("required"); ok {
 				fieldRequired = boolTag(f, "required")
 			}
 
