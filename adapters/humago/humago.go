@@ -135,7 +135,7 @@ func New(m Mux, config huma.Config) huma.API {
 	if _, ok := v.(interface{ PathValue(string) string }); !ok {
 		panic("This adapter requires Go 1.22+")
 	}
-	return huma.NewAPI(config, &goAdapter{m, ""})
+	return huma.NewAPI(config, &goAdapter{m, config.BasePath})
 }
 
 // NewWithPrefix creates a new Huma API using an HTTP mux with a URL prefix.

@@ -124,6 +124,9 @@ func NewAdapter(r chi.Router) huma.Adapter {
 
 // New creates a new Huma API using the latest v5.x.x version of Chi.
 func New(r chi.Router, config huma.Config) huma.API {
+	if config.BasePath != "" {
+		r.Mount(config.BasePath, r)
+	}
 	return huma.NewAPI(config, &chiAdapter{router: r})
 }
 

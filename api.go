@@ -150,6 +150,11 @@ type Config struct {
 	// `Info.Version` fields.
 	*OpenAPI
 
+	// BasePath is the base path is the initial URL segment of the API, and
+	// does not include the host name or any additional segments for paths
+	// or operations. It is shared by all operations in the API.
+	BasePath string
+
 	// OpenAPIPath is the path to the OpenAPI spec without extension. If set
 	// to `/openapi` it will allow clients to get `/openapi.json` or
 	// `/openapi.yaml`, for example.
@@ -183,6 +188,12 @@ type Config struct {
 	// for example if you need access to the path settings that may be changed
 	// by the user after the defaults have been set.
 	CreateHooks []func(Config) Config
+}
+
+func (cfg Config) WithBasePath(path string) Config {
+	cfg.BasePath = path
+	cfg.SchemasPath = cfg.BasePath + cfg.SchemasPath
+	return cfg
 }
 
 // API represents a Huma API wrapping a specific router.
@@ -407,10 +418,7 @@ func NewAPI(config Config, a Adapter) API {
 			Method: http.MethodGet,
 			Path:   config.DocsPath,
 		}, func(ctx Context) {
-			openAPIPath := config.OpenAPIPath
-			if prefix := getAPIPrefix(newAPI.OpenAPI()); prefix != "" {
-				openAPIPath = path.Join(prefix, openAPIPath)
-			}
+			openAPIPath := path.Join(config.BasePath, config.OpenAPIPath)
 			ctx.SetHeader("Content-Type", "text/html")
 			title := "Elements in HTML"
 			if config.Info != nil && config.Info.Title != "" {

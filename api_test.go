@@ -91,12 +91,9 @@ func TestContextValue(t *testing.T) {
 
 func TestRouterPrefix(t *testing.T) {
 	mux := chi.NewMux()
-	var api huma.API
-	mux.Route("/api", func(r chi.Router) {
-		config := huma.DefaultConfig("My API", "1.0.0")
-		config.Servers = []*huma.Server{{URL: "http://localhost:8888/api"}}
-		api = humachi.New(r, config)
-	})
+	config := huma.DefaultConfig("My API", "1.0.0").WithBasePath("/api")
+	config.Servers = []*huma.Server{{URL: "http://localhost:8888"}}
+	api := humachi.New(mux, config)
 
 	type TestOutput struct {
 		Body struct {
@@ -124,4 +121,11 @@ func TestRouterPrefix(t *testing.T) {
 	resp = tapi.Get("/api/docs")
 	assert.Equal(t, http.StatusOK, resp.Code)
 	assert.Contains(t, resp.Body.String(), "/api/openapi.yaml")
+
+	// The OpenAPI spec should be available at the base path
+	resp = tapi.Get("/api/openapi.yaml")
+	assert.Equal(t, http.StatusOK, resp.Code)
+
+	resp = tapi.Get("/api/openapi.json")
+	assert.Equal(t, http.StatusOK, resp.Code)
 }
