@@ -58,7 +58,7 @@ Fields being nullable is determined automatically but can be overidden as needed
 
 1. Start with no fields as nullable
 2. If a field is a pointer:
-    1. To a `boolean`, `integer`, `number`, `string`: it is nullable
+    1. To a `boolean`, `integer`, `number`, `string`: it is nullable unless it has `omitempty`.
     2. To an `array`, `object`: it is **not** nullable, due to complexity and bad support for `anyOf`/`oneOf` in many tools.
 3. If a field has `nullable:"false"`, it is not nullable
 4. If a field has `nullable:"true"`:
