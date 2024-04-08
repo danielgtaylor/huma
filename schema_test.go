@@ -375,7 +375,7 @@ func TestSchema(t *testing.T) {
 				"type": "object",
 				"properties": {
 					"value": {
-						"type": ["string", "null"],
+						"type": "string",
 						"default": "foo"
 					}
 				},

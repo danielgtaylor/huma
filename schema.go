@@ -738,9 +738,16 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 			if fs != nil {
 				props[name] = fs
 				propNames = append(propNames, name)
+
 				if fieldRequired {
 					required = append(required, name)
 					requiredMap[name] = true
+				}
+
+				// Special case: pointer with omitempty and not manually set to
+				// nullable, which will never get `null` sent over the wire.
+				if f.Type.Kind() == reflect.Ptr && strings.Contains(f.Tag.Get("json"), "omitempty") && f.Tag.Get("nullable") != "true" {
+					fs.Nullable = false
 				}
 			}
 		}
