@@ -1125,7 +1125,14 @@ func TestOpenAPI(t *testing.T) {
 		return resp, nil
 	})
 
-	for _, url := range []string{"/openapi.json", "/openapi.yaml", "/docs", "/schemas/Resp.json"} {
+	for _, url := range []string{
+		"/openapi.json",
+		"/openapi-3.0.json",
+		"/openapi.yaml",
+		"/openapi-3.0.yaml",
+		"/docs",
+		"/schemas/RespBody.json",
+	} {
 		req, _ := http.NewRequest(http.MethodGet, url, nil)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)

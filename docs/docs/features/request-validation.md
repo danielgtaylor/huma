@@ -15,7 +15,78 @@ type Person struct {
 }
 ```
 
-The standard `json` tag is supported and can be used to rename a field and mark fields as optional using `omitempty`. Any field tagged with `json:"-"` will be ignored in the schema.
+## Field Naming
+
+The standard `json` tag is supported and can be used to rename a field. Any field tagged with `json:"-"` will be ignored in the schema, as if it did not exist.
+
+## Optional / Required
+
+Fields being optional/required is determined automatically but can be overidden as needed using the logic below:
+
+1. Start with all fields required.
+2. If a field has `omitempty`, it is optional.
+3. If a field has `required:"false"`, it is optional.
+4. If a field has `required:"true"`, it is required.
+
+Pointers have no effect on optional/required. The same rules apply regardless of whether the struct is being used for request input or response output. Some examples:
+
+```go
+type MyStruct struct {
+    // The following are all required.
+    Required1 string  `json:"required1"`
+    Required2 *string `json:"required2"`
+    Required3 string  `json:"required3,omitempty" required:"true"`
+
+    // The following are all optional.
+    Optional1 string  `json:"optional1,omitempty"`
+    Optional2 *string `json:"optional2,omitempty"`
+    Optional3 string  `json:"optional3" required:"false"`
+}
+```
+
+!!! info "Note"
+
+    Why use `omitempty` for inputs when Go itself only uses the field for marshaling? Imagine a client which is going to send a request to your API - it must still be marshaled into JSON (or a similar format). You can think of your input structs as modeling what an API client would produce as output.
+
+## Nullable
+
+In many languages (including Go), there is little to no distinction between an explicit empty value vs. an undefined one. Marking a field as optional as explained above is enough to support either case. Javascript & Typescript are exceptions to this rule, as they have explicit `null` and `undefined` values.
+
+Huma tries to balance schema simplicity, usability, and broad compatibility with schema correctness and a broad range of language support for end-to-end API tooling. To that end, it supports field nullability to a limited extent, and future changes may modify this default behavior as tools become more compatible with advanced JSON Schema features.
+
+Fields being nullable is determined automatically but can be overidden as needed using the logic below:
+
+1. Start with no fields as nullable
+2. If a field is a pointer:
+    1. To a `boolean`, `integer`, `number`, `string`: it is nullable unless it has `omitempty`.
+    2. To an `array`, `object`: it is **not** nullable, due to complexity and bad support for `anyOf`/`oneOf` in many tools.
+3. If a field has `nullable:"false"`, it is not nullable
+4. If a field has `nullable:"true"`:
+    1. To a `boolean`, `integer`, `number`, `string`: it is nullable
+    2. To an `array`, `object`: **panic** saying this is not currently supported
+5. If a struct has a field `_` with `nullable: true`, the struct is nullable enabling users to opt-in for `object` without the `anyOf`/`oneOf` complication.
+
+Here are some examples:
+
+```go title="code.go"
+// Make an entire struct (not its fields) nullable.
+type MyStruct1 struct {
+    _ struct{} `nullable:"true"`
+    Field1 string `json:"field1"`
+    Field2 string `json:"field2"`
+}
+
+// Make a specific scalar field nullable. This is *not* supported for
+// slices, maps, or structs. Structs *must* use the method above.
+type MyStruct2 struct {
+    Field1 *string `json:"field1"`
+    Field2 string `json:"field2" nullable:"true"`
+}
+```
+
+Nullable types will generate a type array like `"type": ["string", "null"]` which has broad compatibility and is easy to downgrade to OpenAPI 3.0. Also keep in mind you can always provide a [custom schema](./schema-customization.md) if the built-in features aren't exactly what you need.
+
+## Validation Tags
 
 The following additional tags are supported on model fields:
 

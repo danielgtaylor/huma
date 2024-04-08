@@ -757,7 +757,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	if ctf, ok := exampleErr.(ContentTypeFilter); ok {
 		errContentType = ctf.ContentType(errContentType)
 	}
-	errType := reflect.TypeOf(exampleErr)
+	errType := deref(reflect.TypeOf(exampleErr))
 	errSchema := registry.Schema(errType, true, getHint(errType, "", "Error"))
 	for _, code := range op.Errors {
 		op.Responses[strconv.Itoa(code)] = &Response{

@@ -80,6 +80,11 @@ func TestSchema(t *testing.T) {
 			expected: `{"type": "boolean"}`,
 		},
 		{
+			name:     "bool-pointer",
+			input:    Ptr(true),
+			expected: `{"type": ["boolean", "null"]}`,
+		},
+		{
 			name:     "int",
 			input:    1,
 			expected: `{"type": "integer", "format": "int` + bitSize + `"}`,
@@ -130,8 +135,13 @@ func TestSchema(t *testing.T) {
 			expected: `{"type": "string", "format": "date-time"}`,
 		},
 		{
+			name:     "time-pointer",
+			input:    Ptr(time.Now()),
+			expected: `{"type": ["string", "null"], "format": "date-time"}`,
+		},
+		{
 			name:     "url",
-			input:    &url.URL{},
+			input:    url.URL{},
 			expected: `{"type": "string", "format": "uri"}`,
 		},
 		{
@@ -613,18 +623,54 @@ func TestSchema(t *testing.T) {
 			expected: `{
 				"type": "object",
 				"additionalProperties": false,
-				"required": ["int", "str"],
 				"properties": {
 					"int": {
-						"type": "integer",
+						"type": ["integer", "null"],
 						"format": "int64",
 						"examples": [123]
 					},
 					"str": {
-						"type": "string",
+						"type": ["string", "null"],
 						"examples": ["foo"]
 					}
-				}
+				},
+				"required": ["int", "str"]
+			}`,
+		},
+		{
+			name: "field-nullable",
+			input: struct {
+				Int *int64 `json:"int" nullable:"true"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"int": {
+						"type": ["integer", "null"],
+						"format": "int64"
+					}
+				},
+				"required": ["int"]
+			}`,
+		},
+		{
+			name: "field-nullable-struct",
+			input: struct {
+				Field struct {
+					_   struct{} `json:"-" nullable:"true"`
+					Foo string   `json:"foo"`
+				} `json:"field"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"field": {
+						"$ref": "#/components/schemas/FieldStruct"
+					}
+				},
+				"required": ["field"]
 			}`,
 		},
 		{
@@ -656,7 +702,7 @@ func TestSchema(t *testing.T) {
 						},
 						"type":"array"}
 					},
-					"required":["slice","array","map","byValue","byRef"],
+					"required":["slice","array","map","byValue", "byRef"],
 					"type":"object"
 				}`,
 		},
@@ -757,6 +803,15 @@ func TestSchema(t *testing.T) {
 				Dependent string `json:"dependent,omitempty"`
 			}{},
 			panics: `dependent field 'missing1' for field 'value1' does not exist; dependent field 'missing2' for field 'value1' does not exist; dependent field 'missing2' for field 'value2' does not exist`,
+		},
+		{
+			name: "panic-nullable-struct",
+			input: struct {
+				Value *struct {
+					Foo string `json:"foo"`
+				} `json:"value" nullable:"true"`
+			}{},
+			panics: `nullable is not supported for field 'Value' which is type '#/components/schemas/ValueStruct'`,
 		},
 	}
 

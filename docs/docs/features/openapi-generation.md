@@ -8,7 +8,12 @@ description: API configuration options & OpenAPI 3.1 spec generation.
 
 Huma generates Open API 3.1 compatible JSON/YAML specs and provides rendered documentation automatically. Every operation that is registered with the API is included in the spec by default. The operation's inputs and outputs are used to generate the request and response parameters / schemas.
 
-The [`huma.Config`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Config) controls where the OpenAPI, docs, and schemas are available. The default config uses `/openapi.json`, `/docs`, and `/schemas` respectively. You can change these to whatever you want, or disable them entirely by leaving them blank.
+The [`huma.Config`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Config) controls where the OpenAPI, docs, and schemas are available. The default config uses `/openapi`, `/docs`, and `/schemas` respectively. You can change these to whatever you want, or disable them entirely by leaving them blank. The OpenAPI spec is available in multiple versions (to better support older tools) and in JSON or YAML:
+
+-   OpenAPI 3.1 JSON: [http://localhost:8888/openapi.json](http://localhost:8888/openapi.json)
+-   OpenAPI 3.1 YAML: [http://localhost:8888/openapi.yaml](http://localhost:8888/openapi.yaml)
+-   OpenAPI 3.0.3 JSON: [http://localhost:8888/openapi-3.0.json](http://localhost:8888/openapi-3.0.json)
+-   OpenAPI 3.0.3 YAML: [http://localhost:8888/openapi-3.0.yaml](http://localhost:8888/openapi-3.0.yaml)
 
 You may want to customize the generated Open API spec. With Huma v2 you have full access and can modify it as needed in the API configuration or when registering operations. For example, to set up and then use a security scheme:
 

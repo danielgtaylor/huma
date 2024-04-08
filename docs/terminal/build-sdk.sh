@@ -1,6 +1,6 @@
 #$ wait 250
 # Grab the OpenAPI spec
-restish :8888/openapi.yaml >openapi.yaml
+go run . openapi >openapi.yaml
 
 # Install the SDK generator
 go install github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@latest
