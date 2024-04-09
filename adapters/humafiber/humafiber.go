@@ -145,6 +145,6 @@ func New(r *fiber.App, config huma.Config) huma.API {
 	return huma.NewAPI(config, &fiberAdapter{tester: r, router: r})
 }
 
-func NewWithGroup(r *fiber.App, g *fiber.Group, config huma.Config) huma.API {
+func NewWithGroup(r *fiber.App, g fiber.Router, config huma.Config) huma.API {
 	return huma.NewAPI(config, &fiberAdapter{tester: r, router: g})
 }
