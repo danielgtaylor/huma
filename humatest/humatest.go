@@ -1,21 +1,22 @@
-// Package humatest provides testing utilities for Huma services. It is based
-// on the `chi` router and the standard library `http.Request` &
-// `http.ResponseWriter` types.
+// Package humatest provides testing utilities for Huma services. It is based on
+// the standard library `http.Request` & `http.ResponseWriter` types.
 package humatest
 
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
 	"reflect"
 	"strings"
+	"testing/iotest"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/adapters/humachi"
-	"github.com/go-chi/chi/v5"
+	"github.com/danielgtaylor/huma/v2/adapters/humaflow"
+	"github.com/danielgtaylor/huma/v2/adapters/humaflow/flow"
 )
 
 // TB is a subset of the `testing.TB` interface used by the test API and
@@ -28,12 +29,12 @@ type TB interface {
 
 // NewContext creates a new test context from an HTTP request and response.
 func NewContext(op *huma.Operation, r *http.Request, w http.ResponseWriter) huma.Context {
-	return humachi.NewContext(op, r, w)
+	return humaflow.NewContext(op, r, w)
 }
 
-// NewAdapter creates a new test adapter from a chi router.
-func NewAdapter(r chi.Router) huma.Adapter {
-	return humachi.NewAdapter(r)
+// NewAdapter creates a new test adapter from a router.
+func NewAdapter() huma.Adapter {
+	return humaflow.NewAdapter(flow.New())
 }
 
 // TestAPI is a `huma.API` with additional methods specifically for testing.
@@ -153,12 +154,12 @@ func (a *testAPI) Do(method, path string, args ...any) *httptest.ResponseRecorde
 	}
 	resp := httptest.NewRecorder()
 
-	bytes, _ := httputil.DumpRequest(req, b != nil)
+	bytes, _ := DumpRequest(req)
 	a.tb.Log("Making request:\n" + strings.TrimSpace(string(bytes)))
 
 	a.Adapter().ServeHTTP(resp, req)
 
-	bytes, _ = httputil.DumpResponse(resp.Result(), resp.Body.Len() > 0)
+	bytes, _ = DumpResponse(resp.Result())
 	a.tb.Log("Got response:\n" + strings.TrimSpace(string(bytes)))
 
 	return resp
@@ -189,11 +190,6 @@ func (a *testAPI) Delete(path string, args ...any) *httptest.ResponseRecorder {
 	return a.Do(http.MethodDelete, path, args...)
 }
 
-// NewTestAPI creates a new test API from a chi router and API config.
-func NewTestAPI(tb TB, r chi.Router, config huma.Config) TestAPI {
-	return Wrap(tb, humachi.New(r, config))
-}
-
 // Wrap returns a `TestAPI` wrapping the given API.
 func Wrap(tb TB, api huma.API) TestAPI {
 	return &testAPI{api, tb}
@@ -203,7 +199,7 @@ func Wrap(tb TB, api huma.API) TestAPI {
 // and perform requests against them. Optionally takes a configuration object
 // to customize how the API is created. If no configuration is provided then
 // a simple default configuration supporting `application/json` is used.
-func New(tb TB, configs ...huma.Config) (chi.Router, TestAPI) {
+func New(tb TB, configs ...huma.Config) (http.Handler, TestAPI) {
 	if len(configs) == 0 {
 		configs = append(configs, huma.Config{
 			OpenAPI: &huma.OpenAPI{
@@ -219,6 +215,72 @@ func New(tb TB, configs ...huma.Config) (chi.Router, TestAPI) {
 			DefaultFormat: "application/json",
 		})
 	}
-	r := chi.NewRouter()
-	return r, NewTestAPI(tb, r, configs[0])
+	r := flow.New()
+	return r, Wrap(tb, humaflow.New(r, configs[0]))
+}
+
+func dumpBody(body io.ReadCloser, buf *bytes.Buffer) (io.ReadCloser, error) {
+	if body == nil {
+		return nil, nil
+	}
+
+	b, err := io.ReadAll(body)
+	if err != nil {
+		return io.NopCloser(iotest.ErrReader(err)), err
+	}
+	body.Close()
+	if strings.Contains(buf.String(), "json") {
+		json.Indent(buf, b, "", "  ")
+	} else {
+		buf.Write(b)
+	}
+	return io.NopCloser(bytes.NewReader(b)), nil
+}
+
+// DumpRequest returns a string representation of an HTTP request, automatically
+// pretty printing JSON bodies for readability.
+func DumpRequest(req *http.Request) ([]byte, error) {
+	var buf bytes.Buffer
+	b, err := httputil.DumpRequest(req, false)
+
+	if err == nil {
+		buf.Write(b)
+		req.Body, err = dumpBody(req.Body, &buf)
+	}
+
+	return buf.Bytes(), err
+}
+
+// DumpResponse returns a string representation of an HTTP response,
+// automatically pretty printing JSON bodies for readability.
+func DumpResponse(resp *http.Response) ([]byte, error) {
+	var buf bytes.Buffer
+	b, err := httputil.DumpResponse(resp, false)
+
+	if err == nil {
+		buf.Write(b)
+		resp.Body, err = dumpBody(resp.Body, &buf)
+	}
+
+	return buf.Bytes(), err
+}
+
+// PrintRequest prints a string representation of an HTTP request to stdout,
+// automatically pretty printing JSON bodies for readability.
+func PrintRequest(req *http.Request) {
+	b, _ := DumpRequest(req)
+	// Turn `/r/n` into `/n` for more straightforward output that is also
+	// compatible with Go's testable examples.
+	b = bytes.ReplaceAll(b, []byte("\r"), []byte(""))
+	fmt.Println(string(b))
+}
+
+// PrintResponse prints a string representation of an HTTP response to stdout,
+// automatically pretty printing JSON bodies for readability.
+func PrintResponse(resp *http.Response) {
+	b, _ := DumpResponse(resp)
+	// Turn `/r/n` into `/n` for more straightforward output that is also
+	// compatible with Go's testable examples.
+	b = bytes.ReplaceAll(b, []byte("\r"), []byte(""))
+	fmt.Println(string(b))
 }

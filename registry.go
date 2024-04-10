@@ -137,7 +137,7 @@ func (r *mapRegistry) Map() map[string]*Schema {
 }
 
 func (r *mapRegistry) MarshalJSON() ([]byte, error) {
-	return json.Marshal(r.schemas)
+	return json.Marshal(r.schemas) //nolint:musttag
 }
 
 func (r *mapRegistry) MarshalYAML() (interface{}, error) {
