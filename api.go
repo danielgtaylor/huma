@@ -100,6 +100,9 @@ type Context interface {
 	// SetStatus sets the HTTP status code for the response.
 	SetStatus(code int)
 
+	// Status returns the HTTP status code for the response.
+	Status() int
+
 	// SetHeader sets the given header to the given value, overwriting any
 	// existing value. Use `AppendHeader` to append a value instead.
 	SetHeader(name, value string)

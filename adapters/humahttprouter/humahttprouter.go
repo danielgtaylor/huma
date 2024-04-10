@@ -19,11 +19,15 @@ import (
 var MultipartMaxMemory int64 = 8 * 1024
 
 type httprouterContext struct {
-	op *huma.Operation
-	r  *http.Request
-	w  http.ResponseWriter
-	ps httprouter.Params
+	op     *huma.Operation
+	r      *http.Request
+	w      http.ResponseWriter
+	ps     httprouter.Params
+	status int
 }
+
+// check that httprouterContext implements huma.Context
+var _ huma.Context = &httprouterContext{}
 
 func (c *httprouterContext) Operation() *huma.Operation {
 	return c.op
@@ -79,7 +83,12 @@ func (c *httprouterContext) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *httprouterContext) SetStatus(code int) {
+	c.status = code
 	c.w.WriteHeader(code)
+}
+
+func (c *httprouterContext) Status() int {
+	return c.status
 }
 
 func (c *httprouterContext) AppendHeader(name string, value string) {
