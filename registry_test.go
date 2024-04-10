@@ -27,28 +27,30 @@ func TestDefaultSchemaNamer(t *testing.T) {
 	for _, example := range []struct {
 		typ  any
 		name string
+		hint string
 	}{
-		{int(0), "Int"},
-		{int64(0), "Int64"},
-		{S{}, "S"},
-		{time.Time{}, "Time"},
-		{Output[int]{}, "OutputInt"},
-		{Output[*int]{}, "OutputInt"},
-		{Output[[]int]{}, "OutputListInt"},
-		{Output[[]*int]{}, "OutputListInt"},
-		{Output[[][]int]{}, "OutputListListInt"},
-		{Output[map[string]int]{}, "OutputMapStringInt"},
-		{Output[map[string][]*int]{}, "OutputMapStringListInt"},
-		{Output[S]{}, "OutputS"},
-		{Output[ü]{}, "OutputÜ"},
-		{Output[MP4]{}, "OutputMP4"},
-		{Output[Embedded[*time.Time]]{}, "OutputEmbeddedTime"},
-		{Output[*[]Embedded[time.Time]]{}, "OutputListEmbeddedTime"},
-		{Output[EmbeddedTwo[[]time.Time, **url.URL]]{}, "OutputEmbeddedTwoListTimeURL"},
-		{Renamed{}, "Renamed"},
+		{int(0), "Int", ""},
+		{int64(0), "Int64", ""},
+		{S{}, "S", ""},
+		{time.Time{}, "Time", ""},
+		{Output[int]{}, "OutputInt", ""},
+		{Output[*int]{}, "OutputInt", ""},
+		{Output[[]int]{}, "OutputListInt", ""},
+		{Output[[]*int]{}, "OutputListInt", ""},
+		{Output[[][]int]{}, "OutputListListInt", ""},
+		{Output[map[string]int]{}, "OutputMapStringInt", ""},
+		{Output[map[string][]*int]{}, "OutputMapStringListInt", ""},
+		{Output[S]{}, "OutputS", ""},
+		{Output[ü]{}, "OutputÜ", ""},
+		{Output[MP4]{}, "OutputMP4", ""},
+		{Output[Embedded[*time.Time]]{}, "OutputEmbeddedTime", ""},
+		{Output[*[]Embedded[time.Time]]{}, "OutputListEmbeddedTime", ""},
+		{Output[EmbeddedTwo[[]time.Time, **url.URL]]{}, "OutputEmbeddedTwoListTimeURL", ""},
+		{Renamed{}, "Renamed", ""},
+		{struct{}{}, "SomeGenericThing", "Some[pkg.Generic]Thing"},
 	} {
 		t.Run(example.name, func(t *testing.T) {
-			name := DefaultSchemaNamer(reflect.TypeOf(example.typ), "hint")
+			name := DefaultSchemaNamer(reflect.TypeOf(example.typ), example.hint)
 			assert.Equal(t, example.name, name)
 		})
 	}

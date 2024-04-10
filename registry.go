@@ -31,6 +31,10 @@ type Registry interface {
 func DefaultSchemaNamer(t reflect.Type, hint string) string {
 	name := deref(t).Name()
 
+	if name == "" {
+		name = hint
+	}
+
 	// Better support for lists, so e.g. `[]int` becomes `ListInt`.
 	name = strings.ReplaceAll(name, "[]", "List[")
 
@@ -51,9 +55,6 @@ func DefaultSchemaNamer(t reflect.Type, hint string) string {
 	}
 	name = result
 
-	if name == "" {
-		name = hint
-	}
 	return name
 }
 
