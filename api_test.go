@@ -77,6 +77,7 @@ func TestContextValue(t *testing.T) {
 		// Make an updated context available to the handler.
 		ctx = huma.WithValue(ctx, "foo", "bar")
 		next(ctx)
+		assert.Equal(t, http.StatusNoContent, ctx.Status())
 	})
 
 	// Register a simple hello world operation in the API.

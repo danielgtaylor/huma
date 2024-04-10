@@ -18,9 +18,13 @@ import (
 var MultipartMaxMemory int64 = 8 * 1024
 
 type ginCtx struct {
-	op   *huma.Operation
-	orig *gin.Context
+	op     *huma.Operation
+	orig   *gin.Context
+	status int
 }
+
+// check that ginCtx implements huma.Context
+var _ huma.Context = &ginCtx{}
 
 func (c *ginCtx) Operation() *huma.Operation {
 	return c.op
@@ -76,7 +80,12 @@ func (c *ginCtx) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *ginCtx) SetStatus(code int) {
+	c.status = code
 	c.orig.Status(code)
+}
+
+func (c *ginCtx) Status() int {
+	return c.status
 }
 
 func (c *ginCtx) AppendHeader(name string, value string) {

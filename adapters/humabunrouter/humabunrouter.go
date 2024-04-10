@@ -20,10 +20,14 @@ import (
 var MultipartMaxMemory int64 = 8 * 1024
 
 type bunContext struct {
-	op *huma.Operation
-	r  bunrouter.Request
-	w  http.ResponseWriter
+	op     *huma.Operation
+	r      bunrouter.Request
+	w      http.ResponseWriter
+	status int
 }
+
+// check that bunContext implements huma.Context
+var _ huma.Context = &bunContext{}
 
 func (c *bunContext) Operation() *huma.Operation {
 	return c.op
@@ -79,7 +83,12 @@ func (c *bunContext) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *bunContext) SetStatus(code int) {
+	c.status = code
 	c.w.WriteHeader(code)
+}
+
+func (c *bunContext) Status() int {
+	return c.status
 }
 
 func (c *bunContext) AppendHeader(name string, value string) {
@@ -100,9 +109,10 @@ func NewContext(op *huma.Operation, r bunrouter.Request, w http.ResponseWriter) 
 }
 
 type bunCompatContext struct {
-	op *huma.Operation
-	r  *http.Request
-	w  http.ResponseWriter
+	op     *huma.Operation
+	r      *http.Request
+	w      http.ResponseWriter
+	status int
 }
 
 func (c *bunCompatContext) Operation() *huma.Operation {
@@ -160,7 +170,12 @@ func (c *bunCompatContext) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *bunCompatContext) SetStatus(code int) {
+	c.status = code
 	c.w.WriteHeader(code)
+}
+
+func (c *bunCompatContext) Status() int {
+	return c.status
 }
 
 func (c *bunCompatContext) AppendHeader(name string, value string) {

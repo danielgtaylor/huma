@@ -19,9 +19,10 @@ import (
 var MultipartMaxMemory int64 = 8 * 1024
 
 type goContext struct {
-	op *huma.Operation
-	r  *http.Request
-	w  http.ResponseWriter
+	op     *huma.Operation
+	r      *http.Request
+	w      http.ResponseWriter
+	status int
 }
 
 func (c *goContext) Operation() *huma.Operation {
@@ -78,7 +79,12 @@ func (c *goContext) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *goContext) SetStatus(code int) {
+	c.status = code
 	c.w.WriteHeader(code)
+}
+
+func (c *goContext) Status() int {
+	return c.status
 }
 
 func (c *goContext) AppendHeader(name string, value string) {

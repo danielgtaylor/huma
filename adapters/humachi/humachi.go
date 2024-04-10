@@ -19,11 +19,15 @@ import (
 var MultipartMaxMemory int64 = 8 * 1024
 
 type chiContext struct {
-	op *huma.Operation
-	r  *http.Request
-	w  http.ResponseWriter
-	v4 bool
+	op     *huma.Operation
+	r      *http.Request
+	w      http.ResponseWriter
+	v4     bool
+	status int
 }
+
+// check that chiContext implements huma.Context
+var _ huma.Context = &chiContext{}
 
 func (c *chiContext) Operation() *huma.Operation {
 	return c.op
@@ -83,7 +87,12 @@ func (c *chiContext) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *chiContext) SetStatus(code int) {
+	c.status = code
 	c.w.WriteHeader(code)
+}
+
+func (c *chiContext) Status() int {
+	return c.status
 }
 
 func (c *chiContext) AppendHeader(name string, value string) {

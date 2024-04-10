@@ -18,9 +18,13 @@ import (
 var MultipartMaxMemory int64 = 8 * 1024
 
 type echoCtx struct {
-	op   *huma.Operation
-	orig echo.Context
+	op     *huma.Operation
+	orig   echo.Context
+	status int
 }
+
+// check that echoCtx implements huma.Context
+var _ huma.Context = &echoCtx{}
 
 func (c *echoCtx) Operation() *huma.Operation {
 	return c.op
@@ -76,7 +80,12 @@ func (c *echoCtx) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *echoCtx) SetStatus(code int) {
+	c.status = code
 	c.orig.Response().WriteHeader(code)
+}
+
+func (c *echoCtx) Status() int {
+	return c.status
 }
 
 func (c *echoCtx) AppendHeader(name, value string) {

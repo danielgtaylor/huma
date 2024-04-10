@@ -15,9 +15,13 @@ import (
 )
 
 type fiberCtx struct {
-	op   *huma.Operation
-	orig *fiber.Ctx
+	op     *huma.Operation
+	orig   *fiber.Ctx
+	status int
 }
+
+// check that fiberCtx implements huma.Context
+var _ huma.Context = &fiberCtx{}
 
 func (c *fiberCtx) Operation() *huma.Operation {
 	return c.op
@@ -84,9 +88,13 @@ func (c *fiberCtx) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *fiberCtx) SetStatus(code int) {
+	c.status = code
 	c.orig.Status(code)
 }
 
+func (c *fiberCtx) Status() int {
+	return c.status
+}
 func (c *fiberCtx) AppendHeader(name string, value string) {
 	c.orig.Append(name, value)
 }
