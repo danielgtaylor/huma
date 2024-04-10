@@ -48,6 +48,7 @@ func TestDefaultSchemaNamer(t *testing.T) {
 		{Output[EmbeddedTwo[[]time.Time, **url.URL]]{}, "OutputEmbeddedTwoListTimeURL", ""},
 		{Renamed{}, "Renamed", ""},
 		{struct{}{}, "SomeGenericThing", "Some[pkg.Generic]Thing"},
+		{struct{}{}, "Type1Type2Type3", "pkg1.Type1[path/to/pkg2.Type2]pkg3.Type3"},
 	} {
 		t.Run(example.name, func(t *testing.T) {
 			name := DefaultSchemaNamer(reflect.TypeOf(example.typ), example.hint)
