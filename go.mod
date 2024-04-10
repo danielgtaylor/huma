@@ -3,7 +3,6 @@ module github.com/danielgtaylor/huma/v2
 go 1.20
 
 require (
-	github.com/danielgtaylor/casing v1.0.0
 	github.com/danielgtaylor/shorthand/v2 v2.2.0
 	github.com/evanphx/json-patch/v5 v5.9.0
 	github.com/fxamacker/cbor/v2 v2.6.0
