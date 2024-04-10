@@ -1080,7 +1080,7 @@ Content of example2.txt.
 			if feature.Transformers != nil {
 				config.Transformers = append(config.Transformers, feature.Transformers...)
 			}
-			api := humatest.NewTestAPI(t, r, config)
+			api := humatest.Wrap(t, humachi.New(r, config))
 			feature.Register(t, api)
 
 			var body io.Reader = nil

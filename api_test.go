@@ -13,7 +13,7 @@ import (
 )
 
 func TestBlankConfig(t *testing.T) {
-	adapter := humatest.NewAdapter(chi.NewMux())
+	adapter := humatest.NewAdapter()
 
 	assert.NotPanics(t, func() {
 		huma.NewAPI(huma.Config{}, adapter)
@@ -28,7 +28,7 @@ func TestBlankConfig(t *testing.T) {
 // including the parameter and response definitions & schemas.
 func ExampleAdapter_handle() {
 	// Create an adapter for your chosen router.
-	adapter := NewExampleAdapter(chi.NewMux())
+	adapter := NewExampleAdapter()
 
 	// Register an operation with a custom handler.
 	adapter.Handle(&huma.Operation{
@@ -90,7 +90,7 @@ func TestContextValue(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, resp.Code)
 }
 
-func TestRouterPrefix(t *testing.T) {
+func TestChiRouterPrefix(t *testing.T) {
 	mux := chi.NewMux()
 	var api huma.API
 	mux.Route("/api", func(r chi.Router) {
@@ -111,7 +111,7 @@ func TestRouterPrefix(t *testing.T) {
 	})
 
 	// Create a test API around the underlying router to make easier requests.
-	tapi := humatest.NewTestAPI(t, mux, huma.Config{})
+	tapi := humatest.Wrap(t, humachi.New(mux, huma.DefaultConfig("Test", "1.0.0")))
 
 	// The top-level router should respond to the full path even though the
 	// operation was registered with just `/test`.
