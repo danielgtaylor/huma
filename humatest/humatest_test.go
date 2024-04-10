@@ -2,15 +2,48 @@ package humatest
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/iotest"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func ExamplePrintRequest() {
+	req, _ := http.NewRequest(http.MethodGet, "http://example.com/foo?bar=baz", nil)
+	req.Header.Set("Foo", "bar")
+	req.Host = "example.com"
+	PrintRequest(req)
+	// Output: GET /foo?bar=baz HTTP/1.1
+	// Host: example.com
+	// Foo: bar
+}
+
+func ExamplePrintResponse() {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		ProtoMajor: 1,
+		ProtoMinor: 1,
+		Header: http.Header{
+			"Content-Type": []string{"application/json"},
+		},
+		ContentLength: -1,
+		Body:          io.NopCloser(strings.NewReader(`{"foo": "bar"}`)),
+	}
+	PrintResponse(resp)
+	// Output: HTTP/1.1 200 OK
+	// Connection: close
+	// Content-Type: application/json
+	//
+	// {
+	//   "foo": "bar"
+	// }
+}
 
 type Response struct {
 	MyHeader string `header:"My-Header"`
@@ -96,12 +129,12 @@ func TestContext(t *testing.T) {
 }
 
 func TestAdapter(t *testing.T) {
-	var _ huma.Adapter = NewAdapter(chi.NewMux())
+	var _ huma.Adapter = NewAdapter()
 }
 
 func TestNewAPI(t *testing.T) {
-	r := chi.NewMux()
-	var api huma.API = NewTestAPI(t, r, huma.DefaultConfig("Test", "1.0.0"))
+	var api huma.API
+	_, api = New(t, huma.DefaultConfig("Test", "1.0.0"))
 
 	// Should be able to wrap and call utility methods.
 	wrapped := Wrap(t, api)
@@ -115,4 +148,19 @@ func TestNewAPI(t *testing.T) {
 		// Invalid param type (only string headers and io.Reader bodies are allowed)
 		wrapped.Post("/", 1234)
 	})
+}
+
+func TestDumpBodyError(t *testing.T) {
+	req, _ := http.NewRequest(http.MethodGet, "http://example.com/foo?bar=baz", nil)
+	req.Header.Set("Foo", "bar")
+	req.Host = "example.com"
+	req.Body = io.NopCloser(iotest.ErrReader(io.ErrUnexpectedEOF))
+
+	// Error should return.
+	_, err := DumpRequest(req)
+	require.Error(t, err)
+
+	// Error should be passed through.
+	_, err = io.ReadAll(req.Body)
+	require.Error(t, err)
 }
