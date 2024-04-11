@@ -22,7 +22,7 @@ Response: 201 Created
 
 Add a new operation to our API that allows users to submit reviews of our product.
 
-```go title="main.go" linenums="1" hl_lines="25-32 57-68"
+```go title="main.go" linenums="1" hl_lines="28-35 60-71"
 package main
 
 import (
@@ -34,6 +34,8 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/danielgtaylor/huma/v2/humacli"
 	"github.com/go-chi/chi/v5"
+
+	_ "github.com/danielgtaylor/huma/v2/formats/cbor"
 )
 
 // Options for the CLI.

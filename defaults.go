@@ -3,8 +3,6 @@ package huma
 import (
 	"encoding/json"
 	"io"
-
-	"github.com/fxamacker/cbor/v2"
 )
 
 // DefaultJSONFormat is the default JSON formatter that can be set in the API's
@@ -22,39 +20,24 @@ var DefaultJSONFormat = Format{
 	Unmarshal: json.Unmarshal,
 }
 
-var cborEncMode, _ = cbor.EncOptions{
-	// Canonical enc opts
-	Sort:          cbor.SortCanonical,
-	ShortestFloat: cbor.ShortestFloat16,
-	NaNConvert:    cbor.NaNConvert7e00,
-	InfConvert:    cbor.InfConvertFloat16,
-	IndefLength:   cbor.IndefLengthForbidden,
-	// Time handling
-	Time:    cbor.TimeUnixDynamic,
-	TimeTag: cbor.EncTagRequired,
-}.EncMode()
-
-// DefaultCBORFormat is the default CBOR formatter that can be set in the API's
-// `Config.Formats` map. This is used by the `DefaultConfig` function.
+// DefaultFormats is a map of default formats that can be set in the API's
+// `Config.Formats` map, used for content negotiation for marshaling and
+// unmarshaling request/response bodies. This is used by the `DefaultConfig`
+// function and can be modified to add or remove additional formats. For
+// example, to add support for CBOR, simply import it:
 //
-//	config := huma.Config{}
-//	config.Formats = map[string]huma.Format{
-//		"application/cbor": huma.DefaultCBORFormat,
-//		"cbor":             huma.DefaultCBORFormat,
-//	}
-var DefaultCBORFormat = Format{
-	Marshal: func(w io.Writer, v any) error {
-		return cborEncMode.NewEncoder(w).Encode(v)
-	},
-	Unmarshal: cbor.Unmarshal,
+//	import _ "github.com/danielgtaylor/huma/v2/formats/cbor"
+var DefaultFormats = map[string]Format{
+	"application/json": DefaultJSONFormat,
+	"json":             DefaultJSONFormat,
 }
 
 // DefaultConfig returns a default configuration for a new API. It is a good
-// starting point for creating your own configuration. It supports JSON and
-// CBOR formats out of the box. The registry uses references for structs and
-// a link transformer is included to add `$schema` fields and links into
-// responses. The `/openapi.[json|yaml]`, `/docs`, and `/schemas` paths are
-// set up to serve the OpenAPI spec, docs UI, and schemas respectively.
+// starting point for creating your own configuration. It supports the JSON
+// format out of the box. The registry uses references for structs and a link
+// transformer is included to add `$schema` fields and links into responses. The
+// `/openapi.[json|yaml]`, `/docs`, and `/schemas` paths are set up to serve the
+// OpenAPI spec, docs UI, and schemas respectively.
 //
 //	// Create and customize the config (if desired).
 //	config := huma.DefaultConfig("My API", "1.0.0")
@@ -62,6 +45,11 @@ var DefaultCBORFormat = Format{
 //	// Create the API using the config.
 //	router := chi.NewMux()
 //	api := humachi.New(router, config)
+//
+// If desired, CBOR (a binary format similar to JSON) support can be
+// automatically enabled by importing the CBOR package:
+//
+//	import _ "github.com/danielgtaylor/huma/v2/formats/cbor"
 func DefaultConfig(title, version string) Config {
 	schemaPrefix := "#/components/schemas/"
 	schemasPath := "/schemas"
@@ -79,15 +67,10 @@ func DefaultConfig(title, version string) Config {
 				Schemas: registry,
 			},
 		},
-		OpenAPIPath: "/openapi",
-		DocsPath:    "/docs",
-		SchemasPath: schemasPath,
-		Formats: map[string]Format{
-			"application/json": DefaultJSONFormat,
-			"json":             DefaultJSONFormat,
-			"application/cbor": DefaultCBORFormat,
-			"cbor":             DefaultCBORFormat,
-		},
+		OpenAPIPath:   "/openapi",
+		DocsPath:      "/docs",
+		SchemasPath:   schemasPath,
+		Formats:       DefaultFormats,
 		DefaultFormat: "application/json",
 		CreateHooks: []func(Config) Config{
 			func(c Config) Config {

@@ -10,10 +10,23 @@ When handler functions return Go objects, they will be serialized to bytes for t
 
 The [`config.Formats`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Config) maps either a content type name or extension (suffix) to a `huma.Format` instance.
 
-The default configuration for Huma includes support for JSON ([RFC 8259](https://tools.ietf.org/html/rfc8259)) and CBOR ([RFC 7049](https://tools.ietf.org/html/rfc7049)) content types via the `Accept` header. This is done by registering the following content types using [`huma.DefaultJSONFormat`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#DefaultJSONFormat) & [`huma.DefaultCBORFormat`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#DefaultCBORFormat):
+The default configuration for Huma includes support for JSON ([RFC 8259](https://tools.ietf.org/html/rfc8259)) and optionally CBOR ([RFC 7049](https://tools.ietf.org/html/rfc7049)) content types via the `Accept` header. This is done by registering the following content types using [`huma.DefaultJSONFormat`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#DefaultJSONFormat):
 
 -   `application/json`
 -   Anything ending with `+json`
+
+CBOR support can be enabled by importing the `cbor` package, which adds [`cbor.DefaultCBORFormat`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/formats/cbor#DefaultCBORFormat) to the default list of formats:
+
+```go title="main.go"
+import (
+    "github.com/danielgtaylor/huma/v2"
+
+    _ "github.com/danielgtaylor/huma/v2/formats/cbor"
+)
+```
+
+This adds the following content types:
+
 -   `application/cbor`
 -   Anything ending with `+cbor`
 

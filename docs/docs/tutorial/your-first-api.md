@@ -48,7 +48,7 @@ my-api/
 
 Let's create a router, which will handle getting incoming requests to the correct operation handler, and a new API instance where we can register our operation.
 
-```go title="main.go" linenums="1" hl_lines="3-9 18-27"
+```go title="main.go" linenums="1" hl_lines="3-11 20-29"
 package main
 
 import (
@@ -57,6 +57,8 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
+
+	_ "github.com/danielgtaylor/huma/v2/formats/cbor"
 )
 
 // GreetingOutput represents the greeting operation response.
@@ -93,7 +95,7 @@ func main() {
 
 Register the operation with the Huma API instance, including how it maps to a URL. The handler function will take in a struct that defines its inputs (in this case a path parameter named `name`) and return the `GreetingOutput` model we built above.
 
-```go title="main.go" linenums="1" hl_lines="4-5 25-32"
+```go title="main.go" linenums="1" hl_lines="4-5 27-34"
 package main
 
 import (
@@ -104,6 +106,8 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
+
+	_ "github.com/danielgtaylor/huma/v2/formats/cbor"
 )
 
 // GreetingOutput represents the greeting operation response.
@@ -180,7 +184,7 @@ These docs are generated from the OpenAPI specification. You can use this file t
 
 You can use `huma.Register` to add more information to the OpenAPI specification, such as descriptions with Markdown, examples, tags, and more. The `huma.Operation` struct provides full access to the OpenAPI including the ability to add extensions. See the [`huma.Operation`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Operation) struct for more details.
 
-```go title="main.go" linenums="1" hl_lines="26-33"
+```go title="main.go" linenums="1" hl_lines="28-35"
 package main
 
 import (
@@ -191,6 +195,8 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
+
+	_ "github.com/danielgtaylor/huma/v2/formats/cbor"
 )
 
 // GreetingOutput represents the greeting operation response.

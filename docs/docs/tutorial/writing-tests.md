@@ -10,7 +10,7 @@ Huma provides a number of helpers for testing your API. The most important is th
 
 First, modify the service code to make it easier to test, by moving the operation registration code out of the `main` function:
 
-```go title="main.go" linenums="1" hl_lines="34 63 72"
+```go title="main.go" linenums="1" hl_lines="37 66 75"
 package main
 
 import (
@@ -22,6 +22,8 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/danielgtaylor/huma/v2/humacli"
 	"github.com/go-chi/chi/v5"
+
+	_ "github.com/danielgtaylor/huma/v2/formats/cbor"
 )
 
 // Options for the CLI.

@@ -191,5 +191,4 @@
 [9.540756, "o", "v"]
 [9.580533, "o", "2"]
 [9.621607, "o", "\r\n\u001b[0m"]
-[9.860282, "o", "go: added github.com/danielgtaylor/casing v0.0.0-20210126043903-4e55e6373ac3\r\n\u001b[0mgo: added github.com/danielgtaylor/huma/v2 v2.0.0-beta.3\r\n\u001b[0mgo: added github.com/danielgtaylor/mexpr v1.8.0\r\n...\r\n\u001b[0mgo: added gopkg.in/ini.v1 v1.67.0\r\n\u001b[0mgo: added gopkg.in/yaml.v3 v3.0.1\r\n\u001b[0m"]
-
+[9.860282, "o", "...\r\n\u001b[0m"]
