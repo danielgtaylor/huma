@@ -1465,6 +1465,23 @@ func TestConvenienceMethods(t *testing.T) {
 	assert.Equal(t, "delete-things-by-thing-id", api.OpenAPI().Paths[path].Delete.OperationID)
 }
 
+type EmbeddedWithMethod struct{}
+
+func (e EmbeddedWithMethod) Method() {}
+
+func TestUnsupportedEmbeddedTypeWithMethods(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	// Should not panic!
+	huma.Post(api, "/things", func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			EmbeddedWithMethod
+		}
+	}, error) {
+		return nil, nil
+	})
+}
+
 // func BenchmarkSecondDecode(b *testing.B) {
 // 	//nolint: musttag
 // 	type MediumSized struct {
