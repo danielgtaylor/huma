@@ -2,6 +2,7 @@ package huma
 
 import (
 	"bytes"
+	"fmt"
 	"path"
 	"reflect"
 )
@@ -125,13 +126,23 @@ func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
 				}
 			}
 
-			newType := reflect.StructOf(fields)
-			info := t.types[typ]
-			info.t = newType
-			info.fields = fieldIndexes
-			info.ref = extra.Schema
-			info.header = "<" + extra.Schema + ">; rel=\"describedBy\""
-			t.types[typ] = info
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						// Catch some scenarios that just aren't supported in Go at the
+						// moment. Logs an error so people know what's going on.
+						// https://github.com/danielgtaylor/huma/issues/371
+						fmt.Println("Warning: unable to create schema link for type", typ, ":", r)
+					}
+				}()
+				newType := reflect.StructOf(fields)
+				info := t.types[typ]
+				info.t = newType
+				info.fields = fieldIndexes
+				info.ref = extra.Schema
+				info.header = "<" + extra.Schema + ">; rel=\"describedBy\""
+				t.types[typ] = info
+			}()
 		}
 	}
 }
