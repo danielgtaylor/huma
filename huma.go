@@ -183,14 +183,22 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		}
 
 		if !boolTag(f, "hidden") {
+			desc := ""
+			if pfi.Schema != nil {
+				// If the schema has a description, use it. Some tools will not show
+				// the description if it is only on the schema.
+				desc = pfi.Schema.Description
+			}
+
 			// Document the parameter if not hidden.
 			op.Parameters = append(op.Parameters, &Param{
-				Name:     name,
-				In:       pfi.Loc,
-				Explode:  explode,
-				Required: pfi.Required,
-				Schema:   pfi.Schema,
-				Example:  example,
+				Name:        name,
+				Description: desc,
+				In:          pfi.Loc,
+				Explode:     explode,
+				Required:    pfi.Required,
+				Schema:      pfi.Schema,
+				Example:     example,
 			})
 		}
 

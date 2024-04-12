@@ -127,7 +127,7 @@ func TestFeatures(t *testing.T) {
 					Method: http.MethodGet,
 					Path:   "/test-params/{string}/{int}/{uuid}",
 				}, func(ctx context.Context, input *struct {
-					PathString   string    `path:"string"`
+					PathString   string    `path:"string" doc:"Some docs"`
 					PathInt      int       `path:"int"`
 					PathUUID     UUID      `path:"uuid"`
 					QueryString  string    `query:"string"`
@@ -186,6 +186,9 @@ func TestFeatures(t *testing.T) {
 					assert.Equal(t, "bar", input.CookieFull.Value)
 					return nil, nil
 				})
+
+				// Docs should be available on the param object, not just the schema.
+				assert.Equal(t, "Some docs", api.OpenAPI().Paths["/test-params/{string}/{int}/{uuid}"].Get.Parameters[0].Description)
 
 				// `http.Cookie` should be treated as a string.
 				assert.Equal(t, "string", api.OpenAPI().Paths["/test-params/{string}/{int}/{uuid}"].Get.Parameters[27].Schema.Type)
