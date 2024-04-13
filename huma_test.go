@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net"
@@ -648,6 +649,22 @@ Content of example2.txt.
 					Path:   "/error",
 				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
 					return nil, huma.Error403Forbidden("nope")
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/error",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusForbidden, resp.Code)
+			},
+		},
+		{
+			Name: "handler-wrapped-error",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/error",
+				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+					return nil, fmt.Errorf("wrapped: %w", huma.Error403Forbidden("nope"))
 				})
 			},
 			Method: http.MethodGet,

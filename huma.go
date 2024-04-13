@@ -1274,7 +1274,8 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		output, err := handler(ctx.Context(), &input)
 		if err != nil {
 			status := http.StatusInternalServerError
-			if se, ok := err.(StatusError); ok {
+			var se StatusError
+			if errors.As(err, &se) {
 				status = se.GetStatus()
 			} else {
 				err = NewError(http.StatusInternalServerError, err.Error())
