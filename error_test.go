@@ -2,6 +2,7 @@ package huma_test
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -100,4 +101,12 @@ func TestTransformError(t *testing.T) {
 	ctx := humatest.NewContext(nil, req, resp)
 
 	require.Error(t, huma.WriteErr(api, ctx, 400, "bad request"))
+}
+
+func TestErrorAs(t *testing.T) {
+	err := fmt.Errorf("wrapped: %w", huma.Error400BadRequest("test"))
+
+	var e huma.StatusError
+	require.ErrorAs(t, err, &e)
+	assert.Equal(t, 400, e.GetStatus())
 }
