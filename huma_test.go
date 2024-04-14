@@ -111,7 +111,6 @@ func TestFeatures(t *testing.T) {
 					Method: http.MethodGet,
 					Path:   "/middleware",
 				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
-					// This should never be called because of the middleware.
 					return nil, nil
 				})
 			},
@@ -119,6 +118,34 @@ func TestFeatures(t *testing.T) {
 			URL:    "/middleware",
 			Headers: map[string]string{
 				"Cookie": "foo=bar",
+			},
+		},
+		{
+			Name: "middleware-operation",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/middleware",
+					Middlewares: huma.Middlewares{
+						func(ctx huma.Context, next func(huma.Context)) {
+							// Just a do-nothing passthrough. Shows that chaining works.
+							next(ctx)
+						},
+						func(ctx huma.Context, next func(huma.Context)) {
+							// Return an error response, never calling the next handler.
+							ctx.SetStatus(299)
+						},
+					},
+				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+					// This should never be called because of the middleware.
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/middleware",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				// We should get the error response from the middleware.
+				assert.Equal(t, 299, resp.Code)
 			},
 		},
 		{

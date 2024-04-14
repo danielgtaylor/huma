@@ -224,7 +224,10 @@ type API interface {
 	// the next Middleware.
 	UseMiddleware(middlewares ...func(ctx Context, next func(Context)))
 
-	// Middlewares returns a slice of middleware handler functions.
+	// Middlewares returns a slice of middleware handler functions that will be
+	// run for all operations. Middleware are run in the order they are added.
+	// See also `huma.Operation{}.Middlewares` for adding operation-specific
+	// middleware at operation registration time.
 	Middlewares() Middlewares
 }
 
