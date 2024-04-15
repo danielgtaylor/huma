@@ -200,6 +200,11 @@ func Wrap(tb TB, api huma.API) TestAPI {
 // to customize how the API is created. If no configuration is provided then
 // a simple default configuration supporting `application/json` is used.
 func New(tb TB, configs ...huma.Config) (http.Handler, TestAPI) {
+	for _, config := range configs {
+		if config.OpenAPI == nil {
+			panic("custom huma.Config structs must specify a value for OpenAPI")
+		}
+	}
 	if len(configs) == 0 {
 		configs = append(configs, huma.Config{
 			OpenAPI: &huma.OpenAPI{
