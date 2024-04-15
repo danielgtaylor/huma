@@ -77,12 +77,11 @@ func TestErrorResponses(t *testing.T) {
 }
 
 func TestNegotiateError(t *testing.T) {
-	_, api := humatest.New(t, huma.Config{})
+	_, api := humatest.New(t, huma.Config{OpenAPI: &huma.OpenAPI{Info: &huma.Info{Title: "Test API", Version: "1.0.0"}}})
 
 	req, _ := http.NewRequest("GET", "/", nil)
 	resp := httptest.NewRecorder()
 	ctx := humatest.NewContext(nil, req, resp)
-
 	require.Error(t, huma.WriteErr(api, ctx, 400, "bad request"))
 }
 
