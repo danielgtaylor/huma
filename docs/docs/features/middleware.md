@@ -151,6 +151,35 @@ func MyMiddleware(ctx huma.Context, next func(ctx huma.Context)) {
 
     The [`huma.ErrorDetail`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ErrorDetail) struct can be used to provide more information about the error, such as the location of the error and the value which was seen.
 
+### Operations
+
+You can also add router-agnostic middleware to individual operations by setting the [`huma.Operation.Middlewares`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Operation) field. This middleware will run after the router-specific middleware and before the operation handler.
+
+```go title="code.go"
+func MyMiddleware(ctx huma.Context, next func(huma.Context)) {
+	// Call the next middleware in the chain. This eventually calls the
+	// operation handler as well.
+	next(ctx)
+}
+
+func main() {
+	// ...
+	api := humachi.New(router, config)
+
+	huma.Register(api, huma.Operation{
+		OperationID: "demo",
+		Method:      http.MethodGet,
+		Path:        "/demo",
+		Middlewares: huma.Middlewares{MyMiddleware},
+	}, func(ctx context.Context, input *MyInput) (*MyOutput, error) {
+		// TODO: implement handler...
+		return nil, nil
+	})
+}
+```
+
+It's also possible for global middleware to run only for certain paths by checking the request context's URL within the middleware, or by using something like the `huma.Operation.Metadata` to trigger the middleware logic using custom settings. It's up to you to decide how to structure your middleware and operations.
+
 ## Dive Deeper
 
 -   Reference

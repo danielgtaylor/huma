@@ -867,6 +867,11 @@ type Operation struct {
 	// functions which generate operations.
 	Metadata map[string]any `yaml:"-"`
 
+	// Middlewares is a list of middleware functions to run before the handler.
+	// This is useful for adding custom logic to operations, such as logging,
+	// authentication, or rate limiting.
+	Middlewares Middlewares `yaml:"-"`
+
 	// --- OpenAPI fields ---
 
 	// Tags is a list of tags for API documentation control. Tags can be used for
