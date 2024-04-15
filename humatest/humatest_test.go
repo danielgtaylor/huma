@@ -164,3 +164,9 @@ func TestDumpBodyError(t *testing.T) {
 	_, err = io.ReadAll(req.Body)
 	require.Error(t, err)
 }
+
+func TestOpenAPIRequired(t *testing.T) {
+	assert.PanicsWithValue(t, "custom huma.Config structs must specify a value for OpenAPI", func() {
+		New(t, huma.Config{})
+	})
+}

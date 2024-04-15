@@ -1404,23 +1404,6 @@ func TestParamPointerPanics(t *testing.T) {
 	})
 }
 
-func TestEmptyConfigPanicsWithClearMessage(t *testing.T) {
-	_, app := humatest.New(t, huma.Config{})
-
-	assert.PanicsWithError(t, "specify a value for OpenAPI", func() {
-		huma.Register(app, huma.Operation{
-			Method: http.MethodGet,
-			Path:   "/",
-		}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
-			return nil, nil
-		})
-
-		app.Get("/", func(ctx context.Context, input *struct{}) (*struct{}, error) {
-			return nil, nil
-		})
-	})
-}
-
 func TestPointerDefaultPanics(t *testing.T) {
 	// For now, we don't support these, so we panic rather than have subtle
 	// bugs that are hard to track down.
