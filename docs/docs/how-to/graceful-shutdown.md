@@ -12,7 +12,7 @@ This can be accomplished in Huma using the CLI `hooks.OnStop()` hook, passing a 
 
 ## Example
 
-```go title="code.go" linenums="1" hl_lines="6-7 50-67"
+```go title="code.go" linenums="1" hl_lines="6-7 51-68"
 package main
 
 import (

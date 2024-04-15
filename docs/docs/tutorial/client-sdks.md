@@ -10,7 +10,7 @@ description: Level up your API with a generated Go SDK and client that uses it.
 
 First, let's create a command to grab the OpenAPI spec so the service doesn't need to be running and you can generate the SDK as needed (e.g. as part of the API service release process).
 
-```go title="main.go" linenums="1" hl_lines="67 73 84-94"
+```go title="main.go" linenums="1" hl_lines="69 75 86-96"
 package main
 
 import (
@@ -22,6 +22,8 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/danielgtaylor/huma/v2/humacli"
 	"github.com/go-chi/chi/v5"
+
+	_ "github.com/danielgtaylor/huma/v2/formats/cbor"
 )
 
 // Options for the CLI.

@@ -10,7 +10,7 @@ Huma includes a basic command-line and environment variable option parser that c
 
 [Your first API](your-first-api.md#operation) can be updated to take an optional network port parameter like this:
 
-```go title="main.go" linenums="1" hl_lines="13-16 26-27 48-56"
+```go title="main.go" linenums="1" hl_lines="16-19 29-30 51-59"
 package main
 
 import (
@@ -22,6 +22,8 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/danielgtaylor/huma/v2/humacli"
 	"github.com/go-chi/chi/v5"
+
+	_ "github.com/danielgtaylor/huma/v2/formats/cbor"
 )
 
 // Options for the CLI.

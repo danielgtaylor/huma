@@ -10,7 +10,7 @@ Images or other encoded or binary responses can be returned by simply using a `[
 
 ## Example
 
-```go title="code.go" linenums="1" hl_lines="18-22 31-50"
+```go title="code.go" linenums="1" hl_lines="19-23 32-51"
 package main
 
 import (

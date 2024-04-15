@@ -26,7 +26,7 @@ Features include:
 -   JSON Errors using [RFC9457](https://tools.ietf.org/html/rfc9457) and `application/problem+json` by default (but can be changed)
 -   Per-operation request size limits with sane defaults
 -   [Content negotiation](https://developer.mozilla.org/en-US/docs/Web/HTTP/Content_negotiation) between server and client
-    -   Support for JSON ([RFC 8259](https://tools.ietf.org/html/rfc8259)) and CBOR ([RFC 7049](https://tools.ietf.org/html/rfc7049)) content types via the `Accept` header with the default config.
+    -   Support for JSON ([RFC 8259](https://tools.ietf.org/html/rfc8259)) and optional CBOR ([RFC 7049](https://tools.ietf.org/html/rfc7049)) content types via the `Accept` header with the default config.
 -   Conditional requests support, e.g. `If-Match` or `If-Unmodified-Since` header utilities.
 -   Optional automatic generation of `PATCH` operations that support:
     -   [RFC 7386](https://www.rfc-editor.org/rfc/rfc7386) JSON Merge Patch
