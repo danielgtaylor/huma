@@ -1273,10 +1273,20 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 		output, err := handler(ctx.Context(), &input)
 		if err != nil {
+			var he HeadersError
+			if errors.As(err, &he) {
+				for k, values := range he.GetHeaders() {
+					for _, v := range values {
+						ctx.AppendHeader(k, v)
+					}
+				}
+			}
+
 			status := http.StatusInternalServerError
 			var se StatusError
 			if errors.As(err, &se) {
 				status = se.GetStatus()
+				err = se
 			} else {
 				err = NewError(http.StatusInternalServerError, err.Error())
 			}
