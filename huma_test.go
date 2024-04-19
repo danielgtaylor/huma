@@ -121,6 +121,187 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
+			Name: "middleware-empty-cookie",
+			Register: func(t *testing.T, api huma.API) {
+				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+					cookie, err := huma.ReadCookie(ctx, "foo")
+					assert.Nil(t, cookie)
+					assert.ErrorIs(t, err, http.ErrNoCookie)
+
+					next(ctx)
+				})
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/middleware",
+				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/middleware",
+			Headers: map[string]string{
+				"Cookie": "",
+			},
+		},
+		{
+			Name: "middleware-cookie-only-semicolon",
+			Register: func(t *testing.T, api huma.API) {
+				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+					cookie, err := huma.ReadCookie(ctx, "foo")
+					assert.Nil(t, cookie)
+					assert.ErrorIs(t, err, http.ErrNoCookie)
+
+					next(ctx)
+				})
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/middleware",
+				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/middleware",
+			Headers: map[string]string{
+				"Cookie": ";",
+			},
+		},
+		{
+			Name: "middleware-read-no-cookie-in-header",
+			Register: func(t *testing.T, api huma.API) {
+				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+					cookie, err := huma.ReadCookie(ctx, "foo")
+					assert.Nil(t, cookie)
+					assert.ErrorIs(t, err, http.ErrNoCookie)
+
+					next(ctx)
+				})
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/middleware",
+				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/middleware",
+		},
+		{
+			Name: "middleware-cookie-invalid-name",
+			Register: func(t *testing.T, api huma.API) {
+				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+					cookie, err := huma.ReadCookie(ctx, "foo")
+					assert.Nil(t, cookie)
+					assert.ErrorIs(t, err, http.ErrNoCookie)
+
+					next(ctx)
+				})
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/middleware",
+				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/middleware",
+			Headers: map[string]string{
+				"Cookie": "=bar;",
+			},
+		},
+		{
+			Name: "middleware-cookie-filter-skip",
+			Register: func(t *testing.T, api huma.API) {
+				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+					cookie, err := huma.ReadCookie(ctx, "foo")
+					assert.Nil(t, cookie)
+					assert.ErrorIs(t, err, http.ErrNoCookie)
+
+					next(ctx)
+				})
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/middleware",
+				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/middleware",
+			Headers: map[string]string{
+				"Cookie": "bar=foo;",
+			},
+		},
+		{
+			Name: "middleware-cookie-parse-double-quote",
+			Register: func(t *testing.T, api huma.API) {
+				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+					cookie, err := huma.ReadCookie(ctx, "bar")
+					require.NoError(t, err)
+					assert.NotNil(t, cookie)
+
+					next(ctx)
+				})
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/middleware",
+				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/middleware",
+			Headers: map[string]string{
+				"Cookie": `bar="foo"`,
+			},
+		},
+		{
+			Name: "middleware-cookie-invalid-value-byte-with-semicolon",
+			Register: func(t *testing.T, api huma.API) {
+				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+					cookie, err := huma.ReadCookie(ctx, "bar")
+					assert.Nil(t, cookie)
+					assert.ErrorIs(t, err, http.ErrNoCookie)
+
+					next(ctx)
+				})
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/middleware",
+				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/middleware",
+			Headers: map[string]string{
+				"Cookie": `bar="fo;o"`,
+			},
+		},
+		{
+			Name: "middleware-cookie-invalid-value-byte-with-double-backslash",
+			Register: func(t *testing.T, api huma.API) {
+				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+					cookie, err := huma.ReadCookie(ctx, "bar")
+					assert.Nil(t, cookie)
+					assert.ErrorIs(t, err, http.ErrNoCookie)
+
+					next(ctx)
+				})
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/middleware",
+				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/middleware",
+			Headers: map[string]string{
+				"Cookie": `bar="fo\\o"`,
+			},
+		},
+		{
 			Name: "middleware-operation",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
