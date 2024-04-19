@@ -477,9 +477,11 @@ func transformAndWrite(api API, ctx Context, status int, ct string, body any) {
 		panic(fmt.Errorf("error transforming response %+v for %s %s %d: %w\n", tval, ctx.Operation().Method, ctx.Operation().Path, status, terr))
 	}
 	ctx.SetStatus(status)
-	if merr := api.Marshal(ctx.BodyWriter(), ct, tval); merr != nil {
-		ctx.BodyWriter().Write([]byte("error marshaling response"))
-		panic(fmt.Errorf("error marshaling response %+v for %s %s %d: %w\n", tval, ctx.Operation().Method, ctx.Operation().Path, status, merr))
+	if status != http.StatusNoContent && status != http.StatusNotModified {
+		if merr := api.Marshal(ctx.BodyWriter(), ct, tval); merr != nil {
+			ctx.BodyWriter().Write([]byte("error marshaling response"))
+			panic(fmt.Errorf("error marshaling response %+v for %s %s %d: %w\n", tval, ctx.Operation().Method, ctx.Operation().Path, status, merr))
+		}
 	}
 }
 
