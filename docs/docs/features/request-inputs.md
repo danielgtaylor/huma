@@ -61,10 +61,11 @@ The special struct field `Body` will be treated as the input request body and ca
 The following special types are supported out of the box:
 
 | Type              | Schema                                      | Example                       |
-| ----------------- | ------------------------------------------- | ----------------------------- |
+|-------------------| ------------------------------------------- | ----------------------------- |
 | `time.Time`       | `{"type": "string", "format": "date-time"}` | `"2020-01-01T12:00:00Z"`      |
 | `url.URL`         | `{"type": "string", "format": "uri"}`       | `"https://example.com"`       |
 | `net.IP`          | `{"type": "string", "format": "ipv4"}`      | `"127.0.0.1"`                 |
+| `netip.Addr`      | `{"type": "string", "format": "ipv4"}`      | `"127.0.0.1"`                 |
 | `json.RawMessage` | `{}`                                        | `["whatever", "you", "want"]` |
 
 You can override this default behavior if needed as described in [Schema Customization](./schema-customization.md) and [Request Validation](./request-validation.md), e.g. setting a custom `format` tag for IPv6.
