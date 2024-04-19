@@ -126,7 +126,7 @@ func TestFeatures(t *testing.T) {
 				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
 					cookie, err := huma.ReadCookie(ctx, "foo")
 					assert.Nil(t, cookie)
-					assert.ErrorIs(t, err, http.ErrNoCookie)
+					require.ErrorIs(t, err, http.ErrNoCookie)
 
 					next(ctx)
 				})
@@ -149,7 +149,7 @@ func TestFeatures(t *testing.T) {
 				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
 					cookie, err := huma.ReadCookie(ctx, "foo")
 					assert.Nil(t, cookie)
-					assert.ErrorIs(t, err, http.ErrNoCookie)
+					require.ErrorIs(t, err, http.ErrNoCookie)
 
 					next(ctx)
 				})
@@ -172,7 +172,7 @@ func TestFeatures(t *testing.T) {
 				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
 					cookie, err := huma.ReadCookie(ctx, "foo")
 					assert.Nil(t, cookie)
-					assert.ErrorIs(t, err, http.ErrNoCookie)
+					require.ErrorIs(t, err, http.ErrNoCookie)
 
 					next(ctx)
 				})
@@ -192,7 +192,7 @@ func TestFeatures(t *testing.T) {
 				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
 					cookie, err := huma.ReadCookie(ctx, "foo")
 					assert.Nil(t, cookie)
-					assert.ErrorIs(t, err, http.ErrNoCookie)
+					require.ErrorIs(t, err, http.ErrNoCookie)
 
 					next(ctx)
 				})
@@ -215,7 +215,7 @@ func TestFeatures(t *testing.T) {
 				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
 					cookie, err := huma.ReadCookie(ctx, "foo")
 					assert.Nil(t, cookie)
-					assert.ErrorIs(t, err, http.ErrNoCookie)
+					require.ErrorIs(t, err, http.ErrNoCookie)
 
 					next(ctx)
 				})
@@ -261,7 +261,7 @@ func TestFeatures(t *testing.T) {
 				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
 					cookie, err := huma.ReadCookie(ctx, "bar")
 					assert.Nil(t, cookie)
-					assert.ErrorIs(t, err, http.ErrNoCookie)
+					require.ErrorIs(t, err, http.ErrNoCookie)
 
 					next(ctx)
 				})
@@ -284,7 +284,7 @@ func TestFeatures(t *testing.T) {
 				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
 					cookie, err := huma.ReadCookie(ctx, "bar")
 					assert.Nil(t, cookie)
-					assert.ErrorIs(t, err, http.ErrNoCookie)
+					require.ErrorIs(t, err, http.ErrNoCookie)
 
 					next(ctx)
 				})
