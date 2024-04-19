@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/bits"
 	"net"
+	"net/netip"
 	"net/url"
 	"reflect"
 	"regexp"
@@ -32,6 +33,7 @@ const (
 var (
 	timeType       = reflect.TypeOf(time.Time{})
 	ipType         = reflect.TypeOf(net.IP{})
+	ipAddrType     = reflect.TypeOf(netip.Addr{})
 	urlType        = reflect.TypeOf(url.URL{})
 	rawMessageType = reflect.TypeOf(json.RawMessage{})
 )
@@ -617,6 +619,8 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 	case urlType:
 		return &Schema{Type: TypeString, Nullable: isPointer, Format: "uri"}
 	case ipType:
+		return &Schema{Type: TypeString, Nullable: isPointer, Format: "ipv4"}
+	case ipAddrType:
 		return &Schema{Type: TypeString, Nullable: isPointer, Format: "ipv4"}
 	case rawMessageType:
 		return &Schema{}
