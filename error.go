@@ -1,6 +1,7 @@
 package huma
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -147,6 +148,50 @@ type ContentTypeFilter interface {
 type StatusError interface {
 	GetStatus() int
 	Error() string
+}
+
+// HeadersError is an error that has HTTP headers. When returned from an
+// operation handler, these headers are set on the response before sending it
+// to the client. Use `ErrorWithHeaders` to wrap an error like
+// `huma.Error400BadRequest` with additional headers.
+type HeadersError interface {
+	GetHeaders() http.Header
+	Error() string
+}
+
+type errWithHeaders struct {
+	err     error
+	headers http.Header
+}
+
+func (e *errWithHeaders) Error() string {
+	return e.err.Error()
+}
+
+func (e *errWithHeaders) Unwrap() error {
+	return e.err
+}
+
+func (e *errWithHeaders) GetHeaders() http.Header {
+	return e.headers
+}
+
+// ErrorWithHeaders wraps an error with additional headers to be sent to the
+// client. This is useful for e.g. caching, rate limiting, or other metadata.
+func ErrorWithHeaders(err error, headers http.Header) error {
+	var he HeadersError
+	if errors.As(err, &he) {
+		// There is already a headers error, so we need to merge the headers. This
+		// lets you chain multiple calls together and have all the headers set.
+		orig := he.GetHeaders()
+		for k, values := range headers {
+			for _, v := range values {
+				orig.Add(k, v)
+			}
+		}
+		return err
+	}
+	return &errWithHeaders{err: err, headers: headers}
 }
 
 // NewError creates a new instance of an error model with the given status code,

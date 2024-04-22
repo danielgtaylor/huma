@@ -90,6 +90,23 @@ flowchart TD
 
 This means it is possible to, for example, get an HTTP `408 Request Timeout` response that _also_ contains an error detail with a validation error for one of the input headers. Since request timeout has higher priority, that will be the response status code that is returned.
 
+## Error Headers
+
+Middleware can be used to add headers to all responses, e.g. for cache control, rate limiting, etc. For headers specific to errors or specific handler error responses, you can wrap the error with additional headers as needed:
+
+```go title="code.go" hl_lines="1-3"
+return nil, huma.ErrorWithHeaders(
+	huma.Error404NotFound("thing not found"),
+	http.Header{
+		"Cache-Control": {"no-store"},
+	},
+)
+```
+
+It is safe to call `huma.ErrorWithHeaders` multiple times, and all the passed headers will be appended to any existing ones.
+
+Any error which satisfies the `huma.HeadersError` interface will have the headers added to the response.
+
 ## Custom Errors
 
 It is possible to provide your own error model and have the built-in error utility functions use that model instead of the default one. This is useful if you want to provide more information in your error responses or your organization has requirements around the error response structure.
@@ -147,6 +164,7 @@ To change the default content type that is returned, you can also implement the 
     -   [`huma.ErrorModel`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ErrorModel) the default error model
     -   [`huma.ErrorDetail`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ErrorDetail) describes location & value of an error
     -   [`huma.StatusError`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#StatusError) interface for custom errors
+    -   [`huma.HeadersError`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#HeadersError) interface for errors with headers
     -   [`huma.ContentTypeFilter`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ContentTypeFilter) interface for custom content types
 -   External Links
     -   [HTTP Status Codes](https://developer.mozilla.org/en-US/docs/Web/HTTP/Status)

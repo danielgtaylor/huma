@@ -1,6 +1,7 @@
 package huma_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -108,4 +109,31 @@ func TestErrorAs(t *testing.T) {
 	var e huma.StatusError
 	require.ErrorAs(t, err, &e)
 	assert.Equal(t, 400, e.GetStatus())
+}
+
+func TestErrorWithHeaders(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Get(api, "/test", func(ctx context.Context, input *struct{}) (*struct{}, error) {
+		err := huma.ErrorWithHeaders(
+			huma.Error400BadRequest("test"),
+			http.Header{
+				"My-Header": {"bar"},
+			},
+		)
+
+		assert.Equal(t, "test", err.Error())
+
+		// Call again and have all the headers merged
+		err = huma.ErrorWithHeaders(err, http.Header{
+			"Another": {"bar"},
+		})
+
+		return nil, fmt.Errorf("wrapped: %w", err)
+	})
+
+	resp := api.Get("/test")
+	assert.Equal(t, 400, resp.Code)
+	assert.Equal(t, "bar", resp.Header().Get("My-Header"))
+	assert.Equal(t, "bar", resp.Header().Get("Another"))
+	assert.Contains(t, resp.Body.String(), "test")
 }
