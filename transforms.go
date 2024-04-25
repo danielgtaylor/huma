@@ -172,7 +172,7 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, status string, v any) (an
 
 	// Set the `$schema` field.
 	buf := bufPool.Get().(*bytes.Buffer)
-	if len(host) >= 9 && host[:9] == "localhost" {
+	if len(host) >= 9 && (host[:9] == "localhost" || host[:9] == "127.0.0.1") {
 		buf.WriteString("http://")
 	} else {
 		buf.WriteString("https://")
