@@ -632,6 +632,9 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 		switch contentType {
 		case "multipart/form-data":
+			if op.RequestBody.Content["multipart/form-data"] != nil {
+				break
+			}
 			op.RequestBody.Content["multipart/form-data"] = &MediaType{
 				Schema: &Schema{
 					Type: "object",
