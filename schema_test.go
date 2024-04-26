@@ -480,6 +480,23 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-example-custom-pointer",
+			input: struct {
+				Value *CustomSchema `json:"value" example:"foo"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "string",
+						"examples": ["foo"]
+					}
+				},
+				"additionalProperties": false,
+				"required": ["value"]
+			}`,
+		},
+		{
 			name: "field-enum-custom",
 			input: struct {
 				Value OmittableNullable[string] `json:"value,omitempty" enum:"foo,bar"`
