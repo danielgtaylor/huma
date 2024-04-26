@@ -1169,7 +1169,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						r := f.Addr().
 							MethodByName("Decode").
 							Call([]reflect.Value{
-								reflect.ValueOf(op.RequestBody.Content["multipart/form-data"].Schema),
+								reflect.ValueOf(op.RequestBody.Content["multipart/form-data"]),
 							})
 						errs := r[0].Interface().([]error)
 						if errs != nil {

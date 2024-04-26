@@ -2,9 +2,13 @@ package huma
 
 import (
 	"fmt"
+	"io"
 	"mime/multipart"
+	"net/http"
 	"reflect"
+	"regexp"
 	"slices"
+	"strings"
 )
 
 type MultipartFormFiles[T any] struct {
@@ -12,24 +16,75 @@ type MultipartFormFiles[T any] struct {
 	data *T
 }
 
-func (m *MultipartFormFiles[T]) readFile(fh *multipart.FileHeader, location string) (multipart.File, *ErrorDetail) {
+type MimeTypeValidator struct {
+	accept []string
+}
+
+var contentTypeSplitRe = regexp.MustCompile(`,\s*`)
+
+func NewMimeTypeValidator(encoding *Encoding) MimeTypeValidator {
+	return MimeTypeValidator{accept: contentTypeSplitRe.Split(encoding.ContentType, -1)}
+}
+
+func (v MimeTypeValidator) Validate(file multipart.File, location string) *ErrorDetail {
+	var buffer = make([]byte, 1000)
+	if _, err := file.Read(buffer); err != nil {
+		return &ErrorDetail{Message: "Failed to infer file media type", Location: location}
+	}
+	file.Seek(int64(0), io.SeekStart)
+
+	mimeType := http.DetectContentType(buffer)
+	accept := slices.ContainsFunc(v.accept, func(m string) bool {
+		if strings.HasSuffix(m, "/*") &&
+			strings.HasPrefix(mimeType, strings.TrimRight(m, "*")) {
+			return true
+		}
+		if mimeType == m {
+			return true
+		}
+		return false
+	})
+
+	if accept {
+		return nil
+	} else {
+		return &ErrorDetail{
+			Message: fmt.Sprintf(
+				"Invalid mime type, expected %v",
+				strings.Join(v.accept, ","),
+			),
+			Location: location,
+			Value:    mimeType,
+		}
+	}
+}
+
+func (m *MultipartFormFiles[T]) readFile(
+	fh *multipart.FileHeader,
+	location string,
+	validator MimeTypeValidator,
+) (multipart.File, *ErrorDetail) {
 	f, err := fh.Open()
 	if err != nil {
 		return nil, &ErrorDetail{Message: "Failed to open file", Location: location}
 	}
+	if validationErr := validator.Validate(f, location); validationErr != nil {
+		return nil, validationErr
+	}
 	return f, nil
 }
 
-func (m *MultipartFormFiles[T]) readSingleFile(key string, schemaForT *Schema) (multipart.File, *ErrorDetail) {
+func (m *MultipartFormFiles[T]) readSingleFile(key string, opMediaType *MediaType) (multipart.File, *ErrorDetail) {
 	fileHeaders := m.Form.File[key]
 	if len(fileHeaders) == 0 {
-		if schemaForT.requiredMap[key] {
+		if opMediaType.Schema.requiredMap[key] {
 			return nil, &ErrorDetail{Message: "File required", Location: key}
 		} else {
 			return nil, nil
 		}
 	} else if len(fileHeaders) == 1 {
-		return m.readFile(fileHeaders[0], key)
+		validator := NewMimeTypeValidator(opMediaType.Encoding[key])
+		return m.readFile(fileHeaders[0], key, validator)
 	}
 	return nil, &ErrorDetail{
 		Message:  "Multiple files received but only one was expected",
@@ -37,17 +92,22 @@ func (m *MultipartFormFiles[T]) readSingleFile(key string, schemaForT *Schema) (
 	}
 }
 
-func (m *MultipartFormFiles[T]) readMultipleFiles(key string, schemaForT *Schema) ([]multipart.File, []error) {
+func (m *MultipartFormFiles[T]) readMultipleFiles(key string, opMediaType *MediaType) ([]multipart.File, []error) {
 	fileHeaders := m.Form.File[key]
 	var (
 		files  = make([]multipart.File, len(fileHeaders))
 		errors []error
 	)
-	if schemaForT.requiredMap[key] && len(fileHeaders) == 0 {
+	if opMediaType.Schema.requiredMap[key] && len(fileHeaders) == 0 {
 		return nil, []error{&ErrorDetail{Message: "At least one file is required", Location: key}}
 	}
+	validator := NewMimeTypeValidator(opMediaType.Encoding[key])
 	for i, fh := range fileHeaders {
-		file, err := m.readFile(fh, fmt.Sprintf("%s[%d]", key, i))
+		file, err := m.readFile(
+			fh,
+			fmt.Sprintf("%s[%d]", key, i),
+			validator,
+		)
 		if err != nil {
 			errors = append(errors, err)
 			continue
@@ -63,7 +123,7 @@ func (m *MultipartFormFiles[T]) Data() *T {
 
 // Decodes multipart.Form data into *T, returning []*ErrorDetail if any
 // Schema is used to check for validation constraints
-func (m *MultipartFormFiles[T]) Decode(schemaForT *Schema) []error {
+func (m *MultipartFormFiles[T]) Decode(opMediaType *MediaType) []error {
 	var (
 		dataType = reflect.TypeOf(m.data).Elem()
 		value    = reflect.New(dataType)
@@ -77,14 +137,14 @@ func (m *MultipartFormFiles[T]) Decode(schemaForT *Schema) []error {
 		}
 		switch {
 		case field.Type().String() == "multipart.File":
-			file, err := m.readSingleFile(key, schemaForT)
+			file, err := m.readSingleFile(key, opMediaType)
 			if err != nil {
 				errors = append(errors, err)
 				continue
 			}
 			field.Set(reflect.ValueOf(file))
 		case field.Type().String() == "[]multipart.File":
-			files, errs := m.readMultipleFiles(key, schemaForT)
+			files, errs := m.readMultipleFiles(key, opMediaType)
 			if errs != nil {
 				errors = slices.Concat(errors, errs)
 				continue
