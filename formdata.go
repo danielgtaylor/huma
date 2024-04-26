@@ -193,7 +193,7 @@ func multiPartFormFileSchema(t reflect.Type) *Schema {
 		}
 
 		if _, ok := f.Tag.Lookup("required"); ok && boolTag(f, "required") {
-			requiredFields = append(requiredFields, name)
+			requiredFields[i] = name
 			schema.requiredMap[name] = true
 		}
 	}
