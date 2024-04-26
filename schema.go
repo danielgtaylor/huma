@@ -601,16 +601,16 @@ type SchemaProvider interface {
 //	registry := huma.NewMapRegistry("#/prefix", huma.DefaultSchemaNamer)
 //	schema := huma.SchemaFromType(registry, reflect.TypeOf(MyType{}))
 func SchemaFromType(r Registry, t reflect.Type) *Schema {
+	isPointer := t.Kind() == reflect.Pointer
+
+	s := Schema{}
+	t = deref(t)
+
 	v := reflect.New(t).Interface()
 	if sp, ok := v.(SchemaProvider); ok {
 		// Special case: type provides its own schema. Do not try to generate.
 		return sp.Schema(r)
 	}
-
-	isPointer := t.Kind() == reflect.Pointer
-
-	s := Schema{}
-	t = deref(t)
 
 	// Handle special cases.
 	switch t {
