@@ -165,7 +165,7 @@ func (m *Mux) Group(fn func(*Mux)) {
 
 // ServeHTTP makes the router implement the http.Handler interface.
 func (m *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	urlSegments := strings.Split(r.URL.Path, "/")
+	urlSegments := strings.Split(r.URL.EscapedPath(), "/")
 	allowedMethods := []string{}
 
 	for _, route := range *m.routes {
