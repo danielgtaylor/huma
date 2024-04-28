@@ -81,7 +81,7 @@ func (p *Params) PreconditionFailed(etag string, modified time.Time) huma.Status
 			if p.isWrite {
 				errors = append(errors, &huma.ErrorDetail{
 					Message:  "If-None-Match: " + match + " precondition failed, " + foundMsg,
-					Location: "request.headers.If-None-Match",
+					Location: "headers.If-None-Match",
 					Value:    match,
 				})
 			}
@@ -104,7 +104,7 @@ func (p *Params) PreconditionFailed(etag string, modified time.Time) huma.Status
 			if p.isWrite {
 				errors = append(errors, &huma.ErrorDetail{
 					Message:  "If-Match precondition failed, " + foundMsg,
-					Location: "request.headers.If-Match",
+					Location: "headers.If-Match",
 					Value:    p.IfMatch,
 				})
 			}
@@ -117,7 +117,7 @@ func (p *Params) PreconditionFailed(etag string, modified time.Time) huma.Status
 		if p.isWrite {
 			errors = append(errors, &huma.ErrorDetail{
 				Message:  "If-Modified-Since: " + p.IfModifiedSince.Format(http.TimeFormat) + " precondition failed, resource was modified at " + modified.Format(http.TimeFormat),
-				Location: "request.headers.If-Modified-Since",
+				Location: "headers.If-Modified-Since",
 				Value:    p.IfModifiedSince.Format(http.TimeFormat),
 			})
 		}
@@ -129,7 +129,7 @@ func (p *Params) PreconditionFailed(etag string, modified time.Time) huma.Status
 		if p.isWrite {
 			errors = append(errors, &huma.ErrorDetail{
 				Message:  "If-Unmodified-Since: " + p.IfUnmodifiedSince.Format(http.TimeFormat) + " precondition failed, resource was modified at " + modified.Format(http.TimeFormat),
-				Location: "request.headers.If-Unmodified-Since",
+				Location: "headers.If-Unmodified-Since",
 				Value:    p.IfUnmodifiedSince.Format(http.TimeFormat),
 			})
 		}
