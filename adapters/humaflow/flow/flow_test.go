@@ -95,6 +95,11 @@ func TestMatching(t *testing.T) {
 			"GET", "/path-params/60/beatles/lennon/bar",
 			http.StatusNotFound, map[string]string{"era": "60", "group": "beatles", "member": "lennon"}, "",
 		},
+		{
+			[]string{"GET"}, "/path-params/:era",
+			"GET", "/path-params/a%3A%2F%2Fb%2Fc",
+			http.StatusOK, map[string]string{"era": "a://b/c"}, "",
+		},
 		// regexp
 		{
 			[]string{"GET"}, "/path-params/:era|^[0-9]{2}$/:group|^[a-z].+$",

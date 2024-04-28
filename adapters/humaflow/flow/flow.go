@@ -62,6 +62,7 @@ package flow
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"regexp"
 	"slices"
 	"strings"
@@ -165,7 +166,7 @@ func (m *Mux) Group(fn func(*Mux)) {
 
 // ServeHTTP makes the router implement the http.Handler interface.
 func (m *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	urlSegments := strings.Split(r.URL.Path, "/")
+	urlSegments := strings.Split(r.URL.EscapedPath(), "/")
 	allowedMethods := []string{}
 
 	for _, route := range *m.routes {
@@ -227,15 +228,20 @@ func (r *route) match(ctx context.Context, urlSegments []string) (context.Contex
 		if strings.HasPrefix(routeSegment, ":") {
 			key, rxPattern, containsRx := strings.Cut(strings.TrimPrefix(routeSegment, ":"), "|")
 
+			value, err := url.QueryUnescape(urlSegments[i])
+			if err != nil {
+				return ctx, false
+			}
+
 			if containsRx {
-				if compiledRXPatterns[rxPattern].MatchString(urlSegments[i]) {
-					ctx = context.WithValue(ctx, contextKey(key), urlSegments[i])
+				if compiledRXPatterns[rxPattern].MatchString(value) {
+					ctx = context.WithValue(ctx, contextKey(key), value)
 					continue
 				}
 			}
 
-			if !containsRx && urlSegments[i] != "" {
-				ctx = context.WithValue(ctx, contextKey(key), urlSegments[i])
+			if !containsRx && value != "" {
+				ctx = context.WithValue(ctx, contextKey(key), value)
 				continue
 			}
 
