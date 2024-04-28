@@ -168,7 +168,7 @@ cmd := cli.Root()
 cmd.Use = "appname"
 cmd.Version = "1.0.1"
 
-cmd.Run()
+cli.Run()
 ```
 
 Then you will see something like this:
