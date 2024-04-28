@@ -582,8 +582,11 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			if c := f.Tag.Get("contentType"); c != "" {
 				contentType = c
 			}
-
-			s := SchemaFromField(registry, f, getHint(inputType, f.Name, op.OperationID+"Request"))
+			hint := getHint(inputType, f.Name, op.OperationID+"Request")
+			if nameHint := f.Tag.Get("nameHint"); nameHint != "" {
+				hint = nameHint
+			}
+			s := SchemaFromField(registry, f, hint)
 
 			op.RequestBody = &RequestBody{
 				Required: required,
@@ -708,7 +711,11 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			op.Responses[statusStr].Headers = map[string]*Param{}
 		}
 		if !outBodyFunc {
-			outSchema := SchemaFromField(registry, f, getHint(outputType, f.Name, op.OperationID+"Response"))
+			hint := getHint(outputType, f.Name, op.OperationID+"Response")
+			if nameHint := f.Tag.Get("nameHint"); nameHint != "" {
+				hint = nameHint
+			}
+			outSchema := SchemaFromField(registry, f, hint)
 			if op.Responses[statusStr].Content == nil {
 				op.Responses[statusStr].Content = map[string]*MediaType{}
 			}

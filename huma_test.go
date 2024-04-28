@@ -606,6 +606,32 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
+			Name: "request-body-nameHint",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name string `json:"name"`
+					} `nameHint:"ANameHint"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+
+				registry := api.OpenAPI().Components.Schemas
+				origType := registry.TypeFromRef(
+					api.OpenAPI().Paths["/body"].Put.RequestBody.Content["application/json"].Schema.Ref,
+				)
+				assert.Equal(t, "ANameHint",
+					huma.DefaultSchemaNamer(origType, "ANameHint"),
+				)
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   `{"name": "Name"}`,
+		},
+		{
 			Name: "request-ptr-body-required",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
@@ -1008,6 +1034,34 @@ Content of example2.txt.
 				assert.Equal(t, http.StatusNoContent, resp.Code)
 				assert.Equal(t, "application/custom-type", resp.Header().Get("Content-Type"))
 			},
+		},
+		{
+			Name: "response-body-nameHint",
+			Register: func(t *testing.T, api huma.API) {
+				type Resp struct {
+					Body struct {
+						Greeting string `json:"greeting" `
+					} `nameHint:"GreetingResp"`
+				}
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/response",
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					resp := &Resp{}
+					resp.Body.Greeting = "Hello, world!"
+					return resp, nil
+				})
+
+				registry := api.OpenAPI().Components.Schemas
+				origType := registry.TypeFromRef(
+					api.OpenAPI().Paths["/response"].Get.Responses["200"].Content["application/json"].Schema.Ref,
+				)
+				assert.Equal(t, "GreetingResp",
+					huma.DefaultSchemaNamer(origType, "GreetingResp"),
+				)
+			},
+			Method: http.MethodGet,
+			URL:    "/response",
 		},
 		{
 			Name: "response",
