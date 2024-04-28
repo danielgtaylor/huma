@@ -618,14 +618,7 @@ func TestFeatures(t *testing.T) {
 				}) (*struct{}, error) {
 					return nil, nil
 				})
-
-				registry := api.OpenAPI().Components.Schemas
-				origType := registry.TypeFromRef(
-					api.OpenAPI().Paths["/body"].Put.RequestBody.Content["application/json"].Schema.Ref,
-				)
-				assert.Equal(t, "ANameHint",
-					huma.DefaultSchemaNamer(origType, "ANameHint"),
-				)
+				assert.Equal(t, "#/components/schemas/ANameHint", api.OpenAPI().Paths["/body"].Put.RequestBody.Content["application/json"].Schema.Ref)
 			},
 			Method: http.MethodPut,
 			URL:    "/body",
@@ -1051,14 +1044,7 @@ Content of example2.txt.
 					resp.Body.Greeting = "Hello, world!"
 					return resp, nil
 				})
-
-				registry := api.OpenAPI().Components.Schemas
-				origType := registry.TypeFromRef(
-					api.OpenAPI().Paths["/response"].Get.Responses["200"].Content["application/json"].Schema.Ref,
-				)
-				assert.Equal(t, "GreetingResp",
-					huma.DefaultSchemaNamer(origType, "GreetingResp"),
-				)
+				assert.Equal(t, "#/components/schemas/GreetingResp", api.OpenAPI().Paths["/response"].Get.Responses["200"].Content["application/json"].Schema.Ref)
 			},
 			Method: http.MethodGet,
 			URL:    "/response",
