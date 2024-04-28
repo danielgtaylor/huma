@@ -45,6 +45,28 @@ func deref(t reflect.Type) reflect.Type {
 	return t
 }
 
+// Discriminator object when request bodies or response payloads may be one of a
+// number of different schemas, can be used to aid in serialization,
+// deserialization, and validation. The discriminator is a specific object in a
+// schema which is used to inform the consumer of the document of an alternative
+// schema based on the value associated with it.
+type Discriminator struct {
+	// PropertyName in the payload that will hold the discriminator value.
+	// REQUIRED.
+	PropertyName string `yaml:"propertyName"`
+
+	// Mapping object to hold mappings between payload values and schema names or
+	// references.
+	Mapping map[string]string `yaml:"mapping,omitempty"`
+}
+
+func (d *Discriminator) MarshalJSON() ([]byte, error) {
+	return marshalJSON([]jsonFieldInfo{
+		{"propertyName", d.PropertyName, omitNever},
+		{"mapping", d.Mapping, omitEmpty},
+	}, nil)
+}
+
 // Schema represents a JSON Schema compatible with OpenAPI 3.1. It is extensible
 // with your own custom properties. It supports a subset of the full JSON Schema
 // spec, designed specifically for use with Go structs and to enable fast zero
@@ -98,6 +120,9 @@ type Schema struct {
 	AnyOf []*Schema `yaml:"anyOf,omitempty"`
 	AllOf []*Schema `yaml:"allOf,omitempty"`
 	Not   *Schema   `yaml:"not,omitempty"`
+
+	// OpenAPI specific fields
+	Discriminator *Discriminator `yaml:"discriminator,omitempty"`
 
 	patternRe     *regexp.Regexp  `yaml:"-"`
 	requiredMap   map[string]bool `yaml:"-"`
@@ -165,6 +190,7 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 		{"anyOf", s.AnyOf, omitEmpty},
 		{"allOf", s.AllOf, omitEmpty},
 		{"not", s.Not, omitEmpty},
+		{"discriminator", s.Discriminator, omitEmpty},
 	}, s.Extensions)
 }
 
