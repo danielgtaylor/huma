@@ -1115,6 +1115,30 @@ Content of example2.txt.
 			},
 		},
 		{
+			Name: "response-transform-nil-body",
+			Transformers: []huma.Transformer{
+				huma.NewSchemaLinkTransformer("/", "/").Transform,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				huma.Get(api, "/transform", func(ctx context.Context, i *struct{}) (*struct {
+					Body *struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body *struct {
+							Field string `json:"field"`
+						}
+					}{}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/transform",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+			},
+		},
+		{
 			Name: "response-transform-error",
 			Transformers: []huma.Transformer{
 				func(ctx huma.Context, status string, v any) (any, error) {
