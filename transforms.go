@@ -150,7 +150,8 @@ func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
 // Transform is called for every response to add the `$schema` field and/or
 // the Link header pointing to the JSON Schema.
 func (t *SchemaLinkTransformer) Transform(ctx Context, status string, v any) (any, error) {
-	if v == nil {
+	vv := reflect.ValueOf(v)
+	if vv.Kind() == reflect.Pointer && vv.IsNil() {
 		return v, nil
 	}
 
@@ -184,7 +185,7 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, status string, v any) (an
 	bufPool.Put(buf)
 
 	// Copy over all the exported fields.
-	vv := reflect.Indirect(reflect.ValueOf(v))
+	vv = reflect.Indirect(vv)
 	for i, j := range info.fields {
 		// Field 0 is the $schema field, so we need to offset the index by one.
 		// There might have been unexported fields in the struct declared in the schema,
