@@ -985,6 +985,55 @@ func TestCustomUnmarshalType(t *testing.T) {
 	assert.Equal(t, 0, o.Field.Value)
 }
 
+func TestMarshalDiscriminator(t *testing.T) {
+	s := &huma.Schema{
+		OneOf: []*huma.Schema{
+			{Type: "object", Properties: map[string]*huma.Schema{
+				"type": {Type: "string", Enum: []any{"foo"}},
+				"foo":  {Type: "string"},
+			}},
+			{Type: "object", Properties: map[string]*huma.Schema{
+				"type": {Type: "string", Enum: []any{"bar"}},
+				"bar":  {Type: "string"},
+			}},
+		},
+		Discriminator: &huma.Discriminator{
+			PropertyName: "type",
+			Mapping: map[string]string{
+				"foo": "#/components/schemas/Foo",
+				"bar": "#/components/schemas/Bar",
+			},
+		},
+	}
+
+	b, _ := json.Marshal(s)
+	assert.JSONEq(t, `{
+		"oneOf": [
+			{
+				"type": "object",
+				"properties": {
+					"type": {"type": "string", "enum": ["foo"]},
+					"foo": {"type": "string"}
+				}
+			},
+			{
+				"type": "object",
+				"properties": {
+					"type": {"type": "string", "enum": ["bar"]},
+					"bar": {"type": "string"}
+				}
+			}
+		],
+		"discriminator": {
+			"propertyName": "type",
+			"mapping": {
+				"foo": "#/components/schemas/Foo",
+				"bar": "#/components/schemas/Bar"
+			}
+		}
+	}`, string(b))
+}
+
 type BenchSub struct {
 	Visible bool      `json:"visible" default:"true"`
 	Metrics []float64 `json:"metrics" maxItems:"31"`
