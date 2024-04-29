@@ -6,7 +6,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"reflect"
-	"regexp"
 	"slices"
 	"strings"
 )
@@ -20,10 +19,12 @@ type MimeTypeValidator struct {
 	accept []string
 }
 
-var contentTypeSplitRe = regexp.MustCompile(`,\s*`)
-
 func NewMimeTypeValidator(encoding *Encoding) MimeTypeValidator {
-	return MimeTypeValidator{accept: contentTypeSplitRe.Split(encoding.ContentType, -1)}
+	var mimeTypes = strings.Split(encoding.ContentType, ",")
+	for i := range mimeTypes {
+		mimeTypes[i] = strings.Trim(mimeTypes[i], " ")
+	}
+	return MimeTypeValidator{accept: mimeTypes}
 }
 
 func (v MimeTypeValidator) Validate(file multipart.File, location string) *ErrorDetail {
