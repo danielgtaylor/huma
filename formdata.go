@@ -132,7 +132,7 @@ func (m *MultipartFormFiles[T]) Decode(opMediaType *MediaType) []error {
 	)
 	for i := 0; i < dataType.NumField(); i++ {
 		field := value.Elem().Field(i)
-		key := dataType.Field(i).Tag.Get("form-data")
+		key := dataType.Field(i).Tag.Get("form")
 		if key == "" {
 			continue
 		}
@@ -162,7 +162,7 @@ func (m *MultipartFormFiles[T]) Decode(opMediaType *MediaType) []error {
 
 func formDataFieldName(f reflect.StructField) string {
 	name := f.Name
-	if formDataKey := f.Tag.Get("form-data"); formDataKey != "" {
+	if formDataKey := f.Tag.Get("form"); formDataKey != "" {
 		name = formDataKey
 	}
 	return name
@@ -218,7 +218,7 @@ func multiPartContentEncoding(t reflect.Type) map[string]*Encoding {
 		f := t.Field(i)
 		name := formDataFieldName(f)
 		encoding[name] = &Encoding{
-			ContentType: f.Tag.Get("content-type"),
+			ContentType: f.Tag.Get("contentType"),
 		}
 	}
 	return encoding
