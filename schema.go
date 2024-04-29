@@ -154,12 +154,17 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 	if s.Nullable {
 		typ = []string{s.Type, "null"}
 	}
+	var contentMediaType string
+	if s.Format == "binary" {
+		contentMediaType = "application/octet-stream"
+	}
 	return marshalJSON([]jsonFieldInfo{
 		{"type", typ, omitEmpty},
 		{"title", s.Title, omitEmpty},
 		{"description", s.Description, omitEmpty},
 		{"$ref", s.Ref, omitEmpty},
 		{"format", s.Format, omitEmpty},
+		{"contentMediaType", contentMediaType, omitEmpty},
 		{"contentEncoding", s.ContentEncoding, omitEmpty},
 		{"default", s.Default, omitNil},
 		{"examples", s.Examples, omitEmpty},
