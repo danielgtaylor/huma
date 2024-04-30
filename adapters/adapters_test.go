@@ -18,7 +18,6 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humamux"
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/gin-gonic/gin"
-	chi4 "github.com/go-chi/chi"
 	"github.com/go-chi/chi/v5"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gorilla/mux"
@@ -96,7 +95,6 @@ func TestAdapters(t *testing.T) {
 		new  func() huma.API
 	}{
 		{"chi", func() huma.API { return humachi.New(chi.NewMux(), config()) }},
-		{"chi4", func() huma.API { return humachi.NewV4(chi4.NewMux(), config()) }},
 		{"echo", func() huma.API { return humaecho.New(echo.New(), config()) }},
 		{"fiber", func() huma.API { return humafiber.New(fiber.New(), config()) }},
 		{"gin", func() huma.API { return humagin.New(gin.New(), config()) }},
