@@ -1421,7 +1421,11 @@ var reRemoveIDs = regexp.MustCompile(`\{([^}]+)\}`)
 // This function can be overridden to provide custom operation IDs.
 var GenerateOperationID = func(method, path string, response any) string {
 	action := method
-	body, hasBody := deref(reflect.TypeOf(response)).FieldByName("Body")
+	t := deref(reflect.TypeOf(response))
+	if t.Kind() != reflect.Struct {
+		panic("Response type must be a struct")
+	}
+	body, hasBody := t.FieldByName("Body")
 	if hasBody && method == http.MethodGet && deref(body.Type).Kind() == reflect.Slice {
 		// Special case: GET with a slice response body is a list operation.
 		action = "list"
@@ -1443,7 +1447,11 @@ var GenerateOperationID = func(method, path string, response any) string {
 // This function can be overridden to provide custom operation summaries.
 var GenerateSummary = func(method, path string, response any) string {
 	action := method
-	body, hasBody := deref(reflect.TypeOf(response)).FieldByName("Body")
+	t := deref(reflect.TypeOf(response))
+	if t.Kind() != reflect.Struct {
+		panic("Response type must be a struct")
+	}
+	body, hasBody := t.FieldByName("Body")
 	if hasBody && method == http.MethodGet && deref(body.Type).Kind() == reflect.Slice {
 		// Special case: GET with a slice response body is a list operation.
 		action = "list"
