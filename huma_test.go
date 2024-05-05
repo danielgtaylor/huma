@@ -1904,3 +1904,15 @@ func BenchmarkHandlerFunc(b *testing.B) {
 		}
 	})
 }
+
+func TestGenerateFuncsPanicWithDescriptiveMessage(t *testing.T) {
+	var resp *int
+	assert.PanicsWithValue(t, "Response type must be a struct", func() {
+		huma.GenerateOperationID("GET", "/foo", resp)
+	})
+
+	assert.PanicsWithValue(t, "Response type must be a struct", func() {
+		huma.GenerateSummary("GET", "/foo", resp)
+	})
+
+}
