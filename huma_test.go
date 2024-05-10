@@ -1729,29 +1729,34 @@ func TestConvenienceMethods(t *testing.T) {
 		Body []struct{}
 	}, error) {
 		return nil, nil
-	})
+	}, huma.OperationTags("Things"))
 	assert.Equal(t, "list-things", api.OpenAPI().Paths[path].Get.OperationID)
+	assert.Equal(t, []string{"Things"}, api.OpenAPI().Paths[path].Get.Tags)
 
 	huma.Post(api, path, func(ctx context.Context, input *Input) (*struct{}, error) {
 		return nil, nil
-	})
+	}, huma.OperationTags("Things"))
 	assert.Equal(t, "post-things", api.OpenAPI().Paths[path].Post.OperationID)
+	assert.Equal(t, []string{"Things"}, api.OpenAPI().Paths[path].Post.Tags)
 
 	path = path + "/{thing-id}"
 	huma.Put(api, path, func(ctx context.Context, input *Input) (*struct{}, error) {
 		return nil, nil
-	})
+	}, huma.OperationTags("Things"))
 	assert.Equal(t, "put-things-by-thing-id", api.OpenAPI().Paths[path].Put.OperationID)
+	assert.Equal(t, []string{"Things"}, api.OpenAPI().Paths[path].Put.Tags)
 
 	huma.Patch(api, path, func(ctx context.Context, input *Input) (*struct{}, error) {
 		return nil, nil
-	})
+	}, huma.OperationTags("Things"))
 	assert.Equal(t, "patch-things-by-thing-id", api.OpenAPI().Paths[path].Patch.OperationID)
+	assert.Equal(t, []string{"Things"}, api.OpenAPI().Paths[path].Patch.Tags)
 
 	huma.Delete(api, path, func(ctx context.Context, input *Input) (*struct{}, error) {
 		return nil, nil
-	})
+	}, huma.OperationTags("Things"))
 	assert.Equal(t, "delete-things-by-thing-id", api.OpenAPI().Paths[path].Delete.OperationID)
+	assert.Equal(t, []string{"Things"}, api.OpenAPI().Paths[path].Delete.Tags)
 }
 
 type EmbeddedWithMethod struct{}
