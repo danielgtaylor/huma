@@ -231,6 +231,10 @@ type API interface {
 	Middlewares() Middlewares
 }
 
+type InputParamConverter interface {
+	HumaInputParamConvert([]byte) (any, error)
+}
+
 // Format represents a request / response format. It is used to marshal and
 // unmarshal data.
 type Format struct {
