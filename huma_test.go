@@ -1977,3 +1977,29 @@ func TestCustomInputParam(t *testing.T) {
 	resp, _ := io.ReadAll(w.Body)
 	assert.Equal(t, 204, w.Code, string(resp))
 }
+
+func TestCustomArrayInputParam(t *testing.T) {
+	type input struct {
+		Query    []Nullable[int]  `query:"query"`
+		QueryPtr []*Nullable[int] `query:"query_ptr"`
+	}
+
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodGet,
+		Path:        "/test_array",
+	}, func(ctx context.Context, i *input) (*struct{}, error) {
+		assert.Equal(t, 2, i.Query[0].Value)
+		assert.Equal(t, 4, i.Query[1].Value)
+		assert.Equal(t, 3, i.QueryPtr[0].Value)
+		assert.Equal(t, 5, i.QueryPtr[1].Value)
+		return nil, nil
+	})
+
+	req, _ := http.NewRequest(http.MethodGet, "/test_array?query=2,4&query_ptr=3,5", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	resp, _ := io.ReadAll(w.Body)
+	assert.Equal(t, 204, w.Code, string(resp))
+}

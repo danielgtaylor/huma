@@ -1388,6 +1388,37 @@ func getValue(f reflect.Value, p *paramFieldInfo, value string, res *ValidateRes
 		return v, true
 	default:
 		if f.Type().Kind() == reflect.Slice {
+			typ := f.Type().Elem()
+			interfaceType := reflect.TypeFor[InputParamConverter]()
+			if typ.Implements(interfaceType) || reflect.PointerTo(typ).Implements(interfaceType) {
+				values := strings.Split(value, ",")
+				slice := reflect.MakeSlice(f.Type(), 0, len(values))
+				vs, err := parseArrElement(values, func(s string) (any, error) {
+					indirectType := typ
+					if typ.Kind() == reflect.Pointer {
+						indirectType = typ.Elem()
+					}
+					val := reflect.New(indirectType)
+					valAddr := val
+					params := []reflect.Value{reflect.ValueOf([]byte(s))}
+					resp := valAddr.MethodByName("HumaInputParamConvert").Call(params)
+
+					if typ.Kind() != reflect.Pointer {
+						val = val.Elem()
+					}
+					slice = reflect.Append(slice, val)
+
+					err, _ := resp[1].Interface().(error)
+					return resp[0].Interface(), err
+				})
+				if err != nil {
+					res.Add(pb, value, "invalid "+f.Type().Elem().Name())
+					return nil, false
+				}
+				f.Set(slice)
+				return vs, true
+			}
+
 			switch f.Type().Elem().Kind() {
 
 			case reflect.String:
