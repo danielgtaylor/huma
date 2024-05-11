@@ -202,11 +202,11 @@ func TestCLICommandWithOptions(t *testing.T) {
 func TestCLIShutdown(t *testing.T) {
 	type Options struct{}
 
-	started := false
+	started := make(chan bool, 1)
 	stopping := make(chan bool, 1)
 	cli := humacli.New(func(hooks humacli.Hooks, options *Options) {
 		hooks.OnStart(func() {
-			started = true
+			started <- true
 			<-stopping
 		})
 		hooks.OnStop(func() {
@@ -221,7 +221,7 @@ func TestCLIShutdown(t *testing.T) {
 
 	cli.Root().SetArgs([]string{})
 	cli.Run()
-	assert.True(t, started)
+	assert.True(t, <-started)
 }
 
 func TestCLIBadType(t *testing.T) {
