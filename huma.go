@@ -1461,14 +1461,24 @@ var GenerateSummary = func(method, path string, response any) string {
 	return strings.ToUpper(phrase[:1]) + phrase[1:]
 }
 
-func convenience[I, O any](api API, method, path string, handler func(context.Context, *I) (*O, error)) {
+func OperationTags(tags ...string) func(o *Operation) {
+	return func(o *Operation) {
+		o.Tags = tags
+	}
+}
+
+func convenience[I, O any](api API, method, path string, handler func(context.Context, *I) (*O, error), operationHandlers ...func(o *Operation)) {
 	var o *O
-	Register(api, Operation{
+	operation := Operation{
 		OperationID: GenerateOperationID(method, path, o),
 		Summary:     GenerateSummary(method, path, o),
 		Method:      method,
 		Path:        path,
-	}, handler)
+	}
+	for _, oh := range operationHandlers {
+		oh(&operation)
+	}
+	Register(api, operation, handler)
 }
 
 // Get HTTP operation handler for an API. The handler must be a function that
@@ -1488,8 +1498,8 @@ func convenience[I, O any](api API, method, path string, handler func(context.Co
 //	})
 //
 // This is a convenience wrapper around `huma.Register`.
-func Get[I, O any](api API, path string, handler func(context.Context, *I) (*O, error)) {
-	convenience(api, http.MethodGet, path, handler)
+func Get[I, O any](api API, path string, handler func(context.Context, *I) (*O, error), operationHandlers ...func(o *Operation)) {
+	convenience(api, http.MethodGet, path, handler, operationHandlers...)
 }
 
 // Post HTTP operation handler for an API. The handler must be a function that
@@ -1509,8 +1519,8 @@ func Get[I, O any](api API, path string, handler func(context.Context, *I) (*O, 
 //	})
 //
 // This is a convenience wrapper around `huma.Register`.
-func Post[I, O any](api API, path string, handler func(context.Context, *I) (*O, error)) {
-	convenience(api, http.MethodPost, path, handler)
+func Post[I, O any](api API, path string, handler func(context.Context, *I) (*O, error), operationHandlers ...func(o *Operation)) {
+	convenience(api, http.MethodPost, path, handler, operationHandlers...)
 }
 
 // Put HTTP operation handler for an API. The handler must be a function that
@@ -1530,8 +1540,8 @@ func Post[I, O any](api API, path string, handler func(context.Context, *I) (*O,
 //	})
 //
 // This is a convenience wrapper around `huma.Register`.
-func Put[I, O any](api API, path string, handler func(context.Context, *I) (*O, error)) {
-	convenience(api, http.MethodPut, path, handler)
+func Put[I, O any](api API, path string, handler func(context.Context, *I) (*O, error), operationHandlers ...func(o *Operation)) {
+	convenience(api, http.MethodPut, path, handler, operationHandlers...)
 }
 
 // Patch HTTP operation handler for an API. The handler must be a function that
@@ -1551,8 +1561,8 @@ func Put[I, O any](api API, path string, handler func(context.Context, *I) (*O, 
 //	})
 //
 // This is a convenience wrapper around `huma.Register`.
-func Patch[I, O any](api API, path string, handler func(context.Context, *I) (*O, error)) {
-	convenience(api, http.MethodPatch, path, handler)
+func Patch[I, O any](api API, path string, handler func(context.Context, *I) (*O, error), operationHandlers ...func(o *Operation)) {
+	convenience(api, http.MethodPatch, path, handler, operationHandlers...)
 }
 
 // Delete HTTP operation handler for an API. The handler must be a function that
@@ -1570,6 +1580,6 @@ func Patch[I, O any](api API, path string, handler func(context.Context, *I) (*O
 //	})
 //
 // This is a convenience wrapper around `huma.Register`.
-func Delete[I, O any](api API, path string, handler func(context.Context, *I) (*O, error)) {
-	convenience(api, http.MethodDelete, path, handler)
+func Delete[I, O any](api API, path string, handler func(context.Context, *I) (*O, error), operationHandlers ...func(o *Operation)) {
+	convenience(api, http.MethodDelete, path, handler, operationHandlers...)
 }
