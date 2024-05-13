@@ -68,6 +68,7 @@ A big thank you to our current & former sponsors:
 - [@bclements](https://github.com/bclements)
 - [@bekabaz](https://github.com/bekabaz)
 - [@victoraugustolls](https://github.com/victoraugustolls)
+- [@phoenixtechnologies-io](https://github.com/phoenixtechnologies-io)
 
 ## Testimonials
 
@@ -80,6 +81,8 @@ A big thank you to our current & former sponsors:
 > Thank you Daniel for Huma. Superbly useful project and saves us a lot of time and hassle thanks to the OpenAPI gen — similar to FastAPI in Python. - [WolvesOfAllStreets](https://www.reddit.com/r/golang/comments/1aqj99d/comment/kqfqcml/?utm_source=reddit&utm_medium=web2x&context=3)
 
 > Huma is wonderful, I've started working with it recently, and it's a pleasure, so thank you very much for your efforts 🙏 - [callmemicah](https://www.reddit.com/r/golang/comments/1b32ts4/comment/ksvr9h7/?utm_source=reddit&utm_medium=web2x&context=3)
+
+> It took us 3 months to build our platform in Python with FastAPI, SQL Alchemy and only 3 weeks to rewrite it in Go with Huma and SQL C. Things just work and I seldomly have to debug where in Python I spent a majority of my time debugging. - [Bitclick\_](https://www.reddit.com/r/golang/comments/1cj2znb/comment/l2e4u6y/)
 
 # Install
 
