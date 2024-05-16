@@ -625,6 +625,27 @@ func TestFeatures(t *testing.T) {
 			Body:   `{"name": "Name"}`,
 		},
 		{
+			Name: "request-body-additionalProperties",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name string `json:"name"`
+					} `additionalProperties:"true"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodPost,
+			URL:    "/body",
+			Body:   `{"name": "Name", "someAdditionalProp": 3.1415}`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNoContent, resp.Code)
+			},
+		},
+		{
 			Name: "request-ptr-body-required",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{

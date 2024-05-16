@@ -587,6 +587,12 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				hint = nameHint
 			}
 			s := SchemaFromField(registry, f, hint)
+			if _, ok = f.Tag.Lookup("additionalProperties"); ok {
+				if s.Ref != "" {
+					s = registry.SchemaFromRef(s.Ref)
+				}
+				s.AdditionalProperties = boolTag(f, "additionalProperties")
+			}
 
 			op.RequestBody = &RequestBody{
 				Required: required,
