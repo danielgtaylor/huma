@@ -135,7 +135,7 @@ func (m *MultipartFormFiles[T]) readMultipleFiles(key string, opMediaType *Media
 			errors = append(errors, err)
 			continue
 		}
-		files = append(files, file)
+		files[i] = file
 	}
 	return files, errors
 }
