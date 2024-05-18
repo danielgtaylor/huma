@@ -742,17 +742,24 @@ func TestFeatures(t *testing.T) {
 					Path:   "/upload",
 				}, func(ctx context.Context, input *struct {
 					RawBody huma.MultipartFormFiles[struct {
-						HelloWorld multipart.File   `form:"file" contentType:"text/plain"`
-						Greetings  []multipart.File `form:"greetings" contentType:"text/plain"`
+						HelloWorld huma.FormFile   `form:"file" contentType:"text/plain"`
+						Greetings  []huma.FormFile `form:"greetings" contentType:"text/plain"`
 					}]
 				}) (*struct{}, error) {
 					fileData := input.RawBody.Data()
+
+					assert.Equal(t, "text/plain", fileData.HelloWorld.ContentType)
+					assert.True(t, fileData.HelloWorld.IsSet)
+
 					b, err := io.ReadAll(fileData.HelloWorld)
 					require.NoError(t, err)
 					assert.Equal(t, "Hello, World!", string(b))
 
 					expected := []string{"Hello", "World"}
 					for i, f := range fileData.Greetings {
+						assert.Equal(t, "text/plain", f.ContentType)
+						assert.True(t, f.IsSet)
+
 						b, err := io.ReadAll(f)
 						require.NoError(t, err)
 						assert.Equal(t, expected[i], string(b))
@@ -798,8 +805,8 @@ World
 					Path:   "/upload",
 				}, func(ctx context.Context, input *struct {
 					RawBody huma.MultipartFormFiles[struct {
-						HelloWorld multipart.File   `form:"file" contentType:"text/plain" required:"true"`
-						Sentences  []multipart.File `form:"greetings" contentType:"text/plain" required:"true"`
+						HelloWorld huma.FormFile   `form:"file" contentType:"text/plain" required:"true"`
+						Sentences  []huma.FormFile `form:"greetings" contentType:"text/plain" required:"true"`
 					}]
 				}) (*struct{}, error) {
 					return nil, nil
