@@ -742,27 +742,34 @@ func TestFeatures(t *testing.T) {
 					Path:   "/upload",
 				}, func(ctx context.Context, input *struct {
 					RawBody huma.MultipartFormFiles[struct {
-						HelloWorld huma.FormFile   `form:"file" contentType:"text/plain"`
-						Greetings  []huma.FormFile `form:"greetings" contentType:"text/plain"`
+						HelloWorld   huma.FormFile   `form:"file" contentType:"text/plain" required:"true"`
+						Greetings    []huma.FormFile `form:"greetings" contentType:"text/plain" required:"true"`
+						NoTagBinding huma.FormFile   `contentType:"text/plain"`
+						UnusedField  string          // Ignored altogether
 					}]
 				}) (*struct{}, error) {
 					fileData := input.RawBody.Data()
 
 					assert.Equal(t, "text/plain", fileData.HelloWorld.ContentType)
 					assert.True(t, fileData.HelloWorld.IsSet)
-
 					b, err := io.ReadAll(fileData.HelloWorld)
 					require.NoError(t, err)
 					assert.Equal(t, "Hello, World!", string(b))
 
-					expected := []string{"Hello", "World"}
-					for i, f := range fileData.Greetings {
-						assert.Equal(t, "text/plain", f.ContentType)
-						assert.True(t, f.IsSet)
+					assert.Equal(t, "text/plain", fileData.NoTagBinding.ContentType)
+					assert.True(t, fileData.NoTagBinding.IsSet)
+					b, err = io.ReadAll(fileData.NoTagBinding)
+					require.NoError(t, err)
+					assert.Equal(t, `Use struct field name as fallback when no "form" tag is provided.`, string(b))
 
-						b, err := io.ReadAll(f)
+					expected := []string{"Hello", "World"}
+					for i, e := range expected {
+						assert.Equal(t, "text/plain", fileData.Greetings[i].ContentType)
+						assert.True(t, fileData.Greetings[i].IsSet)
+
+						b, err := io.ReadAll(fileData.Greetings[i])
 						require.NoError(t, err)
-						assert.Equal(t, expected[i], string(b))
+						assert.Equal(t, e, string(b))
 					}
 
 					return nil, nil
@@ -785,16 +792,21 @@ Content-Disposition: form-data; name="file"; filename="test.txt"
 Content-Type: text/plain
 
 Hello, World!
---SimpleBoundary--
+--SimpleBoundary
 Content-Disposition: form-data; name="greetings"; filename="greetings_1.txt"
 Content-Type: text/plain
 
 Hello
---SimpleBoundary--
+--SimpleBoundary
 Content-Disposition: form-data; name="greetings"; filename="greetings_2.txt"
 Content-Type: text/plain
 
 World
+--SimpleBoundary
+Content-Disposition: form-data; name="NoTagBinding"; filename="notag.txt"
+Content-Type: text/plain
+
+Use struct field name as fallback when no "form" tag is provided.
 --SimpleBoundary--`,
 		},
 		{
