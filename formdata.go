@@ -43,15 +43,15 @@ func (v MimeTypeValidator) Validate(fh *multipart.FileHeader, location string) (
 	if err != nil {
 		return "", &ErrorDetail{Message: "Failed to open file", Location: location}
 	}
-	var buffer = make([]byte, 1000)
-	if _, err := file.Read(buffer); err != nil {
-		return "", &ErrorDetail{Message: "Failed to infer file media type", Location: location}
-	}
-	file.Seek(int64(0), io.SeekStart)
 
 	mimeType := fh.Header.Get("Content-Type")
 	if mimeType == "" {
-		http.DetectContentType(buffer)
+		var buffer = make([]byte, 1000)
+		if _, err := file.Read(buffer); err != nil {
+			return "", &ErrorDetail{Message: "Failed to infer file media type", Location: location}
+		}
+		file.Seek(int64(0), io.SeekStart)
+		mimeType = http.DetectContentType(buffer)
 	}
 	accept := slices.ContainsFunc(v.accept, func(m string) bool {
 		if m == "text/plain" || m == "application/octet-stream" {
