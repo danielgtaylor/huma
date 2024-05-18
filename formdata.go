@@ -154,9 +154,10 @@ func (m *MultipartFormFiles[T]) Decode(opMediaType *MediaType) []error {
 	)
 	for i := 0; i < dataType.NumField(); i++ {
 		field := value.Elem().Field(i)
-		key := dataType.Field(i).Tag.Get("form")
+		structField := dataType.Field(i)
+		key := structField.Tag.Get("form")
 		if key == "" {
-			continue
+			key = structField.Name
 		}
 		switch {
 		case field.Type() == reflect.TypeOf(FormFile{}):
