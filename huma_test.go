@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -850,8 +851,216 @@ Hello, World!
 				}
 			},
 		},
+		{
+			Name: "request-body-multipart-file-decoded-optional",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						HelloWorld huma.FormFile `form:"file" contentType:"text/plain"`
+					}]
+				}) (*struct{}, error) {
+					assert.False(t, input.RawBody.Data().HelloWorld.IsSet)
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body:    `--SimpleBoundary--`,
+		},
+		{
+			Name: "request-body-multipart-file-decoded-bad-cardinality",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						HelloWorld huma.FormFile `form:"file" contentType:"text/plain" required:"true"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+Hello, World!
+--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="text.txt"
+Content-Type: text/plain
+
+What are you doing here ?
+--SimpleBoundary--`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				if ok := assert.Equal(t, http.StatusUnprocessableEntity, resp.Code); ok {
+					var errors huma.ErrorModel
+					err := json.Unmarshal(resp.Body.Bytes(), &errors)
+					require.NoError(t, err)
+					assert.Equal(t, "file", errors.Errors[0].Location)
+				}
+			},
+		},
+		{
+			Name: "request-body-multipart-file-decoded-invalid-content-type",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						// Expecting 'image/png', will receive 'text/plain'
+						Image  huma.FormFile   `form:"file" contentType:"image/png"`
+						Images []huma.FormFile `form:"file" contentType:"image/png"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+Hello, World!
+--SimpleBoundary--`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				var errors huma.ErrorModel
+				err := json.Unmarshal(resp.Body.Bytes(), &errors)
+				require.NoError(t, err)
+				assert.Len(t, errors.Errors, 2) // Both single and multiple file receiver should fail
+				assert.Equal(t, "file", errors.Errors[0].Location)
 				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
 			},
+		},
+		{
+			Name: "request-body-multipart-file-decoded-content-type-default",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						// No contentType tag: default to "application/octet-stream"
+						Image huma.FormFile `form:"file" required:"true"`
+					}]
+				}) (*struct{}, error) {
+					fileData := input.RawBody.Data()
+					b, err := io.ReadAll(fileData.Image.File)
+					require.NoError(t, err)
+					assert.Equal(t, "console.log('Hello, World!')", string(b))
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.js"
+Content-Type: text/javascript
+
+console.log('Hello, World!')
+--SimpleBoundary--`,
+		},
+		{
+			Name: "request-body-multipart-file-decoded-content-type-wildcard",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						File huma.FormFile `form:"file" contentType:"text/*" required:"true"`
+					}]
+				}) (*struct{}, error) {
+					fileData := input.RawBody.Data()
+					b, err := io.ReadAll(fileData.File)
+					require.NoError(t, err)
+					assert.Equal(t, "console.log('Hello, World!')", string(b))
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.js"
+Content-Type: text/javascript
+
+console.log('Hello, World!')
+--SimpleBoundary--`,
+		},
+		{
+			Name: "request-body-multipart-file-decoded-image",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						Image huma.FormFile `form:"file" contentType:"image/jpeg,image/png" required:"true"`
+					}]
+				}) (*struct{}, error) {
+					fileData := input.RawBody.Data()
+					assert.Equal(t, "image/png", fileData.Image.ContentType)
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: func() string {
+				file, err := os.Open("docs/docs/huma.png")
+				require.NoError(t, err)
+				b, err := io.ReadAll(file)
+				require.NoError(t, err)
+				return fmt.Sprintf(`--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.js"
+Content-Type: image/png
+
+%s
+--SimpleBoundary--`, string(b))
+			}(),
+		},
+		{
+			Name: "request-body-multipart-file-decoded-image-detect-type",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						Image huma.FormFile `form:"file" contentType:"image/jpeg,image/png" required:"true"`
+					}]
+				}) (*struct{}, error) {
+					fileData := input.RawBody.Data()
+					assert.Equal(t, "image/png", fileData.Image.ContentType)
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: func() string {
+				file, err := os.Open("docs/docs/huma.png")
+				require.NoError(t, err)
+				b, err := io.ReadAll(file)
+				require.NoError(t, err)
+				return fmt.Sprintf(`--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.js"
+
+%s
+--SimpleBoundary--`, string(b))
+			}(),
 		},
 		{
 			Name: "request-body-multipart-file",
