@@ -735,6 +735,102 @@ func TestFeatures(t *testing.T) {
 			Body:    `some-data`,
 		},
 		{
+			Name: "request-body-multipart-file-decoded",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						HelloWorld multipart.File   `form:"file" contentType:"text/plain"`
+						Greetings  []multipart.File `form:"greetings" contentType:"text/plain"`
+					}]
+				}) (*struct{}, error) {
+					fileData := input.RawBody.Data()
+					b, err := io.ReadAll(fileData.HelloWorld)
+					require.NoError(t, err)
+					assert.Equal(t, "Hello, World!", string(b))
+
+					expected := []string{"Hello", "World"}
+					for i, f := range fileData.Greetings {
+						b, err := io.ReadAll(f)
+						require.NoError(t, err)
+						assert.Equal(t, expected[i], string(b))
+					}
+
+					return nil, nil
+				})
+
+				// Ensure OpenAPI spec is listed as a multipart/form-data upload with
+				// the appropriate schema.
+				mpContent := api.OpenAPI().Paths["/upload"].Post.RequestBody.Content["multipart/form-data"]
+				assert.Equal(t, "text/plain", mpContent.Encoding["file"].ContentType)
+				assert.Equal(t, "text/plain", mpContent.Encoding["greetings"].ContentType)
+				assert.Equal(t, "object", mpContent.Schema.Type)
+				assert.Equal(t, "binary", mpContent.Schema.Properties["file"].Format)
+				assert.Equal(t, "binary", mpContent.Schema.Properties["greetings"].Items.Format)
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+Hello, World!
+--SimpleBoundary--
+Content-Disposition: form-data; name="greetings"; filename="greetings_1.txt"
+Content-Type: text/plain
+
+Hello
+--SimpleBoundary--
+Content-Disposition: form-data; name="greetings"; filename="greetings_2.txt"
+Content-Type: text/plain
+
+World
+--SimpleBoundary--`,
+		},
+		{
+			Name: "request-body-multipart-file-decoded-required",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						HelloWorld multipart.File   `form:"file" contentType:"text/plain" required:"true"`
+						Sentences  []multipart.File `form:"greetings" contentType:"text/plain" required:"true"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+
+				// Ensure OpenAPI spec is listed as a multipart/form-data upload with
+				// the appropriate schema.
+				mpContent := api.OpenAPI().Paths["/upload"].Post.RequestBody.Content["multipart/form-data"]
+				assert.Equal(t, "text/plain", mpContent.Encoding["file"].ContentType)
+				assert.Equal(t, "object", mpContent.Schema.Type)
+				assert.Equal(t, "binary", mpContent.Schema.Properties["file"].Format)
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="bad_key_name"; filename="test.txt"
+Content-Type: text/plain
+
+Hello, World!
+--SimpleBoundary--`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				var errors huma.ErrorModel
+				err := json.Unmarshal(resp.Body.Bytes(), &errors)
+				require.NoError(t, err)
+				assert.Equal(t, "file", errors.Errors[0].Location)
+				assert.Equal(t, "greetings", errors.Errors[1].Location)
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+			},
+		},
+		{
 			Name: "request-body-multipart-file",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
