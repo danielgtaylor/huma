@@ -24,18 +24,31 @@ func NewMimeTypeValidator(encoding *Encoding) MimeTypeValidator {
 	for i := range mimeTypes {
 		mimeTypes[i] = strings.Trim(mimeTypes[i], " ")
 	}
+	if len(mimeTypes) == 0 {
+		mimeTypes = []string{"application/octet-stream"}
+	}
 	return MimeTypeValidator{accept: mimeTypes}
 }
 
-func (v MimeTypeValidator) Validate(file multipart.File, location string) *ErrorDetail {
+func (v MimeTypeValidator) Validate(fh *multipart.FileHeader, location string) *ErrorDetail {
+	file, err := fh.Open()
+	if err != nil {
+		return &ErrorDetail{Message: "Failed to open file", Location: location}
+	}
 	var buffer = make([]byte, 1000)
 	if _, err := file.Read(buffer); err != nil {
 		return &ErrorDetail{Message: "Failed to infer file media type", Location: location}
 	}
 	file.Seek(int64(0), io.SeekStart)
 
-	mimeType := http.DetectContentType(buffer)
+	mimeType := fh.Header.Get("Content-Type")
+	if mimeType == "" {
+		http.DetectContentType(buffer)
+	}
 	accept := slices.ContainsFunc(v.accept, func(m string) bool {
+		if m == "text/plain" || m == "application/octet-stream" {
+			return true
+		}
 		if strings.HasSuffix(m, "/*") &&
 			strings.HasPrefix(mimeType, strings.TrimRight(m, "*")) {
 			return true
@@ -69,7 +82,7 @@ func (m *MultipartFormFiles[T]) readFile(
 	if err != nil {
 		return nil, &ErrorDetail{Message: "Failed to open file", Location: location}
 	}
-	if validationErr := validator.Validate(f, location); validationErr != nil {
+	if validationErr := validator.Validate(fh, location); validationErr != nil {
 		return nil, validationErr
 	}
 	return f, nil
@@ -217,8 +230,12 @@ func multiPartContentEncoding(t reflect.Type) map[string]*Encoding {
 	for i := 0; i < nFields; i++ {
 		f := t.Field(i)
 		name := formDataFieldName(f)
+		contentType := f.Tag.Get("contentType")
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
 		encoding[name] = &Encoding{
-			ContentType: f.Tag.Get("contentType"),
+			ContentType: contentType,
 		}
 	}
 	return encoding
