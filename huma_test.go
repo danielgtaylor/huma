@@ -841,11 +841,15 @@ Content-Type: text/plain
 Hello, World!
 --SimpleBoundary--`,
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-				var errors huma.ErrorModel
-				err := json.Unmarshal(resp.Body.Bytes(), &errors)
-				require.NoError(t, err)
-				assert.Equal(t, "file", errors.Errors[0].Location)
-				assert.Equal(t, "greetings", errors.Errors[1].Location)
+				if ok := assert.Equal(t, http.StatusUnprocessableEntity, resp.Code); ok {
+					var errors huma.ErrorModel
+					err := json.Unmarshal(resp.Body.Bytes(), &errors)
+					require.NoError(t, err)
+					assert.Equal(t, "file", errors.Errors[0].Location)
+					assert.Equal(t, "greetings", errors.Errors[1].Location)
+				}
+			},
+		},
 				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
 			},
 		},
