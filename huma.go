@@ -569,9 +569,11 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		panic("input must be a struct")
 	}
 	inputParams := findParams(registry, &op, inputType)
-	inputBodyIndex := -1
+	inputBodyIndex := make([]int, 0)
+	hasInputBody := false
 	if f, ok := inputType.FieldByName("Body"); ok {
-		inputBodyIndex = f.Index[0]
+		hasInputBody = true
+		inputBodyIndex = f.Index
 		if op.RequestBody == nil {
 			required := f.Type.Kind() != reflect.Ptr && f.Type.Kind() != reflect.Interface
 			if f.Tag.Get("required") == "true" {
@@ -762,7 +764,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		}
 	}
 
-	if len(op.Errors) > 0 && (len(inputParams.Paths) > 0 || inputBodyIndex >= -1) {
+	if len(op.Errors) > 0 && (len(inputParams.Paths) > 0 || hasInputBody) {
 		op.Errors = append(op.Errors, http.StatusUnprocessableEntity)
 	}
 	if len(op.Errors) > 0 {
@@ -1124,7 +1126,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		})
 
 		// Read input body if defined.
-		if inputBodyIndex != -1 || rawBodyIndex != -1 {
+		if hasInputBody || rawBodyIndex != -1 {
 			if op.BodyReadTimeout > 0 {
 				ctx.SetReadDeadline(time.Now().Add(op.BodyReadTimeout))
 			} else if op.BodyReadTimeout < 0 {
@@ -1192,7 +1194,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					}
 				} else {
 					parseErrCount := 0
-					if inputBodyIndex != -1 && !op.SkipValidateBody {
+					if hasInputBody && !op.SkipValidateBody {
 						// Validate the input. First, parse the body into []any or map[string]any
 						// or equivalent, which can be easily validated. Then, convert to the
 						// expected struct type to call the handler.
@@ -1220,13 +1222,16 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						}
 					}
 
-					if inputBodyIndex != -1 {
+					if hasInputBody {
 						// We need to get the body into the correct type now that it has been
 						// validated. Benchmarks on Go 1.20 show that using `json.Unmarshal` a
 						// second time is faster than `mapstructure.Decode` or any of the other
 						// common reflection-based approaches when using real-world medium-sized
 						// JSON payloads with lots of strings.
-						f := v.Field(inputBodyIndex)
+						f := v
+						for _, index := range inputBodyIndex {
+							f = f.Field(index)
+						}
 						if err := api.Unmarshal(ctx.Header("Content-Type"), body, f.Addr().Interface()); err != nil {
 							if parseErrCount == 0 {
 								// Hmm, this should have worked... validator missed something?

@@ -60,6 +60,13 @@ func (UUID) Schema(r huma.Registry) *huma.Schema {
 	return &huma.Schema{Type: huma.TypeString, Format: "uuid"}
 }
 
+// BodyContainer is an embed request body struct to test request body unmarshalling
+type BodyContainer struct {
+	Body struct {
+		Name string `json:"name"`
+	}
+}
+
 func TestFeatures(t *testing.T) {
 	for _, feature := range []struct {
 		Name         string
@@ -621,6 +628,23 @@ func TestFeatures(t *testing.T) {
 				assert.Equal(t, "#/components/schemas/ANameHint", api.OpenAPI().Paths["/body"].Put.RequestBody.Content["application/json"].Schema.Ref)
 			},
 			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   `{"name": "Name"}`,
+		},
+		{
+			Name: "request-body-embed-struct",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					BodyContainer
+				}) (*struct{}, error) {
+					assert.Equal(t, "Name", input.Body.Name)
+					return nil, nil
+				})
+			},
+			Method: http.MethodPost,
 			URL:    "/body",
 			Body:   `{"name": "Name"}`,
 		},
