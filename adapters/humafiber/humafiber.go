@@ -43,6 +43,10 @@ func (c *fiberCtx) Host() string {
 	return c.orig.Hostname()
 }
 
+func (c *fiberCtx) RemoteAddr() string {
+	return c.orig.Context().RemoteAddr().String()
+}
+
 func (c *fiberCtx) URL() url.URL {
 	u, _ := url.Parse(string(c.orig.Request().RequestURI()))
 	return *u

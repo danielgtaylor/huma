@@ -45,6 +45,10 @@ func (c *bunContext) Host() string {
 	return c.r.Host
 }
 
+func (c *bunContext) RemoteAddr() string {
+	return c.r.RemoteAddr
+}
+
 func (c *bunContext) URL() url.URL {
 	return *c.r.URL
 }
@@ -129,6 +133,10 @@ func (c *bunCompatContext) Method() string {
 
 func (c *bunCompatContext) Host() string {
 	return c.r.Host
+}
+
+func (c *bunCompatContext) RemoteAddr() string {
+	return c.r.RemoteAddr
 }
 
 func (c *bunCompatContext) URL() url.URL {

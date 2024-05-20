@@ -41,6 +41,10 @@ func (c *goContext) Host() string {
 	return c.r.Host
 }
 
+func (c *goContext) RemoteAddr() string {
+	return c.r.RemoteAddr
+}
+
 func (c *goContext) URL() url.URL {
 	return *c.r.URL
 }
