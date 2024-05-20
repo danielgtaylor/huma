@@ -72,6 +72,9 @@ type Context interface {
 	// Host returns the HTTP host for the request.
 	Host() string
 
+	// RemoteAddr returns the remote address of the client.
+	RemoteAddr() string
+
 	// URL returns the full URL for the request.
 	URL() url.URL
 

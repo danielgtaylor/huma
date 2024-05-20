@@ -45,6 +45,10 @@ func (c *httprouterContext) Host() string {
 	return c.r.Host
 }
 
+func (c *httprouterContext) RemoteAddr() string {
+	return c.r.RemoteAddr
+}
+
 func (c *httprouterContext) URL() url.URL {
 	return *c.r.URL
 }

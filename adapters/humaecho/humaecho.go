@@ -42,6 +42,10 @@ func (c *echoCtx) Host() string {
 	return c.orig.Request().Host
 }
 
+func (c *echoCtx) RemoteAddr() string {
+	return c.orig.Request().RemoteAddr
+}
+
 func (c *echoCtx) URL() url.URL {
 	return *c.orig.Request().URL
 }

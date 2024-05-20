@@ -43,6 +43,10 @@ func (c *gmuxContext) Host() string {
 	return c.r.Host
 }
 
+func (c *gmuxContext) RemoteAddr() string {
+	return c.r.RemoteAddr
+}
+
 func (c *gmuxContext) URL() url.URL {
 	return *c.r.URL
 }

@@ -43,6 +43,10 @@ func (c *chiContext) Host() string {
 	return c.r.Host
 }
 
+func (c *chiContext) RemoteAddr() string {
+	return c.r.RemoteAddr
+}
+
 func (c *chiContext) URL() url.URL {
 	return *c.r.URL
 }

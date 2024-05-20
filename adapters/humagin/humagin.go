@@ -42,6 +42,10 @@ func (c *ginCtx) Host() string {
 	return c.orig.Request.Host
 }
 
+func (c *ginCtx) RemoteAddr() string {
+	return c.orig.Request.RemoteAddr
+}
+
 func (c *ginCtx) URL() url.URL {
 	return *c.orig.Request.URL
 }
