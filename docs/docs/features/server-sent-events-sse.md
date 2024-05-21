@@ -25,7 +25,7 @@ sse.Register(api, huma.Operation{
 	// Mapping of event type name to Go struct for that event.
 	"message":      DefaultMessage{},
 	"userCreate":   UserCreatedEvent{},
-	"mailRecieved": MailReceivedEvent{},
+	"mailReceived": MailReceivedEvent{},
 }, func(ctx context.Context, input *struct{}, send sse.Sender) {
 	// Send an event every second for 10 seconds.
 	for x := 0; x < 10; x++ {
