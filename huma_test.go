@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1944,4 +1945,85 @@ func TestGenerateFuncsPanicWithDescriptiveMessage(t *testing.T) {
 		huma.GenerateSummary("GET", "/foo", resp)
 	})
 
+}
+
+type Nullable[T any] struct {
+	Null  bool
+	Value T
+}
+
+func (o *Nullable[T]) HumaInputParamConvert(b []byte) (any, error) {
+	err := o.UnmarshalText(b)
+	return o.Value, err
+}
+
+func (o Nullable[T]) Schema(r huma.Registry) *huma.Schema {
+	return r.Schema(reflect.TypeOf(o.Value), true, "")
+}
+
+func (o *Nullable[T]) UnmarshalText(b []byte) error {
+	o.Null = true
+	if len(b) == 0 {
+		o.Null = true
+		return nil
+	}
+	var temp T // Create a temporary variable of type T
+	err := json.Unmarshal(b, &temp)
+	if err != nil {
+		return err
+	}
+	o.Value = temp
+	o.Null = false
+	return nil
+}
+
+type TestCustomQueryParamInput struct {
+	Query Nullable[int] `query:"query"`
+	ID    Nullable[int] `header:"id"`
+}
+
+func TestCustomInputParam(t *testing.T) {
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodGet,
+		Path:        "/custom_query_param",
+	}, func(ctx context.Context, input *TestCustomQueryParamInput) (*struct{}, error) {
+		assert.Equal(t, Nullable[int]{Null: false, Value: 12}, input.ID)
+		assert.Equal(t, Nullable[int]{Null: false, Value: 2}, input.Query)
+		return nil, nil
+	})
+
+	req, _ := http.NewRequest(http.MethodGet, "/custom_query_param?query=2", nil)
+	req.Header.Add("id", "12")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	resp, _ := io.ReadAll(w.Body)
+	assert.Equal(t, 204, w.Code, string(resp))
+}
+
+func TestCustomArrayInputParam(t *testing.T) {
+	type input struct {
+		Query    []Nullable[int]  `query:"query"`
+		QueryPtr []*Nullable[int] `query:"query_ptr"`
+	}
+
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodGet,
+		Path:        "/test_array",
+	}, func(ctx context.Context, i *input) (*struct{}, error) {
+		assert.Equal(t, 2, i.Query[0].Value)
+		assert.Equal(t, 4, i.Query[1].Value)
+		assert.Equal(t, 3, i.QueryPtr[0].Value)
+		assert.Equal(t, 5, i.QueryPtr[1].Value)
+		return nil, nil
+	})
+
+	req, _ := http.NewRequest(http.MethodGet, "/test_array?query=2,4&query_ptr=3,5", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	resp, _ := io.ReadAll(w.Body)
+	assert.Equal(t, 204, w.Code, string(resp))
 }
