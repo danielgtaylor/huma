@@ -623,6 +623,14 @@ type SchemaProvider interface {
 	Schema(r Registry) *Schema
 }
 
+// SchemaTransformer is an interface that can be implemented by types
+// to transform the generated schema as needed.
+// This can be used to leverage the default schema generation for a type,
+// and arbitrarily modify parts of it.
+type SchemaTransformer interface {
+	TransformSchema(r Registry, s *Schema) *Schema
+}
+
 // SchemaFromType returns a schema for a given type, using the registry to
 // possibly create references for nested structs. The schema that is returned
 // can then be passed to `huma.Validate` to efficiently validate incoming
@@ -632,6 +640,16 @@ type SchemaProvider interface {
 //	registry := huma.NewMapRegistry("#/prefix", huma.DefaultSchemaNamer)
 //	schema := huma.SchemaFromType(registry, reflect.TypeOf(MyType{}))
 func SchemaFromType(r Registry, t reflect.Type) *Schema {
+	s := schemaFromType(r, t)
+	// Transform generated schema if type implements SchemaTransformer
+	v := reflect.New(t).Interface()
+	if st, ok := v.(SchemaTransformer); ok {
+		return st.TransformSchema(r, s)
+	}
+	return s
+}
+
+func schemaFromType(r Registry, t reflect.Type) *Schema {
 	isPointer := t.Kind() == reflect.Pointer
 
 	s := Schema{}

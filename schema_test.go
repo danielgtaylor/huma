@@ -505,7 +505,7 @@ func TestSchema(t *testing.T) {
 				"type": "object",
 				"properties": {
 					"value": {
-						"type": "string",
+						"type": ["string", "null"],
 						"enum": ["foo", "bar"]
 					}
 				},
@@ -945,7 +945,9 @@ func (o *OmittableNullable[T]) UnmarshalJSON(b []byte) error {
 }
 
 func (o OmittableNullable[T]) Schema(r huma.Registry) *huma.Schema {
-	return r.Schema(reflect.TypeOf(o.Value), true, "")
+	s := r.Schema(reflect.TypeOf(o.Value), true, "")
+	s.Nullable = true
+	return s
 }
 
 func TestCustomUnmarshalType(t *testing.T) {
@@ -1118,4 +1120,55 @@ func BenchmarkSchemaErrors(b *testing.B) {
 			b.Fatal("expected error")
 		}
 	}
+}
+
+// Struct that defines schemas for its property, to be reused by a SchemaTransformer
+type ExampleInputStruct struct {
+	Name    string `json:"name" minLength:"2" example:"Jane Doe"`
+	Email   string `json:"email" format:"email" doc:"Contact e-mail address"`
+	Age     *int   `json:"age,omitempty" minimum:"0"`
+	Comment string `json:"comment,omitempty" maxLength:"256"`
+}
+
+// Implements SchemaTransformer interface, reusing parts of the schema from `ExampleInputStruct`
+type ExampleUpdateStruct struct {
+	Name    *string                   `json:"name"`
+	Email   *string                   `json:"email" doc:"Override doc for email"`
+	Age     OmittableNullable[int]    `json:"age"`
+	Comment OmittableNullable[string] `json:"comment"`
+}
+
+func (u *ExampleUpdateStruct) TransformSchema(r huma.Registry, s *huma.Schema) *huma.Schema {
+	inputSchema := r.Schema(reflect.TypeOf((*ExampleInputStruct)(nil)), false, "")
+	for propName, schema := range s.Properties {
+		propSchema := inputSchema.Properties[propName]
+		if schema.Description != "" {
+			propSchema.Description = schema.Description
+		}
+		propSchema.Nullable = schema.Nullable
+		s.Properties[propName] = propSchema
+	}
+	s.Required = []string{} // make everything optional
+	return s
+}
+
+func TestSchemaTransformer(t *testing.T) {
+	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	inputSchema := r.Schema(reflect.TypeOf((*ExampleInputStruct)(nil)), false, "")
+	validateSchema := func(s *huma.Schema) {
+		if s.Ref != "" {
+			s = r.SchemaFromRef(s.Ref)
+		}
+		assert.Equal(t, inputSchema.Properties["name"].Examples, s.Properties["name"].Examples)
+		assert.Equal(t, "Override doc for email", s.Properties["email"].Description)
+		assert.Equal(t, inputSchema.Properties["email"].Format, s.Properties["email"].Format)
+		assert.Equal(t, inputSchema.Properties["age"].Minimum, s.Properties["age"].Minimum)
+		assert.True(t, s.Properties["age"].Nullable)
+		assert.Equal(t, inputSchema.Properties["comment"].MaxLength, s.Properties["comment"].MaxLength)
+		assert.True(t, s.Properties["comment"].Nullable)
+	}
+	updateSchema1 := r.Schema(reflect.TypeOf(ExampleUpdateStruct{}), false, "")
+	validateSchema(updateSchema1)
+	updateSchema2 := huma.SchemaFromType(r, reflect.TypeOf(ExampleUpdateStruct{}))
+	validateSchema(updateSchema2)
 }
