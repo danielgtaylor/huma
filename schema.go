@@ -488,7 +488,9 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 	if fs == nil {
 		return fs
 	}
-	fs.Description = f.Tag.Get("doc")
+	if doc := f.Tag.Get("doc"); doc != "" {
+		fs.Description = doc
+	}
 	if fs.Format == "date-time" && f.Tag.Get("header") != "" {
 		// Special case: this is a header and uses a different date/time format.
 		// Note that it can still be overridden by the `format` or `timeFormat`
