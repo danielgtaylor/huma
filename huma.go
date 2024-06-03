@@ -612,6 +612,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	}
 	rawBodyIndex := -1
 	rawBodyMultipart := false
+	rawBodyDecodedMultipart := false
 	if f, ok := inputType.FieldByName("RawBody"); ok {
 		rawBodyIndex = f.Index[0]
 		if op.RequestBody == nil {
@@ -627,6 +628,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			contentType = "multipart/form-data"
 			rawBodyMultipart = true
 		}
+		if strings.HasPrefix(f.Type.Name(), "MultipartFormFiles") {
+			contentType = "multipart/form-data"
+			rawBodyDecodedMultipart = true
+		}
 
 		if c := f.Tag.Get("contentType"); c != "" {
 			contentType = c
@@ -634,21 +639,37 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 		switch contentType {
 		case "multipart/form-data":
-			op.RequestBody.Content["multipart/form-data"] = &MediaType{
-				Schema: &Schema{
-					Type: "object",
-					Properties: map[string]*Schema{
-						"name": {
-							Type:        "string",
-							Description: "general purpose name for multipart form value",
-						},
-						"filename": {
-							Type:        "string",
-							Format:      "binary",
-							Description: "filename of the file being uploaded",
+			if op.RequestBody.Content["multipart/form-data"] != nil {
+				break
+			}
+			if rawBodyMultipart {
+				op.RequestBody.Content["multipart/form-data"] = &MediaType{
+					Schema: &Schema{
+						Type: "object",
+						Properties: map[string]*Schema{
+							"name": {
+								Type:        "string",
+								Description: "general purpose name for multipart form value",
+							},
+							"filename": {
+								Type:        "string",
+								Format:      "binary",
+								Description: "filename of the file being uploaded",
+							},
 						},
 					},
-				},
+				}
+			}
+			if rawBodyDecodedMultipart {
+				dataField, ok := f.Type.FieldByName("data")
+				if !ok {
+					panic("Expected type MultipartFormFiles[T] to have a 'data *T' generic pointer field")
+				}
+				op.RequestBody.Content["multipart/form-data"] = &MediaType{
+					Schema:   multiPartFormFileSchema(dataField.Type.Elem()),
+					Encoding: multiPartContentEncoding(dataField.Type.Elem()),
+				}
+				op.RequestBody.Required = false
 			}
 		default:
 			op.RequestBody.Content[contentType] = &MediaType{
@@ -1134,7 +1155,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				ctx.SetReadDeadline(time.Time{})
 			}
 
-			if rawBodyMultipart {
+			if rawBodyMultipart || rawBodyDecodedMultipart {
 				form, err := ctx.GetMultipartForm()
 				if err != nil || form == nil {
 					res.Errors = append(res.Errors, &ErrorDetail{
@@ -1143,7 +1164,21 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					})
 				} else {
 					f := v.Field(rawBodyIndex)
-					f.Set(reflect.ValueOf(*form))
+					if rawBodyMultipart {
+						f.Set(reflect.ValueOf(*form))
+					} else {
+						f.FieldByName("Form").Set(reflect.ValueOf(form))
+						r := f.Addr().
+							MethodByName("Decode").
+							Call([]reflect.Value{
+								reflect.ValueOf(op.RequestBody.Content["multipart/form-data"]),
+							})
+						errs := r[0].Interface().([]error)
+						if errs != nil {
+							WriteErr(api, ctx, http.StatusUnprocessableEntity, "validation failed", errs...)
+							return
+						}
+					}
 				}
 			} else {
 				buf := bufPool.Get().(*bytes.Buffer)
