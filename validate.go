@@ -487,8 +487,9 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 
 	if len(s.Enum) > 0 {
 		found := false
+		vs := fmt.Sprint(v)
 		for _, e := range s.Enum {
-			if e == v {
+			if fmt.Sprint(e) == vs {
 				found = true
 				break
 			}
