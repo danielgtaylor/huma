@@ -776,6 +776,8 @@ func TestFeatures(t *testing.T) {
 					fileData := input.RawBody.Data()
 
 					assert.Equal(t, "text/plain", fileData.HelloWorld.ContentType)
+					assert.Equal(t, "test.txt", fileData.HelloWorld.Filename)
+					assert.Equal(t, len("Hello, World!"), int(fileData.HelloWorld.Size))
 					assert.True(t, fileData.HelloWorld.IsSet)
 					b, err := io.ReadAll(fileData.HelloWorld)
 					require.NoError(t, err)
@@ -790,6 +792,8 @@ func TestFeatures(t *testing.T) {
 					expected := []string{"Hello", "World"}
 					for i, e := range expected {
 						assert.Equal(t, "text/plain", fileData.Greetings[i].ContentType)
+						assert.Equal(t, fmt.Sprintf("greetings_%d.txt", i+1), fileData.Greetings[i].Filename)
+						assert.Equal(t, len(e), int(fileData.Greetings[i].Size))
 						assert.True(t, fileData.Greetings[i].IsSet)
 
 						b, err := io.ReadAll(fileData.Greetings[i])
