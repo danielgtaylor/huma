@@ -139,10 +139,6 @@ func (a *testAPI) Do(method, path string, args ...any) *httptest.ResponseRecorde
 }
 
 func (a *testAPI) DoCtx(ctx context.Context, method, path string, args ...any) *httptest.ResponseRecorder {
-	return a.do(ctx, method, path, args...)
-}
-
-func (a *testAPI) do(ctx context.Context, method, path string, args ...any) *httptest.ResponseRecorder {
 	a.tb.Helper()
 	var b io.Reader
 	isJSON := false
