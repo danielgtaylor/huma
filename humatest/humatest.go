@@ -4,6 +4,7 @@ package humatest
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -41,13 +42,16 @@ func NewAdapter() huma.Adapter {
 type TestAPI interface {
 	huma.API
 
-	// Do a request against the API. Args, if provided, should be string headers
+	// DoCtx a request against the API. Args, if provided, should be string headers
 	// like `Content-Type: application/json`, an `io.Reader` for the request
 	// body, or a slice/map/struct which will be serialized to JSON and sent
 	// as the request body. Anything else will panic.
+	DoCtx(ctx context.Context, method, path string, args ...any) *httptest.ResponseRecorder
+
+	// Do wraps [TestAPI.DoCtx] using [context.Background].
 	Do(method, path string, args ...any) *httptest.ResponseRecorder
 
-	// Get performs a GET request against the API. Args, if provided, should be
+	// GetCtx performs a GET request against the API. Args, if provided, should be
 	// string headers like `Content-Type: application/json`, an `io.Reader`
 	// for the request body, or a slice/map/struct which will be serialized to
 	// JSON and sent as the request body. Anything else will panic.
@@ -57,9 +61,12 @@ type TestAPI interface {
 	//
 	// 	// Make a GET request with a custom header.
 	// 	api.Get("/foo", "X-My-Header: my-value")
+	GetCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder
+
+	// Get wraps [TestAPI.GetCtx] using [context.Background].
 	Get(path string, args ...any) *httptest.ResponseRecorder
 
-	// Post performs a POST request against the API. Args, if provided, should be
+	// PostCtx performs a POST request against the API. Args, if provided, should be
 	// string headers like `Content-Type: application/json`, an `io.Reader`
 	// for the request body, or a slice/map/struct which will be serialized to
 	// JSON and sent as the request body. Anything else will panic.
@@ -69,9 +76,12 @@ type TestAPI interface {
 	//
 	// 	// Make a POST request with a custom header.
 	// 	api.Post("/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
+	PostCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder
+
+	// Post wraps [TestAPI.PostCtx] using [context.Background].
 	Post(path string, args ...any) *httptest.ResponseRecorder
 
-	// Put performs a PUT request against the API. Args, if provided, should be
+	// PutCtx performs a PUT request against the API. Args, if provided, should be
 	// string headers like `Content-Type: application/json`, an `io.Reader`
 	// for the request body, or a slice/map/struct which will be serialized to
 	// JSON and sent as the request body. Anything else will panic.
@@ -81,9 +91,12 @@ type TestAPI interface {
 	//
 	// 	// Make a PUT request with a custom header.
 	// 	api.Put("/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
+	PutCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder
+
+	// Put wraps [TestAPI.PutCtx] using [context.Background].
 	Put(path string, args ...any) *httptest.ResponseRecorder
 
-	// Patch performs a PATCH request against the API. Args, if provided, should
+	// PatchCtx performs a PATCH request against the API. Args, if provided, should
 	// be string headers like `Content-Type: application/json`, an `io.Reader`
 	// for the request body, or a slice/map/struct which will be serialized to
 	// JSON and sent as the request body. Anything else will panic.
@@ -93,9 +106,12 @@ type TestAPI interface {
 	//
 	// 	// Make a PATCH request with a custom header.
 	// 	api.Patch("/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
+	PatchCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder
+
+	// Patch wraps [TestAPI.PatchCtx] using [context.Background].
 	Patch(path string, args ...any) *httptest.ResponseRecorder
 
-	// Delete performs a DELETE request against the API. Args, if provided, should
+	// DeleteCtx performs a DELETE request against the API. Args, if provided, should
 	// be string headers like `Content-Type: application/json`, an `io.Reader`
 	// for the request body, or a slice/map/struct which will be serialized to
 	// JSON and sent as the request body. Anything else will panic.
@@ -105,8 +121,13 @@ type TestAPI interface {
 	//
 	// 	// Make a DELETE request with a custom header.
 	// 	api.Delete("/foo", "X-My-Header: my-value")
+	DeleteCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder
+
+	// Delete wraps [TestAPI.DeleteCtx] using [context.Background].
 	Delete(path string, args ...any) *httptest.ResponseRecorder
 }
+
+var _ TestAPI = &testAPI{}
 
 type testAPI struct {
 	huma.API
@@ -114,6 +135,14 @@ type testAPI struct {
 }
 
 func (a *testAPI) Do(method, path string, args ...any) *httptest.ResponseRecorder {
+	return a.DoCtx(context.Background(), method, path, args...)
+}
+
+func (a *testAPI) DoCtx(ctx context.Context, method, path string, args ...any) *httptest.ResponseRecorder {
+	return a.do(ctx, method, path, args...)
+}
+
+func (a *testAPI) do(ctx context.Context, method, path string, args ...any) *httptest.ResponseRecorder {
 	a.tb.Helper()
 	var b io.Reader
 	isJSON := false
@@ -136,7 +165,7 @@ func (a *testAPI) Do(method, path string, args ...any) *httptest.ResponseRecorde
 		}
 	}
 
-	req, _ := http.NewRequest(method, path, b)
+	req, _ := http.NewRequestWithContext(ctx, method, path, b)
 	req.RequestURI = path
 	req.RemoteAddr = "127.0.0.1:12345"
 	if isJSON {
@@ -167,27 +196,52 @@ func (a *testAPI) Do(method, path string, args ...any) *httptest.ResponseRecorde
 
 func (a *testAPI) Get(path string, args ...any) *httptest.ResponseRecorder {
 	a.tb.Helper()
-	return a.Do(http.MethodGet, path, args...)
+	return a.GetCtx(context.Background(), path, args...)
+}
+
+func (a *testAPI) GetCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder {
+	a.tb.Helper()
+	return a.DoCtx(ctx, http.MethodGet, path, args...)
 }
 
 func (a *testAPI) Post(path string, args ...any) *httptest.ResponseRecorder {
 	a.tb.Helper()
-	return a.Do(http.MethodPost, path, args...)
+	return a.PostCtx(context.Background(), path, args...)
+}
+
+func (a *testAPI) PostCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder {
+	a.tb.Helper()
+	return a.DoCtx(ctx, http.MethodPost, path, args...)
 }
 
 func (a *testAPI) Put(path string, args ...any) *httptest.ResponseRecorder {
 	a.tb.Helper()
-	return a.Do(http.MethodPut, path, args...)
+	return a.PutCtx(context.Background(), path, args...)
+}
+
+func (a *testAPI) PutCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder {
+	a.tb.Helper()
+	return a.DoCtx(ctx, http.MethodPut, path, args...)
 }
 
 func (a *testAPI) Patch(path string, args ...any) *httptest.ResponseRecorder {
 	a.tb.Helper()
-	return a.Do(http.MethodPatch, path, args...)
+	return a.PatchCtx(context.Background(), path, args...)
+}
+
+func (a *testAPI) PatchCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder {
+	a.tb.Helper()
+	return a.DoCtx(ctx, http.MethodPatch, path, args...)
 }
 
 func (a *testAPI) Delete(path string, args ...any) *httptest.ResponseRecorder {
 	a.tb.Helper()
 	return a.Do(http.MethodDelete, path, args...)
+}
+
+func (a *testAPI) DeleteCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder {
+	a.tb.Helper()
+	return a.DoCtx(ctx, http.MethodDelete, path, args...)
 }
 
 // Wrap returns a `TestAPI` wrapping the given API.
