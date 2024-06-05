@@ -236,7 +236,7 @@ func (a *testAPI) PatchCtx(ctx context.Context, path string, args ...any) *httpt
 
 func (a *testAPI) Delete(path string, args ...any) *httptest.ResponseRecorder {
 	a.tb.Helper()
-	return a.Do(http.MethodDelete, path, args...)
+	return a.DeleteCtx(context.Background(), path, args...)
 }
 
 func (a *testAPI) DeleteCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder {
