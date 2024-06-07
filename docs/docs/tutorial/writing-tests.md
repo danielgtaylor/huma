@@ -177,7 +177,6 @@ func TestGetGreeting(t *testing.T) {
 }
 ```
 
-
 ## Review
 
 Congratulations! You just learned:
