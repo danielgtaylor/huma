@@ -42,88 +42,148 @@ func NewAdapter() huma.Adapter {
 type TestAPI interface {
 	huma.API
 
-	// DoCtx a request against the API. Args, if provided, should be string headers
-	// like `Content-Type: application/json`, an `io.Reader` for the request
-	// body, or a slice/map/struct which will be serialized to JSON and sent
-	// as the request body. Anything else will panic.
+	// DoCtx a request against the API with a custom [context.Context] in the
+	// [http.Request]. Args, if provided, should be string headers like
+	// `Content-Type: application/json`, an `io.Reader` for the request body, or a
+	// slice/map/struct which will be serialized to JSON and sent as the request
+	// body. Anything else will panic.
 	DoCtx(ctx context.Context, method, path string, args ...any) *httptest.ResponseRecorder
 
-	// Do wraps [TestAPI.DoCtx] using [context.Background].
+	// Do a request against the API using [context.Background] in the [http.Request].
+	// Args, if provided, should be string headers like `Content-Type:
+	// application/json`, an `io.Reader` for the request body, or a slice/map/struct
+	// which will be serialized to JSON and sent as the request body. Anything else
+	// will panic.
 	Do(method, path string, args ...any) *httptest.ResponseRecorder
 
-	// GetCtx performs a GET request against the API. Args, if provided, should be
-	// string headers like `Content-Type: application/json`, an `io.Reader`
-	// for the request body, or a slice/map/struct which will be serialized to
-	// JSON and sent as the request body. Anything else will panic.
+	// GetCtx performs a GET request against the API with a custom [context.Context]
+	// in the [http.Request]. Args, if provided, should be string headers like
+	// `Content-Type: application/json`, an `io.Reader` for the request body, or a
+	// slice/map/struct which will be serialized to JSON and sent as the request
+	// body. Anything else will panic.
+	//
+	// 	// Make a GET request
+	//	api.GetCtx(ctx, "/foo")
+	//
+	// 	// Make a GET request with a custom header.
+	// 	api.GetCtx(ctx, "/foo", "X-My-Header: my-value")
+	GetCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder
+
+	// Get performs a GET request against the API using [context.Background] in the
+	// [http.Request]. Args, if provided, should be string headers like
+	// `Content-Type: application/json`, an `io.Reader` for the request body, or a
+	// slice/map/struct which will be serialized to JSON and sent as the request
+	// body. Anything else will panic.
 	//
 	// 	// Make a GET request
 	// 	api.Get("/foo")
 	//
 	// 	// Make a GET request with a custom header.
 	// 	api.Get("/foo", "X-My-Header: my-value")
-	GetCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder
-
-	// Get wraps [TestAPI.GetCtx] using [context.Background].
 	Get(path string, args ...any) *httptest.ResponseRecorder
 
-	// PostCtx performs a POST request against the API. Args, if provided, should be
-	// string headers like `Content-Type: application/json`, an `io.Reader`
-	// for the request body, or a slice/map/struct which will be serialized to
-	// JSON and sent as the request body. Anything else will panic.
+	// PostCtx performs a POST request against the API with a custom
+	// [context.Context] in the [http.Request]. Args, if provided, should be string
+	// headers like `Content-Type: application/json`, an `io.Reader` for the request
+	// body, or a slice/map/struct which will be serialized to JSON and sent as the
+	// request body. Anything else will panic.
 	//
 	// 	// Make a POST request
-	// 	api.Post("/foo", bytes.NewReader(`{"foo": "bar"}`))
+	// 	api.PostCtx(ctx, "/foo", bytes.NewReader(`{"foo": "bar"}`))
+	//
+	// 	// Make a POST request with a custom header.
+	// 	api.PostCtx(ctx, "/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
+	PostCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder
+
+	// Post performs a POST request against the API using [context.Background] in the
+	// [http.Request]. Args, if provided, should be string headers like
+	// `Content-Type: application/json`, an `io.Reader` for the request body, or a
+	// slice/map/struct which will be serialized to JSON and sent as the request
+	// body. Anything else will panic.
+	//
+	// 	// Make a POST request
+	//	api.Post("/foo", bytes.NewReader(`{"foo": "bar"}`))
 	//
 	// 	// Make a POST request with a custom header.
 	// 	api.Post("/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
-	PostCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder
-
-	// Post wraps [TestAPI.PostCtx] using [context.Background].
 	Post(path string, args ...any) *httptest.ResponseRecorder
 
-	// PutCtx performs a PUT request against the API. Args, if provided, should be
-	// string headers like `Content-Type: application/json`, an `io.Reader`
-	// for the request body, or a slice/map/struct which will be serialized to
-	// JSON and sent as the request body. Anything else will panic.
+	// PutCtx performs a PUT request against the API with a custom [context.Context]
+	// in the [http.Request]. Args, if provided, should be string headers like
+	// `Content-Type: application/json`, an `io.Reader` for the request body, or a
+	// slice/map/struct which will be serialized to JSON and sent as the request
+	// body. Anything else will panic.
+	//
+	// 	// Make a PUT request
+	// 	api.PutCtx(ctx, "/foo", bytes.NewReader(`{"foo": "bar"}`))
+	//
+	// 	// Make a PUT request with a custom header.
+	// 	api.PutCtx(ctx, "/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
+	PutCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder
+
+	// Put performs a PUT request against the API using [context.Background] in the
+	// [http.Request]. Args, if provided, should be string headers like
+	// `Content-Type: application/json`, an `io.Reader` for the request body, or a
+	// slice/map/struct which will be serialized to JSON and sent as the request
+	// body. Anything else will panic.
 	//
 	// 	// Make a PUT request
 	// 	api.Put("/foo", bytes.NewReader(`{"foo": "bar"}`))
 	//
 	// 	// Make a PUT request with a custom header.
 	// 	api.Put("/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
-	PutCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder
-
-	// Put wraps [TestAPI.PutCtx] using [context.Background].
 	Put(path string, args ...any) *httptest.ResponseRecorder
 
-	// PatchCtx performs a PATCH request against the API. Args, if provided, should
-	// be string headers like `Content-Type: application/json`, an `io.Reader`
-	// for the request body, or a slice/map/struct which will be serialized to
-	// JSON and sent as the request body. Anything else will panic.
+	// PatchCtx performs a PATCH request against the API with a custom
+	// [context.Context] in the [http.Request]. Args, if provided, should be string
+	// headers like `Content-Type: application/json`, an `io.Reader` for the request
+	// body, or a slice/map/struct which will be serialized to JSON and sent as the
+	// request body. Anything else will panic.
+	//
+	// 	// Make a PATCH request
+	// 	api.PatchCtx(ctx, "/foo", bytes.NewReader(`{"foo": "bar"}`))
+	//
+	// 	// Make a PATCH request with a custom header.
+	// 	api.PatchCtx(ctx, "/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
+	PatchCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder
+
+	// Patch performs a PATCH request against the API using [context.Background] in
+	// the [http.Request]. Args, if provided, should be string headers like
+	// `Content-Type: application/json`, an `io.Reader` for the request body, or a
+	// slice/map/struct which will be serialized to JSON and sent as the request
+	// body. Anything else will panic.
 	//
 	// 	// Make a PATCH request
 	// 	api.Patch("/foo", bytes.NewReader(`{"foo": "bar"}`))
 	//
 	// 	// Make a PATCH request with a custom header.
 	// 	api.Patch("/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
-	PatchCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder
-
-	// Patch wraps [TestAPI.PatchCtx] using [context.Background].
 	Patch(path string, args ...any) *httptest.ResponseRecorder
 
-	// DeleteCtx performs a DELETE request against the API. Args, if provided, should
-	// be string headers like `Content-Type: application/json`, an `io.Reader`
-	// for the request body, or a slice/map/struct which will be serialized to
-	// JSON and sent as the request body. Anything else will panic.
+	// DeleteCtx performs a DELETE request against the API with a custom
+	// [context.Context] in the [http.Request]. Args, if provided, should be string
+	// headers like `Content-Type: application/json`, an `io.Reader` for the request
+	// body, or a slice/map/struct which will be serialized to JSON and sent as the
+	// request body. Anything else will panic.
 	//
 	// 	// Make a DELETE request
-	// 	api.Delete("/foo")
+	// 	api.DeleteCtx(ctx, "/foo")
+	//
+	// 	// Make a DELETE request with a custom header.
+	// 	api.DeleteCtx(ctx, "/foo", "X-My-Header: my-value")
+	DeleteCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder
+
+	// Delete performs a DELETE request against the API using [context.Background] in
+	// the [http.Request]. Args, if provided, should be string headers like
+	// `Content-Type: application/json`, an `io.Reader` for the request body, or a
+	// slice/map/struct which will be serialized to JSON and sent as the request
+	// body. Anything else will panic.
+	//
+	// 	// Make a DELETE request
+	//	api.Delete("/foo")
 	//
 	// 	// Make a DELETE request with a custom header.
 	// 	api.Delete("/foo", "X-My-Header: my-value")
-	DeleteCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder
-
-	// Delete wraps [TestAPI.DeleteCtx] using [context.Background].
 	Delete(path string, args ...any) *httptest.ResponseRecorder
 }
 
