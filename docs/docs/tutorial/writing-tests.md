@@ -160,6 +160,24 @@ Now you can run your tests!
 $ go test -cover
 ```
 
+You may also need to send requests with a custom [`context.Context`](https://pkg.go.dev/context#Context), for example you may need to test an authenticated route, or test using some other request specific values.
+
+```go
+func TestGetGreeting(t *testing.T) {
+	_, api := humatest.New(t)
+
+	addRoutes(api)
+	
+	ctx := context.Background() // define your necessary context
+
+	resp := api.GetCtx(ctx, "/greeting/world") // provide it using the 'Ctx' suffixed methods
+	if !strings.Contains(resp.Body.String(), "Hello, world!") {
+		t.Fatalf("Unexpected response: %s", resp.Body.String())
+	}
+}
+```
+
+
 ## Review
 
 Congratulations! You just learned:
