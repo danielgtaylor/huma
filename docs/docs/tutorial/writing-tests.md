@@ -160,7 +160,7 @@ Now you can run your tests!
 $ go test -cover
 ```
 
-You may also need to send requests with a custom [`context.Context`](https://pkg.go.dev/context#Context), for example you may need to test an authenticated route, or test using some other request specific values.
+You may also need to send requests with a custom [`context.Context`](https://pkg.go.dev/context#Context). For example, you may need to test an authenticated route, or test using some other request-specific values.
 
 ```go
 func TestGetGreeting(t *testing.T) {
