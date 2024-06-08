@@ -14,6 +14,8 @@ type FormFile struct {
 	multipart.File
 	ContentType string // Content-Type as declared in the multipart form field, or detected when parsing request as fallback
 	IsSet       bool   // Indicates whether content was received when working with optional files
+	Size        int64  // File size in bytes
+	Filename    string // Filename as declared in the multipart form field, if any
 }
 
 type MultipartFormFiles[T any] struct {
@@ -94,7 +96,13 @@ func (m *MultipartFormFiles[T]) readFile(
 	if validationErr != nil {
 		return FormFile{}, validationErr
 	}
-	return FormFile{File: f, ContentType: contentType, IsSet: true}, nil
+	return FormFile{
+		File:        f,
+		ContentType: contentType,
+		IsSet:       true,
+		Size:        fh.Size,
+		Filename:    fh.Filename,
+	}, nil
 }
 
 func (m *MultipartFormFiles[T]) readSingleFile(key string, opMediaType *MediaType) (FormFile, *ErrorDetail) {
