@@ -474,13 +474,17 @@ func transformAndWrite(api API, ctx Context, status int, ct string, body any) {
 	tval, terr := api.Transform(ctx, strconv.Itoa(status), body)
 	if terr != nil {
 		ctx.BodyWriter().Write([]byte("error transforming response"))
-		panic(fmt.Errorf("error transforming response %+v for %s %s %d: %w\n", tval, ctx.Operation().Method, ctx.Operation().Path, status, terr))
+		// When including tval in the panic message, the server may become unresponsive for some time if the value is very large
+		// therefore, it has been removed from the panic message
+		panic(fmt.Errorf("error transforming response for %s %s %d: %w\n", ctx.Operation().Method, ctx.Operation().Path, status, terr))
 	}
 	ctx.SetStatus(status)
 	if status != http.StatusNoContent && status != http.StatusNotModified {
 		if merr := api.Marshal(ctx.BodyWriter(), ct, tval); merr != nil {
 			ctx.BodyWriter().Write([]byte("error marshaling response"))
-			panic(fmt.Errorf("error marshaling response %+v for %s %s %d: %w\n", tval, ctx.Operation().Method, ctx.Operation().Path, status, merr))
+			// When including tval in the panic message, the server may become unresponsive for some time if the value is very large
+			// therefore, it has been removed from the panic message
+			panic(fmt.Errorf("error marshaling response for %s %s %d: %w\n", ctx.Operation().Method, ctx.Operation().Path, status, merr))
 		}
 	}
 }
