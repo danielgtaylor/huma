@@ -165,13 +165,13 @@ HTTP/1.1 200 OK
 }
 ```
 
-尽管示例很小，您也可以在http://localhost:8888/docs上看到一些生成的文档。生成的 OpenAPI 可在http://localhost:8888/openapi.json或http://localhost:8888/openapi.yaml获取。
+尽管示例很小，您也可以在 http://localhost:8888/docs 上看到一些生成的文档。生成的 OpenAPI 可在 http://localhost:8888/openapi.json 或 http://localhost:8888/openapi.yaml 获取。
 
 查看[Huma 教程](https://huma.rocks/tutorial/installation/)，获取入门分步指南。
 
 # 文档
 
-请参阅https://huma.rocks/网站，获取演示文稿中的完整文档，该演示文稿比本自述文件更易于导航和搜索。您可以在`docs`此存储库的目录中找到该站点的源代码。
+请参阅 https://huma.rocks/ 网站，获取演示文稿中的完整文档，该演示文稿比本自述文件更易于导航和搜索。您可以在`docs`此存储库的目录中找到该站点的源代码。
 
 官方 Go 包文档始终可以在 https://pkg.go.dev/github.com/danielgtaylor/huma/v2 找到。
 
