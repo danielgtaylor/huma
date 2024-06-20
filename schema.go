@@ -559,8 +559,12 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 	fs.MaxLength = intTag(f, "maxLength")
 	fs.Pattern = f.Tag.Get("pattern")
 	fs.PatternDescription = f.Tag.Get("patternDescription")
-	fs.MinItems = intTag(f, "minItems")
-	fs.MaxItems = intTag(f, "maxItems")
+	if _, ok := f.Tag.Lookup("minItems"); ok {
+		fs.MinItems = intTag(f, "minItems")
+	}
+	if _, ok := f.Tag.Lookup("maxItems"); ok {
+		fs.MaxItems = intTag(f, "maxItems")
+	}
 	fs.UniqueItems = boolTag(f, "uniqueItems")
 	fs.MinProperties = intTag(f, "minProperties")
 	fs.MaxProperties = intTag(f, "maxProperties")

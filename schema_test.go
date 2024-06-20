@@ -66,6 +66,13 @@ func (c BadRefSchema) Schema(r huma.Registry) *huma.Schema {
 
 var _ huma.SchemaProvider = BadRefSchema{}
 
+type TypedArrayWithCustomDesc [4]float64
+
+func (t *TypedArrayWithCustomDesc) TransformSchema(r huma.Registry, s *huma.Schema) *huma.Schema {
+	s.Description = "custom description"
+	return s
+}
+
 func TestSchema(t *testing.T) {
 	bitSize := strconv.Itoa(bits.UintSize)
 
@@ -704,9 +711,12 @@ func TestSchema(t *testing.T) {
 				"properties":{
 					"array":{
 						"items":{
-							"$ref":"#/components/schemas/RecursiveChildLoop"},
-							"type":"array"
+							"$ref":"#/components/schemas/RecursiveChildLoop"
 						},
+						"maxItems":1,
+						"minItems":1,
+						"type":"array"
+					},
 					"byRef":{
 						"$ref":"#/components/schemas/RecursiveChildKey"
 					},
@@ -835,6 +845,52 @@ func TestSchema(t *testing.T) {
 				} `json:"value" nullable:"true"`
 			}{},
 			panics: `nullable is not supported for field 'Value' which is type '#/components/schemas/ValueStruct'`,
+		},
+		{
+			name: "field-custom-array",
+			input: struct {
+				Value TypedArrayWithCustomDesc `json:"value"`
+			}{},
+			expected: ` {
+				"additionalProperties":false,
+				"properties":{
+					"value":{
+						"description":"custom description",
+						"items":{
+							"format":"double",
+							"type":"number"
+						},
+						"maxItems":4,
+						"minItems":4,
+						"type":"array"
+					}
+				},
+				"required":["value"],
+				"type":"object"
+			}`,
+		},
+		{
+			name: "field-ptr-to-custom-array",
+			input: struct {
+				Value *TypedArrayWithCustomDesc `json:"value"`
+			}{},
+			expected: ` {
+				"additionalProperties":false,
+				"properties":{
+					"value":{
+						"description":"custom description",
+						"items":{
+							"format":"double",
+							"type":"number"
+						},
+						"maxItems":4,
+						"minItems":4,
+						"type":"array"
+					}
+				},
+				"required":["value"],
+				"type":"object"
+			}`,
 		},
 	}
 
