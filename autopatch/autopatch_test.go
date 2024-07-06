@@ -385,11 +385,6 @@ func TestAutoPatchOptionalSchema(t *testing.T) {
 	assert.Contains(t, properties, "age")
 	assert.Contains(t, properties, "optional")
 
-	// Verify that all fields are nullable
-	for _, prop := range properties {
-		assert.True(t, prop.Nullable, "All fields should be nullable in PATCH schema")
-	}
-
 	// Test the generated PATCH operation
 	w := api.Patch("/test/123",
 		"Content-Type: application/merge-patch+json",

@@ -329,7 +329,6 @@ func makeOptionalSchema(s *huma.Schema) *huma.Schema {
 
 	optionalSchema := &huma.Schema{
 		Type:                 s.Type,
-		Nullable:             true, // Make all fields nullable
 		Title:                s.Title,
 		Description:          s.Description,
 		Format:               s.Format,
