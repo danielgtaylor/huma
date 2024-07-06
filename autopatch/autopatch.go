@@ -130,6 +130,15 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 		}
 	}
 
+	// Get the schema from the PUT operation
+	putSchema := put.RequestBody.Content["application/json"].Schema
+	if putSchema.Ref != "" {
+		putSchema = oapi.Components.Schemas.SchemaFromRef(putSchema.Ref)
+	}
+
+	// Create an optional version of the PUT schema
+	optionalPutSchema := makeOptionalSchema(putSchema)
+
 	// Manually register the operation so it shows up in the generated OpenAPI.
 	op := &huma.Operation{
 		OperationID:  "patch-" + name,
@@ -145,18 +154,10 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 			Required: true,
 			Content: map[string]*huma.MediaType{
 				"application/merge-patch+json": {
-					Schema: &huma.Schema{
-						Type:                 huma.TypeObject,
-						Description:          "JSON merge patch object, see PUT operation for schema. All fields are optional.",
-						AdditionalProperties: true,
-					},
+					Schema: optionalPutSchema,
 				},
 				"application/merge-patch+shorthand": {
-					Schema: &huma.Schema{
-						Type:                 huma.TypeObject,
-						Description:          "Shorthand merge patch object, see PUT operation for schema. All fields are optional.",
-						AdditionalProperties: true,
-					},
+					Schema: optionalPutSchema,
 				},
 				"application/json-patch+json": {
 					Schema: jsonPatchSchema,
@@ -171,9 +172,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 	}
 	oapi.AddOperation(op)
 
-	// Manually register the handler with the router. This bypasses the normal
-	// Huma API since this is easier and we are just calling the other pre-existing
-	// operations.
+	// Manually register the handler with the router.
 	adapter := api.Adapter()
 	adapter.Handle(op, func(ctx huma.Context) {
 		patchData, err := io.ReadAll(ctx.BodyReader())
@@ -208,9 +207,8 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 		})
 
 		// Accept JSON for the patches.
-		// TODO: could we accept other stuff here...?
-		ctx.SetHeader("Accept", "application/json")
-		ctx.SetHeader("Accept-Encoding", "")
+		origReq.Header.Set("Accept", "application/json")
+		origReq.Header.Set("Accept-Encoding", "")
 
 		origWriter := httptest.NewRecorder()
 		adapter.ServeHTTP(origWriter, origReq)
@@ -322,4 +320,84 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 		ctx.SetStatus(putWriter.Code)
 		io.Copy(ctx.BodyWriter(), putWriter.Body)
 	})
+}
+
+func makeOptionalSchema(s *huma.Schema) *huma.Schema {
+	if s == nil {
+		return nil
+	}
+
+	optionalSchema := &huma.Schema{
+		Type:                 s.Type,
+		Nullable:             true, // Make all fields nullable
+		Title:                s.Title,
+		Description:          s.Description,
+		Format:               s.Format,
+		ContentEncoding:      s.ContentEncoding,
+		Default:              s.Default,
+		Examples:             s.Examples,
+		AdditionalProperties: s.AdditionalProperties,
+		Enum:                 s.Enum,
+		Minimum:              s.Minimum,
+		ExclusiveMinimum:     s.ExclusiveMinimum,
+		Maximum:              s.Maximum,
+		ExclusiveMaximum:     s.ExclusiveMaximum,
+		MultipleOf:           s.MultipleOf,
+		MinLength:            s.MinLength,
+		MaxLength:            s.MaxLength,
+		Pattern:              s.Pattern,
+		PatternDescription:   s.PatternDescription,
+		MinItems:             s.MinItems,
+		MaxItems:             s.MaxItems,
+		UniqueItems:          s.UniqueItems,
+		MinProperties:        s.MinProperties,
+		MaxProperties:        s.MaxProperties,
+		ReadOnly:             s.ReadOnly,
+		WriteOnly:            s.WriteOnly,
+		Deprecated:           s.Deprecated,
+		Extensions:           s.Extensions,
+		DependentRequired:    s.DependentRequired,
+		Discriminator:        s.Discriminator,
+	}
+
+	if s.Items != nil {
+		optionalSchema.Items = makeOptionalSchema(s.Items)
+	}
+
+	if s.Properties != nil {
+		optionalSchema.Properties = make(map[string]*huma.Schema)
+		for k, v := range s.Properties {
+			optionalSchema.Properties[k] = makeOptionalSchema(v)
+		}
+	}
+
+	if s.OneOf != nil {
+		optionalSchema.OneOf = make([]*huma.Schema, len(s.OneOf))
+		for i, schema := range s.OneOf {
+			optionalSchema.OneOf[i] = makeOptionalSchema(schema)
+		}
+	}
+
+	if s.AnyOf != nil {
+		optionalSchema.AnyOf = make([]*huma.Schema, len(s.AnyOf))
+		for i, schema := range s.AnyOf {
+			optionalSchema.AnyOf[i] = makeOptionalSchema(schema)
+		}
+	}
+
+	if s.AllOf != nil {
+		optionalSchema.AllOf = make([]*huma.Schema, len(s.AllOf))
+		for i, schema := range s.AllOf {
+			optionalSchema.AllOf[i] = makeOptionalSchema(schema)
+		}
+	}
+
+	if s.Not != nil {
+		optionalSchema.Not = makeOptionalSchema(s.Not)
+	}
+
+	// Make all properties optional
+	optionalSchema.Required = nil
+
+	return optionalSchema
 }
