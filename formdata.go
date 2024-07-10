@@ -6,7 +6,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"reflect"
-	"slices"
 	"strings"
 )
 
@@ -55,19 +54,22 @@ func (v MimeTypeValidator) Validate(fh *multipart.FileHeader, location string) (
 		file.Seek(int64(0), io.SeekStart)
 		mimeType = http.DetectContentType(buffer)
 	}
-	accept := slices.ContainsFunc(v.accept, func(m string) bool {
+	accept := false
+	for _, m := range v.accept {
 		if m == "text/plain" || m == "application/octet-stream" {
-			return true
+			accept = true
+			break
 		}
 		if strings.HasSuffix(m, "/*") &&
 			strings.HasPrefix(mimeType, strings.TrimRight(m, "*")) {
-			return true
+			accept = true
+			break
 		}
 		if mimeType == m {
-			return true
+			accept = true
+			break
 		}
-		return false
-	})
+	}
 
 	if accept {
 		return mimeType, nil
@@ -178,7 +180,7 @@ func (m *MultipartFormFiles[T]) Decode(opMediaType *MediaType) []error {
 		case field.Type() == reflect.TypeOf([]FormFile{}):
 			files, errs := m.readMultipleFiles(key, opMediaType)
 			if errs != nil {
-				errors = slices.Concat(errors, errs)
+				errors = append(errors, errs...)
 				continue
 			}
 			field.Set(reflect.ValueOf(files))
