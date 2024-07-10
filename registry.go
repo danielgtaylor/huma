@@ -71,6 +71,11 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 	origType := t
 	t = deref(t)
 
+	// Pointer to array should decay to array
+	if t.Kind() == reflect.Array || t.Kind() == reflect.Slice {
+		origType = t
+	}
+
 	alias, ok := r.aliases[t]
 	if ok {
 		return r.Schema(alias, allowRef, hint)
