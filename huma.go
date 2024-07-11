@@ -102,6 +102,7 @@ type paramFieldInfo struct {
 	Required   bool
 	Default    string
 	TimeFormat string
+	Explode    bool
 	Schema     *Schema
 }
 
@@ -136,11 +137,14 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			pfi.Required = true
 		} else if q := f.Tag.Get("query"); q != "" {
 			pfi.Loc = "query"
-			name = q
+			split := strings.Split(q, ",")
+			name = split[0]
 			// If `in` is `query` then `explode` defaults to true. Parsing is *much*
-			// easier if we use comma-separated values, so we disable explode.
-			nope := false
-			explode = &nope
+			// easier if we use comma-separated values, so we disable explode by default.
+			if slicesContains(split[1:], "explode") {
+				pfi.Explode = true
+			}
+			explode = &pfi.Explode
 		} else if h := f.Tag.Get("header"); h != "" {
 			pfi.Loc = "header"
 			name = h
@@ -933,15 +937,20 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					pv = v
 				default:
 					if f.Type().Kind() == reflect.Slice {
+						var values []string
+						if p.Explode {
+							u := ctx.URL()
+							values = (&u).Query()[p.Name]
+						} else {
+							values = strings.Split(value, ",")
+						}
 						switch f.Type().Elem().Kind() {
 
 						case reflect.String:
-							values := strings.Split(value, ",")
 							f.Set(reflect.ValueOf(values))
 							pv = values
 
 						case reflect.Int:
-							values := strings.Split(value, ",")
 							vs, err := parseArrElement(values, func(s string) (int, error) {
 								val, err := strconv.ParseInt(s, 10, strconv.IntSize)
 								if err != nil {
@@ -957,7 +966,6 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							pv = vs
 
 						case reflect.Int8:
-							values := strings.Split(value, ",")
 							vs, err := parseArrElement(values, func(s string) (int8, error) {
 								val, err := strconv.ParseInt(s, 10, 8)
 								if err != nil {
@@ -973,7 +981,6 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							pv = vs
 
 						case reflect.Int16:
-							values := strings.Split(value, ",")
 							vs, err := parseArrElement(values, func(s string) (int16, error) {
 								val, err := strconv.ParseInt(s, 10, 16)
 								if err != nil {
@@ -989,7 +996,6 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							pv = vs
 
 						case reflect.Int32:
-							values := strings.Split(value, ",")
 							vs, err := parseArrElement(values, func(s string) (int32, error) {
 								val, err := strconv.ParseInt(s, 10, 32)
 								if err != nil {
@@ -1005,7 +1011,6 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							pv = vs
 
 						case reflect.Int64:
-							values := strings.Split(value, ",")
 							vs, err := parseArrElement(values, func(s string) (int64, error) {
 								val, err := strconv.ParseInt(s, 10, 64)
 								if err != nil {
@@ -1021,7 +1026,6 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							pv = vs
 
 						case reflect.Uint:
-							values := strings.Split(value, ",")
 							vs, err := parseArrElement(values, func(s string) (uint, error) {
 								val, err := strconv.ParseUint(s, 10, strconv.IntSize)
 								if err != nil {
@@ -1037,7 +1041,6 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							pv = vs
 
 						case reflect.Uint16:
-							values := strings.Split(value, ",")
 							vs, err := parseArrElement(values, func(s string) (uint16, error) {
 								val, err := strconv.ParseUint(s, 10, 16)
 								if err != nil {
@@ -1053,7 +1056,6 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							pv = vs
 
 						case reflect.Uint32:
-							values := strings.Split(value, ",")
 							vs, err := parseArrElement(values, func(s string) (uint32, error) {
 								val, err := strconv.ParseUint(s, 10, 32)
 								if err != nil {
@@ -1069,7 +1071,6 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							pv = vs
 
 						case reflect.Uint64:
-							values := strings.Split(value, ",")
 							vs, err := parseArrElement(values, func(s string) (uint64, error) {
 								val, err := strconv.ParseUint(s, 10, 64)
 								if err != nil {
@@ -1085,7 +1086,6 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							pv = vs
 
 						case reflect.Float32:
-							values := strings.Split(value, ",")
 							vs, err := parseArrElement(values, func(s string) (float32, error) {
 								val, err := strconv.ParseFloat(s, 32)
 								if err != nil {
@@ -1101,7 +1101,6 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							pv = vs
 
 						case reflect.Float64:
-							values := strings.Split(value, ",")
 							vs, err := parseArrElement(values, func(s string) (float64, error) {
 								val, err := strconv.ParseFloat(s, 64)
 								if err != nil {

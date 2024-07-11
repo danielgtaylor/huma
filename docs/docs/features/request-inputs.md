@@ -33,7 +33,7 @@ The following parameter types are supported out of the box:
 | `time.Time`         | `2020-01-01T12:00:00Z` |
 | slice, e.g. `[]int` | `1,2,3`, `tag1,tag2`   |
 
-For example, if the parameter is a query param and the type is `[]string` it might look like `?tags=tag1,tag2` in the URI.
+For example, if the parameter is a query param and the type is `[]string` it might look like `?tags=tag1,tag2` in the URI. Query paramaters also support specifying the same parameter multiple times by setting the `explode` tag, e.g. `query:"tags,explode"` would parse a query string like `?tags=tag1&tags=tag2` instead of a comma separated list. The comma separated list is faster and recommended for most use cases.
 
 For cookies, the default behavior is to read the cookie _value_ from the request and convert it to one of the types above. If you want to access the entire cookie, you can use `http.Cookie` as the type instead:
 
