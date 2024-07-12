@@ -63,7 +63,26 @@ This project was inspired by [FastAPI](https://fastapi.tiangolo.com/). Logo & br
 
 ## Sponsors
 
-A big thank you to our current & former sponsors:
+A big thank you to our current & former sponsors!
+
+<table width="100%">
+	<tr>
+			<td>
+					<img width="1000" height="0" />
+					<a href="https://zuplo.link/huma-gh ">
+					<picture>
+							<!-- <source media="(prefers-color-scheme: dark)" srcset="docs/zuplo-dark.png"> -->
+							<img src="https://github.com/user-attachments/assets/aace5aa7-32bd-45cf-a8f8-2e352feaf017" alt="Zuplo" width="260" align="right">
+					</picture>
+					</a>
+					<h3>Zuplo: Scale, Protect, and Productize your Huma API</h3>
+					<p>
+							Our API Gateway allows you to secure your API, scale it globally, generate documentation from your OpenAPI, and monetize your users.
+					</p>
+					<a href="https://zuplo.link/huma-gh ">Start for Free</a>
+			</td>
+	</tr>
+</table>
 
 - [@bclements](https://github.com/bclements)
 - [@bekabaz](https://github.com/bekabaz)
