@@ -1940,6 +1940,45 @@ func TestCustomError(t *testing.T) {
 	assert.Equal(t, `{"$schema":"http://localhost/schemas/MyError.json","message":"not found","details":["some-other-error"]}`+"\n", resp.Body.String())
 }
 
+type NotFoundError struct {
+	Resource string
+}
+
+func (e *NotFoundError) Error() string {
+	return fmt.Sprintf("Resource '%s' not found", e.Resource)
+}
+
+func TestTypedError(t *testing.T) {
+	orig := huma.HandleTypedError
+	defer func() {
+		huma.HandleTypedError = orig
+	}()
+
+	huma.HandleTypedError = func(err error) huma.StatusError {
+		switch e := err.(type) {
+		case *NotFoundError:
+			return huma.NewError(http.StatusNotFound, e.Error())
+		default:
+			return huma.NewError(http.StatusInternalServerError, "An unexpected error has occurred")
+		}
+	}
+
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-error",
+		Method:      http.MethodGet,
+		Path:        "/error",
+	}, func(ctx context.Context, i *struct{}) (*struct{}, error) {
+		return nil, &NotFoundError{
+			Resource: "foo",
+		}
+	})
+
+	resp := api.Get("/error", "Host: localhost")
+	assert.Equal(t, `{"$schema":"http://localhost/schemas/ErrorModel.json","title":"Not Found","status":404,"detail":"Resource 'foo' not found"}`+"\n", resp.Body.String())
+}
+
 type NestedResolversStruct struct {
 	Field2 string `json:"field2"`
 }
