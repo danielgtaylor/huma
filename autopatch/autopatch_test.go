@@ -330,65 +330,90 @@ func TestDeprecatedPatch(t *testing.T) {
 
 	assert.True(t, api.OpenAPI().Paths["/things/{thing-id}"].Patch.Deprecated)
 }
-func TestAutoPatchOptionalSchema(t *testing.T) {
-	_, api := humatest.New(t)
-
-	type TestModel struct {
-		ID       string  `json:"id"`
-		Name     string  `json:"name"`
-		Age      int     `json:"age"`
-		Optional *string `json:"optional,omitempty"`
+func TestMakeOptionalSchemaBasicProperties(t *testing.T) {
+	originalSchema := &huma.Schema{
+		Type: "object",
+		Properties: map[string]*huma.Schema{
+			"id":   {Type: "string"},
+			"name": {Type: "string"},
+		},
+		Required: []string{"id", "name"},
 	}
 
-	huma.Register(api, huma.Operation{
-		OperationID: "get-test",
-		Method:      http.MethodGet,
-		Path:        "/test/{id}",
-	}, func(ctx context.Context, input *struct {
-		ID string `path:"id"`
-	}) (*struct {
-		Body *TestModel
-	}, error) {
-		return &struct{ Body *TestModel }{&TestModel{}}, nil
-	})
+	optionalSchema := makeOptionalSchema(originalSchema)
 
-	huma.Register(api, huma.Operation{
-		OperationID: "put-test",
-		Method:      http.MethodPut,
-		Path:        "/test/{id}",
-	}, func(ctx context.Context, input *struct {
-		ID   string    `path:"id"`
-		Body TestModel `json:"body"`
-	}) (*struct {
-		Body *TestModel
-	}, error) {
-		return &struct{ Body *TestModel }{&TestModel{}}, nil
-	})
+	assert.Equal(t, "object", optionalSchema.Type)
+	assert.Contains(t, optionalSchema.Properties, "id")
+	assert.Contains(t, optionalSchema.Properties, "name")
+	assert.Empty(t, optionalSchema.Required)
+}
 
-	AutoPatch(api)
+func TestMakeOptionalSchemaAnyOf(t *testing.T) {
+	originalSchema := &huma.Schema{
+		AnyOf: []*huma.Schema{
+			{Type: "string"},
+			{Type: "number"},
+		},
+	}
 
-	// Check if PATCH operation was generated
-	patchOp := api.OpenAPI().Paths["/test/{id}"].Patch
-	assert.NotNil(t, patchOp, "PATCH operation should be generated")
+	optionalSchema := makeOptionalSchema(originalSchema)
 
-	// Check if the generated PATCH operation has the correct schema
-	patchSchema := patchOp.RequestBody.Content["application/merge-patch+json"].Schema
-	assert.NotNil(t, patchSchema, "PATCH schema should be present")
+	assert.Len(t, optionalSchema.AnyOf, 2)
+	assert.Equal(t, "string", optionalSchema.AnyOf[0].Type)
+	assert.Equal(t, "number", optionalSchema.AnyOf[1].Type)
+}
 
-	// Verify that all fields in the schema are optional
-	assert.Empty(t, patchSchema.Required, "All fields should be optional in PATCH schema")
+func TestMakeOptionalSchemaAllOf(t *testing.T) {
+	minLength := 1
+	maxLength := 100
+	originalSchema := &huma.Schema{
+		AllOf: []*huma.Schema{
+			{MinLength: &minLength},
+			{MaxLength: &maxLength},
+		},
+	}
 
-	// Check if all fields from the original schema are present
-	properties := patchSchema.Properties
-	assert.Contains(t, properties, "id")
-	assert.Contains(t, properties, "name")
-	assert.Contains(t, properties, "age")
-	assert.Contains(t, properties, "optional")
+	optionalSchema := makeOptionalSchema(originalSchema)
 
-	// Test the generated PATCH operation
-	w := api.Patch("/test/123",
-		"Content-Type: application/merge-patch+json",
-		strings.NewReader(`{"name": "New Name", "age": 30}`),
-	)
-	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Len(t, optionalSchema.AllOf, 2)
+	assert.Equal(t, 1, *optionalSchema.AllOf[0].MinLength)
+	assert.Equal(t, 100, *optionalSchema.AllOf[1].MaxLength)
+}
+
+func TestMakeOptionalSchemaNot(t *testing.T) {
+	originalSchema := &huma.Schema{
+		Not: &huma.Schema{
+			Type: "null",
+		},
+	}
+
+	optionalSchema := makeOptionalSchema(originalSchema)
+
+	assert.NotNil(t, optionalSchema.Not)
+	assert.Equal(t, "null", optionalSchema.Not.Type)
+}
+
+func TestMakeOptionalSchemaNilInput(t *testing.T) {
+	assert.Nil(t, makeOptionalSchema(nil))
+}
+
+func TestMakeOptionalSchemaNestedSchemas(t *testing.T) {
+	nestedSchema := &huma.Schema{
+		Type: "object",
+		Properties: map[string]*huma.Schema{
+			"nested": {
+				Type: "object",
+				Properties: map[string]*huma.Schema{
+					"deeplyNested": {Type: "string"},
+				},
+				Required: []string{"deeplyNested"},
+			},
+		},
+		Required: []string{"nested"},
+	}
+
+	optionalNestedSchema := makeOptionalSchema(nestedSchema)
+
+	assert.Empty(t, optionalNestedSchema.Required)
+	assert.Empty(t, optionalNestedSchema.Properties["nested"].Required)
 }
