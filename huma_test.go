@@ -367,6 +367,7 @@ func TestFeatures(t *testing.T) {
 					QueryUints64  []uint64    `query:"uints64"`
 					QueryFloats32 []float32   `query:"floats32"`
 					QueryFloats64 []float64   `query:"floats64"`
+					QueryExploded []string    `query:"exploded,explode"`
 					HeaderString  string      `header:"String"`
 					HeaderInt     int         `header:"Int"`
 					HeaderDate    time.Time   `header:"Date"`
@@ -401,6 +402,7 @@ func TestFeatures(t *testing.T) {
 					assert.Equal(t, "foo", input.CookieValue)
 					assert.Equal(t, 123, input.CookieInt)
 					assert.Equal(t, "bar", input.CookieFull.Value)
+					assert.Equal(t, []string{"foo", "bar"}, input.QueryExploded)
 					return nil, nil
 				})
 
@@ -408,10 +410,10 @@ func TestFeatures(t *testing.T) {
 				assert.Equal(t, "Some docs", api.OpenAPI().Paths["/test-params/{string}/{int}/{uuid}"].Get.Parameters[0].Description)
 
 				// `http.Cookie` should be treated as a string.
-				assert.Equal(t, "string", api.OpenAPI().Paths["/test-params/{string}/{int}/{uuid}"].Get.Parameters[27].Schema.Type)
+				assert.Equal(t, "string", api.OpenAPI().Paths["/test-params/{string}/{int}/{uuid}"].Get.Parameters[28].Schema.Type)
 			},
 			Method: http.MethodGet,
-			URL:    "/test-params/foo/123/fba4f46b-4539-4d19-8e3f-a0e629a243b5?string=bar&int=456&before=2023-01-01T12:00:00Z&date=2023-01-01&uint=1&bool=true&strings=foo,bar&ints=2,3&ints8=4,5&ints16=4,5&ints32=4,5&ints64=4,5&uints=1,2&uints16=10,15&uints32=10,15&uints64=10,15&floats32=2.2,2.3&floats64=3.2,3.3",
+			URL:    "/test-params/foo/123/fba4f46b-4539-4d19-8e3f-a0e629a243b5?string=bar&int=456&before=2023-01-01T12:00:00Z&date=2023-01-01&uint=1&bool=true&strings=foo,bar&ints=2,3&ints8=4,5&ints16=4,5&ints32=4,5&ints64=4,5&uints=1,2&uints16=10,15&uints32=10,15&uints64=10,15&floats32=2.2,2.3&floats64=3.2,3.3&exploded=foo&exploded=bar",
 			Headers: map[string]string{
 				"string": "baz",
 				"int":    "789",
