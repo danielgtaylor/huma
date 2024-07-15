@@ -69,6 +69,7 @@ A big thank you to our current & former sponsors:
 - [@bekabaz](https://github.com/bekabaz)
 - [@victoraugustolls](https://github.com/victoraugustolls)
 - [@phoenixtechnologies-io](https://github.com/phoenixtechnologies-io)
+- [@chenjr0719](https://github.com/chenjr0719)
 
 ## Testimonials
 
