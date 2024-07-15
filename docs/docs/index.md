@@ -8,6 +8,7 @@ sponsors:
     - bekabaz
     - victoraugustolls
     - phoenixtechnologies-io
+    - chenjr0719
 ---
 
 # Huma {.hidden}
