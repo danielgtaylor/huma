@@ -330,3 +330,90 @@ func TestDeprecatedPatch(t *testing.T) {
 
 	assert.True(t, api.OpenAPI().Paths["/things/{thing-id}"].Patch.Deprecated)
 }
+func TestMakeOptionalSchemaBasicProperties(t *testing.T) {
+	originalSchema := &huma.Schema{
+		Type: "object",
+		Properties: map[string]*huma.Schema{
+			"id":   {Type: "string"},
+			"name": {Type: "string"},
+		},
+		Required: []string{"id", "name"},
+	}
+
+	optionalSchema := makeOptionalSchema(originalSchema)
+
+	assert.Equal(t, "object", optionalSchema.Type)
+	assert.Contains(t, optionalSchema.Properties, "id")
+	assert.Contains(t, optionalSchema.Properties, "name")
+	assert.Empty(t, optionalSchema.Required)
+}
+
+func TestMakeOptionalSchemaAnyOf(t *testing.T) {
+	originalSchema := &huma.Schema{
+		AnyOf: []*huma.Schema{
+			{Type: "string"},
+			{Type: "number"},
+		},
+	}
+
+	optionalSchema := makeOptionalSchema(originalSchema)
+
+	assert.Len(t, optionalSchema.AnyOf, 2)
+	assert.Equal(t, "string", optionalSchema.AnyOf[0].Type)
+	assert.Equal(t, "number", optionalSchema.AnyOf[1].Type)
+}
+
+func TestMakeOptionalSchemaAllOf(t *testing.T) {
+	minLength := 1
+	maxLength := 100
+	originalSchema := &huma.Schema{
+		AllOf: []*huma.Schema{
+			{MinLength: &minLength},
+			{MaxLength: &maxLength},
+		},
+	}
+
+	optionalSchema := makeOptionalSchema(originalSchema)
+
+	assert.Len(t, optionalSchema.AllOf, 2)
+	assert.Equal(t, 1, *optionalSchema.AllOf[0].MinLength)
+	assert.Equal(t, 100, *optionalSchema.AllOf[1].MaxLength)
+}
+
+func TestMakeOptionalSchemaNot(t *testing.T) {
+	originalSchema := &huma.Schema{
+		Not: &huma.Schema{
+			Type: "null",
+		},
+	}
+
+	optionalSchema := makeOptionalSchema(originalSchema)
+
+	assert.NotNil(t, optionalSchema.Not)
+	assert.Equal(t, "null", optionalSchema.Not.Type)
+}
+
+func TestMakeOptionalSchemaNilInput(t *testing.T) {
+	assert.Nil(t, makeOptionalSchema(nil))
+}
+
+func TestMakeOptionalSchemaNestedSchemas(t *testing.T) {
+	nestedSchema := &huma.Schema{
+		Type: "object",
+		Properties: map[string]*huma.Schema{
+			"nested": {
+				Type: "object",
+				Properties: map[string]*huma.Schema{
+					"deeplyNested": {Type: "string"},
+				},
+				Required: []string{"deeplyNested"},
+			},
+		},
+		Required: []string{"nested"},
+	}
+
+	optionalNestedSchema := makeOptionalSchema(nestedSchema)
+
+	assert.Empty(t, optionalNestedSchema.Required)
+	assert.Empty(t, optionalNestedSchema.Properties["nested"].Required)
+}
