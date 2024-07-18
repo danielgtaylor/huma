@@ -73,6 +73,17 @@ func (t *TypedArrayWithCustomDesc) TransformSchema(r huma.Registry, s *huma.Sche
 	return s
 }
 
+type TypedStringWithCustomLength struct{}
+
+func (c TypedStringWithCustomLength) Schema(r huma.Registry) *huma.Schema {
+	min, max := 1, 10
+	return &huma.Schema{
+		Type:      "string",
+		MinLength: &min,
+		MaxLength: &max,
+	}
+}
+
 func TestSchema(t *testing.T) {
 	bitSize := strconv.Itoa(bits.UintSize)
 
@@ -845,6 +856,63 @@ func TestSchema(t *testing.T) {
 				} `json:"value" nullable:"true"`
 			}{},
 			panics: `nullable is not supported for field 'Value' which is type '#/components/schemas/ValueStruct'`,
+		},
+		{
+			name: "field-custom-length-string-in-slice",
+			input: struct {
+				Values []TypedStringWithCustomLength `json:"values"`
+			}{},
+			expected: ` {
+				"additionalProperties":false,
+				"properties":{
+					"values":{
+						"type":"array",
+						"items":{
+							"type":"string",
+							"minLength":1,
+							"maxLength":10
+						}
+					}
+				},
+				"required":["values"],
+				"type":"object"
+			}`,
+		},
+		{
+			name: "field-custom-length-string",
+			input: struct {
+				Value TypedStringWithCustomLength `json:"value"`
+			}{},
+			expected: ` {
+				"additionalProperties":false,
+				"properties":{
+					"value":{
+						"type":"string",
+						"minLength":1,
+						"maxLength":10
+					}
+				},
+				"required":["value"],
+				"type":"object"
+			}`,
+		},
+		{
+			name: "field-ptr-to-custom-length-string",
+			input: struct {
+				Value *TypedStringWithCustomLength `json:"value"`
+			}{},
+			expected: ` {
+				"additionalProperties":false,
+				"properties":{
+					"value":{
+						"type":"string",
+						"minLength":1,
+						"maxLength":10
+					}
+				},
+				"required":["value"],
+				"type":"object"
+			}`,
 		},
 		{
 			name: "field-custom-array",
