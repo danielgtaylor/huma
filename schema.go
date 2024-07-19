@@ -550,9 +550,15 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 		}
 	}
 
-	fs.Minimum = floatTag(f, "minimum")
+	if _, ok := f.Tag.Lookup("minimum"); ok {
+		fs.Minimum = floatTag(f, "minimum")
+	}
+
 	fs.ExclusiveMinimum = floatTag(f, "exclusiveMinimum")
-	fs.Maximum = floatTag(f, "maximum")
+
+	if _, ok := f.Tag.Lookup("maximum"); ok {
+		fs.Maximum = floatTag(f, "maximum")
+	}
 	fs.ExclusiveMaximum = floatTag(f, "exclusiveMaximum")
 	fs.MultipleOf = floatTag(f, "multipleOf")
 	fs.MinLength = intTag(f, "minLength")

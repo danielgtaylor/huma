@@ -73,6 +73,14 @@ func (t *TypedArrayWithCustomDesc) TransformSchema(r huma.Registry, s *huma.Sche
 	return s
 }
 
+type TypedIntegerWithCustomLimits int
+
+func (c *TypedIntegerWithCustomLimits) TransformSchema(r huma.Registry, s *huma.Schema) *huma.Schema {
+	s.Minimum = Ptr(float64(1))
+	s.Maximum = Ptr(float64(10))
+	return s
+}
+
 func TestSchema(t *testing.T) {
 	bitSize := strconv.Itoa(bits.UintSize)
 
@@ -845,6 +853,60 @@ func TestSchema(t *testing.T) {
 				} `json:"value" nullable:"true"`
 			}{},
 			panics: `nullable is not supported for field 'Value' which is type '#/components/schemas/ValueStruct'`,
+		},
+		{
+			name: "field-custom-limits-int",
+			input: struct {
+				Value TypedIntegerWithCustomLimits `json:"value"`
+			}{},
+			expected: ` {
+					"additionalProperties":false,
+					"properties":{
+						"value":{
+							"type":"integer",
+							"format":"int64",
+							"minimum":1,
+							"maximum":10
+						}
+					},
+					"required":["value"],
+					"type":"object"
+				}`,
+		},
+		{
+			name: "field-custom-limits-int-with-tag",
+			input: struct {
+				Value TypedIntegerWithCustomLimits `json:"value" minimum:"2"`
+			}{},
+			expected: ` {
+					"additionalProperties":false,
+					"properties":{
+						"value":{
+							"type":"integer",
+							"format":"int64",
+							"minimum":2,
+							"maximum":10
+						}
+					},
+					"required":["value"],
+					"type":"object"
+				}`,
+		},
+		{
+			name: "field-ptr-to-custom-limits-int",
+			input: struct {
+				Value *TypedIntegerWithCustomLimits `json:"value"`
+			}{},
+			expected: ` {
+				"additionalProperties":false,
+				"properties":{
+					"value":{
+						"type": ["integer", "null"]
+					}
+				},
+				"required":["value"],
+				"type":"object"
+			}`,
 		},
 		{
 			name: "field-custom-array",
