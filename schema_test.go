@@ -73,14 +73,13 @@ func (t *TypedArrayWithCustomDesc) TransformSchema(r huma.Registry, s *huma.Sche
 	return s
 }
 
-type TypedStringWithCustomLength struct{}
+type TypedStringWithCustomLength string
 
 func (c TypedStringWithCustomLength) Schema(r huma.Registry) *huma.Schema {
-	min, max := 1, 10
 	return &huma.Schema{
 		Type:      "string",
-		MinLength: &min,
-		MaxLength: &max,
+		MinLength: Ptr(1),
+		MaxLength: Ptr(10),
 	}
 }
 
@@ -897,6 +896,24 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-custom-length-string-with-tag",
+			input: struct {
+				Value TypedStringWithCustomLength `json:"value" maxLength:"20"`
+			}{},
+			expected: ` {
+				"additionalProperties":false,
+				"properties":{
+					"value":{
+						"type":"string",
+						"minLength":1,
+						"maxLength":20
+					}
+				},
+				"required":["value"],
+				"type":"object"
+			}`,
+		},
+		{
 			name: "field-ptr-to-custom-length-string",
 			input: struct {
 				Value *TypedStringWithCustomLength `json:"value"`
@@ -907,6 +924,24 @@ func TestSchema(t *testing.T) {
 					"value":{
 						"type":"string",
 						"minLength":1,
+						"maxLength":10
+					}
+				},
+				"required":["value"],
+				"type":"object"
+			}`,
+		},
+		{
+			name: "field-ptr-to-custom-length-string-with-tag",
+			input: struct {
+				Value *TypedStringWithCustomLength `json:"value" minLength:"0"`
+			}{},
+			expected: ` {
+				"additionalProperties":false,
+				"properties":{
+					"value":{
+						"type":"string",
+						"minLength":0,
 						"maxLength":10
 					}
 				},
