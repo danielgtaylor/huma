@@ -901,6 +901,7 @@ func TestSchema(t *testing.T) {
 				"additionalProperties":false,
 				"properties":{
 					"value":{
+						"format":"int64",
 						"type": ["integer", "null"]
 					}
 				},
