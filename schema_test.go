@@ -73,6 +73,17 @@ func (t *TypedArrayWithCustomDesc) TransformSchema(r huma.Registry, s *huma.Sche
 	return s
 }
 
+var _ huma.SchemaTransformer = (*CustomSchemaPtr)(nil)
+
+type CustomSchemaPtr struct {
+	Value string `json:"value"`
+}
+
+func (c *CustomSchemaPtr) TransformSchema(r huma.Registry, s *huma.Schema) *huma.Schema {
+	s.Description = "custom description"
+	return s
+}
+
 func TestSchema(t *testing.T) {
 	bitSize := strconv.Itoa(bits.UintSize)
 
@@ -892,6 +903,21 @@ func TestSchema(t *testing.T) {
 				"type":"object"
 			}`,
 		},
+		{
+			name:  "schema-transformer-for-ptr",
+			input: &CustomSchemaPtr{},
+			expected: ` {
+				"additionalProperties":false,
+				"description":"custom description",
+				"properties":{
+					"value":{
+						"type":"string"
+					}
+				},
+				"required":["value"],
+				"type":"object"
+			}`,
+		},
 	}
 
 	for _, c := range cases {
@@ -932,7 +958,6 @@ func TestSchemaOld(t *testing.T) {
 	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 
 	s := r.Schema(reflect.TypeOf(GreetingInput{}), false, "")
-	// fmt.Printf("%+v\n", s)
 	assert.Equal(t, "object", s.Type)
 	assert.Len(t, s.Properties, 1)
 	assert.Equal(t, "string", s.Properties["ID"].Type)
@@ -949,9 +974,6 @@ func TestSchemaOld(t *testing.T) {
 		},
 	}, &res)
 	assert.Empty(t, res.Errors)
-
-	// b, _ := json.MarshalIndent(r.Map(), "", "  ")
-	// fmt.Println(string(b))
 }
 
 func TestSchemaGenericNaming(t *testing.T) {
