@@ -168,16 +168,6 @@ func (r *ValidateResult) Add(path *PathBuffer, v any, msg string) {
 	})
 }
 
-// Addf adds an error to the validation result at the given path and with
-// the given value, allowing for fmt.Printf-style formatting.
-func (r *ValidateResult) Addf(path *PathBuffer, v any, format string, args ...any) {
-	r.Errors = append(r.Errors, &ErrorDetail{
-		Message:  fmt.Sprintf(format, args...),
-		Location: path.String(),
-		Value:    v,
-	})
-}
-
 // Reset the validation error so it can be used again.
 func (r *ValidateResult) Reset() {
 	r.Errors = r.Errors[:0]
@@ -213,7 +203,7 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 		// TODO: duration
 	case "email", "idn-email":
 		if _, err := mail.ParseAddress(str); err != nil {
-			res.Addf(path, str, validation.MsgExpectedRFC5322Email, err)
+			res.Add(path, str, validation.ErrorFormatter(validation.MsgExpectedRFC5322Email, err))
 		}
 	case "hostname":
 		if !(rxHostname.MatchString(str) && len(str) < 256) {
@@ -230,17 +220,17 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 		}
 	case "uri", "uri-reference", "iri", "iri-reference":
 		if _, err := url.Parse(str); err != nil {
-			res.Addf(path, str, validation.MsgExpectedRFC3986URI, err)
+			res.Add(path, str, validation.ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
 		}
 		// TODO: check if it's actually a reference?
 	case "uuid":
 		if err := validateUUID(str); err != nil {
-			res.Addf(path, str, validation.MsgExpectedRFC4122UUID, err)
+			res.Add(path, str, validation.ErrorFormatter(validation.MsgExpectedRFC4122UUID, err))
 		}
 	case "uri-template":
 		u, err := url.Parse(str)
 		if err != nil {
-			res.Addf(path, str, validation.MsgExpectedRFC3986URI, err)
+			res.Add(path, str, validation.ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
 			return
 		}
 		if !rxURITemplate.MatchString(u.Path) {
@@ -256,7 +246,7 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 		}
 	case "regex":
 		if _, err := regexp.Compile(str); err != nil {
-			res.Addf(path, str, validation.MsgExpectedRegexp, err)
+			res.Add(path, str, validation.ErrorFormatter(validation.MsgExpectedRegexp, err))
 		}
 	}
 }
@@ -384,12 +374,12 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 
 		if s.Minimum != nil {
 			if num < *s.Minimum {
-				res.Addf(path, v, s.msgMinimum)
+				res.Add(path, v, s.msgMinimum)
 			}
 		}
 		if s.ExclusiveMinimum != nil {
 			if num <= *s.ExclusiveMinimum {
-				res.Addf(path, v, s.msgExclusiveMinimum)
+				res.Add(path, v, s.msgExclusiveMinimum)
 			}
 		}
 		if s.Maximum != nil {
@@ -399,12 +389,12 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		}
 		if s.ExclusiveMaximum != nil {
 			if num >= *s.ExclusiveMaximum {
-				res.Addf(path, v, s.msgExclusiveMaximum)
+				res.Add(path, v, s.msgExclusiveMaximum)
 			}
 		}
 		if s.MultipleOf != nil {
 			if math.Mod(num, *s.MultipleOf) != 0 {
-				res.Addf(path, v, s.msgMultipleOf)
+				res.Add(path, v, s.msgMultipleOf)
 			}
 		}
 	case TypeString:
@@ -420,7 +410,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 
 		if s.MinLength != nil {
 			if utf8.RuneCountInString(str) < *s.MinLength {
-				res.Addf(path, str, s.msgMinLength)
+				res.Add(path, str, s.msgMinLength)
 			}
 		}
 		if s.MaxLength != nil {
@@ -504,12 +494,12 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 func handleArray[T any](r Registry, s *Schema, path *PathBuffer, mode ValidateMode, res *ValidateResult, arr []T) {
 	if s.MinItems != nil {
 		if len(arr) < *s.MinItems {
-			res.Addf(path, arr, s.msgMinItems)
+			res.Add(path, arr, s.msgMinItems)
 		}
 	}
 	if s.MaxItems != nil {
 		if len(arr) > *s.MaxItems {
-			res.Addf(path, arr, s.msgMaxItems)
+			res.Add(path, arr, s.msgMaxItems)
 		}
 	}
 
