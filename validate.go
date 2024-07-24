@@ -14,6 +14,8 @@ import (
 	"time"
 	"unicode/utf8"
 	"unsafe"
+
+	"github.com/danielgtaylor/huma/v2/validation"
 )
 
 // ValidateMode describes the direction of validation (server -> client or
@@ -192,69 +194,69 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 			}
 		}
 		if !found {
-			res.Add(path, str, "expected string to be RFC 3339 date-time")
+			res.Add(path, str, validation.MsgExpectedRFC3339DateTime)
 		}
 	case "date-time-http":
 		if _, err := time.Parse(time.RFC1123, str); err != nil {
-			res.Add(path, str, "expected string to be RFC 1123 date-time")
+			res.Add(path, str, validation.MsgExpectedRFC1123DateTime)
 		}
 	case "date":
 		if _, err := time.Parse("2006-01-02", str); err != nil {
-			res.Add(path, str, "expected string to be RFC 3339 date")
+			res.Add(path, str, validation.MsgExpectedRFC3339Date)
 		}
 	case "time":
 		if _, err := time.Parse("15:04:05", str); err != nil {
 			if _, err := time.Parse("15:04:05Z07:00", str); err != nil {
-				res.Add(path, str, "expected string to be RFC 3339 time")
+				res.Add(path, str, validation.MsgExpectedRFC3339Time)
 			}
 		}
 		// TODO: duration
 	case "email", "idn-email":
 		if _, err := mail.ParseAddress(str); err != nil {
-			res.Addf(path, str, "expected string to be RFC 5322 email: %v", err)
+			res.Addf(path, str, validation.MsgExpectedRFC5322Email, err)
 		}
 	case "hostname":
 		if !(rxHostname.MatchString(str) && len(str) < 256) {
-			res.Add(path, str, "expected string to be RFC 5890 hostname")
+			res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
 		}
 	// TODO: proper idn-hostname support... need to figure out how.
 	case "ipv4":
 		if ip := net.ParseIP(str); ip == nil || ip.To4() == nil {
-			res.Add(path, str, "expected string to be RFC 2673 ipv4")
+			res.Add(path, str, validation.MsgExpectedRFC2673IPv4)
 		}
 	case "ipv6":
 		if ip := net.ParseIP(str); ip == nil || ip.To16() == nil {
-			res.Add(path, str, "expected string to be RFC 2373 ipv6")
+			res.Add(path, str, validation.MsgExpectedRFC2373IPv6)
 		}
 	case "uri", "uri-reference", "iri", "iri-reference":
 		if _, err := url.Parse(str); err != nil {
-			res.Addf(path, str, "expected string to be RFC 3986 uri: %v", err)
+			res.Addf(path, str, validation.MsgExpectedRFC3986URI, err)
 		}
 		// TODO: check if it's actually a reference?
 	case "uuid":
 		if err := validateUUID(str); err != nil {
-			res.Addf(path, str, "expected string to be RFC 4122 uuid: %v", err)
+			res.Addf(path, str, validation.MsgExpectedRFC4122UUID, err)
 		}
 	case "uri-template":
 		u, err := url.Parse(str)
 		if err != nil {
-			res.Addf(path, str, "expected string to be RFC 3986 uri: %v", err)
+			res.Addf(path, str, validation.MsgExpectedRFC3986URI, err)
 			return
 		}
 		if !rxURITemplate.MatchString(u.Path) {
-			res.Add(path, str, "expected string to be RFC 6570 uri-template")
+			res.Add(path, str, validation.MsgExpectedRFC6570URITemplate)
 		}
 	case "json-pointer":
 		if !rxJSONPointer.MatchString(str) {
-			res.Add(path, str, "expected string to be RFC 6901 json-pointer")
+			res.Add(path, str, validation.MsgExpectedRFC6901JSONPointer)
 		}
 	case "relative-json-pointer":
 		if !rxRelJSONPointer.MatchString(str) {
-			res.Add(path, str, "expected string to be RFC 6901 relative-json-pointer")
+			res.Add(path, str, validation.MsgExpectedRFC6901RelativeJSONPointer)
 		}
 	case "regex":
 		if _, err := regexp.Compile(str); err != nil {
-			res.Addf(path, str, "expected string to be regex: %v", err)
+			res.Addf(path, str, validation.MsgExpectedRegexp, err)
 		}
 	}
 }
@@ -289,7 +291,7 @@ func validateAnyOf(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v
 	}
 
 	if matches == 0 {
-		res.Add(path, v, "expected value to match at least one schema but matched none")
+		res.Add(path, v, validation.MsgExpectedMatchSchema)
 	}
 }
 
@@ -333,7 +335,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		subRes := &ValidateResult{}
 		Validate(r, s.Not, path, mode, v, subRes)
 		if len(subRes.Errors) == 0 {
-			res.Add(path, v, "expected value to not match schema")
+			res.Add(path, v, validation.MsgExpectedNotMatchSchema)
 		}
 	}
 
@@ -344,7 +346,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 	switch s.Type {
 	case TypeBoolean:
 		if _, ok := v.(bool); !ok {
-			res.Add(path, v, "expected boolean")
+			res.Add(path, v, validation.MsgExpectedBoolean)
 			return
 		}
 	case TypeNumber, TypeInteger:
@@ -376,7 +378,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		case uint64:
 			num = float64(v)
 		default:
-			res.Add(path, v, "expected number")
+			res.Add(path, v, validation.MsgExpectedNumber)
 			return
 		}
 
@@ -411,7 +413,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 			if b, ok := v.([]byte); ok {
 				str = *(*string)(unsafe.Pointer(&b))
 			} else {
-				res.Add(path, v, "expected string")
+				res.Add(path, v, validation.MsgExpectedString)
 				return
 			}
 		}
@@ -438,7 +440,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 
 		if s.ContentEncoding == "base64" {
 			if !rxBase64.MatchString(str) {
-				res.Add(path, str, "expected string to be base64 encoded")
+				res.Add(path, str, validation.MsgExpectedBase64String)
 			}
 		}
 	case TypeArray:
@@ -471,7 +473,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		case []float64:
 			handleArray(r, s, path, mode, res, arr)
 		default:
-			res.Add(path, v, "expected array")
+			res.Add(path, v, validation.MsgExpectedArray)
 			return
 		}
 	case TypeObject:
@@ -480,7 +482,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		} else if vv, ok := v.(map[any]any); ok {
 			handleMapAny(r, s, path, mode, vv, res)
 		} else {
-			res.Add(path, v, "expected object")
+			res.Add(path, v, validation.MsgExpectedObject)
 			return
 		}
 	}
@@ -515,7 +517,7 @@ func handleArray[T any](r Registry, s *Schema, path *PathBuffer, mode ValidateMo
 		seen := make(map[any]struct{}, len(arr))
 		for _, item := range arr {
 			if _, ok := seen[item]; ok {
-				res.Add(path, arr, "expected array items to be unique")
+				res.Add(path, arr, validation.MsgExpectedArrayItemsUnique)
 			}
 			seen[item] = struct{}{}
 		}
@@ -602,7 +604,7 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 			// No additional properties allowed.
 			if _, ok := s.Properties[k]; !ok {
 				path.Push(k)
-				res.Add(path, m, "unexpected property")
+				res.Add(path, m, validation.MsgUnexpectedProperty)
 				path.Pop()
 			}
 		}
@@ -702,7 +704,7 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 			}
 			if _, ok := s.Properties[kStr]; !ok {
 				path.Push(kStr)
-				res.Add(path, m, "unexpected property")
+				res.Add(path, m, validation.MsgUnexpectedProperty)
 				path.Pop()
 			}
 		}
