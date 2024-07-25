@@ -658,6 +658,8 @@ type SchemaTransformer interface {
 //	schema := huma.SchemaFromType(registry, reflect.TypeOf(MyType{}))
 func SchemaFromType(r Registry, t reflect.Type) *Schema {
 	s := schemaFromType(r, t)
+	t = deref(t)
+
 	// Transform generated schema if type implements SchemaTransformer
 	v := reflect.New(t).Interface()
 	if st, ok := v.(SchemaTransformer); ok {
