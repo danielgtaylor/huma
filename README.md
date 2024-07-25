@@ -65,9 +65,7 @@ This project was inspired by [FastAPI](https://fastapi.tiangolo.com/). Logo & br
 
 A big thank you to our current & former sponsors!
 
-<table width="100%">
-	<tr>
-			<td>
+<div>
 					<img width="1000" height="0" />
 					<a href="https://zuplo.link/huma-gh ">
 					<picture>
@@ -80,9 +78,8 @@ A big thank you to our current & former sponsors!
 							Our API Gateway allows you to secure your API, scale it globally, generate documentation from your OpenAPI, and monetize your users.
 					</p>
 					<a href="https://zuplo.link/huma-gh ">Start for Free</a>
-			</td>
-	</tr>
-</table>
+</div>
+<hr/>
 
 - [@bclements](https://github.com/bclements)
 - [@bekabaz](https://github.com/bekabaz)
