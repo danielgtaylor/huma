@@ -81,7 +81,7 @@ type CustomSchemaPtr struct {
 
 func (c *CustomSchemaPtr) TransformSchema(r huma.Registry, s *huma.Schema) *huma.Schema {
 	s.Description = "custom description"
-  	return s
+	return s
 }
 
 type TypedStringWithCustomLength string
@@ -1016,7 +1016,9 @@ func TestSchema(t *testing.T) {
 				"properties":{
 					"value":{
 						"format":"int64",
-						"type": ["integer", "null"]
+						"type": ["integer", "null"],
+						"minimum":1,
+						"maximum":10
 					}
 				},
 				"required":["value"],
