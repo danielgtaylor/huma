@@ -168,6 +168,16 @@ func (r *ValidateResult) Add(path *PathBuffer, v any, msg string) {
 	})
 }
 
+// Addf adds an error to the validation result at the given path and with
+// the given value, allowing for fmt.Printf-style formatting.
+func (r *ValidateResult) Addf(path *PathBuffer, v any, format string, args ...any) {
+	r.Errors = append(r.Errors, &ErrorDetail{
+		Message:  fmt.Sprintf(format, args...),
+		Location: path.String(),
+		Value:    v,
+	})
+}
+
 // Reset the validation error so it can be used again.
 func (r *ValidateResult) Reset() {
 	r.Errors = r.Errors[:0]
