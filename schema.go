@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/danielgtaylor/huma/v2/validation"
 )
 
 // ErrSchemaInvalid is sent when there is a problem building the schema.
@@ -202,49 +204,49 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 // PrecomputeMessages tries to precompute as many validation error messages
 // as possible so that new strings aren't allocated during request validation.
 func (s *Schema) PrecomputeMessages() {
-	s.msgEnum = "expected value to be one of \"" + strings.Join(mapTo(s.Enum, func(v any) string {
+	s.msgEnum = ErrorFormatter(validation.MsgExpectedOneOf, strings.Join(mapTo(s.Enum, func(v any) string {
 		return fmt.Sprintf("%v", v)
-	}), ", ") + "\""
+	}), ", "))
 	if s.Minimum != nil {
-		s.msgMinimum = fmt.Sprintf("expected number >= %v", *s.Minimum)
+		s.msgMinimum = ErrorFormatter(validation.MsgExpectedMinimumNumber, *s.Minimum)
 	}
 	if s.ExclusiveMinimum != nil {
-		s.msgExclusiveMinimum = fmt.Sprintf("expected number > %v", *s.ExclusiveMinimum)
+		s.msgExclusiveMinimum = ErrorFormatter(validation.MsgExpectedExclusiveMinimumNumber, *s.ExclusiveMinimum)
 	}
 	if s.Maximum != nil {
-		s.msgMaximum = fmt.Sprintf("expected number <= %v", *s.Maximum)
+		s.msgMaximum = ErrorFormatter(validation.MsgExpectedMaximumNumber, *s.Maximum)
 	}
 	if s.ExclusiveMaximum != nil {
-		s.msgExclusiveMaximum = fmt.Sprintf("expected number < %v", *s.ExclusiveMaximum)
+		s.msgExclusiveMaximum = ErrorFormatter(validation.MsgExpectedExclusiveMaximumNumber, *s.ExclusiveMaximum)
 	}
 	if s.MultipleOf != nil {
-		s.msgMultipleOf = fmt.Sprintf("expected number to be a multiple of %v", *s.MultipleOf)
+		s.msgMultipleOf = ErrorFormatter(validation.MsgExpectedNumberBeMultipleOf, *s.MultipleOf)
 	}
 	if s.MinLength != nil {
-		s.msgMinLength = fmt.Sprintf("expected length >= %d", *s.MinLength)
+		s.msgMinLength = ErrorFormatter(validation.MsgExpectedMinLength, *s.MinLength)
 	}
 	if s.MaxLength != nil {
-		s.msgMaxLength = fmt.Sprintf("expected length <= %d", *s.MaxLength)
+		s.msgMaxLength = ErrorFormatter(validation.MsgExpectedMaxLength, *s.MaxLength)
 	}
 	if s.Pattern != "" {
 		s.patternRe = regexp.MustCompile(s.Pattern)
 		if s.PatternDescription != "" {
-			s.msgPattern = "expected string to be " + s.PatternDescription
+			s.msgPattern = ErrorFormatter(validation.MsgExpectedBePattern, s.PatternDescription)
 		} else {
-			s.msgPattern = "expected string to match pattern " + s.Pattern
+			s.msgPattern = ErrorFormatter(validation.MsgExpectedMatchPattern, s.Pattern)
 		}
 	}
 	if s.MinItems != nil {
-		s.msgMinItems = fmt.Sprintf("expected array length >= %d", *s.MinItems)
+		s.msgMinItems = ErrorFormatter(validation.MsgExpectedMinItems, *s.MinItems)
 	}
 	if s.MaxItems != nil {
-		s.msgMaxItems = fmt.Sprintf("expected array length <= %d", *s.MaxItems)
+		s.msgMaxItems = ErrorFormatter(validation.MsgExpectedMaxItems, *s.MaxItems)
 	}
 	if s.MinProperties != nil {
-		s.msgMinProperties = fmt.Sprintf("expected object with at least %d properties", *s.MinProperties)
+		s.msgMinProperties = ErrorFormatter(validation.MsgExpectedMinProperties, *s.MinProperties)
 	}
 	if s.MaxProperties != nil {
-		s.msgMaxProperties = fmt.Sprintf("expected object with at most %d properties", *s.MaxProperties)
+		s.msgMaxProperties = ErrorFormatter(validation.MsgExpectedMaxProperties, *s.MaxProperties)
 	}
 
 	if s.Required != nil {
@@ -252,7 +254,7 @@ func (s *Schema) PrecomputeMessages() {
 			s.msgRequired = map[string]string{}
 		}
 		for _, name := range s.Required {
-			s.msgRequired[name] = "expected required property " + name + " to be present"
+			s.msgRequired[name] = ErrorFormatter(validation.MsgExpectedRequiredProperty, name)
 		}
 	}
 
@@ -265,7 +267,7 @@ func (s *Schema) PrecomputeMessages() {
 				if s.msgDependentRequired[name] == nil {
 					s.msgDependentRequired[name] = map[string]string{}
 				}
-				s.msgDependentRequired[name][dependent] = "expected property " + dependent + " to be present when " + name + " is present"
+				s.msgDependentRequired[name][dependent] = ErrorFormatter(validation.MsgExpectedDependentRequiredProperty, dependent, name)
 			}
 		}
 	}
