@@ -1300,6 +1300,28 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+func TestValidateCustomFormatter(t *testing.T) {
+	originalFormatter := huma.ErrorFormatter
+	defer func() {
+		huma.ErrorFormatter = originalFormatter
+	}()
+
+	huma.ErrorFormatter = func(format string, a ...any) string {
+		return fmt.Sprintf("custom: %v", a)
+	}
+
+	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	s := registry.Schema(reflect.TypeOf(struct {
+		Value string `json:"value" format:"email"`
+	}{}), true, "TestInput")
+	pb := huma.NewPathBuffer([]byte(""), 0)
+	res := &huma.ValidateResult{}
+
+	huma.Validate(registry, s, pb, huma.ModeReadFromServer, map[string]any{"value": "alice"}, res)
+	assert.Len(t, res.Errors, 1)
+	assert.Equal(t, "custom: [mail: missing '@' or angle-addr] (value: alice)", res.Errors[0].Error())
+}
+
 func ExampleModelValidator() {
 	// Define a type you want to validate.
 	type Model struct {
