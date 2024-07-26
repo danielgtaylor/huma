@@ -362,3 +362,6 @@ func Error503ServiceUnavailable(msg string, errs ...error) StatusError {
 func Error504GatewayTimeout(msg string, errs ...error) StatusError {
 	return NewError(http.StatusGatewayTimeout, msg, errs...)
 }
+
+// ErrorFormatter is a function that formats an error message
+var ErrorFormatter func(format string, a ...any) string = fmt.Sprintf

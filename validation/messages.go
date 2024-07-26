@@ -1,7 +1,5 @@
 package validation
 
-import "fmt"
-
 // List of built-in validation error messages
 var (
 	MsgUnexpectedProperty                 = "unexpected property"
@@ -45,6 +43,3 @@ var (
 	MsgExpectedRequiredProperty           = "expected required property %s to be present"
 	MsgExpectedDependentRequiredProperty  = "expected property %s to be present when %s is present"
 )
-
-// ErrorFormatter is a function that formats an error message
-var ErrorFormatter func(format string, a ...any) string = fmt.Sprintf

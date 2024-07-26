@@ -204,49 +204,49 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 // PrecomputeMessages tries to precompute as many validation error messages
 // as possible so that new strings aren't allocated during request validation.
 func (s *Schema) PrecomputeMessages() {
-	s.msgEnum = validation.ErrorFormatter(validation.MsgExpectedOneOf, strings.Join(mapTo(s.Enum, func(v any) string {
+	s.msgEnum = ErrorFormatter(validation.MsgExpectedOneOf, strings.Join(mapTo(s.Enum, func(v any) string {
 		return fmt.Sprintf("%v", v)
 	}), ", "))
 	if s.Minimum != nil {
-		s.msgMinimum = validation.ErrorFormatter(validation.MsgExpectedMinimumNumber, *s.Minimum)
+		s.msgMinimum = ErrorFormatter(validation.MsgExpectedMinimumNumber, *s.Minimum)
 	}
 	if s.ExclusiveMinimum != nil {
-		s.msgExclusiveMinimum = validation.ErrorFormatter(validation.MsgExpectedExclusiveMinimumNumber, *s.ExclusiveMinimum)
+		s.msgExclusiveMinimum = ErrorFormatter(validation.MsgExpectedExclusiveMinimumNumber, *s.ExclusiveMinimum)
 	}
 	if s.Maximum != nil {
-		s.msgMaximum = validation.ErrorFormatter(validation.MsgExpectedMaximumNumber, *s.Maximum)
+		s.msgMaximum = ErrorFormatter(validation.MsgExpectedMaximumNumber, *s.Maximum)
 	}
 	if s.ExclusiveMaximum != nil {
-		s.msgExclusiveMaximum = validation.ErrorFormatter(validation.MsgExpectedExclusiveMaximumNumber, *s.ExclusiveMaximum)
+		s.msgExclusiveMaximum = ErrorFormatter(validation.MsgExpectedExclusiveMaximumNumber, *s.ExclusiveMaximum)
 	}
 	if s.MultipleOf != nil {
-		s.msgMultipleOf = validation.ErrorFormatter(validation.MsgExpectedNumberBeMultipleOf, *s.MultipleOf)
+		s.msgMultipleOf = ErrorFormatter(validation.MsgExpectedNumberBeMultipleOf, *s.MultipleOf)
 	}
 	if s.MinLength != nil {
-		s.msgMinLength = validation.ErrorFormatter(validation.MsgExpectedMinLength, *s.MinLength)
+		s.msgMinLength = ErrorFormatter(validation.MsgExpectedMinLength, *s.MinLength)
 	}
 	if s.MaxLength != nil {
-		s.msgMaxLength = validation.ErrorFormatter(validation.MsgExpectedMaxLength, *s.MaxLength)
+		s.msgMaxLength = ErrorFormatter(validation.MsgExpectedMaxLength, *s.MaxLength)
 	}
 	if s.Pattern != "" {
 		s.patternRe = regexp.MustCompile(s.Pattern)
 		if s.PatternDescription != "" {
-			s.msgPattern = validation.ErrorFormatter(validation.MsgExpectedBePattern, s.PatternDescription)
+			s.msgPattern = ErrorFormatter(validation.MsgExpectedBePattern, s.PatternDescription)
 		} else {
-			s.msgPattern = validation.ErrorFormatter(validation.MsgExpectedMatchPattern, s.Pattern)
+			s.msgPattern = ErrorFormatter(validation.MsgExpectedMatchPattern, s.Pattern)
 		}
 	}
 	if s.MinItems != nil {
-		s.msgMinItems = validation.ErrorFormatter(validation.MsgExpectedMinItems, *s.MinItems)
+		s.msgMinItems = ErrorFormatter(validation.MsgExpectedMinItems, *s.MinItems)
 	}
 	if s.MaxItems != nil {
-		s.msgMaxItems = validation.ErrorFormatter(validation.MsgExpectedMaxItems, *s.MaxItems)
+		s.msgMaxItems = ErrorFormatter(validation.MsgExpectedMaxItems, *s.MaxItems)
 	}
 	if s.MinProperties != nil {
-		s.msgMinProperties = validation.ErrorFormatter(validation.MsgExpectedMinProperties, *s.MinProperties)
+		s.msgMinProperties = ErrorFormatter(validation.MsgExpectedMinProperties, *s.MinProperties)
 	}
 	if s.MaxProperties != nil {
-		s.msgMaxProperties = validation.ErrorFormatter(validation.MsgExpectedMaxProperties, *s.MaxProperties)
+		s.msgMaxProperties = ErrorFormatter(validation.MsgExpectedMaxProperties, *s.MaxProperties)
 	}
 
 	if s.Required != nil {
@@ -254,7 +254,7 @@ func (s *Schema) PrecomputeMessages() {
 			s.msgRequired = map[string]string{}
 		}
 		for _, name := range s.Required {
-			s.msgRequired[name] = validation.ErrorFormatter(validation.MsgExpectedRequiredProperty, name)
+			s.msgRequired[name] = ErrorFormatter(validation.MsgExpectedRequiredProperty, name)
 		}
 	}
 
@@ -267,7 +267,7 @@ func (s *Schema) PrecomputeMessages() {
 				if s.msgDependentRequired[name] == nil {
 					s.msgDependentRequired[name] = map[string]string{}
 				}
-				s.msgDependentRequired[name][dependent] = validation.ErrorFormatter(validation.MsgExpectedDependentRequiredProperty, dependent, name)
+				s.msgDependentRequired[name][dependent] = ErrorFormatter(validation.MsgExpectedDependentRequiredProperty, dependent, name)
 			}
 		}
 	}

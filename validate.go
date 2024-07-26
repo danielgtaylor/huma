@@ -213,7 +213,7 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 		// TODO: duration
 	case "email", "idn-email":
 		if _, err := mail.ParseAddress(str); err != nil {
-			res.Add(path, str, validation.ErrorFormatter(validation.MsgExpectedRFC5322Email, err))
+			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC5322Email, err))
 		}
 	case "hostname":
 		if !(rxHostname.MatchString(str) && len(str) < 256) {
@@ -230,17 +230,17 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 		}
 	case "uri", "uri-reference", "iri", "iri-reference":
 		if _, err := url.Parse(str); err != nil {
-			res.Add(path, str, validation.ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
+			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
 		}
 		// TODO: check if it's actually a reference?
 	case "uuid":
 		if err := validateUUID(str); err != nil {
-			res.Add(path, str, validation.ErrorFormatter(validation.MsgExpectedRFC4122UUID, err))
+			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC4122UUID, err))
 		}
 	case "uri-template":
 		u, err := url.Parse(str)
 		if err != nil {
-			res.Add(path, str, validation.ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
+			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
 			return
 		}
 		if !rxURITemplate.MatchString(u.Path) {
@@ -256,7 +256,7 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 		}
 	case "regex":
 		if _, err := regexp.Compile(str); err != nil {
-			res.Add(path, str, validation.ErrorFormatter(validation.MsgExpectedRegexp, err))
+			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRegexp, err))
 		}
 	}
 }
