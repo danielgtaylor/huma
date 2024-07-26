@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/danielgtaylor/huma/v2/validation"
 )
 
@@ -1406,6 +1407,48 @@ func TestValidateCustomFormatter(t *testing.T) {
 	assert.Equal(t, "custom: [mail: missing '@' or angle-addr] (value: alice)", res.Errors[0].Error())
 }
 
+func TestValidateContextFormatter(t *testing.T) {
+	huma.ErrorFormatterContext = func(ctx huma.Context, format string, a ...any) string {
+		assert.NotNil(t, ctx)
+		return fmt.Sprintf("translated string for format '%s' and arguments '%v'", format, a)
+	}
+	defer func() {
+		huma.ErrorFormatterContext = nil
+	}()
+
+	ctx := humatest.NewContext(nil, nil, nil)
+
+	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	// this validation always happens in runtime
+	s := registry.Schema(reflect.TypeOf(struct {
+		Value string `json:"value" format:"email"`
+	}{}), true, "TestInput")
+	pb := huma.NewPathBuffer([]byte(""), 0)
+	res := &huma.ValidateResult{}
+
+	huma.ValidateContext(ctx, registry, s, pb, huma.ModeWriteToServer, map[string]any{"value": "bad"}, res)
+
+	assert.Len(t, res.Errors, 1)
+	assert.Equal(t,
+		"translated string for format 'expected string to be RFC 5322 email: %v' and arguments '[mail: missing '@' or angle-addr]' (value: bad)",
+		res.Errors[0].Error())
+
+	registry = huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	// this validation is using pre-computed validation error without context formatter
+	s = registry.Schema(reflect.TypeOf(struct {
+		Value int `json:"value" minimum:"5"`
+	}{}), true, "TestInput")
+	pb = huma.NewPathBuffer([]byte(""), 0)
+	res = &huma.ValidateResult{}
+
+	huma.ValidateContext(ctx, registry, s, pb, huma.ModeWriteToServer, map[string]any{"value": 1}, res)
+
+	assert.Len(t, res.Errors, 1)
+	assert.Equal(t,
+		"translated string for format 'expected number >= %v' and arguments '[5]' (value: 1)",
+		res.Errors[0].Error())
+}
+
 func ExampleModelValidator() {
 	// Define a type you want to validate.
 	type Model struct {
@@ -1472,6 +1515,18 @@ func BenchmarkValidate(b *testing.B) {
 			}
 		})
 	}
+}
+
+func BenchmarkValidateContext(b *testing.B) {
+	// use the same formatter as in BenchmarkValidate to measure only difference in pre-computed messages
+	// and not the actual formatting logic that would differ based on use-case
+	huma.ErrorFormatterContext = func(ctx huma.Context, format string, a ...any) string {
+		return huma.ErrorFormatter(format, a...)
+	}
+	defer func() {
+		huma.ErrorFormatterContext = nil
+	}()
+	BenchmarkValidate(b)
 }
 
 type Cat struct {

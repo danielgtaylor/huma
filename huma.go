@@ -1143,7 +1143,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				}
 
 				if !op.SkipValidateParams {
-					Validate(oapi.Components.Schemas, p.Schema, pb, ModeWriteToServer, pv, res)
+					ValidateContext(ctx, oapi.Components.Schemas, p.Schema, pb, ModeWriteToServer, pv, res)
 				}
 			}
 		})
@@ -1251,7 +1251,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							pb.Reset()
 							pb.Push("body")
 							count := len(res.Errors)
-							Validate(oapi.Components.Schemas, inSchema, pb, ModeWriteToServer, parsed, res)
+							ValidateContext(ctx, oapi.Components.Schemas, inSchema, pb, ModeWriteToServer, parsed, res)
 							parseErrCount = len(res.Errors) - count
 							if parseErrCount > 0 {
 								errStatus = http.StatusUnprocessableEntity

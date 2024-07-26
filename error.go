@@ -365,3 +365,7 @@ func Error504GatewayTimeout(msg string, errs ...error) StatusError {
 
 // ErrorFormatter is a function that formats an error message
 var ErrorFormatter func(format string, a ...any) string = fmt.Sprintf
+
+// ErrorFormatterContext is a function that will be used instead of ErrorFormatter
+// to format an error message when defined
+var ErrorFormatterContext func(ctx Context, format string, a ...any) string = nil
