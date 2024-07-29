@@ -204,12 +204,12 @@ func TestSchema(t *testing.T) {
 		{
 			name:     "array",
 			input:    [2]int{1, 2},
-			expected: `{"type": "array", "items": {"type": "integer", "format": "int64"}, "minItems": 2, "maxItems": 2}`,
+			expected: `{"type": ["array", "null"], "items": {"type": "integer", "format": "int64"}, "minItems": 2, "maxItems": 2}`,
 		},
 		{
 			name:     "slice",
 			input:    []int{1, 2, 3},
-			expected: `{"type": "array", "items": {"type": "integer", "format": "int64"}}`,
+			expected: `{"type": ["array", "null"], "items": {"type": "integer", "format": "int64"}}`,
 		},
 		{
 			name:     "map",
@@ -285,7 +285,7 @@ func TestSchema(t *testing.T) {
 				"type": "object",
 				"properties": {
 					"value": {
-						"type": "array",
+						"type": ["array", "null"],
 						"minItems": 1,
 						"maxItems": 10,
 						"uniqueItems": true,
@@ -343,7 +343,7 @@ func TestSchema(t *testing.T) {
 				"type": "object",
 				"properties": {
 					"value": {
-						"type": "array",
+						"type": ["array", "null"],
 						"items": {
 							"type": "integer",
 							"format": "int64",
@@ -433,7 +433,7 @@ func TestSchema(t *testing.T) {
 				"type": "object",
 				"properties": {
 					"value": {
-						"type": "array",
+						"type": ["array", "null"],
 						"items": {
 							"type": "string"
 						},
@@ -453,7 +453,7 @@ func TestSchema(t *testing.T) {
 				"type": "object",
 				"properties": {
 					"value": {
-						"type": "array",
+						"type": ["array", "null"],
 						"items": {
 							"type": "integer",
 							"format": "int64"
@@ -744,7 +744,7 @@ func TestSchema(t *testing.T) {
 						},
 						"maxItems":1,
 						"minItems":1,
-						"type":"array"
+						"type":["array", "null"]
 					},
 					"byRef":{
 						"$ref":"#/components/schemas/RecursiveChildKey"
@@ -762,7 +762,7 @@ func TestSchema(t *testing.T) {
 						"items":{
 							"$ref":"#/components/schemas/RecursiveChildLoop"
 						},
-						"type":"array"}
+						"type":["array", "null"]}
 					},
 					"required":["slice","array","map","byValue", "byRef"],
 					"type":"object"
@@ -884,7 +884,7 @@ func TestSchema(t *testing.T) {
 				"additionalProperties":false,
 				"properties":{
 					"values":{
-						"type":"array",
+						"type":["array", "null"],
 						"items":{
 							"type":"string",
 							"minLength":1,
@@ -1041,7 +1041,7 @@ func TestSchema(t *testing.T) {
 						},
 						"maxItems":4,
 						"minItems":4,
-						"type":"array"
+						"type":["array", "null"]
 					}
 				},
 				"required":["value"],
@@ -1064,7 +1064,7 @@ func TestSchema(t *testing.T) {
 						},
 						"maxItems":4,
 						"minItems":4,
-						"type":"array"
+						"type":["array", "null"]
 					}
 				},
 				"required":["value"],
