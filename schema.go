@@ -515,7 +515,9 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 	if enc := f.Tag.Get("encoding"); enc != "" {
 		fs.ContentEncoding = enc
 	}
-	fs.Default = jsonTag(registry, f, fs, "default")
+	if defaultValue := jsonTag(registry, f, fs, "default"); defaultValue != nil {
+		fs.Default = defaultValue
+	}
 
 	if value := f.Tag.Get("example"); value != "" {
 		if e := jsonTagValue(registry, f.Name, fs, value); e != nil {
