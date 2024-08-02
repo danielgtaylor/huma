@@ -111,7 +111,7 @@ Any error which satisfies the `huma.HeadersError` interface will have the header
 
 It is possible to provide your own error model and have the built-in error utility functions use that model instead of the default one. This is useful if you want to provide more information in your error responses or your organization has requirements around the error response structure.
 
-This is accmplished by defining your custom model as a [`huma.StatusError`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#StatusError) and then overriding the built-in [`huma.NewError`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#NewError) function:
+This is accomplished by defining your custom model as a [`huma.StatusError`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#StatusError) and then overriding the built-in [`huma.NewError`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#NewError) function:
 
 ```go title="code.go" hl_lines="1-13 16-26 36"
 type MyError struct {
