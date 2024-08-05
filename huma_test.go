@@ -2134,6 +2134,32 @@ func TestUnsupportedEmbeddedTypeWithMethods(t *testing.T) {
 	})
 }
 
+type SchemaWithExample int
+
+func (*SchemaWithExample) Schema(r huma.Registry) *huma.Schema {
+	schema := &huma.Schema{
+		Type:     huma.TypeInteger,
+		Examples: []any{1},
+	}
+	return schema
+}
+
+func TestSchemaWithExample(t *testing.T) {
+	_, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodGet,
+		Path:        "/test",
+	}, func(ctx context.Context, input *struct {
+		Test SchemaWithExample `query:"test"`
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	example := app.OpenAPI().Paths["/test"].Get.Parameters[0].Example
+	assert.Equal(t, 1, example)
+}
+
 // func BenchmarkSecondDecode(b *testing.B) {
 // 	//nolint: musttag
 // 	type MediumSized struct {
