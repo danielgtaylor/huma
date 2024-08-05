@@ -248,6 +248,43 @@ var NewError = func(status int, msg string, errs ...error) StatusError {
 	}
 }
 
+// HandleTypedError dynamically creates an HTTP error response based on the type of the provided error.
+// This allows API implementers to customize the HTTP error response according to different error types
+// handled by the application.
+//
+// Usage example:
+//
+//	type NotFoundError struct {
+//		Resource string
+//	}
+//
+//	func (e *NotFoundError) Error() string {
+//		return fmt.Sprintf("Resource '%s' not found", e.Resource)
+//	}
+//
+//	type ValidationError struct {
+//		Field   string
+//		Message string
+//	}
+//
+//	func (e *ValidationError) Error() string {
+//		return fmt.Sprintf("Validation failed on '%s': %s", e.Field, e.Message)
+//	}
+//
+//	NewTypedError = func(err error) StatusError {
+//		switch e := err.(type) {
+//		case *NotFoundError:
+//			return NewError(http.StatusNotFound, e.Error())
+//		case *ValidationError:
+//			return NewError(http.StatusBadRequest, e.Error())
+//		default:
+//			return NewError(http.StatusInternalServerError, "An unexpected error has occurred")
+//		}
+//	}
+var HandleTypedError = func(err error) StatusError {
+	return NewError(http.StatusInternalServerError, err.Error())
+}
+
 // WriteErr writes an error response with the given context, using the
 // configured error type and with the given status code and message. It is
 // marshaled using the API's content negotiation methods.
