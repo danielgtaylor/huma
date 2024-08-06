@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/validation"
 )
 
 func Ptr[T any](v T) *T {
@@ -1254,6 +1256,71 @@ var validateTests = []struct {
 		input: map[string]any{},
 		errs:  []string{"expected required property field to be present"},
 	},
+	{
+		name: "discriminator: input expected to be an object",
+		s: &huma.Schema{
+			Type: huma.TypeObject,
+			OneOf: []*huma.Schema{
+				{Type: huma.TypeString},
+			},
+			Discriminator: &huma.Discriminator{
+				PropertyName: "inputType",
+			},
+		},
+		input: "test",
+		errs:  []string{validation.MsgExpectedObject},
+	},
+	{
+		name: "discriminator: propertyName expected to be present in object",
+		s: &huma.Schema{
+			Type: huma.TypeObject,
+			OneOf: []*huma.Schema{
+				{Type: huma.TypeString},
+			},
+			Properties: map[string]*huma.Schema{
+				"inputType": {Type: huma.TypeString},
+			},
+			Discriminator: &huma.Discriminator{
+				PropertyName: "inputType",
+			},
+		},
+		input: map[string]any{"undefined": ""},
+		errs:  []string{validation.MsgExpectedPropertyNameInObject},
+	},
+	{
+		name: "discriminator: propertyName expected to be string",
+		s: &huma.Schema{
+			Type: huma.TypeObject,
+			OneOf: []*huma.Schema{
+				{Type: huma.TypeString},
+			},
+			Properties: map[string]*huma.Schema{
+				"inputType": {Type: huma.TypeString},
+			},
+			Discriminator: &huma.Discriminator{
+				PropertyName: "inputType",
+			},
+		},
+		input: map[string]any{"inputType": 1},
+		errs:  []string{validation.MsgExpectedString},
+	},
+	{
+		name: "discriminator: propertyName not explicitly mapped",
+		s: &huma.Schema{
+			Type: huma.TypeObject,
+			OneOf: []*huma.Schema{
+				{Type: huma.TypeString},
+			},
+			Properties: map[string]*huma.Schema{
+				"inputType": {Type: huma.TypeString},
+			},
+			Discriminator: &huma.Discriminator{
+				PropertyName: "inputType",
+			},
+		},
+		input: map[string]any{"inputType": "test"},
+		errs:  []string{validation.MsgExpectedMatchExactlyOneSchema},
+	},
 }
 
 func TestValidate(t *testing.T) {
@@ -1385,6 +1452,110 @@ func BenchmarkValidate(b *testing.B) {
 				pb.Reset()
 				res.Reset()
 				huma.Validate(registry, s, pb, test.mode, input, res)
+			}
+		})
+	}
+}
+
+type Cat struct {
+	Name string `json:"name" minLength:"2" maxLength:"10"`
+	Kind string `json:"kind" enum:"cat"`
+}
+
+type Dog struct {
+	Color string `json:"color" enum:"black,white,brown"`
+	Kind  string `json:"kind" enum:"dog"`
+}
+
+func Test_validateWithDiscriminator(t *testing.T) {
+	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	catSchema := registry.Schema(reflect.TypeOf(Cat{}), true, "Cat")
+	dogSchema := registry.Schema(reflect.TypeOf(Dog{}), true, "Dog")
+
+	s := &huma.Schema{
+		Type:        huma.TypeObject,
+		Description: "Animal",
+		OneOf: []*huma.Schema{
+			{Ref: catSchema.Ref},
+			{Ref: dogSchema.Ref},
+		},
+		Discriminator: &huma.Discriminator{
+			PropertyName: "kind",
+			Mapping: map[string]string{
+				"cat": catSchema.Ref,
+				"dog": dogSchema.Ref,
+			},
+		},
+	}
+
+	pb := huma.NewPathBuffer([]byte(""), 0)
+	res := &huma.ValidateResult{}
+
+	tests := []struct {
+		name     string
+		input    any
+		wantErrs []string
+	}{
+		{
+			name: "cat - minLength case",
+			input: map[string]any{
+				"kind": "cat",
+				"name": "c",
+			},
+			wantErrs: []string{"expected length >= 2"},
+		},
+		{
+			name: "cat - maxLength case",
+			input: map[string]any{
+				"kind": "cat",
+				"name": "aaaaaaaaaaa",
+			},
+			wantErrs: []string{"expected length <= 10"},
+		},
+		{
+			name: "cat - invalida schema",
+			input: map[string]any{
+				"kind": "dog",
+				"name": "cat",
+			},
+			wantErrs: []string{
+				"expected required property color to be present",
+				"unexpected property",
+			},
+		},
+		{
+			name: "cat - ok",
+			input: map[string]any{
+				"kind": "cat",
+				"name": "meow",
+			},
+		},
+		{
+			name: "dog - wrong color",
+			input: map[string]any{
+				"kind":  "dog",
+				"color": "red",
+			},
+			wantErrs: []string{"expected value to be one of \"black, white, brown\""},
+		},
+		{
+			name: "unknown kind",
+			input: map[string]any{
+				"kind": "unknown",
+				"foo":  "bar",
+			},
+			wantErrs: []string{validation.MsgExpectedMatchExactlyOneSchema},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pb.Reset()
+			res.Reset()
+			huma.Validate(registry, s, pb, huma.ModeWriteToServer, tc.input, res)
+			require.Len(t, res.Errors, len(tc.wantErrs))
+			for i, wantErr := range tc.wantErrs {
+				assert.Contains(t, res.Errors[i].Error(), wantErr)
 			}
 		})
 	}
