@@ -275,7 +275,7 @@ func validateOneOf(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v
 		subRes.Reset()
 	}
 	if !found {
-		res.Add(path, v, "expected value to match exactly one schema but matched none")
+		res.Add(path, v, validation.MsgExpectedMatchExactlyOneSchema)
 	}
 }
 
@@ -291,8 +291,47 @@ func validateAnyOf(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v
 	}
 
 	if matches == 0 {
-		res.Add(path, v, validation.MsgExpectedMatchSchema)
+		res.Add(path, v, validation.MsgExpectedMatchAtLeastOneSchema)
 	}
+}
+
+func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any, res *ValidateResult) {
+	var kk any
+	found := true
+
+	if vv, ok := v.(map[string]any); ok {
+		kk, found = vv[s.Discriminator.PropertyName]
+	}
+
+	if vv, ok := v.(map[any]any); ok {
+		kk, found = vv[s.Discriminator.PropertyName]
+	}
+
+	if !found {
+		path.Push(s.Discriminator.PropertyName)
+		res.Add(path, v, validation.MsgExpectedPropertyNameInObject)
+		return
+	}
+
+	if kk == nil {
+		// Either `v` is not a map or the property is set to null. Return so that
+		// type and enum checks on the field can complete elsewhere.
+		return
+	}
+
+	key, ok := kk.(string)
+	if !ok {
+		path.Push(s.Discriminator.PropertyName)
+		return
+	}
+
+	ref, found := s.Discriminator.Mapping[key]
+	if !found {
+		validateOneOf(r, s, path, mode, v, res)
+		return
+	}
+
+	Validate(r, r.SchemaFromRef(ref), path, mode, v, res)
 }
 
 // Validate an input value against a schema, collecting errors in the validation
@@ -318,7 +357,11 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 	}
 
 	if s.OneOf != nil {
-		validateOneOf(r, s, path, mode, v, res)
+		if s.Discriminator != nil {
+			validateDiscriminator(r, s, path, mode, v, res)
+		} else {
+			validateOneOf(r, s, path, mode, v, res)
+		}
 	}
 
 	if s.AnyOf != nil {
