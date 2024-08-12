@@ -1288,6 +1288,23 @@ var validateTests = []struct {
 		errs:  []string{validation.MsgExpectedPropertyNameInObject},
 	},
 	{
+		name: "discriminator: propertyName expected to be present in any object",
+		s: &huma.Schema{
+			Type: huma.TypeObject,
+			OneOf: []*huma.Schema{
+				{Type: huma.TypeString},
+			},
+			Properties: map[string]*huma.Schema{
+				"inputType": {Type: huma.TypeString},
+			},
+			Discriminator: &huma.Discriminator{
+				PropertyName: "inputType",
+			},
+		},
+		input: map[any]any{"undefined": ""},
+		errs:  []string{validation.MsgExpectedPropertyNameInObject},
+	},
+	{
 		name: "discriminator: propertyName expected to be string",
 		s: &huma.Schema{
 			Type: huma.TypeObject,
@@ -1513,8 +1530,19 @@ func Test_validateWithDiscriminator(t *testing.T) {
 			wantErrs: []string{"expected length <= 10"},
 		},
 		{
-			name: "cat - invalida schema",
+			name: "cat - invalid schema",
 			input: map[string]any{
+				"kind": "dog",
+				"name": "cat",
+			},
+			wantErrs: []string{
+				"expected required property color to be present",
+				"unexpected property",
+			},
+		},
+		{
+			name: "cat - any invalid schema",
+			input: map[any]any{
 				"kind": "dog",
 				"name": "cat",
 			},
@@ -1526,6 +1554,13 @@ func Test_validateWithDiscriminator(t *testing.T) {
 		{
 			name: "cat - ok",
 			input: map[string]any{
+				"kind": "cat",
+				"name": "meow",
+			},
+		},
+		{
+			name: "cat - any ok",
+			input: map[any]any{
 				"kind": "cat",
 				"name": "meow",
 			},

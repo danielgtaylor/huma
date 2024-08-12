@@ -296,15 +296,26 @@ func validateAnyOf(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v
 }
 
 func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any, res *ValidateResult) {
-	vv, ok := v.(map[string]any)
-	if !ok {
-		return
+	var kk any
+	found := true
+
+	if vv, ok := v.(map[string]any); ok {
+		kk, found = vv[s.Discriminator.PropertyName]
 	}
 
-	kk, found := vv[s.Discriminator.PropertyName]
+	if vv, ok := v.(map[any]any); ok {
+		kk, found = vv[s.Discriminator.PropertyName]
+	}
+
 	if !found {
 		path.Push(s.Discriminator.PropertyName)
 		res.Add(path, v, validation.MsgExpectedPropertyNameInObject)
+		return
+	}
+
+	if kk == nil {
+		// Either `v` is not a map or the property is set to null. Return so that
+		// type and enum checks on the field can complete elsewhere.
 		return
 	}
 
