@@ -1292,8 +1292,8 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						}
 					}
 
-					buf.Reset()
-					bufPool.Put(buf)
+					defer bufPool.Put(buf)
+					defer buf.Reset()
 				}
 			}
 		}
