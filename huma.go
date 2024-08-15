@@ -1292,8 +1292,20 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						}
 					}
 
-					defer bufPool.Put(buf)
-					defer buf.Reset()
+					if rawBodyIndex != -1 {
+						// If the raw body is used, then we must wait until *AFTER* the
+						// handler has run to return the body byte buffer to the pool, as
+						// the handler can read and modify this buffer. The safest way is
+						// to just wait until the end of this handler via defer.
+						defer bufPool.Put(buf)
+						defer buf.Reset()
+					} else {
+						// No raw body, and the body has already been unmarshalled above, so
+						// we can return the buffer to the pool now as we don't need the
+						// bytes any more.
+						bufPool.Put(buf)
+						buf.Reset()
+					}
 				}
 			}
 		}

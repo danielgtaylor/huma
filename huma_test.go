@@ -2160,6 +2160,30 @@ func TestSchemaWithExample(t *testing.T) {
 	assert.Equal(t, 1, example)
 }
 
+func TestBodyRace(t *testing.T) {
+	// Run with the following:
+	// go test -run=TestBodyRace -race -parallel=100
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Post(api, "/ping", func(ctx context.Context, input *struct {
+		Body struct {
+			Value string `json:"value"`
+		}
+		RawBody []byte
+	}) (*struct{}, error) {
+		// Access/modify the raw input to detect races.
+		input.RawBody[1] = 'a'
+		return nil, nil
+	})
+
+	for i := 0; i < 100; i++ {
+		t.Run(fmt.Sprintf("test-%d", i), func(tt *testing.T) {
+			tt.Parallel()
+			resp := api.Post("/ping", map[string]any{"value": "hello"})
+			assert.Equal(tt, 204, resp.Result().StatusCode)
+		})
+	}
+}
+
 // func BenchmarkSecondDecode(b *testing.B) {
 // 	//nolint: musttag
 // 	type MediumSized struct {
