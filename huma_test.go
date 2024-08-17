@@ -1433,6 +1433,30 @@ Content of example2.txt.
 			},
 		},
 		{
+			Name: "response-nil",
+			Register: func(t *testing.T, api huma.API) {
+				type Resp struct {
+					Body struct {
+						Greeting string `json:"greeting"`
+					}
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/response",
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/response",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				// This should not panic and should return the default status code,
+				// which for responses which normally have a body is 200.
+				assert.Equal(t, http.StatusOK, resp.Code)
+			},
+		},
+		{
 			Name: "response-raw",
 			Register: func(t *testing.T, api huma.API) {
 				type Resp struct {
