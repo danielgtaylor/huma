@@ -692,8 +692,19 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		}
 	}
 
+	if op.RequestBody != nil {
+		for _, mediatype := range op.RequestBody.Content {
+			if mediatype.Schema != nil {
+				// Ensure all schema validation errors are set up properly as some
+				// parts of the schema may have been user-supplied.
+				mediatype.Schema.PrecomputeMessages()
+			}
+		}
+	}
+
 	var inSchema *Schema
 	if op.RequestBody != nil && op.RequestBody.Content != nil && op.RequestBody.Content["application/json"] != nil && op.RequestBody.Content["application/json"].Schema != nil {
+		hasInputBody = true
 		inSchema = op.RequestBody.Content["application/json"].Schema
 	}
 
@@ -1263,7 +1274,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						}
 					}
 
-					if hasInputBody {
+					if hasInputBody && len(inputBodyIndex) > 0 {
 						// We need to get the body into the correct type now that it has been
 						// validated. Benchmarks on Go 1.20 show that using `json.Unmarshal` a
 						// second time is faster than `mapstructure.Decode` or any of the other

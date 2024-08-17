@@ -1687,7 +1687,6 @@ Content of example2.txt.
 						},
 					},
 				}
-				customSchema.PrecomputeMessages()
 
 				huma.Register(api, huma.Operation{
 					Method: http.MethodPut,
@@ -2158,6 +2157,44 @@ func TestSchemaWithExample(t *testing.T) {
 
 	example := app.OpenAPI().Paths["/test"].Get.Parameters[0].Example
 	assert.Equal(t, 1, example)
+}
+
+func TestCustomSchemaErrors(t *testing.T) {
+	// Ensure that custom schema errors are correctly reported without having
+	// to manually call `schema.PrecomputeMessages()`.
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	huma.Register(api, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodPost,
+		Path:        "/test",
+		RequestBody: &huma.RequestBody{
+			Content: map[string]*huma.MediaType{
+				"application/json": {
+					Schema: &huma.Schema{
+						Type:                 huma.TypeObject,
+						Required:             []string{"test"},
+						AdditionalProperties: false,
+						Properties: map[string]*huma.Schema{
+							"test": {
+								Type:    huma.TypeInteger,
+								Minimum: Ptr(10.0),
+							},
+						},
+					},
+				},
+			},
+		},
+	}, func(ctx context.Context, input *struct {
+		RawBody []byte
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	resp := api.Post("/test", map[string]any{"test": 1})
+
+	assert.Equal(t, http.StatusUnprocessableEntity, resp.Result().StatusCode)
+	assert.Contains(t, resp.Body.String(), `expected number \u003e= 10`)
 }
 
 func TestBodyRace(t *testing.T) {
