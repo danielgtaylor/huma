@@ -1379,6 +1379,13 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			return
 		}
 
+		if output == nil {
+			// Special case: No err or output, so just set the status code and return.
+			// This is a weird case, but it's better than panicking or returning 500.
+			ctx.SetStatus(op.DefaultStatus)
+			return
+		}
+
 		// Serialize output headers
 		ct := ""
 		vo := reflect.ValueOf(output).Elem()
