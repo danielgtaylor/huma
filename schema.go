@@ -681,7 +681,9 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 	v := reflect.New(t).Interface()
 	if sp, ok := v.(SchemaProvider); ok {
 		// Special case: type provides its own schema. Do not try to generate.
-		return sp.Schema(r)
+		custom := sp.Schema(r)
+		custom.PrecomputeMessages()
+		return custom
 	}
 
 	// Handle special cases.
