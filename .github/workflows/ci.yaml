@@ -19,7 +19,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.57.2
+          version: v1.60.1
       - run: go test -coverprofile=coverage.txt -covermode=atomic ./...
       - uses: codecov/codecov-action@v4
         with:
