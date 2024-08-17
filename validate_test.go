@@ -1373,7 +1373,7 @@ func TestValidate(t *testing.T) {
 				errs := mapTo(res.Errors, func(e error) string {
 					return e.(*huma.ErrorDetail).Message
 				})
-				schemaJSON, _ := json.MarshalIndent(registry.Map(), "", "  ") //nolint: musttag
+				schemaJSON, _ := json.MarshalIndent(registry.Map(), "", "  ")
 				for _, err := range test.errs {
 					assert.Contains(t, errs, err, string(schemaJSON))
 				}

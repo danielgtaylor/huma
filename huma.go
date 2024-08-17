@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,22 +33,6 @@ var bodyCallbackType = reflect.TypeOf(func(Context) {})
 var cookieType = reflect.TypeOf((*http.Cookie)(nil)).Elem()
 var fmtStringerType = reflect.TypeOf((*fmt.Stringer)(nil)).Elem()
 var stringType = reflect.TypeOf("")
-
-// slicesIndex returns the index of the first occurrence of v in s,
-// or -1 if not present.
-func slicesIndex[E comparable](s []E, v E) int {
-	for i := range s {
-		if v == s[i] {
-			return i
-		}
-	}
-	return -1
-}
-
-// slicesContains reports whether v is present in s.
-func slicesContains[E comparable](s []E, v E) bool {
-	return slicesIndex(s, v) >= 0
-}
 
 // SetReadDeadline is a utility to set the read deadline on a response writer,
 // if possible. If not, it will not incur any allocations (unlike the stdlib
@@ -141,7 +126,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			name = split[0]
 			// If `in` is `query` then `explode` defaults to true. Parsing is *much*
 			// easier if we use comma-separated values, so we disable explode by default.
-			if slicesContains(split[1:], "explode") {
+			if slices.Contains(split[1:], "explode") {
 				pfi.Explode = true
 			}
 			explode = &pfi.Explode
@@ -417,7 +402,7 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 			if !f.IsExported() {
 				continue
 			}
-			if slicesContains(ignore, f.Name) {
+			if slices.Contains(ignore, f.Name) {
 				continue
 			}
 			if ignoreAnonymous && f.Anonymous {

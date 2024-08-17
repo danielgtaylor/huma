@@ -292,7 +292,7 @@ func Camel(value string, transform ...TransformFunc) string {
 	if transform == nil {
 		transform = []TransformFunc{strings.ToLower}
 	}
-	t := append(transform, strings.Title) //nolint:staticcheck
+	t := append(transform, strings.Title)
 	return Join(Split(value), "", t...)
 }
 
