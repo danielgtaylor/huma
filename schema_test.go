@@ -1212,21 +1212,21 @@ func TestCustomUnmarshalType(t *testing.T) {
 
 	// Confirm the field works as expected when loading JSON.
 	o = O{}
-	err := json.Unmarshal([]byte(`{"field": 123}`), &o) //nolint:musttag
+	err := json.Unmarshal([]byte(`{"field": 123}`), &o)
 	require.NoError(t, err)
 	assert.True(t, o.Field.Sent)
 	assert.False(t, o.Field.Null)
 	assert.Equal(t, 123, o.Field.Value)
 
 	o = O{}
-	err = json.Unmarshal([]byte(`{"field": null}`), &o) //nolint:musttag
+	err = json.Unmarshal([]byte(`{"field": null}`), &o)
 	require.NoError(t, err)
 	assert.True(t, o.Field.Sent)
 	assert.True(t, o.Field.Null)
 	assert.Equal(t, 0, o.Field.Value)
 
 	o = O{}
-	err = json.Unmarshal([]byte(`{}`), &o) //nolint:musttag
+	err = json.Unmarshal([]byte(`{}`), &o)
 	require.NoError(t, err)
 	assert.False(t, o.Field.Sent)
 	assert.False(t, o.Field.Null)
