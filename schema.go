@@ -1,6 +1,7 @@
 package huma
 
 import (
+	"encoding"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -686,7 +687,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 		return custom
 	}
 
-	// Handle special cases.
+	// Handle special cases for known stdlib types.
 	switch t {
 	case timeType:
 		return &Schema{Type: TypeString, Nullable: isPointer, Format: "date-time"}
@@ -698,6 +699,14 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 		return &Schema{Type: TypeString, Nullable: isPointer, Format: "ipv4"}
 	case rawMessageType:
 		return &Schema{}
+	}
+
+	if _, ok := v.(encoding.TextUnmarshaler); ok {
+		// Special case: types that implement encoding.TextUnmarshaler are able to
+		// be loaded from plain text, and so should be treated as strings.
+		// This behavior can be overidden by implementing `huma.SchemaProvider`
+		// and returning a custom schema.
+		return &Schema{Type: TypeString, Nullable: isPointer}
 	}
 
 	minZero := 0.0

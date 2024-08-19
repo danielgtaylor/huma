@@ -2,6 +2,7 @@ package huma_test
 
 import (
 	"bytes"
+	"encoding"
 	"encoding/json"
 	"math/bits"
 	"net"
@@ -1170,6 +1171,34 @@ func TestSchemaGenericNamingFromModule(t *testing.T) {
 	assert.JSONEq(t, `{
 		"$ref": "#/components/schemas/SchemaGenericTime"
 	}`, string(b))
+}
+
+type MyDate time.Time
+
+func (d *MyDate) UnmarshalText(data []byte) error {
+	t, err := time.Parse(time.RFC3339, string(data))
+	if err != nil {
+		return err
+	}
+	*d = MyDate(t)
+	return nil
+}
+
+var _ encoding.TextUnmarshaler = (*MyDate)(nil)
+
+func TestCustomDateType(t *testing.T) {
+	type O struct {
+		Date MyDate `json:"date"`
+	}
+
+	var o O
+	err := json.Unmarshal([]byte(`{"date": "2022-01-01T00:00:00Z"}`), &o)
+	require.NoError(t, err)
+	assert.Equal(t, MyDate(time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)), o.Date)
+
+	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	s := r.Schema(reflect.TypeOf(o), false, "")
+	assert.Equal(t, "string", s.Properties["date"].Type)
 }
 
 type OmittableNullable[T any] struct {

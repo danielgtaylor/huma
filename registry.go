@@ -1,6 +1,7 @@
 package huma
 
 import (
+	"encoding"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -90,6 +91,11 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 	v := reflect.New(t).Interface()
 	if _, ok := v.(SchemaProvider); ok {
 		// Special case: type provides its own schema
+		getsRef = false
+	}
+	if _, ok := v.(encoding.TextUnmarshaler); ok {
+		// Special case: type can be unmarshalled from text so will be a `string`
+		// and doesn't need a ref. This simplifies the schema a little bit.
 		getsRef = false
 	}
 
