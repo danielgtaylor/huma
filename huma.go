@@ -1299,8 +1299,8 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						// No raw body, and the body has already been unmarshalled above, so
 						// we can return the buffer to the pool now as we don't need the
 						// bytes any more.
-						bufPool.Put(buf)
 						buf.Reset()
+						bufPool.Put(buf)
 					}
 				}
 			}
