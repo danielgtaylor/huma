@@ -97,15 +97,6 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			return nil
 		}
 
-		if f.Type.Kind() == reflect.Pointer {
-			// TODO: support pointers? The problem is that when we dynamically
-			// create an instance of the input struct the `params.Every(...)`
-			// call cannot set them as the value is `reflect.Invalid` unless
-			// dynamically allocated, but we don't know when to allocate until
-			// after the `Every` callback has run. Doable, but a bigger change.
-			panic("pointers are not supported for path/query/header parameters")
-		}
-
 		pfi := &paramFieldInfo{
 			Type: f.Type,
 		}
@@ -144,6 +135,15 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			}
 		} else {
 			return nil
+		}
+
+		if f.Type.Kind() == reflect.Pointer {
+			// TODO: support pointers? The problem is that when we dynamically
+			// create an instance of the input struct the `params.Every(...)`
+			// call cannot set them as the value is `reflect.Invalid` unless
+			// dynamically allocated, but we don't know when to allocate until
+			// after the `Every` callback has run. Doable, but a bigger change.
+			panic("pointers are not supported for path/query/header parameters")
 		}
 
 		pfi.Schema = SchemaFromField(registry, f, "")
