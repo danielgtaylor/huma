@@ -107,6 +107,7 @@ func Recovery(onPanic PanicFunc) func(http.Handler) http.Handler {
 			if r.Body != nil {
 				// Get a buffer that the body will be read into.
 				buf = bufPool.Get().(*bytes.Buffer)
+				buf.Reset()
 				defer bufPool.Put(buf)
 
 				r.Body = newBufferedReadCloser(r.Body, buf, MaxLogBodyBytes)
