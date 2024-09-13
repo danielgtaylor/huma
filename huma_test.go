@@ -2059,6 +2059,38 @@ func TestResolverCompositionCalledOnce(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
 }
 
+type ResolverWithPointer struct {
+	Ptr *string
+}
+
+func (r *ResolverWithPointer) Resolve(ctx huma.Context) []error {
+	r.Ptr = new(string)
+	*r.Ptr = "String"
+	return nil
+}
+
+func TestResolverWithPointer(t *testing.T) {
+	// Allow using pointers in input structs if they are not path/query/header/cookie parameters
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodPut,
+		Path:        "/test",
+	}, func(ctx context.Context, input *struct {
+		ResolverWithPointer
+	}) (*struct{}, error) {
+		// Exactly one call should have been made to the resolver.
+		assert.Equal(t, "String", *input.Ptr)
+		return nil, nil
+	})
+
+	req, _ := http.NewRequest(http.MethodPut, "/test", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+}
+
 func TestParamPointerPanics(t *testing.T) {
 	// For now, we don't support these, so we panic rather than have subtle
 	// bugs that are hard to track down.
