@@ -619,18 +619,26 @@ func TestSchema(t *testing.T) {
 		{
 			name: "field-skip",
 			input: struct {
+				// Not filtered out (just a normal field)
+				Value1 string `json:"value1"`
 				// Filtered out from JSON tag
-				Value1 string `json:"-"`
+				Value2 string `json:"-"`
 				// Filtered because it's private
-				value2 string
+				value3 string
 				// Filtered due to being an unsupported type
-				Value3 func()
+				Value4 func()
 				// Filtered due to being hidden
-				Value4 string `json:"value4,omitempty" hidden:"true"`
+				Value5 string `json:"value4,omitempty" hidden:"true"`
 			}{},
 			expected: `{
 				"type": "object",
-				"additionalProperties": false
+				"additionalProperties": false,
+				"required": ["value1"],
+				"properties": {
+					"value1": {
+						"type": "string"
+					}
+				}
 			}`,
 		},
 		{

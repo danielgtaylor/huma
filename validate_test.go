@@ -1050,6 +1050,28 @@ var validateTests = []struct {
 		errs:  []string{"expected length >= 1"},
 	},
 	{
+		name: "hidden is optional",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" minLength:"5" hidden:"true"`
+		}{}),
+		input: map[any]any{},
+	},
+	{
+		name: "hidden success",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" minLength:"5" hidden:"true"`
+		}{}),
+		input: map[any]any{"value": "abcde"},
+	},
+	{
+		name: "hidden fail",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" minLength:"5" hidden:"true"`
+		}{}),
+		input: map[any]any{"value": "abc"},
+		errs:  []string{"expected length >= 5"},
+	},
+	{
 		name: "dependentRequired empty success",
 		typ: reflect.TypeOf(struct {
 			Value     string `json:"value,omitempty" dependentRequired:"dependent"`

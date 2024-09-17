@@ -130,6 +130,7 @@ type Schema struct {
 	patternRe     *regexp.Regexp  `yaml:"-"`
 	requiredMap   map[string]bool `yaml:"-"`
 	propertyNames []string        `yaml:"-"`
+	hidden        bool            `yaml:"-"`
 
 	// Precomputed validation messages. These prevent allocations during
 	// validation and are known at schema creation time.
@@ -157,10 +158,26 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 	if s.Nullable {
 		typ = []string{s.Type, "null"}
 	}
+
 	var contentMediaType string
 	if s.Format == "binary" {
 		contentMediaType = "application/octet-stream"
 	}
+
+	props := s.Properties
+	for _, ps := range props {
+		if ps.hidden {
+			// Copy the map to avoid modifying the original schema.
+			props = make(map[string]*Schema, len(s.Properties))
+			for k, v := range s.Properties {
+				if !v.hidden {
+					props[k] = v
+				}
+			}
+			break
+		}
+	}
+
 	return marshalJSON([]jsonFieldInfo{
 		{"type", typ, omitEmpty},
 		{"title", s.Title, omitEmpty},
@@ -173,7 +190,7 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 		{"examples", s.Examples, omitEmpty},
 		{"items", s.Items, omitEmpty},
 		{"additionalProperties", s.AdditionalProperties, omitNil},
-		{"properties", s.Properties, omitEmpty},
+		{"properties", props, omitEmpty},
 		{"enum", s.Enum, omitEmpty},
 		{"minimum", s.Minimum, omitEmpty},
 		{"exclusiveMinimum", s.ExclusiveMinimum, omitEmpty},
@@ -589,6 +606,10 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 	fs.Deprecated = boolTag(f, "deprecated")
 	fs.PrecomputeMessages()
 
+	if v := f.Tag.Get("hidden"); v != "" {
+		fs.hidden = boolTag(f, "hidden")
+	}
+
 	return fs
 }
 
@@ -812,12 +833,6 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 				fieldRequired = boolTag(f, "required")
 			}
 
-			if boolTag(f, "hidden") {
-				// This field is deliberately ignored. It may still exist, but won't
-				// be documented.
-				continue
-			}
-
 			if dr := f.Tag.Get("dependentRequired"); strings.TrimSpace(dr) != "" {
 				dependentRequiredMap[name] = strings.Split(dr, ",")
 			}
@@ -826,6 +841,12 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 			if fs != nil {
 				props[name] = fs
 				propNames = append(propNames, name)
+
+				if fs.hidden {
+					// This field is deliberately ignored. It may still exist, but won't
+					// be documented as a required field.
+					fieldRequired = false
+				}
 
 				if fieldRequired {
 					required = append(required, name)
