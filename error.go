@@ -227,7 +227,7 @@ func ErrorWithHeaders(err error, headers http.Header) error {
 //			Message: msg,
 //			Errors:  errs,
 //		}
-//	}
+//	}z
 var NewError = func(status int, msg string, errs ...error) StatusError {
 	details := make([]*ErrorDetail, len(errs))
 	for i := 0; i < len(errs); i++ {
@@ -248,11 +248,15 @@ var NewError = func(status int, msg string, errs ...error) StatusError {
 	}
 }
 
+var NewErrorWithContext = func(_ Context, status int, msg string, errs ...error) StatusError {
+	return NewError(status, msg, errs...)
+}
+
 // WriteErr writes an error response with the given context, using the
 // configured error type and with the given status code and message. It is
 // marshaled using the API's content negotiation methods.
 func WriteErr(api API, ctx Context, status int, msg string, errs ...error) error {
-	var err any = NewError(status, msg, errs...)
+	var err any = NewErrorWithContext(ctx, status, msg, errs...)
 
 	ct, negotiateErr := api.Negotiate(ctx.Header("Accept"))
 	if negotiateErr != nil {
