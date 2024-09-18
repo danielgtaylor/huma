@@ -1411,6 +1411,7 @@ type ExampleInputStruct struct {
 	Email   string `json:"email" format:"email" doc:"Contact e-mail address"`
 	Age     *int   `json:"age,omitempty" minimum:"0"`
 	Comment string `json:"comment,omitempty" maxLength:"256"`
+	Pattern string `json:"pattern" pattern:"^[a-z]+$"`
 }
 
 // Implements SchemaTransformer interface, reusing parts of the schema from `ExampleInputStruct`
@@ -1419,6 +1420,7 @@ type ExampleUpdateStruct struct {
 	Email   *string                   `json:"email" doc:"Override doc for email"`
 	Age     OmittableNullable[int]    `json:"age"`
 	Comment OmittableNullable[string] `json:"comment"`
+	Pattern string                    `json:"pattern"`
 }
 
 func (u *ExampleUpdateStruct) TransformSchema(r huma.Registry, s *huma.Schema) *huma.Schema {
@@ -1449,6 +1451,7 @@ func TestSchemaTransformer(t *testing.T) {
 		assert.True(t, s.Properties["age"].Nullable)
 		assert.Equal(t, inputSchema.Properties["comment"].MaxLength, s.Properties["comment"].MaxLength)
 		assert.True(t, s.Properties["comment"].Nullable)
+		assert.Equal(t, inputSchema.Properties["pattern"].Pattern, s.Properties["pattern"].Pattern)
 	}
 	updateSchema1 := r.Schema(reflect.TypeOf(ExampleUpdateStruct{}), false, "")
 	validateSchema(updateSchema1)
