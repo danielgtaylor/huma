@@ -174,7 +174,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			pfi.TimeFormat = timeFormat
 		}
 
-		if !boolTag(f, "hidden") {
+		if !boolTag(f, "hidden", false) {
 			desc := ""
 			if pfi.Schema != nil {
 				// If the schema has a description, use it. Some tools will not show
