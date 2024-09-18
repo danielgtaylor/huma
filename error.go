@@ -227,7 +227,7 @@ func ErrorWithHeaders(err error, headers http.Header) error {
 //			Message: msg,
 //			Errors:  errs,
 //		}
-//	}z
+//	}
 var NewError = func(status int, msg string, errs ...error) StatusError {
 	details := make([]*ErrorDetail, len(errs))
 	for i := 0; i < len(errs); i++ {
