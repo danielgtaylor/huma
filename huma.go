@@ -1307,11 +1307,24 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		}
 
 		resolvers.EveryPB(pb, v, func(item reflect.Value, _ bool) {
-			if resolver, ok := item.Addr().Interface().(Resolver); ok {
+			if item.CanAddr() {
+				item = item.Addr()
+			} else {
+				// If the item is non-addressable (example: primitive custom type with
+				// a resolver as a map value), then we need to create a new pointer to
+				// the value to ensure the resolver can be called, regardless of whether
+				// is is a value or pointer resolver type.
+				// TODO: this is inefficient and could be improved in the future.
+				ptr := reflect.New(item.Type())
+				elem := ptr.Elem()
+				elem.Set(item)
+				item = ptr
+			}
+			if resolver, ok := item.Interface().(Resolver); ok {
 				if errs := resolver.Resolve(ctx); len(errs) > 0 {
 					res.Errors = append(res.Errors, errs...)
 				}
-			} else if resolver, ok := item.Addr().Interface().(ResolverWithPath); ok {
+			} else if resolver, ok := item.Interface().(ResolverWithPath); ok {
 				if errs := resolver.Resolve(ctx, pb); len(errs) > 0 {
 					res.Errors = append(res.Errors, errs...)
 				}
