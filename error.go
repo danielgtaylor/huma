@@ -252,7 +252,11 @@ var NewError = func(status int, msg string, errs ...error) StatusError {
 // configured error type and with the given status code and message. It is
 // marshaled using the API's content negotiation methods.
 func WriteErr(api API, ctx Context, status int, msg string, errs ...error) error {
-	var err any = NewError(status, msg, errs...)
+	var err = NewError(status, msg, errs...)
+
+	// NewError may have modified the status code, so update it here if needed.
+	// If it was not modified then this is a no-op.
+	status = err.GetStatus()
 
 	ct, negotiateErr := api.Negotiate(ctx.Header("Accept"))
 	if negotiateErr != nil {

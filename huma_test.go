@@ -2298,6 +2298,32 @@ func TestResolverCustomTypePrimitive(t *testing.T) {
 	})
 }
 
+func TestCustomValidationErrorStatus(t *testing.T) {
+	orig := huma.NewError
+	huma.NewError = func(status int, message string, errs ...error) huma.StatusError {
+		if status == 422 {
+			status = 400
+		}
+		return orig(status, message, errs...)
+	}
+	t.Cleanup(func() {
+		huma.NewError = orig
+	})
+
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Post(api, "/test", func(ctx context.Context, input *struct {
+		Body struct {
+			Value string `json:"value" minLength:"5"`
+		}
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	resp := api.Post("/test", map[string]any{"value": "foo"})
+	assert.Equal(t, http.StatusBadRequest, resp.Result().StatusCode)
+	assert.Contains(t, resp.Body.String(), "Bad Request")
+}
+
 // func BenchmarkSecondDecode(b *testing.B) {
 // 	//nolint: musttag
 // 	type MediumSized struct {
