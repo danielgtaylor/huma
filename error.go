@@ -248,11 +248,15 @@ var NewError = func(status int, msg string, errs ...error) StatusError {
 	}
 }
 
+var NewErrorWithContext = func(_ Context, status int, msg string, errs ...error) StatusError {
+	return NewError(status, msg, errs...)
+}
+
 // WriteErr writes an error response with the given context, using the
 // configured error type and with the given status code and message. It is
 // marshaled using the API's content negotiation methods.
 func WriteErr(api API, ctx Context, status int, msg string, errs ...error) error {
-	var err = NewError(status, msg, errs...)
+	var err = NewErrorWithContext(ctx, status, msg, errs...)
 
 	// NewError may have modified the status code, so update it here if needed.
 	// If it was not modified then this is a no-op.
