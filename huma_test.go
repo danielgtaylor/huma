@@ -2277,6 +2277,27 @@ func TestBodyRace(t *testing.T) {
 	}
 }
 
+type CustomMapValue string
+
+func (v *CustomMapValue) Resolve(ctx huma.Context) []error {
+	return nil
+}
+
+func TestResolverCustomTypePrimitive(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Post(api, "/test", func(ctx context.Context, input *struct {
+		Body struct {
+			Tags map[string]CustomMapValue `json:"tags"`
+		}
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	assert.NotPanics(t, func() {
+		api.Post("/test", map[string]any{"tags": map[string]string{"foo": "bar"}})
+	})
+}
+
 // func BenchmarkSecondDecode(b *testing.B) {
 // 	//nolint: musttag
 // 	type MediumSized struct {
