@@ -64,24 +64,9 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 )
-
-// slicesIndex returns the index of the first occurrence of v in s,
-// or -1 if not present.
-func slicesIndex[E comparable](s []E, v E) int {
-	for i := range s {
-		if v == s[i] {
-			return i
-		}
-	}
-	return -1
-}
-
-// slicesContains reports whether v is present in s.
-func slicesContains[E comparable](s []E, v E) bool {
-	return slicesIndex(s, v) >= 0
-}
 
 // AllMethods is a slice containing all HTTP request methods.
 var AllMethods = []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace}
@@ -128,7 +113,7 @@ func New() *Mux {
 // Handle registers a new handler for the given request path pattern and HTTP
 // methods.
 func (m *Mux) Handle(pattern string, handler http.Handler, methods ...string) {
-	if slicesContains(methods, http.MethodGet) && !slicesContains(methods, http.MethodHead) {
+	if slices.Contains(methods, http.MethodGet) && !slices.Contains(methods, http.MethodHead) {
 		methods = append(methods, http.MethodHead)
 	}
 
@@ -191,7 +176,7 @@ func (m *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				route.handler.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
-			if !slicesContains(allowedMethods, route.method) {
+			if !slices.Contains(allowedMethods, route.method) {
 				allowedMethods = append(allowedMethods, route.method)
 			}
 		}

@@ -226,7 +226,7 @@ func multiPartFormFileSchema(t reflect.Type) *Schema {
 			continue
 		}
 
-		if _, ok := f.Tag.Lookup("required"); ok && boolTag(f, "required") {
+		if _, ok := f.Tag.Lookup("required"); ok && boolTag(f, "required", false) {
 			requiredFields[i] = name
 			schema.requiredMap[name] = true
 		}

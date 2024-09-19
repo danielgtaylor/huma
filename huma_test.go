@@ -1433,6 +1433,30 @@ Content of example2.txt.
 			},
 		},
 		{
+			Name: "response-nil",
+			Register: func(t *testing.T, api huma.API) {
+				type Resp struct {
+					Body struct {
+						Greeting string `json:"greeting"`
+					}
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/response",
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/response",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				// This should not panic and should return the default status code,
+				// which for responses which normally have a body is 200.
+				assert.Equal(t, http.StatusOK, resp.Code)
+			},
+		},
+		{
 			Name: "response-raw",
 			Register: func(t *testing.T, api huma.API) {
 				type Resp struct {
@@ -1687,7 +1711,6 @@ Content of example2.txt.
 						},
 					},
 				}
-				customSchema.PrecomputeMessages()
 
 				huma.Register(api, huma.Operation{
 					Method: http.MethodPut,
@@ -2036,6 +2059,38 @@ func TestResolverCompositionCalledOnce(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
 }
 
+type ResolverWithPointer struct {
+	Ptr *string
+}
+
+func (r *ResolverWithPointer) Resolve(ctx huma.Context) []error {
+	r.Ptr = new(string)
+	*r.Ptr = "String"
+	return nil
+}
+
+func TestResolverWithPointer(t *testing.T) {
+	// Allow using pointers in input structs if they are not path/query/header/cookie parameters
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodPut,
+		Path:        "/test",
+	}, func(ctx context.Context, input *struct {
+		ResolverWithPointer
+	}) (*struct{}, error) {
+		// Exactly one call should have been made to the resolver.
+		assert.Equal(t, "String", *input.Ptr)
+		return nil, nil
+	})
+
+	req, _ := http.NewRequest(http.MethodPut, "/test", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+}
+
 func TestParamPointerPanics(t *testing.T) {
 	// For now, we don't support these, so we panic rather than have subtle
 	// bugs that are hard to track down.
@@ -2158,6 +2213,115 @@ func TestSchemaWithExample(t *testing.T) {
 
 	example := app.OpenAPI().Paths["/test"].Get.Parameters[0].Example
 	assert.Equal(t, 1, example)
+}
+
+func TestCustomSchemaErrors(t *testing.T) {
+	// Ensure that custom schema errors are correctly reported without having
+	// to manually call `schema.PrecomputeMessages()`.
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	huma.Register(api, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodPost,
+		Path:        "/test",
+		RequestBody: &huma.RequestBody{
+			Content: map[string]*huma.MediaType{
+				"application/json": {
+					Schema: &huma.Schema{
+						Type:                 huma.TypeObject,
+						Required:             []string{"test"},
+						AdditionalProperties: false,
+						Properties: map[string]*huma.Schema{
+							"test": {
+								Type:    huma.TypeInteger,
+								Minimum: Ptr(10.0),
+							},
+						},
+					},
+				},
+			},
+		},
+	}, func(ctx context.Context, input *struct {
+		RawBody []byte
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	resp := api.Post("/test", map[string]any{"test": 1})
+
+	assert.Equal(t, http.StatusUnprocessableEntity, resp.Result().StatusCode)
+	assert.Contains(t, resp.Body.String(), `expected number \u003e= 10`)
+}
+
+func TestBodyRace(t *testing.T) {
+	// Run with the following:
+	// go test -run=TestBodyRace -race -parallel=100
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Post(api, "/ping", func(ctx context.Context, input *struct {
+		Body struct {
+			Value string `json:"value"`
+		}
+		RawBody []byte
+	}) (*struct{}, error) {
+		// Access/modify the raw input to detect races.
+		input.RawBody[1] = 'a'
+		return nil, nil
+	})
+
+	for i := 0; i < 100; i++ {
+		t.Run(fmt.Sprintf("test-%d", i), func(tt *testing.T) {
+			tt.Parallel()
+			resp := api.Post("/ping", map[string]any{"value": "hello"})
+			assert.Equal(tt, 204, resp.Result().StatusCode)
+		})
+	}
+}
+
+type CustomMapValue string
+
+func (v *CustomMapValue) Resolve(ctx huma.Context) []error {
+	return nil
+}
+
+func TestResolverCustomTypePrimitive(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Post(api, "/test", func(ctx context.Context, input *struct {
+		Body struct {
+			Tags map[string]CustomMapValue `json:"tags"`
+		}
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	assert.NotPanics(t, func() {
+		api.Post("/test", map[string]any{"tags": map[string]string{"foo": "bar"}})
+	})
+}
+
+func TestCustomValidationErrorStatus(t *testing.T) {
+	orig := huma.NewError
+	huma.NewError = func(status int, message string, errs ...error) huma.StatusError {
+		if status == 422 {
+			status = 400
+		}
+		return orig(status, message, errs...)
+	}
+	t.Cleanup(func() {
+		huma.NewError = orig
+	})
+
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Post(api, "/test", func(ctx context.Context, input *struct {
+		Body struct {
+			Value string `json:"value" minLength:"5"`
+		}
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	resp := api.Post("/test", map[string]any{"value": "foo"})
+	assert.Equal(t, http.StatusBadRequest, resp.Result().StatusCode)
+	assert.Contains(t, resp.Body.String(), "Bad Request")
 }
 
 // func BenchmarkSecondDecode(b *testing.B) {

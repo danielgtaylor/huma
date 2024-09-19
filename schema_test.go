@@ -2,6 +2,7 @@ package huma_test
 
 import (
 	"bytes"
+	"encoding"
 	"encoding/json"
 	"math/bits"
 	"net"
@@ -618,18 +619,26 @@ func TestSchema(t *testing.T) {
 		{
 			name: "field-skip",
 			input: struct {
+				// Not filtered out (just a normal field)
+				Value1 string `json:"value1"`
 				// Filtered out from JSON tag
-				Value1 string `json:"-"`
+				Value2 string `json:"-"`
 				// Filtered because it's private
-				value2 string
+				value3 string
 				// Filtered due to being an unsupported type
-				Value3 func()
+				Value4 func()
 				// Filtered due to being hidden
-				Value4 string `json:"value4,omitempty" hidden:"true"`
+				Value5 string `json:"value4,omitempty" hidden:"true"`
 			}{},
 			expected: `{
 				"type": "object",
-				"additionalProperties": false
+				"additionalProperties": false,
+				"required": ["value1"],
+				"properties": {
+					"value1": {
+						"type": "string"
+					}
+				}
 			}`,
 		},
 		{
@@ -1172,6 +1181,34 @@ func TestSchemaGenericNamingFromModule(t *testing.T) {
 	}`, string(b))
 }
 
+type MyDate time.Time
+
+func (d *MyDate) UnmarshalText(data []byte) error {
+	t, err := time.Parse(time.RFC3339, string(data))
+	if err != nil {
+		return err
+	}
+	*d = MyDate(t)
+	return nil
+}
+
+var _ encoding.TextUnmarshaler = (*MyDate)(nil)
+
+func TestCustomDateType(t *testing.T) {
+	type O struct {
+		Date MyDate `json:"date"`
+	}
+
+	var o O
+	err := json.Unmarshal([]byte(`{"date": "2022-01-01T00:00:00Z"}`), &o)
+	require.NoError(t, err)
+	assert.Equal(t, MyDate(time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)), o.Date)
+
+	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	s := r.Schema(reflect.TypeOf(o), false, "")
+	assert.Equal(t, "string", s.Properties["date"].Type)
+}
+
 type OmittableNullable[T any] struct {
 	Sent  bool
 	Null  bool
@@ -1212,21 +1249,21 @@ func TestCustomUnmarshalType(t *testing.T) {
 
 	// Confirm the field works as expected when loading JSON.
 	o = O{}
-	err := json.Unmarshal([]byte(`{"field": 123}`), &o) //nolint:musttag
+	err := json.Unmarshal([]byte(`{"field": 123}`), &o)
 	require.NoError(t, err)
 	assert.True(t, o.Field.Sent)
 	assert.False(t, o.Field.Null)
 	assert.Equal(t, 123, o.Field.Value)
 
 	o = O{}
-	err = json.Unmarshal([]byte(`{"field": null}`), &o) //nolint:musttag
+	err = json.Unmarshal([]byte(`{"field": null}`), &o)
 	require.NoError(t, err)
 	assert.True(t, o.Field.Sent)
 	assert.True(t, o.Field.Null)
 	assert.Equal(t, 0, o.Field.Value)
 
 	o = O{}
-	err = json.Unmarshal([]byte(`{}`), &o) //nolint:musttag
+	err = json.Unmarshal([]byte(`{}`), &o)
 	require.NoError(t, err)
 	assert.False(t, o.Field.Sent)
 	assert.False(t, o.Field.Null)
@@ -1374,6 +1411,7 @@ type ExampleInputStruct struct {
 	Email   string `json:"email" format:"email" doc:"Contact e-mail address"`
 	Age     *int   `json:"age,omitempty" minimum:"0"`
 	Comment string `json:"comment,omitempty" maxLength:"256"`
+	Pattern string `json:"pattern" pattern:"^[a-z]+$"`
 }
 
 // Implements SchemaTransformer interface, reusing parts of the schema from `ExampleInputStruct`
@@ -1382,6 +1420,7 @@ type ExampleUpdateStruct struct {
 	Email   *string                   `json:"email" doc:"Override doc for email"`
 	Age     OmittableNullable[int]    `json:"age"`
 	Comment OmittableNullable[string] `json:"comment"`
+	Pattern string                    `json:"pattern"`
 }
 
 func (u *ExampleUpdateStruct) TransformSchema(r huma.Registry, s *huma.Schema) *huma.Schema {
@@ -1412,6 +1451,7 @@ func TestSchemaTransformer(t *testing.T) {
 		assert.True(t, s.Properties["age"].Nullable)
 		assert.Equal(t, inputSchema.Properties["comment"].MaxLength, s.Properties["comment"].MaxLength)
 		assert.True(t, s.Properties["comment"].Nullable)
+		assert.Equal(t, inputSchema.Properties["pattern"].Pattern, s.Properties["pattern"].Pattern)
 	}
 	updateSchema1 := r.Schema(reflect.TypeOf(ExampleUpdateStruct{}), false, "")
 	validateSchema(updateSchema1)

@@ -1,6 +1,6 @@
 module github.com/danielgtaylor/huma/v2
 
-go 1.20
+go 1.21
 
 require (
 	github.com/danielgtaylor/shorthand/v2 v2.2.0
@@ -8,7 +8,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.6.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-chi/chi/v5 v5.0.12
-	github.com/gofiber/fiber/v2 v2.52.1
+	github.com/gofiber/fiber/v2 v2.52.5
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/julienschmidt/httprouter v1.3.0

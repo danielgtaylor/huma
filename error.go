@@ -258,6 +258,10 @@ var NewErrorWithContext = func(_ Context, status int, msg string, errs ...error)
 func WriteErr(api API, ctx Context, status int, msg string, errs ...error) error {
 	var err any = NewErrorWithContext(ctx, status, msg, errs...)
 
+	// NewError may have modified the status code, so update it here if needed.
+	// If it was not modified then this is a no-op.
+	status = err.GetStatus()
+
 	ct, negotiateErr := api.Negotiate(ctx.Header("Accept"))
 	if negotiateErr != nil {
 		return negotiateErr
