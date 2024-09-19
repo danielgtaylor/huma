@@ -1364,7 +1364,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				status = se.GetStatus()
 				err = se
 			} else {
-				err = NewError(http.StatusInternalServerError, err.Error())
+				err = HandleTypedError(err)
 			}
 
 			ct, _ := api.Negotiate(ctx.Header("Accept"))
