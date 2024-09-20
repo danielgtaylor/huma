@@ -16,6 +16,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"reflect"
 	"regexp"
 	"slices"
@@ -1125,6 +1126,16 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							return
 						}
 						f.Set(reflect.ValueOf(t))
+						pv = value
+						break
+						// Special case: url.URL
+					} else if f.Type() == urlType {
+						u, err := url.Parse(value)
+						if err != nil {
+							res.Add(pb, value, "invalid url.URL value")
+							return
+						}
+						f.Set(reflect.ValueOf(*u))
 						pv = value
 						break
 					}
