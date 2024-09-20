@@ -162,5 +162,10 @@ func New(m Mux, config huma.Config) huma.API {
 //	config.Servers = []*huma.Server{{URL: "http://example.com/api"}}
 //	api := humago.NewWithPrefix(mux, "/api", config)
 func NewWithPrefix(m Mux, prefix string, config huma.Config) huma.API {
+	if len(config.Servers) == 0 {
+		config.Servers = append(config.Servers, &huma.Server{
+			URL: prefix,
+		})
+	}
 	return huma.NewAPI(config, &goAdapter{m, prefix})
 }
