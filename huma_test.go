@@ -545,6 +545,42 @@ func TestFeatures(t *testing.T) {
 			Body: `{"name":"foo"}`,
 		},
 		{
+			Name: "request-body-description",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+					RequestBody: &huma.RequestBody{
+						Description: "A description",
+					},
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name string `json:"name"`
+					}
+				}) (*struct{}, error) {
+					assert.Equal(t, "foo", input.Body.Name)
+					return nil, nil
+				})
+				// Note: the description should be set, but *also* the generated
+				// schema should be present since we didn't set it up ourselves.
+				b, _ := api.OpenAPI().Paths["/body"].Put.RequestBody.MarshalJSON()
+				assert.JSONEq(t, `{
+					"description": "A description",
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/Request"
+							}
+						}
+					}
+				}`, string(b))
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   `{"name":"foo"}`,
+		},
+		{
 			Name: "request-body-nested-struct-readOnly",
 			Register: func(t *testing.T, api huma.API) {
 				type NestedStruct struct {
