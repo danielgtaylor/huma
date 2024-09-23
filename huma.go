@@ -572,30 +572,30 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		hasInputBody = true
 		inputBodyIndex = f.Index
 		if op.RequestBody == nil {
-			required := f.Type.Kind() != reflect.Ptr && f.Type.Kind() != reflect.Interface
-			if f.Tag.Get("required") == "true" {
-				required = true
-			}
-
-			contentType := "application/json"
-			if c := f.Tag.Get("contentType"); c != "" {
-				contentType = c
-			}
-			hint := getHint(inputType, f.Name, op.OperationID+"Request")
-			if nameHint := f.Tag.Get("nameHint"); nameHint != "" {
-				hint = nameHint
-			}
-			s := SchemaFromField(registry, f, hint)
-
-			op.RequestBody = &RequestBody{
-				Required: required,
-				Content: map[string]*MediaType{
-					contentType: {
-						Schema: s,
-					},
-				},
-			}
+			op.RequestBody = &RequestBody{}
 		}
+
+		required := f.Type.Kind() != reflect.Ptr && f.Type.Kind() != reflect.Interface
+		if f.Tag.Get("required") == "true" {
+			required = true
+		}
+
+		contentType := "application/json"
+		if c := f.Tag.Get("contentType"); c != "" {
+			contentType = c
+		}
+		hint := getHint(inputType, f.Name, op.OperationID+"Request")
+		if nameHint := f.Tag.Get("nameHint"); nameHint != "" {
+			hint = nameHint
+		}
+		s := SchemaFromField(registry, f, hint)
+
+		op.RequestBody.Required = required
+
+		if op.RequestBody.Content == nil {
+			op.RequestBody.Content = map[string]*MediaType{}
+		}
+		op.RequestBody.Content[contentType] = &MediaType{Schema: s}
 
 		if op.BodyReadTimeout == 0 {
 			// 5 second default
@@ -615,8 +615,11 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		if op.RequestBody == nil {
 			op.RequestBody = &RequestBody{
 				Required: true,
-				Content:  map[string]*MediaType{},
 			}
+		}
+
+		if op.RequestBody.Content == nil {
+			op.RequestBody.Content = map[string]*MediaType{}
 		}
 
 		contentType := "application/octet-stream"
