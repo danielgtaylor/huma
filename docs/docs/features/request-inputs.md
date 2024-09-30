@@ -81,7 +81,7 @@ huma.Register(api, huma.Operation{
 	Path:        "/text",
 	Summary:     "Example to post plain text input",
 }, func(ctx context.Context, input struct {
-	RawBody []string `contentType:"text/plain"`
+	RawBody []byte `contentType:"text/plain"`
 }) (*struct{}, error) {
 	fmt.Println("Got input:", input.RawBody)
 	return nil, nil
