@@ -762,7 +762,6 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 			s.ContentEncoding = "base64"
 		} else {
 			s.Type = TypeArray
-			s.Nullable = true
 			s.Items = r.Schema(t.Elem(), true, t.Name()+"Item")
 
 			if t.Kind() == reflect.Array {
