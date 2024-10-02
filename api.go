@@ -191,6 +191,10 @@ type Config struct {
 	CreateHooks []func(Config) Config
 }
 
+func (c *Config) RegistryConfig() *RegistryConfig {
+	return c.Components.Schemas.Config()
+}
+
 // API represents a Huma API wrapping a specific router.
 type API interface {
 	// Adapter returns the router adapter for this API, providing a generic

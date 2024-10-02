@@ -9,6 +9,15 @@ import (
 	"unicode/utf8"
 )
 
+// RegistryConfig contains configuration options to control how OpenAPI schemas
+// are generated
+type RegistryConfig struct {
+	// NullSlices specifies whether slices in request and response body should be
+	// marked as nullable in the generated OpenAPI spec to reflect the behavior
+	// of [encoding/json] package.
+	NullSlices bool
+}
+
 // Registry creates and stores schemas and their references, and supports
 // marshalling to JSON/YAML for use as an OpenAPI #/components/schemas object.
 // Behavior is implementation-dependent, but the design allows for recursive
@@ -20,6 +29,7 @@ type Registry interface {
 	TypeFromRef(ref string) reflect.Type
 	Map() map[string]*Schema
 	RegisterTypeAlias(t reflect.Type, alias reflect.Type)
+	Config() *RegistryConfig
 }
 
 // DefaultSchemaNamer provides schema names for types. It uses the type name
@@ -66,6 +76,11 @@ type mapRegistry struct {
 	seen    map[reflect.Type]bool
 	namer   func(reflect.Type, string) string
 	aliases map[reflect.Type]reflect.Type
+	config  RegistryConfig
+}
+
+func (r *mapRegistry) Config() *RegistryConfig {
+	return &r.config
 }
 
 func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema {
@@ -170,5 +185,8 @@ func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) strin
 		seen:    map[reflect.Type]bool{},
 		aliases: map[reflect.Type]reflect.Type{},
 		namer:   namer,
+		config: RegistryConfig{
+			NullSlices: false,
+		},
 	}
 }

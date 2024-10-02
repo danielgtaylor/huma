@@ -126,3 +126,13 @@ func TestChiRouterPrefix(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.Code)
 	assert.Contains(t, resp.Body.String(), "/api/openapi.yaml")
 }
+
+func TestRegistryConfig(t *testing.T) {
+	cfg := huma.DefaultConfig("Test", "3.1")
+
+	// Test default value
+	assert.False(t, cfg.Components.Schemas.Config().NullSlices)
+
+	cfg.RegistryConfig().NullSlices = true
+	assert.True(t, cfg.Components.Schemas.Config().NullSlices)
+}

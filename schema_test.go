@@ -106,11 +106,16 @@ func (c *TypedIntegerWithCustomLimits) TransformSchema(r huma.Registry, s *huma.
 func TestSchema(t *testing.T) {
 	bitSize := strconv.Itoa(bits.UintSize)
 
+	nullSlicesCfg := huma.RegistryConfig{
+		NullSlices: true,
+	}
+
 	cases := []struct {
 		name     string
 		input    any
 		expected string
 		panics   string
+		config   huma.RegistryConfig
 	}{
 		{
 			name:     "bool",
@@ -1095,11 +1100,46 @@ func TestSchema(t *testing.T) {
 				"type":"object"
 			}`,
 		},
+		{
+			name:     "array-null-cfg",
+			config:   nullSlicesCfg,
+			input:    [2]int{1, 2},
+			expected: `{"type": ["array", "null"], "items": {"type": "integer", "format": "int64"}, "minItems": 2, "maxItems": 2}`,
+		},
+		{
+			name:     "slice-null-cfg",
+			config:   nullSlicesCfg,
+			input:    []int{1, 2, 3},
+			expected: `{"type": ["array", "null"], "items": {"type": "integer", "format": "int64"}}`,
+		},
+		{
+			name:   "field-array-null-cfg",
+			config: nullSlicesCfg,
+			input: struct {
+				Value []int `json:"value" minItems:"1" maxItems:"10" uniqueItems:"true"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": ["array", "null"],
+						"minItems": 1,
+						"maxItems": 10,
+						"uniqueItems": true,
+						"items": {"type": "integer", "format": "int64"}
+					}
+				},
+				"required": ["value"],
+				"additionalProperties": false
+			}`,
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+
+			r.Config().NullSlices = c.config.NullSlices
 
 			if c.panics != "" {
 				assert.PanicsWithError(t, c.panics, func() {
