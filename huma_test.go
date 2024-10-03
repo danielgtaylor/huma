@@ -627,14 +627,17 @@ func TestFeatures(t *testing.T) {
 					assert.Equal(t, 5, input.Body.Count)
 					assert.Equal(t, []string{"foo", "bar"}, input.Body.Tags)
 					assert.Equal(t, []int{1, 2, 3}, input.Body.Numbers)
+					assert.Equal(t, len(input.Body.Items), 2)
 					assert.Equal(t, 1, input.Body.Items[0].ID)
 					assert.True(t, input.Body.Items[0].Verified)
+					assert.Equal(t, 1, input.Body.Items[1].ID)
+					assert.False(t, input.Body.Items[1].Verified)
 					return nil, nil
 				})
 			},
 			Method: http.MethodPut,
 			URL:    "/body",
-			Body:   `{"items": [{"id": 1}]}`,
+			Body:   `{"items": [{"id": 1}, {"id": 1, "verified": false}]}`,
 		},
 		{
 			Name: "request-body-required",

@@ -1293,12 +1293,22 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 								})
 							}
 						} else {
-							// Set defaults for any fields that were not in the input.
+							// Set defaults for any fields that were not in the input:
+							atLeastOneFieldIsOverriden := false
 							defaults.Every(v, func(item reflect.Value, def any) {
-								if item.IsZero() {
+								if item.IsZero() && !reflect.ValueOf(def).IsZero() {
+									// There is one caveat here:
+									//     - IF the default value is not the 'zero' of the field type
+									//     - AND the 'zero' of the field type is a valid value specified in the input
+									//     - THEN the input required field value is overriden with a different value
 									item.Set(reflect.Indirect(reflect.ValueOf(def)))
+									atLeastOneFieldIsOverriden = true
 								}
 							})
+							// Restore wrongly overriden input values if any
+							if atLeastOneFieldIsOverriden {
+								_ = api.Unmarshal(ctx.Header("Content-Type"), body, f.Addr().Interface())
+							}
 						}
 					}
 
