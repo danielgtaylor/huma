@@ -1334,16 +1334,17 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				elem.Set(item)
 				item = ptr
 			}
-			if resolver, ok := item.Interface().(Resolver); ok {
-				if errs := resolver.Resolve(ctx); len(errs) > 0 {
-					res.Errors = append(res.Errors, errs...)
-				}
-			} else if resolver, ok := item.Interface().(ResolverWithPath); ok {
-				if errs := resolver.Resolve(ctx, pb); len(errs) > 0 {
-					res.Errors = append(res.Errors, errs...)
-				}
-			} else {
+			var errs []error
+			switch resolver := item.Interface().(type) {
+			case Resolver:
+				errs = resolver.Resolve(ctx)
+			case ResolverWithPath:
+				errs = resolver.Resolve(ctx, pb)
+			default:
 				panic("matched resolver cannot be run, please file a bug")
+			}
+			if len(errs) > 0 {
+				res.Errors = append(res.Errors, errs...)
 			}
 		})
 

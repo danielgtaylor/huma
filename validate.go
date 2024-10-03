@@ -520,11 +520,12 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 			return
 		}
 	case TypeObject:
-		if vv, ok := v.(map[string]any); ok {
+		switch vv := v.(type) {
+		case map[string]any:
 			handleMapString(r, s, path, mode, vv, res)
-		} else if vv, ok := v.(map[any]any); ok {
+		case map[any]any:
 			handleMapAny(r, s, path, mode, vv, res)
-		} else {
+		default:
 			res.Add(path, v, validation.MsgExpectedObject)
 			return
 		}
