@@ -96,7 +96,7 @@ data: {"error": "encode error: json: unsupported type: chan int"}
 
 `, resp.Body.String())
 
-	// Test write error doens't panic
+	// Test write error doesn't panic
 	w := &DummyWriter{writeErr: errors.New("whoops")}
 	req, _ := http.NewRequest(http.MethodGet, "/sse", nil)
 	api.Adapter().ServeHTTP(w, req)

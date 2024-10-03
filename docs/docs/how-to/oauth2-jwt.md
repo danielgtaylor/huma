@@ -110,7 +110,7 @@ graph LR
 	APIGateway --->|Forward| API
 ```
 
-In this case and depending on your security requirements, you may be able to skip this section since all incoming requests to your API will have already been vetted by the gateway. In this scenario, the Huma code frome the previous section serves mostly as documentation for your clients.
+In this case and depending on your security requirements, you may be able to skip this section since all incoming requests to your API will have already been vetted by the gateway. In this scenario, the Huma code from the previous section serves mostly as documentation for your clients.
 
 ### Huma Auth Middleware
 

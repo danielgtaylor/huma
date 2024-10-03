@@ -73,14 +73,14 @@ func TestCLIPlain(t *testing.T) {
 		Port  int
 
 		// ignore private fields, should not crash.
-		ingore bool
+		ignore bool
 	}
 
 	cli := humacli.New(func(hooks humacli.Hooks, options *Options) {
 		assert.True(t, options.Debug)
 		assert.Equal(t, "localhost", options.Host)
 		assert.Equal(t, 8001, options.Port)
-		assert.False(t, options.ingore)
+		assert.False(t, options.ignore)
 		hooks.OnStart(func() {
 			// Do nothing
 		})

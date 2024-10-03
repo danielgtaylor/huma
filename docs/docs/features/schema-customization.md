@@ -52,7 +52,7 @@ type SchemaProvider interface {
 }
 ```
 
-The [`huma.Registry`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Registry) is passed to you and can be used to get schemas or refs for any embedded structs. Here is an example, where we want to know if a field was omitted vs. null vs. a value when sent as part of a request body. First we start by defininig the custom generic struct:
+The [`huma.Registry`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Registry) is passed to you and can be used to get schemas or refs for any embedded structs. Here is an example, where we want to know if a field was omitted vs. null vs. a value when sent as part of a request body. First we start by defining the custom generic struct:
 
 ```go title="code.go"
 // OmittableNullable is a field which can be omitted from the input,

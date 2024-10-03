@@ -151,11 +151,11 @@ Now you can run your service and use the new command: `go run . openapi`. Notice
 
 ### Custom Commands with Options
 
-If you want to access your custom options struct with custom commands, use the [`huma.WithOptions(func(cmd *cobra.Command, args []string, options *YourOptions)) func(cmd *cobra.Command, args []string)`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#WithOptions) utitity function. It ensures the options are parsed and available before running your command.
+If you want to access your custom options struct with custom commands, use the [`huma.WithOptions(func(cmd *cobra.Command, args []string, options *YourOptions)) func(cmd *cobra.Command, args []string)`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#WithOptions) utility function. It ensures the options are parsed and available before running your command.
 
 !!! info "More Customization"
 
-    You can also overwite `cli.Root().Run` to completely customize how you run the server. Or just ditch the `cli` package altogether!
+    You can also overwrite `cli.Root().Run` to completely customize how you run the server. Or just ditch the `cli` package altogether!
 
 ## App Name & Version
 
