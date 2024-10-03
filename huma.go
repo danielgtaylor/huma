@@ -330,7 +330,7 @@ func (r *findResult[T]) everyPB(current reflect.Value, path []int, pb *PathBuffe
 			} else {
 				// The body is _always_ in a field called "Body", which turns into
 				// `body` in the path buffer, so we don't need to push it separately
-				// like the the params fields above.
+				// like the params fields above.
 				pb.Push(jsonName(field))
 			}
 		}
@@ -1327,7 +1327,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				// If the item is non-addressable (example: primitive custom type with
 				// a resolver as a map value), then we need to create a new pointer to
 				// the value to ensure the resolver can be called, regardless of whether
-				// is is a value or pointer resolver type.
+				// is a value or pointer resolver type.
 				// TODO: this is inefficient and could be improved in the future.
 				ptr := reflect.New(item.Type())
 				elem := ptr.Elem()
