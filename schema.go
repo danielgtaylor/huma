@@ -331,11 +331,12 @@ func (s *Schema) PrecomputeMessages() {
 
 func boolTag(f reflect.StructField, tag string, def bool) bool {
 	if v := f.Tag.Get(tag); v != "" {
-		if v == "true" {
+		switch v {
+		case "true":
 			return true
-		} else if v == "false" {
+		case "false":
 			return false
-		} else {
+		default:
 			panic(fmt.Errorf("invalid bool tag '%s' for field '%s': %v", tag, f.Name, v))
 		}
 	}

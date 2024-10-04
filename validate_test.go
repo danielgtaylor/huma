@@ -1476,10 +1476,11 @@ func BenchmarkValidate(b *testing.B) {
 
 			input := test.input
 			if s.Type == huma.TypeObject && s.Properties["value"] != nil {
-				if i, ok := input.(map[string]any); ok {
+				switch i := input.(type) {
+				case map[string]any:
 					input = i["value"]
 					s = s.Properties["value"]
-				} else if i, ok := input.(map[any]any); ok {
+				case map[any]any:
 					input = i["value"]
 					s = s.Properties["value"]
 				}
