@@ -950,7 +950,18 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						switch f.Type().Elem().Kind() {
 
 						case reflect.String:
-							f.Set(reflect.ValueOf(values))
+							if f.Type() == reflect.TypeOf(values) {
+								f.Set(reflect.ValueOf(values))
+							} else {
+								//Change element type to support slice of string subtypes (enums)
+								enumValues := reflect.New(f.Type()).Elem()
+								for _, val := range values {
+									enumVal := reflect.New(f.Type().Elem()).Elem()
+									enumVal.SetString(val)
+									enumValues.Set(reflect.Append(enumValues, enumVal))
+								}
+								f.Set(enumValues)
+							}
 							pv = values
 
 						case reflect.Int:
