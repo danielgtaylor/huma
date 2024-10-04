@@ -21,7 +21,7 @@ The standard `json` tag is supported and can be used to rename a field. Any fiel
 
 ## Optional / Required
 
-Fields being optional/required is determined automatically but can be overidden as needed using the logic below:
+Fields being optional/required is determined automatically but can be overridden as needed using the logic below:
 
 1. Start with all fields required.
 2. If a field has `omitempty`, it is optional.
@@ -54,7 +54,7 @@ In many languages (including Go), there is little to no distinction between an e
 
 Huma tries to balance schema simplicity, usability, and broad compatibility with schema correctness and a broad range of language support for end-to-end API tooling. To that end, it supports field nullability to a limited extent, and future changes may modify this default behavior as tools become more compatible with advanced JSON Schema features.
 
-Fields being nullable is determined automatically but can be overidden as needed using the logic below:
+Fields being nullable is determined automatically but can be overridden as needed using the logic below:
 
 1. Start with no fields as nullable
 2. If a field is a pointer:

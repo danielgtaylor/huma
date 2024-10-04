@@ -835,7 +835,7 @@ type Operation struct {
 	// BodyReadTimeout is the maximum amount of time to wait for the request
 	// body to be read. If not specified, the default is 5 seconds. Use -1
 	// for unlimited. If the timeout is reached, then an HTTP 408 error is
-	// returned. This value supercedes the server's read timeout, and a value
+	// returned. This value supersedes the server's read timeout, and a value
 	// of -1 can unset the server's timeout.
 	BodyReadTimeout time.Duration `yaml:"-"`
 

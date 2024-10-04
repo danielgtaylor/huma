@@ -708,7 +708,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 	if _, ok := v.(encoding.TextUnmarshaler); ok {
 		// Special case: types that implement encoding.TextUnmarshaler are able to
 		// be loaded from plain text, and so should be treated as strings.
-		// This behavior can be overidden by implementing `huma.SchemaProvider`
+		// This behavior can be overridden by implementing `huma.SchemaProvider`
 		// and returning a custom schema.
 		return &Schema{Type: TypeString, Nullable: isPointer}
 	}
@@ -893,7 +893,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 	switch s.Type {
 	case TypeBoolean, TypeInteger, TypeNumber, TypeString:
 		// Scalar types which are pointers are nullable by default. This can be
-		// overidden via the `nullable:"false"` field tag in structs.
+		// overridden via the `nullable:"false"` field tag in structs.
 		s.Nullable = isPointer
 	}
 

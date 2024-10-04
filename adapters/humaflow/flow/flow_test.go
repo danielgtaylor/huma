@@ -53,7 +53,7 @@ func TestMatching(t *testing.T) {
 			"GET", "/not/enough",
 			http.StatusNotFound, nil, "",
 		},
-		// wilcards
+		// wildcards
 		{
 			[]string{"GET"}, "/prefix/...",
 			"GET", "/prefix/anything/else",
