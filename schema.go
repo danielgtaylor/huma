@@ -561,7 +561,7 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 	}
 
 	fs.Nullable = boolTag(f, "nullable", fs.Nullable)
-	if fs.Nullable && fs.Ref != "" {
+	if fs.Nullable && fs.Ref != "" && registry.SchemaFromRef(fs.Ref).Type == "object" {
 		// Nullability is only supported for scalar types for now. Objects are
 		// much more complicated because the `null` type lives within the object
 		// definition (requiring multiple copies of the object) or needs to use
