@@ -51,13 +51,32 @@ func isEmptyValue(v reflect.Value) bool {
 	return false
 }
 
+// isNilValue returns true if the given value is nil.
+func isNilValue(v any) bool {
+	if v == nil {
+		return true
+	}
+
+	// Nil is typed and may not always match above, so for some types we can
+	// use reflection instead. This is a bit slower, but works.
+	// https://www.calhoun.io/when-nil-isnt-equal-to-nil/
+	// https://go.dev/doc/faq#nil_error
+	vv := reflect.ValueOf(v)
+	switch vv.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+		return vv.IsNil()
+	}
+
+	return false
+}
+
 // marshalJSON marshals a list of fields and their values into JSON. It supports
 // inlined extensions.
 func marshalJSON(fields []jsonFieldInfo, extensions map[string]any) ([]byte, error) {
 	value := make(map[string]any, len(extensions)+len(fields))
 
 	for _, v := range fields {
-		if v.omit == omitNil && v.value == nil {
+		if v.omit == omitNil && isNilValue(v.value) {
 			continue
 		}
 		if v.omit == omitEmpty {
@@ -956,7 +975,7 @@ func (o *Operation) MarshalJSON() ([]byte, error) {
 		{"responses", o.Responses, omitEmpty},
 		{"callbacks", o.Callbacks, omitEmpty},
 		{"deprecated", o.Deprecated, omitEmpty},
-		{"security", o.Security, omitEmpty},
+		{"security", o.Security, omitNil},
 		{"servers", o.Servers, omitEmpty},
 	}, o.Extensions)
 }
@@ -1507,7 +1526,7 @@ func (o *OpenAPI) MarshalJSON() ([]byte, error) {
 		{"paths", o.Paths, omitEmpty},
 		{"webhooks", o.Webhooks, omitEmpty},
 		{"components", o.Components, omitEmpty},
-		{"security", o.Security, omitEmpty},
+		{"security", o.Security, omitNil},
 		{"tags", o.Tags, omitEmpty},
 		{"externalDocs", o.ExternalDocs, omitEmpty},
 	}, o.Extensions)

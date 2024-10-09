@@ -1792,6 +1792,24 @@ Content of example2.txt.
 			URL:    "/one-of",
 			Body:   `[{"foo": "first"}, {"foo": "second"}]`,
 		},
+		{
+			Name: "security-override-public",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method:   http.MethodGet,
+					Path:     "/public",
+					Security: []map[string][]string{}, // No security for this call!
+				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+					return nil, nil
+				})
+				// Note: the empty security object should be serialized as an empty
+				// array in the OpenAPI document.
+				b, _ := api.OpenAPI().Paths["/public"].Get.MarshalJSON()
+				assert.Contains(t, string(b), `"security":[]`)
+			},
+			Method: http.MethodGet,
+			URL:    "/public",
+		},
 	} {
 		t.Run(feature.Name, func(t *testing.T) {
 			r := chi.NewRouter()
