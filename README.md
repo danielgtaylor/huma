@@ -101,6 +101,8 @@ A big thank you to our current & former sponsors!
 
 > It took us 3 months to build our platform in Python with FastAPI, SQL Alchemy and only 3 weeks to rewrite it in Go with Huma and SQL C. Things just work and I seldomly have to debug where in Python I spent a majority of my time debugging. - [Bitclick\_](https://www.reddit.com/r/golang/comments/1cj2znb/comment/l2e4u6y/)
 
+> Look at Huma, it's great. A nice slim layer on top of stdlib mux/chi and automatic body and parameter serialization, kinda feels like doing dotnet web APIs, but forces you to actually design request and response structs, which is great imo. - [Kirides](https://www.reddit.com/r/golang/comments/1fnn5c2/comment/lokuvpo/)
+
 # Install
 
 Install via `go get`. Note that Go 1.21 or newer is required.
