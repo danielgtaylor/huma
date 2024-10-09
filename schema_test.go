@@ -106,11 +106,16 @@ func (c *TypedIntegerWithCustomLimits) TransformSchema(r huma.Registry, s *huma.
 func TestSchema(t *testing.T) {
 	bitSize := strconv.Itoa(bits.UintSize)
 
+	nullSlicesCfg := huma.RegistryConfig{
+		NullSlices: true,
+	}
+
 	cases := []struct {
 		name     string
 		input    any
 		expected string
 		panics   string
+		config   huma.RegistryConfig
 	}{
 		{
 			name:     "bool",
@@ -205,12 +210,12 @@ func TestSchema(t *testing.T) {
 		{
 			name:     "array",
 			input:    [2]int{1, 2},
-			expected: `{"type": ["array", "null"], "items": {"type": "integer", "format": "int64"}, "minItems": 2, "maxItems": 2}`,
+			expected: `{"type": "array", "items": {"type": "integer", "format": "int64"}, "minItems": 2, "maxItems": 2}`,
 		},
 		{
 			name:     "slice",
 			input:    []int{1, 2, 3},
-			expected: `{"type": ["array", "null"], "items": {"type": "integer", "format": "int64"}}`,
+			expected: `{"type": "array", "items": {"type": "integer", "format": "int64"}}`,
 		},
 		{
 			name:     "map",
@@ -286,7 +291,7 @@ func TestSchema(t *testing.T) {
 				"type": "object",
 				"properties": {
 					"value": {
-						"type": ["array", "null"],
+						"type": "array",
 						"minItems": 1,
 						"maxItems": 10,
 						"uniqueItems": true,
@@ -344,7 +349,7 @@ func TestSchema(t *testing.T) {
 				"type": "object",
 				"properties": {
 					"value": {
-						"type": ["array", "null"],
+						"type": "array",
 						"items": {
 							"type": "integer",
 							"format": "int64",
@@ -434,7 +439,7 @@ func TestSchema(t *testing.T) {
 				"type": "object",
 				"properties": {
 					"value": {
-						"type": ["array", "null"],
+						"type": "array",
 						"items": {
 							"type": "string"
 						},
@@ -454,7 +459,7 @@ func TestSchema(t *testing.T) {
 				"type": "object",
 				"properties": {
 					"value": {
-						"type": ["array", "null"],
+						"type": "array",
 						"items": {
 							"type": "integer",
 							"format": "int64"
@@ -753,7 +758,7 @@ func TestSchema(t *testing.T) {
 						},
 						"maxItems":1,
 						"minItems":1,
-						"type":["array", "null"]
+						"type":"array"
 					},
 					"byRef":{
 						"$ref":"#/components/schemas/RecursiveChildKey"
@@ -771,7 +776,7 @@ func TestSchema(t *testing.T) {
 						"items":{
 							"$ref":"#/components/schemas/RecursiveChildLoop"
 						},
-						"type":["array", "null"]}
+						"type":"array"}
 					},
 					"required":["slice","array","map","byValue", "byRef"],
 					"type":"object"
@@ -893,7 +898,7 @@ func TestSchema(t *testing.T) {
 				"additionalProperties":false,
 				"properties":{
 					"values":{
-						"type":["array", "null"],
+						"type":"array",
 						"items":{
 							"type":"string",
 							"minLength":1,
@@ -1050,7 +1055,7 @@ func TestSchema(t *testing.T) {
 						},
 						"maxItems":4,
 						"minItems":4,
-						"type":["array", "null"]
+						"type":"array"
 					}
 				},
 				"required":["value"],
@@ -1073,7 +1078,7 @@ func TestSchema(t *testing.T) {
 						},
 						"maxItems":4,
 						"minItems":4,
-						"type":["array", "null"]
+						"type":"array"
 					}
 				},
 				"required":["value"],
@@ -1095,11 +1100,46 @@ func TestSchema(t *testing.T) {
 				"type":"object"
 			}`,
 		},
+		{
+			name:     "array-null-cfg",
+			config:   nullSlicesCfg,
+			input:    [2]int{1, 2},
+			expected: `{"type": ["array", "null"], "items": {"type": "integer", "format": "int64"}, "minItems": 2, "maxItems": 2}`,
+		},
+		{
+			name:     "slice-null-cfg",
+			config:   nullSlicesCfg,
+			input:    []int{1, 2, 3},
+			expected: `{"type": ["array", "null"], "items": {"type": "integer", "format": "int64"}}`,
+		},
+		{
+			name:   "field-array-null-cfg",
+			config: nullSlicesCfg,
+			input: struct {
+				Value []int `json:"value" minItems:"1" maxItems:"10" uniqueItems:"true"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": ["array", "null"],
+						"minItems": 1,
+						"maxItems": 10,
+						"uniqueItems": true,
+						"items": {"type": "integer", "format": "int64"}
+					}
+				},
+				"required": ["value"],
+				"additionalProperties": false
+			}`,
+		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+
+			r.Config().NullSlices = c.config.NullSlices
 
 			if c.panics != "" {
 				assert.PanicsWithError(t, c.panics, func() {
