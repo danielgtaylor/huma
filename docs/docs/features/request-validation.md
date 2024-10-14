@@ -137,6 +137,14 @@ Built-in string formats include:
 | `regex`                           | Regular expression              | `[a-z]+`                               |
 | `uuid`                            | UUID                            | `550e8400-e29b-41d4-a716-446655440000` |
 
+### Read and Write Only
+
+Note that the `readOnly` and `writeOnly` validations are not enforced by Huma and the values in those fields are not modified by Huma. They are purely for documentation purposes and allow you to re-use structs for both inputs and outputs.
+
+You will need to take care to ensure read-only fields are not modified. It's up to you whether you wish to ignore the field's value, compare it to an existing value in e.g. a datastore, or take some other action. This is a design choice to enable easier round-trips of data, for example reading a `GET` response with a read-only created date, modifying a different field, and sending it back to the server via `PUT`. The server should ignore both the presence and value of the created date, otherwise clients have to make potentially many modifications before data can be sent back to the server.
+
+Write-only fields, if stored in a datastore, can be combined with `omitempty` and then set to the zero value in handlers, or filtered out via datastore queries or projection. They can also be kept out of the datastore altogether but used to compute values in fields that will get stored.
+
 ## Strict vs. Loose Field Validation
 
 By default, Huma is strict about which fields are allowed in an object, making use of the `additionalProperties: false` JSON Schema setting. This means if a client sends a field that is not defined in the schema, the request will be rejected with an error. This can help to prevent typos and other issues and is recommended for most APIs.
