@@ -145,6 +145,10 @@ You will need to take care to ensure read-only fields are not modified. It's up 
 
 Write-only fields, if stored in a datastore, can be combined with `omitempty` and then set to the zero value in handlers, or filtered out via datastore queries or projection. They can also be kept out of the datastore altogether but used to compute values in fields that will get stored.
 
+!!! info "Note"
+
+    If a write-only field needs to be required on the request but the same struct is re-used in the response, you can use `json:"name,omitempy"` with `required:"true"`.
+
 ## Strict vs. Loose Field Validation
 
 By default, Huma is strict about which fields are allowed in an object, making use of the `additionalProperties: false` JSON Schema setting. This means if a client sends a field that is not defined in the schema, the request will be rejected with an error. This can help to prevent typos and other issues and is recommended for most APIs.
