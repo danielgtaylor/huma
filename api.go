@@ -2,6 +2,7 @@ package huma
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -65,6 +66,10 @@ type Context interface {
 
 	// Context returns the underlying request context.
 	Context() context.Context
+
+	TLS() *tls.ConnectionState
+
+	//ApiVersion() string
 
 	// Method returns the HTTP method for the request.
 	Method() string

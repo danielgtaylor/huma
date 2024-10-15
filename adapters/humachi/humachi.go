@@ -2,6 +2,7 @@ package humachi
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -104,6 +105,10 @@ func (c *chiContext) SetHeader(name string, value string) {
 
 func (c *chiContext) BodyWriter() io.Writer {
 	return c.w
+}
+
+func (c *chiContext) TLS() *tls.ConnectionState {
+	return c.r.TLS
 }
 
 // NewContext creates a new Huma context from an HTTP request and response.

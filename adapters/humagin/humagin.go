@@ -2,6 +2,7 @@ package humagin
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -102,6 +103,10 @@ func (c *ginCtx) SetHeader(name string, value string) {
 
 func (c *ginCtx) BodyWriter() io.Writer {
 	return c.orig.Writer
+}
+
+func (c *ginCtx) TLS() *tls.ConnectionState {
+	return c.orig.Request.TLS
 }
 
 // Router is an interface that wraps the Gin router's Handle method.

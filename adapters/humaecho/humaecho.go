@@ -2,6 +2,7 @@ package humaecho
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -102,6 +103,10 @@ func (c *echoCtx) SetHeader(name, value string) {
 
 func (c *echoCtx) BodyWriter() io.Writer {
 	return c.orig.Response()
+}
+
+func (c *echoCtx) TLS() *tls.ConnectionState {
+	return c.orig.Request().TLS
 }
 
 type router interface {

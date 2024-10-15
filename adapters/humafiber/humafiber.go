@@ -3,6 +3,7 @@ package humafiber
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -109,6 +110,10 @@ func (c *fiberCtx) SetHeader(name string, value string) {
 
 func (c *fiberCtx) BodyWriter() io.Writer {
 	return c.orig
+}
+
+func (c *fiberCtx) TLS() *tls.ConnectionState {
+	return c.orig.Context().TLSConnectionState()
 }
 
 type router interface {

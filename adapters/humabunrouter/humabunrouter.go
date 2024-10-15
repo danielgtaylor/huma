@@ -2,6 +2,7 @@ package humabunrouter
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -107,6 +108,10 @@ func (c *bunContext) BodyWriter() io.Writer {
 	return c.w
 }
 
+func (c *bunContext) TLS() *tls.ConnectionState {
+	return c.r.TLS
+}
+
 // NewContext creates a new Huma context from an HTTP request and response.
 func NewContext(op *huma.Operation, r bunrouter.Request, w http.ResponseWriter) huma.Context {
 	return &bunContext{op: op, r: r, w: w}
@@ -196,6 +201,10 @@ func (c *bunCompatContext) SetHeader(name string, value string) {
 
 func (c *bunCompatContext) BodyWriter() io.Writer {
 	return c.w
+}
+
+func (c *bunCompatContext) TLS() *tls.ConnectionState {
+	return c.r.TLS
 }
 
 // NewCompatContext creates a new Huma context from an HTTP request and response.
