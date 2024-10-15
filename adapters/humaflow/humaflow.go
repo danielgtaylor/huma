@@ -108,6 +108,14 @@ func (c *goContext) TLS() *tls.ConnectionState {
 	return c.r.TLS
 }
 
+func (c *goContext) Version() huma.ProtoVersion {
+	return huma.ProtoVersion{
+		Proto:      c.r.Proto,
+		ProtoMajor: c.r.ProtoMajor,
+		ProtoMinor: c.r.ProtoMinor,
+	}
+}
+
 // NewContext creates a new Huma context from an HTTP request and response.
 func NewContext(op *huma.Operation, r *http.Request, w http.ResponseWriter) huma.Context {
 	return &goContext{op: op, r: r, w: w}

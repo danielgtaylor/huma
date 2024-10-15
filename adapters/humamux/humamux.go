@@ -68,6 +68,14 @@ func (c *gmuxContext) TLS() *tls.ConnectionState {
 	return c.r.TLS
 }
 
+func (c *gmuxContext) Version() huma.ProtoVersion {
+	return huma.ProtoVersion{
+		Proto:      c.r.Proto,
+		ProtoMajor: c.r.ProtoMajor,
+		ProtoMinor: c.r.ProtoMinor,
+	}
+}
+
 func (c *gmuxContext) EachHeader(cb func(name, value string)) {
 	for name, values := range c.r.Header {
 		for _, value := range values {

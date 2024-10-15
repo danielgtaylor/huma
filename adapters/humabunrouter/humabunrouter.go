@@ -112,6 +112,14 @@ func (c *bunContext) TLS() *tls.ConnectionState {
 	return c.r.TLS
 }
 
+func (c *bunContext) Version() huma.ProtoVersion {
+	return huma.ProtoVersion{
+		Proto:      c.r.Proto,
+		ProtoMajor: c.r.ProtoMajor,
+		ProtoMinor: c.r.ProtoMinor,
+	}
+}
+
 // NewContext creates a new Huma context from an HTTP request and response.
 func NewContext(op *huma.Operation, r bunrouter.Request, w http.ResponseWriter) huma.Context {
 	return &bunContext{op: op, r: r, w: w}
@@ -205,6 +213,14 @@ func (c *bunCompatContext) BodyWriter() io.Writer {
 
 func (c *bunCompatContext) TLS() *tls.ConnectionState {
 	return c.r.TLS
+}
+
+func (c *bunCompatContext) Version() huma.ProtoVersion {
+	return huma.ProtoVersion{
+		Proto:      c.r.Proto,
+		ProtoMajor: c.r.ProtoMajor,
+		ProtoMinor: c.r.ProtoMinor,
+	}
 }
 
 // NewCompatContext creates a new Huma context from an HTTP request and response.

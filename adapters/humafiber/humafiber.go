@@ -116,6 +116,12 @@ func (c *fiberCtx) TLS() *tls.ConnectionState {
 	return c.orig.Context().TLSConnectionState()
 }
 
+func (c *fiberCtx) Version() huma.ProtoVersion {
+	return huma.ProtoVersion{
+		Proto: c.orig.Protocol(),
+	}
+}
+
 type router interface {
 	Add(method, path string, handlers ...fiber.Handler) fiber.Router
 }

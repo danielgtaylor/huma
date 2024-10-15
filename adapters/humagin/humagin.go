@@ -109,6 +109,14 @@ func (c *ginCtx) TLS() *tls.ConnectionState {
 	return c.orig.Request.TLS
 }
 
+func (c *ginCtx) Version() huma.ProtoVersion {
+	return huma.ProtoVersion{
+		Proto:      c.orig.Request.Proto,
+		ProtoMajor: c.orig.Request.ProtoMajor,
+		ProtoMinor: c.orig.Request.ProtoMinor,
+	}
+}
+
 // Router is an interface that wraps the Gin router's Handle method.
 type Router interface {
 	Handle(string, string, ...gin.HandlerFunc) gin.IRoutes

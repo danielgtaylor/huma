@@ -69,7 +69,7 @@ type Context interface {
 
 	TLS() *tls.ConnectionState
 
-	//ApiVersion() string
+	Version() ProtoVersion
 
 	// Method returns the HTTP method for the request.
 	Method() string
@@ -120,6 +120,13 @@ type Context interface {
 
 	// BodyWriter returns the response body writer.
 	BodyWriter() io.Writer
+}
+
+// Represent http protocol version
+type ProtoVersion struct {
+	Proto      string
+	ProtoMajor int
+	ProtoMinor int
 }
 
 type (

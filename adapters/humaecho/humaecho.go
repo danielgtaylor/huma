@@ -109,6 +109,15 @@ func (c *echoCtx) TLS() *tls.ConnectionState {
 	return c.orig.Request().TLS
 }
 
+func (c *echoCtx) Version() huma.ProtoVersion {
+	r := c.orig.Request()
+	return huma.ProtoVersion{
+		Proto:      r.Proto,
+		ProtoMajor: r.ProtoMajor,
+		ProtoMinor: r.ProtoMinor,
+	}
+}
+
 type router interface {
 	Add(method, path string, handler echo.HandlerFunc, middlewares ...echo.MiddlewareFunc) *echo.Route
 }
