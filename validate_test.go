@@ -1448,7 +1448,7 @@ func TestValidateSchemaTransformerDeleteField(t *testing.T) {
 
 	huma.Validate(registry, s, pb, huma.ModeReadFromServer, map[string]any{"field1": "value1"}, res)
 	// We should have no errors and no panics.
-	assert.Len(t, res.Errors, 0)
+	assert.Empty(t, res.Errors)
 }
 
 func ExampleModelValidator() {
