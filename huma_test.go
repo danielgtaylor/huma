@@ -1951,13 +1951,13 @@ func TestExhaustiveErrors(t *testing.T) {
 				"location": "path.id",
 				"value": 15
 			}, {
-				"message": "expected length <= 10",
-				"location": "body.name",
-				"value": "12345678901"
-			}, {
 				"message": "expected number >= 1",
 				"location": "body.count",
 				"value": -6
+			}, {
+				"message": "expected length <= 10",
+				"location": "body.name",
+				"value": "12345678901"
 			}, {
 				"message": "input resolver error",
 				"location": "path.id",
