@@ -1319,6 +1319,22 @@ func TestMarshalDiscriminator(t *testing.T) {
 	}`, string(b))
 }
 
+func TestSchemaArrayNotNullable(t *testing.T) {
+	huma.DefaultArrayNullable = false
+	defer func() {
+		huma.DefaultArrayNullable = true
+	}()
+
+	type Value struct {
+		Field []string `json:"field"`
+	}
+
+	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	s := r.Schema(reflect.TypeOf(Value{}), false, "")
+
+	assert.Equal(t, "array", s.Properties["field"].Type)
+}
+
 type BenchSub struct {
 	Visible bool      `json:"visible" default:"true"`
 	Metrics []float64 `json:"metrics" maxItems:"31"`

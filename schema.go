@@ -22,6 +22,12 @@ import (
 // ErrSchemaInvalid is sent when there is a problem building the schema.
 var ErrSchemaInvalid = errors.New("schema is invalid")
 
+// DefaultArrayNullable controls whether arrays are nullable by default. Set
+// this to `false` to make arrays non-nullable by default, but be aware that
+// any `nil` slice will still encode as `null` in JSON. See also:
+// https://pkg.go.dev/encoding/json#Marshal.
+var DefaultArrayNullable = true
+
 // JSON Schema type constants
 const (
 	TypeBoolean = "boolean"
@@ -763,7 +769,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 			s.ContentEncoding = "base64"
 		} else {
 			s.Type = TypeArray
-			s.Nullable = true
+			s.Nullable = DefaultArrayNullable
 			s.Items = r.Schema(t.Elem(), true, t.Name()+"Item")
 
 			if t.Kind() == reflect.Array {
