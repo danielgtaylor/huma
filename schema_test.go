@@ -723,6 +723,46 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-nullable-array",
+			input: struct {
+				Int []int64 `json:"int" nullable:"true"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"int": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "integer",
+							"format": "int64"
+						}
+					}
+				},
+				"required": ["int"]
+			}`,
+		},
+		{
+			name: "field-non-nullable-array",
+			input: struct {
+				Int []int64 `json:"int" nullable:"false"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"int": {
+						"type": "array",
+						"items": {
+							"type": "integer",
+							"format": "int64"
+						}
+					}
+				},
+				"required": ["int"]
+			}`,
+		},
+		{
 			name: "field-nullable-struct",
 			input: struct {
 				Field struct {
