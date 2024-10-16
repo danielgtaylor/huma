@@ -1428,6 +1428,30 @@ func TestValidateCustomFormatter(t *testing.T) {
 	assert.Equal(t, "custom: [mail: missing '@' or angle-addr] (value: alice)", res.Errors[0].Error())
 }
 
+type TransformDeleteField struct {
+	Field1 string `json:"field1"`
+	Field2 string `json:"field2"`
+}
+
+var _ huma.SchemaTransformer = (*TransformDeleteField)(nil)
+
+func (t *TransformDeleteField) TransformSchema(r huma.Registry, s *huma.Schema) *huma.Schema {
+	delete(s.Properties, "field2")
+	return s
+}
+
+func TestValidateSchemaTransformerDeleteField(t *testing.T) {
+	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	s := registry.Schema(reflect.TypeOf(&TransformDeleteField{}), true, "TestInput")
+	pb := huma.NewPathBuffer([]byte(""), 0)
+	res := &huma.ValidateResult{}
+
+	huma.Validate(registry, s, pb, huma.ModeReadFromServer, map[string]any{"field1": "value1"}, res)
+	// We should have no errors and no panics.
+	assert.Empty(t, res.Errors)
+	assert.NotContains(t, s.Properties, "field2")
+}
+
 func ExampleModelValidator() {
 	// Define a type you want to validate.
 	type Model struct {
@@ -1452,7 +1476,7 @@ func ExampleModelValidator() {
 	errs = validator.Validate(typ, val)
 	fmt.Println(errs)
 
-	// Output: [expected length <= 5 (name: abcdefg) expected number >= 25 (age: 1)]
+	// Output: [expected number >= 25 (age: 1) expected length <= 5 (name: abcdefg)]
 	// []
 }
 

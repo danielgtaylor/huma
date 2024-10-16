@@ -290,18 +290,15 @@ func (s *Schema) PrecomputeMessages() {
 		}
 	}
 
-	if s.propertyNames == nil {
-		s.propertyNames = make([]string, 0, len(s.Properties))
-		for name := range s.Properties {
-			s.propertyNames = append(s.propertyNames, name)
-		}
+	s.propertyNames = make([]string, 0, len(s.Properties))
+	for name := range s.Properties {
+		s.propertyNames = append(s.propertyNames, name)
 	}
+	sort.Strings(s.propertyNames)
 
-	if s.requiredMap == nil {
-		s.requiredMap = map[string]bool{}
-		for _, name := range s.Required {
-			s.requiredMap[name] = true
-		}
+	s.requiredMap = map[string]bool{}
+	for _, name := range s.Required {
+		s.requiredMap[name] = true
 	}
 
 	if s.Items != nil {
@@ -672,7 +669,10 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 	// Transform generated schema if type implements SchemaTransformer
 	v := reflect.New(t).Interface()
 	if st, ok := v.(SchemaTransformer); ok {
-		return st.TransformSchema(r, s)
+		s = st.TransformSchema(r, s)
+
+		// The schema may have been modified, so recompute the error messages.
+		s.PrecomputeMessages()
 	}
 	return s
 }
