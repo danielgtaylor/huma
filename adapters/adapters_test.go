@@ -95,11 +95,11 @@ func TestAdapters(t *testing.T) {
 			assert.Nil(t, ctx.TLS())
 			v := ctx.Version()
 			if !isFiber {
-				assert.Equal(t, v.Proto, "HTTP/1.1")
-				assert.Equal(t, v.ProtoMajor, 1)
-				assert.Equal(t, v.ProtoMinor, 1)
+				assert.Equal(t, "HTTP/1.1", v.Proto)
+				assert.Equal(t, 1, v.ProtoMajor)
+				assert.Equal(t, 1, v.ProtoMinor)
 			} else {
-				assert.Equal(t, v.Proto, "http")
+				assert.Equal(t, "http", v.Proto)
 			}
 			next(ctx)
 		})
