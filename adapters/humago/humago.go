@@ -2,6 +2,7 @@ package humago
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -110,6 +111,18 @@ func (c *goContext) SetHeader(name string, value string) {
 
 func (c *goContext) BodyWriter() io.Writer {
 	return c.w
+}
+
+func (c *goContext) TLS() *tls.ConnectionState {
+	return c.r.TLS
+}
+
+func (c *goContext) Version() huma.ProtoVersion {
+	return huma.ProtoVersion{
+		Proto:      c.r.Proto,
+		ProtoMajor: c.r.ProtoMajor,
+		ProtoMinor: c.r.ProtoMinor,
+	}
 }
 
 // NewContext creates a new Huma context from an HTTP request and response.

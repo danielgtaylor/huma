@@ -2,6 +2,7 @@ package humahttprouter
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -105,6 +106,18 @@ func (c *httprouterContext) SetHeader(name string, value string) {
 
 func (c *httprouterContext) BodyWriter() io.Writer {
 	return c.w
+}
+
+func (c *httprouterContext) TLS() *tls.ConnectionState {
+	return c.r.TLS
+}
+
+func (c *httprouterContext) Version() huma.ProtoVersion {
+	return huma.ProtoVersion{
+		Proto:      c.r.Proto,
+		ProtoMajor: c.r.ProtoMajor,
+		ProtoMinor: c.r.ProtoMinor,
+	}
 }
 
 type httprouterAdapter struct {

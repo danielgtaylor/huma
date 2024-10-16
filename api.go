@@ -2,6 +2,7 @@ package huma
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -66,6 +67,12 @@ type Context interface {
 	// Context returns the underlying request context.
 	Context() context.Context
 
+	// TLS / SSL connection information.
+	TLS() *tls.ConnectionState
+
+	// Version of the HTTP protocol as text and integers.
+	Version() ProtoVersion
+
 	// Method returns the HTTP method for the request.
 	Method() string
 
@@ -115,6 +122,13 @@ type Context interface {
 
 	// BodyWriter returns the response body writer.
 	BodyWriter() io.Writer
+}
+
+// Represent http protocol version
+type ProtoVersion struct {
+	Proto      string
+	ProtoMajor int
+	ProtoMinor int
 }
 
 type (

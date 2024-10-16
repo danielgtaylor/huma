@@ -90,18 +90,34 @@ func TestAdapters(t *testing.T) {
 		return huma.DefaultConfig("Test", "1.0.0")
 	}
 
+	wrap := func(h huma.API, isFiber bool) huma.API {
+		h.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+			assert.Nil(t, ctx.TLS())
+			v := ctx.Version()
+			if !isFiber {
+				assert.Equal(t, "HTTP/1.1", v.Proto)
+				assert.Equal(t, 1, v.ProtoMajor)
+				assert.Equal(t, 1, v.ProtoMinor)
+			} else {
+				assert.Equal(t, "http", v.Proto)
+			}
+			next(ctx)
+		})
+		return h
+	}
+
 	for _, adapter := range []struct {
 		name string
 		new  func() huma.API
 	}{
-		{"chi", func() huma.API { return humachi.New(chi.NewMux(), config()) }},
-		{"echo", func() huma.API { return humaecho.New(echo.New(), config()) }},
-		{"fiber", func() huma.API { return humafiber.New(fiber.New(), config()) }},
-		{"gin", func() huma.API { return humagin.New(gin.New(), config()) }},
-		{"httprouter", func() huma.API { return humahttprouter.New(httprouter.New(), config()) }},
-		{"mux", func() huma.API { return humamux.New(mux.NewRouter(), config()) }},
-		{"bunrouter", func() huma.API { return humabunrouter.New(bunrouter.New(), config()) }},
-		{"bunroutercompat", func() huma.API { return humabunrouter.NewCompat(bunrouter.New().Compat(), config()) }},
+		{"chi", func() huma.API { return wrap(humachi.New(chi.NewMux(), config()), false) }},
+		{"echo", func() huma.API { return wrap(humaecho.New(echo.New(), config()), false) }},
+		{"fiber", func() huma.API { return wrap(humafiber.New(fiber.New(), config()), true) }},
+		{"gin", func() huma.API { return wrap(humagin.New(gin.New(), config()), false) }},
+		{"httprouter", func() huma.API { return wrap(humahttprouter.New(httprouter.New(), config()), false) }},
+		{"mux", func() huma.API { return wrap(humamux.New(mux.NewRouter(), config()), false) }},
+		{"bunrouter", func() huma.API { return wrap(humabunrouter.New(bunrouter.New(), config()), false) }},
+		{"bunroutercompat", func() huma.API { return wrap(humabunrouter.NewCompat(bunrouter.New().Compat(), config()), false) }},
 	} {
 		t.Run(adapter.name, func(t *testing.T) {
 			testAdapter(t, adapter.new())

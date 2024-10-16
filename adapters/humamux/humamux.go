@@ -2,6 +2,7 @@ package humamux
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -61,6 +62,18 @@ func (c *gmuxContext) Query(name string) string {
 
 func (c *gmuxContext) Header(name string) string {
 	return c.r.Header.Get(name)
+}
+
+func (c *gmuxContext) TLS() *tls.ConnectionState {
+	return c.r.TLS
+}
+
+func (c *gmuxContext) Version() huma.ProtoVersion {
+	return huma.ProtoVersion{
+		Proto:      c.r.Proto,
+		ProtoMajor: c.r.ProtoMajor,
+		ProtoMinor: c.r.ProtoMinor,
+	}
 }
 
 func (c *gmuxContext) EachHeader(cb func(name, value string)) {
