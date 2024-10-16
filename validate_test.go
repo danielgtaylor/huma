@@ -1449,6 +1449,7 @@ func TestValidateSchemaTransformerDeleteField(t *testing.T) {
 	huma.Validate(registry, s, pb, huma.ModeReadFromServer, map[string]any{"field1": "value1"}, res)
 	// We should have no errors and no panics.
 	assert.Empty(t, res.Errors)
+	assert.NotContains(t, s.Properties, "field2")
 }
 
 func ExampleModelValidator() {
