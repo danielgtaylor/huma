@@ -160,7 +160,7 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 				send := func(msg Message) error {
 					if deadliner != nil {
 						if err := deadliner.SetWriteDeadline(time.Now().Add(WriteTimeout)); err != nil {
-							fmt.Println("warning: unable to set write deadline: %w", err)
+							fmt.Println("warning: unable to set write deadline: " + err.Error())
 						}
 					} else {
 						fmt.Println("warning: unable to set write deadline")
