@@ -138,6 +138,12 @@ func main() {
 
 The `path` tag tells Huma that this field should be read from the URL path. The `maxLength` tag tells Huma that the name should be no longer than 30 characters.
 
+Download dependencies for `main.go`:
+
+```bash
+$ go mod tidy
+```
+
 Congratulations! This is a fully functional Huma API!
 
 ## Calling the API
