@@ -57,13 +57,14 @@ Huma tries to balance schema simplicity, usability, and broad compatibility with
 Fields being nullable is determined automatically but can be overridden as needed using the logic below:
 
 1. Start with no fields as nullable
-2. If a field is a pointer:
+2. If a field is a pointer (including slices):
     1. To a `boolean`, `integer`, `number`, `string`: it is nullable unless it has `omitempty`.
-    2. To an `array`, `object`: it is **not** nullable, due to complexity and bad support for `anyOf`/`oneOf` in many tools.
+    2. To an `array`: it is nullable if `huma.DefaultArrayNullable` is true.
+    3. To an `object`: it is **not** nullable, due to complexity and bad support for `anyOf`/`oneOf` in many tools.
 3. If a field has `nullable:"false"`, it is not nullable
 4. If a field has `nullable:"true"`:
-    1. To a `boolean`, `integer`, `number`, `string`: it is nullable
-    2. To an `array`, `object`: **panic** saying this is not currently supported
+    1. To a `boolean`, `integer`, `number`, `string`, `array`: it is nullable
+    2. To an `object`: **panic** saying this is not currently supported
 5. If a struct has a field `_` with `nullable: true`, the struct is nullable enabling users to opt-in for `object` without the `anyOf`/`oneOf` complication.
 
 Here are some examples:
@@ -77,7 +78,7 @@ type MyStruct1 struct {
 }
 
 // Make a specific scalar field nullable. This is *not* supported for
-// slices, maps, or structs. Structs *must* use the method above.
+// maps or structs. Structs *must* use the method above.
 type MyStruct2 struct {
     Field1 *string `json:"field1"`
     Field2 string `json:"field2" nullable:"true"`
@@ -85,6 +86,10 @@ type MyStruct2 struct {
 ```
 
 Nullable types will generate a type array like `"type": ["string", "null"]` which has broad compatibility and is easy to downgrade to OpenAPI 3.0. Also keep in mind you can always provide a [custom schema](./schema-customization.md) if the built-in features aren't exactly what you need.
+
+!!! info "Note"
+
+    Slices in Go marshal into JSON as `null` if the slice itself is `nil` rather than allocated but empty. This is why slices are nullable by default. See the [Go JSON package documentation](https://pkg.go.dev/encoding/json#Marshal) for more information.
 
 ## Validation Tags
 
