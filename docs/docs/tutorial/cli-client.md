@@ -61,7 +61,7 @@ Once configured, you can call the API operations using high-level commands gener
 
 {{ asciinema("../../terminal/restish-call.cast", rows="20") }}
 
-See the help commands like `restish tutorial --help` or `restish tutorial get-greeting --help` for more details. If you set up command-line completion, you can also use tab to see all available commands.
+See the help commands like `restish tutorial --help` or `restish tutorial get-greeting-by-name --help` for more details. If you set up command-line completion, you can also use tab to see all available commands.
 
 ## Review
 
