@@ -22,8 +22,10 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/danielgtaylor/huma/v2/humacli"
 	"github.com/danielgtaylor/huma/v2/sse"
+	"github.com/gin-gonic/gin"
 	"github.com/go-chi/chi/v5"
 
 	_ "github.com/danielgtaylor/huma/v2/formats/cbor"
@@ -31,7 +33,8 @@ import (
 
 // Options for the CLI.
 type Options struct {
-	Port int `help:"Port to listen on" default:"8888"`
+	Port   int    `help:"Port to listen on" default:"8888"`
+	Router string `help:"Router to use" enum:"chi,gin" default:"chi"`
 }
 
 // First, define your SSE message types. These can be any struct you want and
@@ -126,8 +129,20 @@ func main() {
 	// Create a CLI app which takes a port option.
 	cli := humacli.New(func(hooks humacli.Hooks, options *Options) {
 		// Create a new router & API
-		router := chi.NewMux()
-		api := humachi.New(router, huma.DefaultConfig("My API", "1.0.0"))
+		var router http.Handler
+		var api huma.API
+
+		if options.Router == "chi" {
+			r := chi.NewMux()
+			api = humachi.New(r, huma.DefaultConfig("My API", "1.0.0"))
+			router = r
+		} else if options.Router == "gin" {
+			r := gin.New()
+			api = humagin.New(r, huma.DefaultConfig("My API", "1.0.0"))
+			router = r
+		} else {
+			panic("Unknown router " + options.Router)
+		}
 
 		// Create a producer to generate messages for clients.
 		p := Producer{Cancel: make(chan bool, 1)}

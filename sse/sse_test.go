@@ -28,7 +28,8 @@ type UserCreatedEvent UserEvent
 type UserDeletedEvent UserEvent
 
 type DummyWriter struct {
-	writeErr error
+	writeErr    error
+	deadlineErr error
 }
 
 func (w *DummyWriter) Header() http.Header {
@@ -41,8 +42,17 @@ func (w *DummyWriter) Write(p []byte) (n int, err error) {
 
 func (w *DummyWriter) WriteHeader(statusCode int) {}
 
-func (w *DummyWriter) SetWriteDeadline(t time.Time) error {
-	return nil
+func (w *DummyWriter) Unwrap() http.ResponseWriter {
+	return &WrappedDeadliner{deadlineErr: w.deadlineErr}
+}
+
+type WrappedDeadliner struct {
+	http.ResponseWriter
+	deadlineErr error
+}
+
+func (w *WrappedDeadliner) SetWriteDeadline(t time.Time) error {
+	return w.deadlineErr
 }
 
 func TestSSE(t *testing.T) {
@@ -103,6 +113,11 @@ data: {"error": "encode error: json: unsupported type: chan int"}
 
 	// Test inability to flush doesn't panic
 	w = &DummyWriter{}
+	req, _ = http.NewRequest(http.MethodGet, "/sse", nil)
+	api.Adapter().ServeHTTP(w, req)
+
+	// Test inability to set write deadline due to error doesn't panic
+	w = &DummyWriter{deadlineErr: errors.New("whoops")}
 	req, _ = http.NewRequest(http.MethodGet, "/sse", nil)
 	api.Adapter().ServeHTTP(w, req)
 }
