@@ -24,6 +24,14 @@ func deref(t reflect.Type) reflect.Type {
 	return t
 }
 
+type unwrapper interface {
+	Unwrap() http.ResponseWriter
+}
+
+type writeDeadliner interface {
+	SetWriteDeadline(time.Time) error
+}
+
 // Message is a single SSE message. There is no `event` field as this is
 // handled by the `eventTypeMap` when registering the operation.
 type Message struct {
@@ -119,9 +127,41 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 				ctx.SetHeader("Content-Type", "text/event-stream")
 				bw := ctx.BodyWriter()
 				encoder := json.NewEncoder(bw)
+
+				// Get the flusher/deadliner from the response writer if possible.
+				var flusher http.Flusher
+				flushCheck := bw
+				for {
+					if f, ok := flushCheck.(http.Flusher); ok {
+						flusher = f
+						break
+					}
+					if u, ok := flushCheck.(unwrapper); ok {
+						flushCheck = u.Unwrap()
+					} else {
+						break
+					}
+				}
+
+				var deadliner writeDeadliner
+				deadlineCheck := bw
+				for {
+					if d, ok := deadlineCheck.(writeDeadliner); ok {
+						deadliner = d
+						break
+					}
+					if u, ok := deadlineCheck.(unwrapper); ok {
+						deadlineCheck = u.Unwrap()
+					} else {
+						break
+					}
+				}
+
 				send := func(msg Message) error {
-					if d, ok := bw.(interface{ SetWriteDeadline(time.Time) error }); ok {
-						d.SetWriteDeadline(time.Now().Add(WriteTimeout))
+					if deadliner != nil {
+						if err := deadliner.SetWriteDeadline(time.Now().Add(WriteTimeout)); err != nil {
+							fmt.Println("warning: unable to set write deadline: " + err.Error())
+						}
 					} else {
 						fmt.Println("warning: unable to set write deadline")
 					}
@@ -155,8 +195,8 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 						return err
 					}
 					bw.Write([]byte("\n"))
-					if f, ok := bw.(http.Flusher); ok {
-						f.Flush()
+					if flusher != nil {
+						flusher.Flush()
 					} else {
 						fmt.Println("error: unable to flush")
 						return fmt.Errorf("unable to flush: %w", http.ErrNotSupported)
