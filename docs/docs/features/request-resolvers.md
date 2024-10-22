@@ -47,7 +47,7 @@ For deeply nested structs within the request body, you may not know the current 
 func (m *MyInput) Resolve(ctx huma.Context, prefix *huma.PathBuffer) []error {
 	return []error{&huma.ErrorDetail{
 		Message: "Foo has a bad value",
-		Location: prefix.With("foo")
+		Location: prefix.With("foo"),
 		Value: m.Foo,
 	}}
 }
