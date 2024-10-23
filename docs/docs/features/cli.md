@@ -135,11 +135,18 @@ cli.Root().AddCommand(&cobra.Command{
 	Use:   "openapi",
 	Short: "Print the OpenAPI spec",
 	Run: func(cmd *cobra.Command, args []string) {
-		b, _ := yaml.Marshal(api.OpenAPI())
+		b, err := api.OpenAPI().YAML()
+		if err != nil {
+			panic(err)
+		}
 		fmt.Println(string(b))
 	},
 })
 ```
+
+!!! info "Note"
+
+    You can use `api.OpenAPI().DowngradeYAML()` to output OpenAPI 3.0 instead of 3.1 for tools that don't support 3.1 yet.
 
 Now you can run your service and use the new command: `go run . openapi`. Notice that it never starts the server; it just runs your command handler code. Some ideas for custom commands:
 
