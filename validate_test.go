@@ -1388,7 +1388,7 @@ func TestValidate(t *testing.T) {
 			pb.Reset()
 			res.Reset()
 
-			huma.Validate(registry, s, pb, test.mode, test.input, res)
+			huma.ValidateAndSetDefaults(registry, s, pb, test.mode, test.input, res)
 
 			assert.Len(t, res.Errors, len(test.errs))
 			if len(test.errs) > 0 {
@@ -1423,7 +1423,7 @@ func TestValidateCustomFormatter(t *testing.T) {
 	pb := huma.NewPathBuffer([]byte(""), 0)
 	res := &huma.ValidateResult{}
 
-	huma.Validate(registry, s, pb, huma.ModeReadFromServer, map[string]any{"value": "alice"}, res)
+	huma.ValidateAndSetDefaults(registry, s, pb, huma.ModeReadFromServer, map[string]any{"value": "alice"}, res)
 	assert.Len(t, res.Errors, 1)
 	assert.Equal(t, "custom: [mail: missing '@' or angle-addr] (value: alice)", res.Errors[0].Error())
 }
@@ -1446,7 +1446,7 @@ func TestValidateSchemaTransformerDeleteField(t *testing.T) {
 	pb := huma.NewPathBuffer([]byte(""), 0)
 	res := &huma.ValidateResult{}
 
-	huma.Validate(registry, s, pb, huma.ModeReadFromServer, map[string]any{"field1": "value1"}, res)
+	huma.ValidateAndSetDefaults(registry, s, pb, huma.ModeReadFromServer, map[string]any{"field1": "value1"}, res)
 	// We should have no errors and no panics.
 	assert.Empty(t, res.Errors)
 	assert.NotContains(t, s.Properties, "field2")
@@ -1515,7 +1515,7 @@ func BenchmarkValidate(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				pb.Reset()
 				res.Reset()
-				huma.Validate(registry, s, pb, test.mode, input, res)
+				huma.ValidateAndSetDefaults(registry, s, pb, test.mode, input, res)
 			}
 		})
 	}
@@ -1634,7 +1634,7 @@ func Test_validateWithDiscriminator(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			pb.Reset()
 			res.Reset()
-			huma.Validate(registry, s, pb, huma.ModeWriteToServer, tc.input, res)
+			huma.ValidateAndSetDefaults(registry, s, pb, huma.ModeWriteToServer, tc.input, res)
 			require.Len(t, res.Errors, len(tc.wantErrs))
 			for i, wantErr := range tc.wantErrs {
 				assert.Contains(t, res.Errors[i].Error(), wantErr)

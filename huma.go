@@ -1168,7 +1168,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				}
 
 				if !op.SkipValidateParams {
-					Validate(oapi.Components.Schemas, p.Schema, pb, ModeWriteToServer, pv, res)
+					ValidateAndSetDefaults(oapi.Components.Schemas, p.Schema, pb, ModeWriteToServer, pv, res)
 				}
 			}
 		})
@@ -1276,7 +1276,19 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							pb.Reset()
 							pb.Push("body")
 							count := len(res.Errors)
-							Validate(oapi.Components.Schemas, inSchema, pb, ModeWriteToServer, parsed, res)
+							ValidateAndSetDefaults(oapi.Components.Schemas, inSchema, pb, ModeWriteToServer, parsed, res)
+
+							// Validate changes the original parsed input setting default values when needed
+							// so we need to marshal the parsed input back to a byte buffer to get the
+							// default values set by the validator.
+							parsedBuff := new(strings.Builder)
+							err := DefaultJSONFormat.Marshal(parsedBuff, parsed)
+							if err != nil {
+								WriteErr(api, ctx, http.StatusBadRequest, "could not set default value", err)
+								return
+							}
+							body = []byte(parsedBuff.String())
+
 							parseErrCount = len(res.Errors) - count
 							if parseErrCount > 0 {
 								errStatus = http.StatusUnprocessableEntity
@@ -1307,7 +1319,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							// Set defaults for any fields that were not in the input.
 							defaults.Every(v, func(item reflect.Value, def any) {
 								if item.IsZero() {
-									item.Set(reflect.Indirect(reflect.ValueOf(def)))
+									// item.Set(reflect.Indirect(reflect.ValueOf(def)))
 								}
 							})
 						}

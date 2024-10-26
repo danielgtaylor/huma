@@ -190,16 +190,16 @@ func BenchmarkRawBunRouter(b *testing.B) {
 
 		// Read and validate params
 		id := r.Param("id")
-		huma.Validate(registry, strSchema, pb, huma.ModeReadFromServer, id, res)
+		huma.ValidateAndSetDefaults(registry, strSchema, pb, huma.ModeReadFromServer, id, res)
 
 		ct := r.Header.Get("Content-Type")
-		huma.Validate(registry, strSchema, pb, huma.ModeReadFromServer, ct, res)
+		huma.ValidateAndSetDefaults(registry, strSchema, pb, huma.ModeReadFromServer, ct, res)
 
 		num, err := strconv.Atoi(r.URL.Query().Get("num"))
 		if err != nil {
 			return err
 		}
-		huma.Validate(registry, numSchema, pb, huma.ModeReadFromServer, num, res)
+		huma.ValidateAndSetDefaults(registry, numSchema, pb, huma.ModeReadFromServer, num, res)
 
 		// Read and validate body
 		defer r.Body.Close()
@@ -213,7 +213,7 @@ func BenchmarkRawBunRouter(b *testing.B) {
 			return err
 		}
 
-		huma.Validate(registry, schema, pb, huma.ModeWriteToServer, tmp, res)
+		huma.ValidateAndSetDefaults(registry, schema, pb, huma.ModeWriteToServer, tmp, res)
 		if len(res.Errors) > 0 {
 			return fmt.Errorf("%v", res.Errors)
 		}

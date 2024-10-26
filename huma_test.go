@@ -643,6 +643,41 @@ func TestFeatures(t *testing.T) {
 			Body:   `{"items": [{"id": 1}]}`,
 		},
 		{
+			Name: "request-body-defaults-respect-input",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						// Test defaults for primitive types.
+						Name  string `json:"name,omitempty" default:"Huma"`
+						Count int    `json:"count,omitempty" default:"5"`
+						// Test defaults for slices of primitives.
+						Tags    []string `json:"tags,omitempty" default:"foo, bar"`
+						Numbers []int    `json:"numbers,omitempty" default:"[1, 2, 3]"`
+						// Test defaults for fields within slices of structs.
+						Items []struct {
+							ID       int  `json:"id"`
+							Verified bool `json:"verified,omitempty" default:"true"`
+						} `json:"items,omitempty"`
+					}
+				},
+				) (*struct{}, error) {
+					assert.Equal(t, "Huma", input.Body.Name)
+					assert.Equal(t, 5, input.Body.Count)
+					assert.Equal(t, []string{"foo", "bar"}, input.Body.Tags)
+					assert.Equal(t, []int{1, 2, 3}, input.Body.Numbers)
+					assert.Equal(t, 1, input.Body.Items[0].ID)
+					assert.False(t, input.Body.Items[0].Verified)
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   `{"items": [{"id": 1, "verified": false}]}`,
+		},
+		{
 			Name: "request-body-required",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{

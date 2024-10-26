@@ -1184,7 +1184,7 @@ func TestSchemaOld(t *testing.T) {
 	s2 := r.Schema(reflect.TypeOf(TestInput{}), false, "")
 	pb := huma.NewPathBuffer(make([]byte, 0, 128), 0)
 	res := huma.ValidateResult{}
-	huma.Validate(r, s2, pb, huma.ModeReadFromServer, map[string]any{
+	huma.ValidateAndSetDefaults(r, s2, pb, huma.ModeReadFromServer, map[string]any{
 		"name": "foo",
 		"sub": map[string]any{
 			"num": 1.0,
@@ -1412,7 +1412,7 @@ func BenchmarkSchema(b *testing.B) {
 	}
 	pb := huma.NewPathBuffer(make([]byte, 0, 128), 0)
 	res := huma.ValidateResult{}
-	huma.Validate(r, s2, pb, huma.ModeReadFromServer, input, &res)
+	huma.ValidateAndSetDefaults(r, s2, pb, huma.ModeReadFromServer, input, &res)
 	assert.Empty(b, res.Errors)
 
 	b.ResetTimer()
@@ -1420,7 +1420,7 @@ func BenchmarkSchema(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		pb.Reset()
 		res.Reset()
-		huma.Validate(r, s2, pb, huma.ModeReadFromServer, input, &res)
+		huma.ValidateAndSetDefaults(r, s2, pb, huma.ModeReadFromServer, input, &res)
 		if len(res.Errors) > 0 {
 			b.Fatal(res.Errors)
 		}
@@ -1446,7 +1446,7 @@ func BenchmarkSchemaErrors(b *testing.B) {
 	}
 	pb := huma.NewPathBuffer(make([]byte, 0, 128), 0)
 	res := huma.ValidateResult{}
-	huma.Validate(r, s2, pb, huma.ModeReadFromServer, input, &res)
+	huma.ValidateAndSetDefaults(r, s2, pb, huma.ModeReadFromServer, input, &res)
 	assert.NotEmpty(b, res.Errors)
 
 	b.ResetTimer()
@@ -1454,7 +1454,7 @@ func BenchmarkSchemaErrors(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		pb.Reset()
 		res.Reset()
-		huma.Validate(r, s2, pb, huma.ModeReadFromServer, input, &res)
+		huma.ValidateAndSetDefaults(r, s2, pb, huma.ModeReadFromServer, input, &res)
 		if len(res.Errors) == 0 {
 			b.Fatal("expected error")
 		}

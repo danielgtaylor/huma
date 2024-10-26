@@ -109,16 +109,16 @@ func BenchmarkRawEcho(b *testing.B) {
 
 		// Read and validate params
 		id := c.Param("id")
-		huma.Validate(registry, strSchema, pb, huma.ModeReadFromServer, id, res)
+		huma.ValidateAndSetDefaults(registry, strSchema, pb, huma.ModeReadFromServer, id, res)
 
 		ct := r.Header.Get("Content-Type")
-		huma.Validate(registry, strSchema, pb, huma.ModeReadFromServer, ct, res)
+		huma.ValidateAndSetDefaults(registry, strSchema, pb, huma.ModeReadFromServer, ct, res)
 
 		num, err := strconv.Atoi(c.QueryParam("num"))
 		if err != nil {
 			panic(err)
 		}
-		huma.Validate(registry, numSchema, pb, huma.ModeReadFromServer, num, res)
+		huma.ValidateAndSetDefaults(registry, numSchema, pb, huma.ModeReadFromServer, num, res)
 
 		// Read and validate body
 		defer r.Body.Close()
@@ -132,7 +132,7 @@ func BenchmarkRawEcho(b *testing.B) {
 			panic(err)
 		}
 
-		huma.Validate(registry, schema, pb, huma.ModeWriteToServer, tmp, res)
+		huma.ValidateAndSetDefaults(registry, schema, pb, huma.ModeWriteToServer, tmp, res)
 		if len(res.Errors) > 0 {
 			panic(res.Errors)
 		}

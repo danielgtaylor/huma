@@ -265,7 +265,7 @@ func validateOneOf(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v
 	found := false
 	subRes := &ValidateResult{}
 	for _, sub := range s.OneOf {
-		Validate(r, sub, path, mode, v, subRes)
+		ValidateAndSetDefaults(r, sub, path, mode, v, subRes)
 		if len(subRes.Errors) == 0 {
 			if found {
 				res.Add(path, v, "expected value to match exactly one schema but matched multiple")
@@ -283,7 +283,7 @@ func validateAnyOf(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v
 	matches := 0
 	subRes := &ValidateResult{}
 	for _, sub := range s.AnyOf {
-		Validate(r, sub, path, mode, v, subRes)
+		ValidateAndSetDefaults(r, sub, path, mode, v, subRes)
 		if len(subRes.Errors) == 0 {
 			matches++
 		}
@@ -331,11 +331,12 @@ func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode Validat
 		return
 	}
 
-	Validate(r, r.SchemaFromRef(ref), path, mode, v, res)
+	ValidateAndSetDefaults(r, r.SchemaFromRef(ref), path, mode, v, res)
 }
 
 // Validate an input value against a schema, collecting errors in the validation
-// result object. If successful, `res.Errors` will be empty. It is suggested
+// result object. And set default values on ommited fields
+// If validation is successful, `res.Errors` will be empty. It is suggested
 // to use a `sync.Pool` to reuse the PathBuffer and ValidateResult objects,
 // making sure to call `Reset()` on them before returning them to the pool.
 //
@@ -346,11 +347,11 @@ func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode Validat
 //
 //	var value any
 //	json.Unmarshal([]byte(`{"foo": "bar"}`), &v)
-//	huma.Validate(registry, schema, pb, huma.ModeWriteToServer, value, res)
+//	huma.ValidateAndSetDefaults(registry, schema, pb, huma.ModeWriteToServer, value, res)
 //	for _, err := range res.Errors {
 //		fmt.Println(err.Error())
 //	}
-func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any, res *ValidateResult) {
+func ValidateAndSetDefaults(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any, res *ValidateResult) {
 	// Get the actual schema if this is a reference.
 	for s.Ref != "" {
 		s = r.SchemaFromRef(s.Ref)
@@ -370,13 +371,13 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 
 	if s.AllOf != nil {
 		for _, sub := range s.AllOf {
-			Validate(r, sub, path, mode, v, res)
+			ValidateAndSetDefaults(r, sub, path, mode, v, res)
 		}
 	}
 
 	if s.Not != nil {
 		subRes := &ValidateResult{}
-		Validate(r, s.Not, path, mode, v, subRes)
+		ValidateAndSetDefaults(r, s.Not, path, mode, v, subRes)
 		if len(subRes.Errors) == 0 {
 			res.Add(path, v, validation.MsgExpectedNotMatchSchema)
 		}
@@ -569,7 +570,7 @@ func handleArray[T any](r Registry, s *Schema, path *PathBuffer, mode ValidateMo
 
 	for i, item := range arr {
 		path.PushIndex(i)
-		Validate(r, s.Items, path, mode, item, res)
+		ValidateAndSetDefaults(r, s.Items, path, mode, item, res)
 		path.Pop()
 	}
 }
@@ -595,6 +596,11 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		// the `for` loop never runs.
 		readOnly := v.ReadOnly
 		writeOnly := v.WriteOnly
+
+		if m[k] == nil && v.Default != nil {
+			m[k] = v.Default
+		}
+
 		for v.Ref != "" {
 			v = r.SchemaFromRef(v.Ref)
 		}
@@ -639,7 +645,7 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		}
 
 		path.Push(k)
-		Validate(r, v, path, mode, m[k], res)
+		ValidateAndSetDefaults(r, v, path, mode, m[k], res)
 		path.Pop()
 	}
 
@@ -662,7 +668,7 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 			}
 
 			path.Push(k)
-			Validate(r, addl, path, mode, v, res)
+			ValidateAndSetDefaults(r, addl, path, mode, v, res)
 			path.Pop()
 		}
 	}
@@ -689,6 +695,11 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 		// the `for` loop never runs.
 		readOnly := v.ReadOnly
 		writeOnly := v.WriteOnly
+
+		if m[k] == nil && v.Default != nil {
+			m[k] = v.Default
+		}
+
 		for v.Ref != "" {
 			v = r.SchemaFromRef(v.Ref)
 		}
@@ -733,7 +744,7 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 		}
 
 		path.Push(k)
-		Validate(r, v, path, mode, m[k], res)
+		ValidateAndSetDefaults(r, v, path, mode, m[k], res)
 		path.Pop()
 	}
 
@@ -764,7 +775,7 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 				kStr = fmt.Sprint(k)
 			}
 			path.Push(kStr)
-			Validate(r, addl, path, mode, v, res)
+			ValidateAndSetDefaults(r, addl, path, mode, v, res)
 			path.Pop()
 		}
 	}
@@ -828,7 +839,7 @@ func (v *ModelValidator) Validate(typ reflect.Type, value any) []error {
 
 	s := v.registry.Schema(typ, true, typ.Name())
 
-	Validate(v.registry, s, v.pb, ModeReadFromServer, value, v.result)
+	ValidateAndSetDefaults(v.registry, s, v.pb, ModeReadFromServer, value, v.result)
 
 	if len(v.result.Errors) > 0 {
 		return v.result.Errors
