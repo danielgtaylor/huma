@@ -335,7 +335,7 @@ func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode Validat
 }
 
 // Validate an input value against a schema, collecting errors in the validation
-// result object. And set default values on ommited fields
+// result object. And set default values on omitted fields
 // If validation is successful, `res.Errors` will be empty. It is suggested
 // to use a `sync.Pool` to reuse the PathBuffer and ValidateResult objects,
 // making sure to call `Reset()` on them before returning them to the pool.
