@@ -28,13 +28,15 @@ func mapTo[A, B any](s []A, f func(A) B) []B {
 }
 
 var validateTests = []struct {
-	name  string
-	typ   reflect.Type
-	s     *huma.Schema
-	input any
-	mode  huma.ValidateMode
-	errs  []string
-	panic string
+	name    string
+	typ     reflect.Type
+	s       *huma.Schema
+	input   any
+	mode    huma.ValidateMode
+	errs    []string
+	panic   string
+	before  func()
+	cleanup func()
 }{
 	{
 		name:  "bool success",
@@ -919,6 +921,34 @@ var validateTests = []struct {
 		errs:  []string{"write only property is non-zero"},
 	},
 	{
+		name: "case-insensive success",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value"`
+		}{}),
+		input: map[string]any{"VaLuE": "works"},
+	},
+	{
+		name: "case-insensive fail",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" maxLength:"3"`
+		}{}),
+		input: map[string]any{"VaLuE": "fails"},
+		errs:  []string{"expected length <= 3"},
+	},
+	{
+		name:    "case-sensive fail",
+		before:  func() { huma.ValidateStrictCasing = true },
+		cleanup: func() { huma.ValidateStrictCasing = false },
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value"`
+		}{}),
+		input: map[string]any{"VaLuE": "fails due to casing"},
+		errs: []string{
+			"expected required property value to be present",
+			"unexpected property",
+		},
+	},
+	{
 		name: "unexpected property",
 		typ: reflect.TypeOf(struct {
 			Value string `json:"value,omitempty"`
@@ -1368,6 +1398,13 @@ func TestValidate(t *testing.T) {
 
 	for _, test := range validateTests {
 		t.Run(test.name, func(t *testing.T) {
+			if test.before != nil {
+				test.before()
+			}
+			if test.cleanup != nil {
+				defer test.cleanup()
+			}
+
 			registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 
 			var s *huma.Schema
@@ -1502,10 +1539,18 @@ func BenchmarkValidate(b *testing.B) {
 			if s.Type == huma.TypeObject && s.Properties["value"] != nil {
 				switch i := input.(type) {
 				case map[string]any:
-					input = i["value"]
+					for k := range i {
+						if strings.EqualFold(k, "value") {
+							input = i[k]
+						}
+					}
 					s = s.Properties["value"]
 				case map[any]any:
-					input = i["value"]
+					for k := range i {
+						if strings.EqualFold(fmt.Sprintf("%v", k), "value") {
+							input = i[k]
+						}
+					}
 					s = s.Properties["value"]
 				}
 			}
