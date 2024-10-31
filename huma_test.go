@@ -35,6 +35,7 @@ func Recoverer(next http.Handler) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rvr := recover(); rvr != nil {
+				fmt.Println(rvr)
 				w.WriteHeader(http.StatusInternalServerError)
 			}
 		}()
@@ -641,6 +642,70 @@ func TestFeatures(t *testing.T) {
 			Method: http.MethodPut,
 			URL:    "/body",
 			Body:   `{"items": [{"id": 1}]}`,
+		},
+		{
+			Name: "request-body-pointer-defaults",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						// Test defaults for primitive types.
+						Name    *string `json:"name,omitempty" default:"Huma"`
+						Enabled *bool   `json:"enabled,omitempty" default:"true"`
+						// Test defaults for slices of primitives.
+						Tags    []*string `json:"tags,omitempty" default:"foo, bar"`
+						Numbers []*int    `json:"numbers,omitempty" default:"[1, 2, 3]"`
+						// Test defaults for fields within slices of structs.
+						Items []*struct {
+							ID       int   `json:"id"`
+							Verified *bool `json:"verified,omitempty" default:"true"`
+						} `json:"items,omitempty"`
+					}
+				}) (*struct{}, error) {
+					assert.EqualValues(t, "Huma", *input.Body.Name)
+					assert.EqualValues(t, true, *input.Body.Enabled)
+					assert.EqualValues(t, []*string{Ptr("foo"), Ptr("bar")}, input.Body.Tags)
+					assert.EqualValues(t, []*int{Ptr(1), Ptr(2), Ptr(3)}, input.Body.Numbers)
+					assert.Equal(t, 1, input.Body.Items[0].ID)
+					assert.True(t, *input.Body.Items[0].Verified)
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   `{"items": [{"id": 1}]}`,
+		},
+		{
+			Name: "request-body-pointer-defaults-set",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						// Test defaults for primitive types.
+						Name    *string `json:"name,omitempty" default:"Huma"`
+						Enabled *bool   `json:"enabled,omitempty" default:"true"`
+						// Test defaults for fields within slices of structs.
+						Items []struct {
+							ID       int   `json:"id"`
+							Verified *bool `json:"verified,omitempty" default:"true"`
+						} `json:"items,omitempty"`
+					}
+				}) (*struct{}, error) {
+					// Ensure we can send the zero value and it doesn't get overridden.
+					assert.EqualValues(t, "", *input.Body.Name)
+					assert.EqualValues(t, false, *input.Body.Enabled)
+					assert.Equal(t, 1, input.Body.Items[0].ID)
+					assert.False(t, *input.Body.Items[0].Verified)
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   `{"name": "", "enabled": false, "items": [{"id": 1, "verified": false}]}`,
 		},
 		{
 			Name: "request-body-required",
@@ -2186,7 +2251,9 @@ func TestPointerDefaultPanics(t *testing.T) {
 			Path:        "/bug",
 		}, func(ctx context.Context, input *struct {
 			Body struct {
-				Value *string `json:"value,omitempty" default:"foo"`
+				Value *struct {
+					Field string `json:"field"`
+				} `json:"value,omitempty" default:"{}"`
 			}
 		}) (*struct{}, error) {
 			return nil, nil
