@@ -665,7 +665,7 @@ func TestFeatures(t *testing.T) {
 					}
 				}) (*struct{}, error) {
 					assert.EqualValues(t, "Huma", *input.Body.Name)
-					assert.EqualValues(t, true, *input.Body.Enabled)
+					assert.True(t, *input.Body.Enabled)
 					assert.EqualValues(t, []*string{Ptr("foo"), Ptr("bar")}, input.Body.Tags)
 					assert.EqualValues(t, []*int{Ptr(1), Ptr(2), Ptr(3)}, input.Body.Numbers)
 					assert.Equal(t, 1, input.Body.Items[0].ID)
@@ -697,7 +697,7 @@ func TestFeatures(t *testing.T) {
 				}) (*struct{}, error) {
 					// Ensure we can send the zero value and it doesn't get overridden.
 					assert.EqualValues(t, "", *input.Body.Name)
-					assert.EqualValues(t, false, *input.Body.Enabled)
+					assert.False(t, *input.Body.Enabled)
 					assert.Equal(t, 1, input.Body.Items[0].ID)
 					assert.False(t, *input.Body.Items[0].Verified)
 					return nil, nil
