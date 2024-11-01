@@ -670,12 +670,14 @@ func TestFeatures(t *testing.T) {
 					assert.EqualValues(t, []*int{Ptr(1), Ptr(2), Ptr(3)}, input.Body.Numbers)
 					assert.Equal(t, 1, input.Body.Items[0].ID)
 					assert.True(t, *input.Body.Items[0].Verified)
+					assert.Equal(t, 2, input.Body.Items[1].ID)
+					assert.False(t, *input.Body.Items[1].Verified)
 					return nil, nil
 				})
 			},
 			Method: http.MethodPut,
 			URL:    "/body",
-			Body:   `{"items": [{"id": 1}]}`,
+			Body:   `{"items": [{"id": 1}, {"id": 2, "verified": false}]}`,
 		},
 		{
 			Name: "request-body-pointer-defaults-set",
@@ -688,24 +690,17 @@ func TestFeatures(t *testing.T) {
 						// Test defaults for primitive types.
 						Name    *string `json:"name,omitempty" default:"Huma"`
 						Enabled *bool   `json:"enabled,omitempty" default:"true"`
-						// Test defaults for fields within slices of structs.
-						Items []struct {
-							ID       int   `json:"id"`
-							Verified *bool `json:"verified,omitempty" default:"true"`
-						} `json:"items,omitempty"`
 					}
 				}) (*struct{}, error) {
 					// Ensure we can send the zero value and it doesn't get overridden.
 					assert.EqualValues(t, "", *input.Body.Name)
 					assert.False(t, *input.Body.Enabled)
-					assert.Equal(t, 1, input.Body.Items[0].ID)
-					assert.False(t, *input.Body.Items[0].Verified)
 					return nil, nil
 				})
 			},
 			Method: http.MethodPut,
 			URL:    "/body",
-			Body:   `{"name": "", "enabled": false, "items": [{"id": 1, "verified": false}]}`,
+			Body:   `{"name": "", "enabled": false}`,
 		},
 		{
 			Name: "request-body-required",
