@@ -212,8 +212,8 @@ func findResolvers(resolverType, t reflect.Type) *findResult[bool] {
 func findDefaults(registry Registry, t reflect.Type) *findResult[any] {
 	return findInType(t, nil, func(sf reflect.StructField, i []int) any {
 		if d := sf.Tag.Get("default"); d != "" {
-			if sf.Type.Kind() == reflect.Pointer {
-				panic("pointers cannot have default values")
+			if sf.Type.Kind() == reflect.Pointer && sf.Type.Elem().Kind() == reflect.Struct {
+				panic("pointers to structs cannot have default values")
 			}
 			s := registry.Schema(sf.Type, true, "")
 			return convertType(sf.Type.Name(), sf.Type, jsonTagValue(registry, sf.Name, s, d))
@@ -255,27 +255,28 @@ type findResult[T comparable] struct {
 }
 
 func (r *findResult[T]) every(current reflect.Value, path []int, v T, f func(reflect.Value, T)) {
-	if current.Kind() == reflect.Invalid {
-		// Indirect from below may have resulted in no value, for example
-		// an optional field may have been omitted; just ignore it.
-		return
-	}
-
 	if len(path) == 0 {
 		f(current, v)
 		return
 	}
 
+	current = reflect.Indirect(current)
+	if current.Kind() == reflect.Invalid {
+		// Indirect may have resulted in no value, for example an optional field
+		// that's a pointer may have been omitted; just ignore it.
+		return
+	}
+
 	switch current.Kind() {
 	case reflect.Struct:
-		r.every(reflect.Indirect(current.Field(path[0])), path[1:], v, f)
+		r.every(current.Field(path[0]), path[1:], v, f)
 	case reflect.Slice:
 		for j := 0; j < current.Len(); j++ {
-			r.every(reflect.Indirect(current.Index(j)), path, v, f)
+			r.every(current.Index(j), path, v, f)
 		}
 	case reflect.Map:
 		for _, k := range current.MapKeys() {
-			r.every(reflect.Indirect(current.MapIndex(k)), path, v, f)
+			r.every(current.MapIndex(k), path, v, f)
 		}
 	default:
 		panic("unsupported")
@@ -297,17 +298,25 @@ func jsonName(field reflect.StructField) string {
 }
 
 func (r *findResult[T]) everyPB(current reflect.Value, path []int, pb *PathBuffer, v T, f func(reflect.Value, T)) {
-	if current.Kind() == reflect.Invalid {
-		// Indirect from below may have resulted in no value, for example
-		// an optional field may have been omitted; just ignore it.
-		return
-	}
-	switch current.Kind() {
-	case reflect.Struct:
+	switch reflect.Indirect(current).Kind() {
+	case reflect.Slice, reflect.Map:
+		// Ignore these. We only care about the leaf nodes.
+	default:
 		if len(path) == 0 {
 			f(current, v)
 			return
 		}
+	}
+
+	current = reflect.Indirect(current)
+	if current.Kind() == reflect.Invalid {
+		// Indirect may have resulted in no value, for example an optional field may
+		// have been omitted; just ignore it.
+		return
+	}
+
+	switch current.Kind() {
+	case reflect.Struct:
 		field := current.Type().Field(path[0])
 		pops := 0
 		if !field.Anonymous {
@@ -334,14 +343,14 @@ func (r *findResult[T]) everyPB(current reflect.Value, path []int, pb *PathBuffe
 				pb.Push(jsonName(field))
 			}
 		}
-		r.everyPB(reflect.Indirect(current.Field(path[0])), path[1:], pb, v, f)
+		r.everyPB(current.Field(path[0]), path[1:], pb, v, f)
 		for i := 0; i < pops; i++ {
 			pb.Pop()
 		}
 	case reflect.Slice:
 		for j := 0; j < current.Len(); j++ {
 			pb.PushIndex(j)
-			r.everyPB(reflect.Indirect(current.Index(j)), path, pb, v, f)
+			r.everyPB(current.Index(j), path, pb, v, f)
 			pb.Pop()
 		}
 	case reflect.Map:
@@ -351,14 +360,10 @@ func (r *findResult[T]) everyPB(current reflect.Value, path []int, pb *PathBuffe
 			} else {
 				pb.Push(fmt.Sprintf("%v", k.Interface()))
 			}
-			r.everyPB(reflect.Indirect(current.MapIndex(k)), path, pb, v, f)
+			r.everyPB(current.MapIndex(k), path, pb, v, f)
 			pb.Pop()
 		}
 	default:
-		if len(path) == 0 {
-			f(current, v)
-			return
-		}
 		panic("unsupported")
 	}
 }
@@ -469,7 +474,7 @@ func transformAndWrite(api API, ctx Context, status int, ct string, body any) {
 		ctx.BodyWriter().Write([]byte("error transforming response"))
 		// When including tval in the panic message, the server may become unresponsive for some time if the value is very large
 		// therefore, it has been removed from the panic message
-		panic(fmt.Errorf("error transforming response for %s %s %d: %w\n", ctx.Operation().Method, ctx.Operation().Path, status, terr))
+		panic(fmt.Errorf("error transforming response for %s %s %d: %w", ctx.Operation().Method, ctx.Operation().Path, status, terr))
 	}
 	ctx.SetStatus(status)
 	if status != http.StatusNoContent && status != http.StatusNotModified {
@@ -477,7 +482,7 @@ func transformAndWrite(api API, ctx Context, status int, ct string, body any) {
 			ctx.BodyWriter().Write([]byte("error marshaling response"))
 			// When including tval in the panic message, the server may become unresponsive for some time if the value is very large
 			// therefore, it has been removed from the panic message
-			panic(fmt.Errorf("error marshaling response for %s %s %d: %w\n", ctx.Operation().Method, ctx.Operation().Path, status, merr))
+			panic(fmt.Errorf("error marshaling response for %s %s %d: %w", ctx.Operation().Method, ctx.Operation().Path, status, merr))
 		}
 	}
 }
@@ -857,6 +862,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 		v := reflect.ValueOf(&input).Elem()
 		inputParams.Every(v, func(f reflect.Value, p *paramFieldInfo) {
+			f = reflect.Indirect(f)
+			if f.Kind() == reflect.Invalid {
+				return
+			}
 			var value string
 			switch p.Loc {
 			case "path":
@@ -1307,6 +1316,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							// Set defaults for any fields that were not in the input.
 							defaults.Every(v, func(item reflect.Value, def any) {
 								if item.IsZero() {
+									if item.Kind() == reflect.Pointer {
+										item.Set(reflect.New(item.Type().Elem()))
+										item = item.Elem()
+									}
 									item.Set(reflect.Indirect(reflect.ValueOf(def)))
 								}
 							})
@@ -1332,6 +1345,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		}
 
 		resolvers.EveryPB(pb, v, func(item reflect.Value, _ bool) {
+			item = reflect.Indirect(item)
+			if item.Kind() == reflect.Invalid {
+				return
+			}
 			if item.CanAddr() {
 				item = item.Addr()
 			} else {
@@ -1414,6 +1431,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		ct := ""
 		vo := reflect.ValueOf(output).Elem()
 		outHeaders.Every(vo, func(f reflect.Value, info *headerInfo) {
+			f = reflect.Indirect(f)
+			if f.Kind() == reflect.Invalid {
+				return
+			}
 			if f.Kind() == reflect.Slice {
 				for i := 0; i < f.Len(); i++ {
 					writeHeader(ctx.AppendHeader, info, f.Index(i))

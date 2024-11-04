@@ -142,6 +142,22 @@ Built-in string formats include:
 | `regex`                           | Regular expression              | `[a-z]+`                               |
 | `uuid`                            | UUID                            | `550e8400-e29b-41d4-a716-446655440000` |
 
+### Defaults
+
+The `default` field validation tag listed above is used to both document the existence of a server-side default value as well as to automatically have Huma set that value for you. This is useful for fields that are optional but have a default value if not provided.
+
+Similar to how the standard library JSON unmarshaler works, it is recommended to use pointers for scalar types where the zero value has semantic meaning to your application. For example, if you have a `bool` field that defaults to `true`, you should use a `*bool` field and set the default to `true`. This way, if the field is not provided, the default value will be used.
+
+```go title="code.go"
+type MyInput struct {
+	Body struct {
+		Enabled *bool `json:"enabled" default:"true"`
+	}
+}
+```
+
+If you had used `bool` instead of `*bool` then the zero value of `false` would get overridden by the default value of `true`, even if false is explictly sent by the client.
+
 ### Read and Write Only
 
 Note that the `readOnly` and `writeOnly` validations are not enforced by Huma and the values in those fields are not modified by Huma. They are purely for documentation purposes and allow you to re-use structs for both inputs and outputs.

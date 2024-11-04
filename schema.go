@@ -442,11 +442,27 @@ func convertType(fieldName string, t reflect.Type, v any) any {
 			// the original to the new type.
 			tmp := reflect.MakeSlice(t, 0, vv.Len())
 			for i := 0; i < vv.Len(); i++ {
-				if !vv.Index(i).Elem().Type().ConvertibleTo(t.Elem()) {
-					panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", vv.Index(i).Interface(), t.Elem(), fieldName, ErrSchemaInvalid))
+				item := vv.Index(i)
+				if item.Kind() == reflect.Interface {
+					// E.g. []any and we want the underlying type.
+					item = item.Elem()
+				}
+				item = reflect.Indirect(item)
+				typ := deref(t.Elem())
+				if !item.Type().ConvertibleTo(typ) {
+					panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", item.Interface(), t.Elem(), fieldName, ErrSchemaInvalid))
 				}
 
-				tmp = reflect.Append(tmp, vv.Index(i).Elem().Convert(t.Elem()))
+				value := item.Convert(typ)
+				if t.Elem().Kind() == reflect.Ptr {
+					// Special case: if the field is a pointer, we need to get a pointer
+					// to the converted value.
+					ptr := reflect.New(value.Type())
+					ptr.Elem().Set(value)
+					value = ptr
+				}
+
+				tmp = reflect.Append(tmp, value)
 			}
 			v = tmp.Interface()
 		} else if !tv.ConvertibleTo(deref(t)) {
