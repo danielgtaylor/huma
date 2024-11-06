@@ -1402,21 +1402,18 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			}
 
 			status := http.StatusInternalServerError
+
+			// handle status error
 			var se StatusError
 			if errors.As(err, &se) {
-				status = se.GetStatus()
-				err = se
-			} else {
-				err = NewErrorWithContext(ctx, http.StatusInternalServerError, "unexpected error occurred", err)
+				writeStatusError(api, ctx, se)
+				return
 			}
 
-			ct, _ := api.Negotiate(ctx.Header("Accept"))
-			if ctf, ok := err.(ContentTypeFilter); ok {
-				ct = ctf.ContentType(ct)
+			if err := WriteErr(api, ctx, status, "unexpected error occurred", err); err != nil {
+				ctx.BodyWriter().Write([]byte("internal server error"))
+				panic(fmt.Errorf("failed to write error response for %s %s %d: %w", ctx.Operation().Method, ctx.Operation().Path, status, err))
 			}
-
-			ctx.SetHeader("Content-Type", ct)
-			transformAndWrite(api, ctx, status, ct, err)
 			return
 		}
 
