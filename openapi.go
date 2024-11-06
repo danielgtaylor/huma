@@ -863,7 +863,8 @@ type Operation struct {
 	// This is a convenience for handlers that return a fixed set of errors
 	// where you do not wish to provide each one as an OpenAPI response object.
 	// Each error specified here is expanded into a response object with the
-	// schema generated from the type returned by `huma.NewError()`.
+	// schema generated from the type returned by `huma.NewError()`
+	// or `huma.NewErrorWithContext`.
 	Errors []int `yaml:"-"`
 
 	// SkipValidateParams disables validation of path, query, and header

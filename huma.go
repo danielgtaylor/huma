@@ -962,7 +962,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							if f.Type() == reflect.TypeOf(values) {
 								f.Set(reflect.ValueOf(values))
 							} else {
-								//Change element type to support slice of string subtypes (enums)
+								// Change element type to support slice of string subtypes (enums)
 								enumValues := reflect.New(f.Type()).Elem()
 								for _, val := range values {
 									enumVal := reflect.New(f.Type().Elem()).Elem()
@@ -1407,7 +1407,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				status = se.GetStatus()
 				err = se
 			} else {
-				err = NewError(http.StatusInternalServerError, err.Error())
+				err = NewErrorWithContext(ctx, http.StatusInternalServerError, "unexpected error occurred", err)
 			}
 
 			ct, _ := api.Negotiate(ctx.Header("Accept"))
