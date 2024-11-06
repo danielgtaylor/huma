@@ -280,6 +280,31 @@ func WriteErr(api API, ctx Context, status int, msg string, errs ...error) error
 	return api.Marshal(ctx.BodyWriter(), ct, tval)
 }
 
+func writeStatusError(api API, ctx Context, err StatusError) error {
+	ct, negotiateErr := api.Negotiate(ctx.Header("Accept"))
+	if negotiateErr != nil {
+		return fmt.Errorf("failed to write status error: %w", negotiateErr)
+	}
+	if ctf, ok := err.(ContentTypeFilter); ok {
+		ct = ctf.ContentType(ct)
+	}
+	ctx.SetHeader("Content-Type", ct)
+
+	status := err.GetStatus()
+	ctx.SetStatus(status)
+
+	// If request accept no output, just set the status code and return.
+	if status == http.StatusNoContent || status == http.StatusNotModified {
+		return nil
+	}
+
+	tval, terr := api.Transform(ctx, strconv.Itoa(status), err)
+	if terr != nil {
+		return terr
+	}
+	return api.Marshal(ctx.BodyWriter(), ct, tval)
+}
+
 // Status304NotModified returns a 304. This is not really an error, but
 // provides a way to send non-default responses.
 func Status304NotModified() StatusError {
@@ -372,4 +397,4 @@ func Error504GatewayTimeout(msg string, errs ...error) StatusError {
 }
 
 // ErrorFormatter is a function that formats an error message
-var ErrorFormatter func(format string, a ...any) string = fmt.Sprintf
+var ErrorFormatter = fmt.Sprintf
