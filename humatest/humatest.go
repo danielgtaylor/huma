@@ -345,7 +345,10 @@ func dumpBody(body io.ReadCloser, buf *bytes.Buffer) (io.ReadCloser, error) {
 	}
 	body.Close()
 	if strings.Contains(buf.String(), "json") {
-		json.Indent(buf, b, "", "  ")
+		if err := json.Indent(buf, b, "", "  "); err != nil {
+			// Indent failed, so just write the buffer.
+			buf.Write(b)
+		}
 	} else {
 		buf.Write(b)
 	}
