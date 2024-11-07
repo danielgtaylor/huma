@@ -59,33 +59,38 @@ func SelectQValueFast(header string, allowed []string) string {
 	bestQ := 0.0
 
 	name := ""
-	start := -1
+	start := 0
 	end := 0
 
 	for pos, char := range header {
 		// Format is like "a; q=0.5, b;q=1.0,c; q=0.3"
 		if char == ';' {
 			name = header[start : end+1]
-			start = -1
+			start = pos + 1
+			end = start
 			continue
 		}
 
 		if char == ',' || pos == len(header)-1 {
 			q := 1.0
-			if pos == len(header)-1 {
-				// This is the end, so it must be the name.
-				// Example: "application/yaml"
-				name = header[start : pos+1]
-			} else if name == "" {
-				// No name yet means we did not encounter a `;`.
+			if char != ',' && char != ' ' && char != '\t' {
+				// Update the end if it's not a comma or whitespace (i.e. end of string).
+				end = pos
+			}
+			if name == "" {
+				// No name yet means we did not encounter a `;`. Either this is a `,`
+				// or the end of the string so whatever we have is the name.
 				// Example: "a, b, c"
-				name = header[start:pos]
+				name = header[start : end+1]
 			} else {
-				if parsed, _ := strconv.ParseFloat(header[start+2:end+1], 64); parsed > 0 {
-					q = parsed
+				if len(header) > end+1 {
+					if parsed, _ := strconv.ParseFloat(header[start+2:end+1], 64); parsed > 0 {
+						q = parsed
+					}
 				}
 			}
-			start = -1
+			start = pos + 1
+			end = start
 
 			found := false
 			for _, n := range allowed {
@@ -97,6 +102,7 @@ func SelectQValueFast(header string, allowed []string) string {
 
 			if !found {
 				// Skip formats we don't support.
+				name = ""
 				continue
 			}
 
@@ -104,12 +110,15 @@ func SelectQValueFast(header string, allowed []string) string {
 				bestQ = q
 				best = name
 			}
+			name = ""
 			continue
 		}
 
 		if char != ' ' && char != '\t' {
+			// Only advance end if it's not whitespace.
 			end = pos
-			if start == -1 {
+			if header[start] == ' ' || header[start] == '\t' {
+				// Trim leading whitespace.
 				start = pos
 			}
 		}
