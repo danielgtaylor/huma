@@ -402,7 +402,6 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 		if _, ok := visited[t]; ok {
 			return
 		}
-		visited[t] = struct{}{}
 		for i := 0; i < t.NumField(); i++ {
 			f := t.Field(i)
 			if !f.IsExported() {
@@ -425,7 +424,9 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 				// Always process embedded structs and named fields which are not
 				// structs. If `recurseFields` is true then we also process named
 				// struct fields recursively.
+				visited[t] = struct{}{}
 				_findInType(f.Type, fi, result, onType, onField, recurseFields, visited, ignore...)
+				delete(visited, t)
 			}
 		}
 	case reflect.Slice:

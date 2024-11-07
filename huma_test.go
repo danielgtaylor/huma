@@ -72,6 +72,10 @@ type BodyContainer struct {
 
 type CustomStringParam string
 
+type StructWithDefaultField struct {
+	Field string `json:"field" default:"default"`
+}
+
 func TestFeatures(t *testing.T) {
 	for _, feature := range []struct {
 		Name         string
@@ -628,6 +632,11 @@ func TestFeatures(t *testing.T) {
 							ID       int  `json:"id"`
 							Verified bool `json:"verified,omitempty" default:"true"`
 						} `json:"items,omitempty"`
+						// Test defaults for fields in the same linked struct. Even though
+						// we have seen the struct before we still need to set the default
+						// since it's a new/different field.
+						S1 StructWithDefaultField `json:"s1,omitempty"`
+						S2 StructWithDefaultField `json:"s2,omitempty"`
 					}
 				}) (*struct{}, error) {
 					assert.Equal(t, "Huma", input.Body.Name)
@@ -636,6 +645,8 @@ func TestFeatures(t *testing.T) {
 					assert.Equal(t, []int{1, 2, 3}, input.Body.Numbers)
 					assert.Equal(t, 1, input.Body.Items[0].ID)
 					assert.True(t, input.Body.Items[0].Verified)
+					assert.Equal(t, "default", input.Body.S1.Field)
+					assert.Equal(t, "default", input.Body.S2.Field)
 					return nil, nil
 				})
 			},
