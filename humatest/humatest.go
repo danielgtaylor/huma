@@ -89,7 +89,7 @@ type TestAPI interface {
 	// request body. Anything else will panic.
 	//
 	// 	// Make a POST request
-	// 	api.PostCtx(ctx, "/foo", bytes.NewReader(`{"foo": "bar"}`))
+	// 	api.PostCtx(ctx, "/foo", strings.NewReader(`{"foo": "bar"}`))
 	//
 	// 	// Make a POST request with a custom header.
 	// 	api.PostCtx(ctx, "/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
@@ -102,7 +102,7 @@ type TestAPI interface {
 	// body. Anything else will panic.
 	//
 	// 	// Make a POST request
-	//	api.Post("/foo", bytes.NewReader(`{"foo": "bar"}`))
+	//	api.Post("/foo", strings.NewReader(`{"foo": "bar"}`))
 	//
 	// 	// Make a POST request with a custom header.
 	// 	api.Post("/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
@@ -115,7 +115,7 @@ type TestAPI interface {
 	// body. Anything else will panic.
 	//
 	// 	// Make a PUT request
-	// 	api.PutCtx(ctx, "/foo", bytes.NewReader(`{"foo": "bar"}`))
+	// 	api.PutCtx(ctx, "/foo", strings.NewReader(`{"foo": "bar"}`))
 	//
 	// 	// Make a PUT request with a custom header.
 	// 	api.PutCtx(ctx, "/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
@@ -128,7 +128,7 @@ type TestAPI interface {
 	// body. Anything else will panic.
 	//
 	// 	// Make a PUT request
-	// 	api.Put("/foo", bytes.NewReader(`{"foo": "bar"}`))
+	// 	api.Put("/foo", strings.NewReader(`{"foo": "bar"}`))
 	//
 	// 	// Make a PUT request with a custom header.
 	// 	api.Put("/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
@@ -141,7 +141,7 @@ type TestAPI interface {
 	// request body. Anything else will panic.
 	//
 	// 	// Make a PATCH request
-	// 	api.PatchCtx(ctx, "/foo", bytes.NewReader(`{"foo": "bar"}`))
+	// 	api.PatchCtx(ctx, "/foo", strings.NewReader(`{"foo": "bar"}`))
 	//
 	// 	// Make a PATCH request with a custom header.
 	// 	api.PatchCtx(ctx, "/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
@@ -154,7 +154,7 @@ type TestAPI interface {
 	// body. Anything else will panic.
 	//
 	// 	// Make a PATCH request
-	// 	api.Patch("/foo", bytes.NewReader(`{"foo": "bar"}`))
+	// 	api.Patch("/foo", strings.NewReader(`{"foo": "bar"}`))
 	//
 	// 	// Make a PATCH request with a custom header.
 	// 	api.Patch("/foo", "X-My-Header: my-value", MyBody{Foo: "bar"})
