@@ -53,6 +53,9 @@ func TestNoMatchFast(t *testing.T) {
 func TestMalformedFast(t *testing.T) {
 	assert.Equal(t, "", SelectQValueFast("a;,", []string{"d", "e"}))
 	assert.Equal(t, "a", SelectQValueFast(",a ", []string{"a", "b"}))
+	assert.Equal(t, "", SelectQValueFast("a;;", []string{"a", "b"}))
+	assert.Equal(t, "", SelectQValueFast(";,", []string{"a", "b"}))
+	assert.Equal(t, "a", SelectQValueFast("a;q=invalid", []string{"a", "b"}))
 }
 
 var BenchResult string
