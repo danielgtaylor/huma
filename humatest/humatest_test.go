@@ -151,7 +151,7 @@ func TestNewAPI(t *testing.T) {
 }
 
 func TestDumpBodyError(t *testing.T) {
-	req, _ := http.NewRequest(http.MethodGet, "http://example.com/foo?bar=baz", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/foo?bar=baz", nil)
 	req.Header.Set("Foo", "bar")
 	req.Host = "example.com"
 	req.Body = io.NopCloser(iotest.ErrReader(io.ErrUnexpectedEOF))
@@ -163,6 +163,17 @@ func TestDumpBodyError(t *testing.T) {
 	// Error should be passed through.
 	_, err = io.ReadAll(req.Body)
 	require.Error(t, err)
+}
+
+func TestDumpBodyInvalidJSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "http://example.com/foo?bar=baz", nil)
+	req.Header.Set("Content-Type", "application/json")
+	req.Host = "example.com"
+	req.Body = io.NopCloser(strings.NewReader("invalid json"))
+
+	b, err := DumpRequest(req)
+	require.NoError(t, err)
+	assert.Contains(t, string(b), "invalid json")
 }
 
 func TestOpenAPIRequired(t *testing.T) {
