@@ -465,20 +465,22 @@ var bufPool = sync.Pool{
 
 func writeResponse(api API, ctx Context, status int, ct string, body any) error {
 	if ct == "" {
+		// If no content type was provided, try to negotiate one with the client.
 		var err error
-		ct, err = getContentType(api, ctx, body)
+		ct, err = api.Negotiate(ctx.Header("Accept"))
 		if err != nil {
-			// Couldn't negotiate a content type, so return an error. This is best
-			// effort and we default to JSON. This prevents loops that would result
-			// from calling `WriteErr`.
-			status := http.StatusInternalServerError
-			if se, ok := err.(StatusError); ok {
-				status = se.GetStatus()
+			notAccept := NewErrorWithContext(ctx, http.StatusNotAcceptable, "unable to marshal response", err)
+			if e := transformAndWrite(api, ctx, http.StatusNotAcceptable, "application/json", notAccept); e != nil {
+				return e
 			}
-			if err := transformAndWrite(api, ctx, status, "application/json", err); err != nil {
-				return err
-			}
+			return err
 		}
+
+		if ctf, ok := body.(ContentTypeFilter); ok {
+			ct = ctf.ContentType(ct)
+		}
+
+		ctx.SetHeader("Content-Type", ct)
 	}
 
 	if err := transformAndWrite(api, ctx, status, ct, body); err != nil {
@@ -491,19 +493,6 @@ func writeResponseWithPanic(api API, ctx Context, status int, ct string, body an
 	if err := writeResponse(api, ctx, status, ct, body); err != nil {
 		panic(err)
 	}
-}
-
-func getContentType(api API, ctx Context, body any) (string, error) {
-	ct, err := api.Negotiate(ctx.Header("Accept"))
-	if err != nil {
-		return "", NewErrorWithContext(ctx, http.StatusNotAcceptable, "unable to marshal response", err)
-	}
-	if ctf, ok := body.(ContentTypeFilter); ok {
-		ct = ctf.ContentType(ct)
-	}
-
-	ctx.SetHeader("Content-Type", ct)
-	return ct, nil
 }
 
 // transformAndWrite is a utility function to transform and write a response.
