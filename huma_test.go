@@ -1372,7 +1372,7 @@ Content of example2.txt.
 					Method: http.MethodGet,
 					Path:   "/error",
 				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
-					return nil, fmt.Errorf("whoops")
+					return nil, errors.New("whoops")
 				})
 			},
 			Method: http.MethodGet,
