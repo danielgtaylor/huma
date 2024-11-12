@@ -464,9 +464,41 @@ var bufPool = sync.Pool{
 	},
 }
 
+func writeResponse(api API, ctx Context, status int, ct string, body any) error {
+	if ct == "" {
+		// If no content type was provided, try to negotiate one with the client.
+		var err error
+		ct, err = api.Negotiate(ctx.Header("Accept"))
+		if err != nil {
+			notAccept := NewErrorWithContext(ctx, http.StatusNotAcceptable, "unable to marshal response", err)
+			if e := transformAndWrite(api, ctx, http.StatusNotAcceptable, "application/json", notAccept); e != nil {
+				return e
+			}
+			return err
+		}
+
+		if ctf, ok := body.(ContentTypeFilter); ok {
+			ct = ctf.ContentType(ct)
+		}
+
+		ctx.SetHeader("Content-Type", ct)
+	}
+
+	if err := transformAndWrite(api, ctx, status, ct, body); err != nil {
+		return err
+	}
+	return nil
+}
+
+func writeResponseWithPanic(api API, ctx Context, status int, ct string, body any) {
+	if err := writeResponse(api, ctx, status, ct, body); err != nil {
+		panic(err)
+	}
+}
+
 // transformAndWrite is a utility function to transform and write a response.
 // It is best-effort as the status code and headers may have already been sent.
-func transformAndWrite(api API, ctx Context, status int, ct string, body any) {
+func transformAndWrite(api API, ctx Context, status int, ct string, body any) error {
 	// Try to transform and then marshal/write the response.
 	// Status code was already sent, so just log the error if something fails,
 	// and do our best to stuff it into the body of the response.
@@ -475,7 +507,7 @@ func transformAndWrite(api API, ctx Context, status int, ct string, body any) {
 		ctx.BodyWriter().Write([]byte("error transforming response"))
 		// When including tval in the panic message, the server may become unresponsive for some time if the value is very large
 		// therefore, it has been removed from the panic message
-		panic(fmt.Errorf("error transforming response for %s %s %d: %w", ctx.Operation().Method, ctx.Operation().Path, status, terr))
+		return fmt.Errorf("error transforming response for %s %s %d: %w", ctx.Operation().Method, ctx.Operation().Path, status, terr)
 	}
 	ctx.SetStatus(status)
 	if status != http.StatusNoContent && status != http.StatusNotModified {
@@ -483,9 +515,10 @@ func transformAndWrite(api API, ctx Context, status int, ct string, body any) {
 			ctx.BodyWriter().Write([]byte("error marshaling response"))
 			// When including tval in the panic message, the server may become unresponsive for some time if the value is very large
 			// therefore, it has been removed from the panic message
-			panic(fmt.Errorf("error marshaling response for %s %s %d: %w", ctx.Operation().Method, ctx.Operation().Path, status, merr))
+			return fmt.Errorf("error marshaling response for %s %s %d: %w", ctx.Operation().Method, ctx.Operation().Path, status, merr)
 		}
 	}
+	return nil
 }
 
 func parseArrElement[T any](values []string, parse func(string) (T, error)) ([]T, error) {
@@ -963,7 +996,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							if f.Type() == reflect.TypeOf(values) {
 								f.Set(reflect.ValueOf(values))
 							} else {
-								//Change element type to support slice of string subtypes (enums)
+								// Change element type to support slice of string subtypes (enums)
 								enumValues := reflect.New(f.Type()).Elem()
 								for _, val := range values {
 									enumVal := reflect.New(f.Type().Elem()).Elem()
@@ -1403,21 +1436,16 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			}
 
 			status := http.StatusInternalServerError
+
+			// handle status error
 			var se StatusError
 			if errors.As(err, &se) {
-				status = se.GetStatus()
-				err = se
-			} else {
-				err = NewError(http.StatusInternalServerError, err.Error())
+				writeResponseWithPanic(api, ctx, se.GetStatus(), "", se)
+				return
 			}
 
-			ct, _ := api.Negotiate(ctx.Header("Accept"))
-			if ctf, ok := err.(ContentTypeFilter); ok {
-				ct = ctf.ContentType(ct)
-			}
-
-			ctx.SetHeader("Content-Type", ct)
-			transformAndWrite(api, ctx, status, ct, err)
+			se = NewErrorWithContext(ctx, status, "unexpected error occurred", err)
+			writeResponseWithPanic(api, ctx, se.GetStatus(), "", se)
 			return
 		}
 
@@ -1442,7 +1470,8 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				}
 			} else {
 				if f.Kind() == reflect.String && info.Name == "Content-Type" {
-					// Track custom content type.
+					// Track custom content type. This overrides any content negotiation
+					// that would happen when writing the response.
 					ct = f.String()
 				}
 				writeHeader(ctx.SetHeader, info, f)
@@ -1469,22 +1498,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				return
 			}
 
-			// Only write a content type if one wasn't already written by the
-			// response headers handled above.
-			if ct == "" {
-				ct, err = api.Negotiate(ctx.Header("Accept"))
-				if err != nil {
-					WriteErr(api, ctx, http.StatusNotAcceptable, "unable to marshal response", err)
-					return
-				}
-				if ctf, ok := body.(ContentTypeFilter); ok {
-					ct = ctf.ContentType(ct)
-				}
-
-				ctx.SetHeader("Content-Type", ct)
-			}
-
-			transformAndWrite(api, ctx, status, ct, body)
+			writeResponseWithPanic(api, ctx, status, ct, body)
 		} else {
 			ctx.SetStatus(status)
 		}
