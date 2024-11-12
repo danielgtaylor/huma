@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 )
 
 // ErrorDetailer returns error details for responses & debugging. This enables
@@ -262,47 +261,12 @@ func WriteErr(api API, ctx Context, status int, msg string, errs ...error) error
 	// If it was not modified then this is a no-op.
 	status = err.GetStatus()
 
-	ct, negotiateErr := api.Negotiate(ctx.Header("Accept"))
-	if negotiateErr != nil {
-		return negotiateErr
+	writeErr := writeResponse(api, ctx, status, "", err)
+	if writeErr != nil {
+		// If we can't write the error, log it so we know what happened.
+		fmt.Printf("could not write error: %s\n", writeErr)
 	}
-
-	if ctf, ok := err.(ContentTypeFilter); ok {
-		ct = ctf.ContentType(ct)
-	}
-
-	ctx.SetHeader("Content-Type", ct)
-	ctx.SetStatus(status)
-	tval, terr := api.Transform(ctx, strconv.Itoa(status), err)
-	if terr != nil {
-		return terr
-	}
-	return api.Marshal(ctx.BodyWriter(), ct, tval)
-}
-
-func writeStatusError(api API, ctx Context, err StatusError) error {
-	ct, negotiateErr := api.Negotiate(ctx.Header("Accept"))
-	if negotiateErr != nil {
-		return fmt.Errorf("failed to write status error: %w", negotiateErr)
-	}
-	if ctf, ok := err.(ContentTypeFilter); ok {
-		ct = ctf.ContentType(ct)
-	}
-	ctx.SetHeader("Content-Type", ct)
-
-	status := err.GetStatus()
-	ctx.SetStatus(status)
-
-	// If request accept no output, just set the status code and return.
-	if status == http.StatusNoContent || status == http.StatusNotModified {
-		return nil
-	}
-
-	tval, terr := api.Transform(ctx, strconv.Itoa(status), err)
-	if terr != nil {
-		return terr
-	}
-	return api.Marshal(ctx.BodyWriter(), ct, tval)
+	return writeErr
 }
 
 // Status304NotModified returns a 304. This is not really an error, but

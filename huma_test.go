@@ -1366,6 +1366,22 @@ Content of example2.txt.
 			},
 		},
 		{
+			Name: "handler-generic-error",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/error",
+				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+					return nil, fmt.Errorf("whoops")
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/error",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusInternalServerError, resp.Code)
+			},
+		},
+		{
 			Name: "response-headers",
 			Register: func(t *testing.T, api huma.API) {
 				type Resp struct {

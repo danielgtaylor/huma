@@ -83,7 +83,7 @@ func TestNegotiateError(t *testing.T) {
 
 	req, _ := http.NewRequest("GET", "/", nil)
 	resp := httptest.NewRecorder()
-	ctx := humatest.NewContext(nil, req, resp)
+	ctx := humatest.NewContext(&huma.Operation{}, req, resp)
 	require.Error(t, huma.WriteErr(api, ctx, 400, "bad request"))
 }
 
@@ -98,7 +98,7 @@ func TestTransformError(t *testing.T) {
 
 	req, _ := http.NewRequest("GET", "/", nil)
 	resp := httptest.NewRecorder()
-	ctx := humatest.NewContext(nil, req, resp)
+	ctx := humatest.NewContext(&huma.Operation{}, req, resp)
 
 	require.Error(t, huma.WriteErr(api, ctx, 400, "bad request"))
 }
