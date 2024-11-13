@@ -2117,6 +2117,39 @@ func TestCustomError(t *testing.T) {
 	assert.Equal(t, `{"$schema":"http://localhost/schemas/MyError.json","message":"not found","details":["some-other-error"]}`+"\n", resp.Body.String())
 }
 
+type BrokenWriter struct {
+	http.ResponseWriter
+}
+
+func (br *BrokenWriter) Write(p []byte) (n int, err error) {
+	return 0, errors.New("failed writing")
+}
+
+func TestClientDisconnect(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	huma.Get(api, "/error", func(ctx context.Context, i *struct{}) (*struct {
+		Body string
+	}, error) {
+		return &struct{ Body string }{Body: "test"}, nil
+	})
+
+	// Create and immediately cancel the context. This simulates a client
+	// that has disconnected.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "/error", nil)
+
+	// Also make the response writer fail when writing.
+	recorder := httptest.NewRecorder()
+	resp := &BrokenWriter{recorder}
+
+	// We do not want any panics as this is not a real error.
+	assert.NotPanics(t, func() {
+		api.Adapter().ServeHTTP(resp, req)
+	})
+}
+
 type NestedResolversStruct struct {
 	Field2 string `json:"field2"`
 }

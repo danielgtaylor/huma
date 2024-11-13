@@ -512,6 +512,13 @@ func transformAndWrite(api API, ctx Context, status int, ct string, body any) er
 	ctx.SetStatus(status)
 	if status != http.StatusNoContent && status != http.StatusNotModified {
 		if merr := api.Marshal(ctx.BodyWriter(), ct, tval); merr != nil {
+			if errors.Is(ctx.Context().Err(), context.Canceled) {
+				// The client disconnected, so don't bother writing anything. Attempt
+				// to set the status in case it'll get logged. Technically this was
+				// not a normal successful request.
+				ctx.SetStatus(499)
+				return nil
+			}
 			ctx.BodyWriter().Write([]byte("error marshaling response"))
 			// When including tval in the panic message, the server may become unresponsive for some time if the value is very large
 			// therefore, it has been removed from the panic message
