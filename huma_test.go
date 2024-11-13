@@ -2122,7 +2122,7 @@ type BrokenWriter struct {
 }
 
 func (br *BrokenWriter) Write(p []byte) (n int, err error) {
-	return 0, fmt.Errorf("failed writing")
+	return 0, errors.New("failed writing")
 }
 
 func TestClientDisconnect(t *testing.T) {
