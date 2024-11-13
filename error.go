@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 )
 
 // ErrorDetailer returns error details for responses & debugging. This enables
@@ -264,7 +265,7 @@ func WriteErr(api API, ctx Context, status int, msg string, errs ...error) error
 	writeErr := writeResponse(api, ctx, status, "", err)
 	if writeErr != nil {
 		// If we can't write the error, log it so we know what happened.
-		fmt.Printf("could not write error: %s\n", writeErr)
+		fmt.Fprintf(os.Stderr, "could not write error: %s\n", writeErr)
 	}
 	return writeErr
 }
