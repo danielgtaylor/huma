@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"reflect"
 	"runtime/debug"
 	"time"
@@ -160,10 +161,10 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 				send := func(msg Message) error {
 					if deadliner != nil {
 						if err := deadliner.SetWriteDeadline(time.Now().Add(WriteTimeout)); err != nil {
-							fmt.Println("warning: unable to set write deadline: " + err.Error())
+							fmt.Fprintln(os.Stderr, "warning: unable to set write deadline: "+err.Error())
 						}
 					} else {
-						fmt.Println("warning: unable to set write deadline")
+						fmt.Fprintln(os.Stderr, "warning: unable to set write deadline")
 					}
 
 					// Write optional fields
@@ -198,7 +199,7 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 					if flusher != nil {
 						flusher.Flush()
 					} else {
-						fmt.Println("error: unable to flush")
+						fmt.Fprintln(os.Stderr, "error: unable to flush")
 						return fmt.Errorf("unable to flush: %w", http.ErrNotSupported)
 					}
 					return nil
