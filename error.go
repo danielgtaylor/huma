@@ -265,7 +265,7 @@ func WriteErr(api API, ctx Context, status int, msg string, errs ...error) error
 	writeErr := writeResponse(api, ctx, status, "", err)
 	if writeErr != nil {
 		// If we can't write the error, log it so we know what happened.
-		fmt.Fprintf(os.Stderr, "could not write error: %s\n", writeErr)
+		fmt.Fprintf(os.Stderr, "could not write error: %v\n", writeErr)
 	}
 	return writeErr
 }
