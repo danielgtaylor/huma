@@ -165,7 +165,7 @@ func (c *cli[O]) setupOptions(t reflect.Type, path []int) {
 		if !field.IsExported() {
 			// This isn't a public field, so we cannot use reflect.Value.Set with
 			// it. This is usually a struct field with a lowercase name.
-			fmt.Println("warning: ignoring unexported options field", field.Name)
+			fmt.Fprintln(os.Stderr, "warning: ignoring unexported options field", field.Name)
 			continue
 		}
 
@@ -298,7 +298,7 @@ func New[O any](onParsed func(Hooks, *O)) CLI {
 			// Server is done, just exit.
 		case <-quit:
 			if c.stop != nil {
-				fmt.Println("Gracefully shutting down the server...")
+				fmt.Fprintln(os.Stderr, "Gracefully shutting down the server...")
 				c.stop()
 			}
 		}

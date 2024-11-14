@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"reflect"
 	"runtime/debug"
 	"time"
@@ -160,10 +161,10 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 				send := func(msg Message) error {
 					if deadliner != nil {
 						if err := deadliner.SetWriteDeadline(time.Now().Add(WriteTimeout)); err != nil {
-							fmt.Println("warning: unable to set write deadline: " + err.Error())
+							fmt.Fprintf(os.Stderr, "warning: unable to set write deadline: %v\n", err)
 						}
 					} else {
-						fmt.Println("warning: unable to set write deadline")
+						fmt.Fprintln(os.Stderr, "write deadline not supported by underlying writer")
 					}
 
 					// Write optional fields
@@ -176,7 +177,7 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 
 					event, ok := typeToEvent[deref(reflect.TypeOf(msg.Data))]
 					if !ok {
-						fmt.Println("error: unknown event type", reflect.TypeOf(msg.Data))
+						fmt.Fprintf(os.Stderr, "error: unknown event type %v\n", reflect.TypeOf(msg.Data))
 						debug.PrintStack()
 					}
 					if event != "" && event != "message" {
@@ -198,7 +199,7 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 					if flusher != nil {
 						flusher.Flush()
 					} else {
-						fmt.Println("error: unable to flush")
+						fmt.Fprintln(os.Stderr, "error: unable to flush")
 						return fmt.Errorf("unable to flush: %w", http.ErrNotSupported)
 					}
 					return nil
