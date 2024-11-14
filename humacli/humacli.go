@@ -298,7 +298,7 @@ func New[O any](onParsed func(Hooks, *O)) CLI {
 			// Server is done, just exit.
 		case <-quit:
 			if c.stop != nil {
-				fmt.Println("Gracefully shutting down the server...")
+				fmt.Fprintln(os.Stderr, "Gracefully shutting down the server...")
 				c.stop()
 			}
 		}

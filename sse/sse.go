@@ -177,7 +177,7 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 
 					event, ok := typeToEvent[deref(reflect.TypeOf(msg.Data))]
 					if !ok {
-						fmt.Println("error: unknown event type", reflect.TypeOf(msg.Data))
+						fmt.Fprintln(os.Stderr, "error: unknown event type", reflect.TypeOf(msg.Data))
 						debug.PrintStack()
 					}
 					if event != "" && event != "message" {
