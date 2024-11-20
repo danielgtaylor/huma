@@ -1935,6 +1935,7 @@ Content of example2.txt.
 func TestOpenAPI(t *testing.T) {
 	r, api := humatest.New(t, huma.DefaultConfig("Features Test API", "1.0.0"))
 
+	// Used to validate exclusion of embedded structs from response headers
 	type PaginationHeaders struct {
 		Link string `header:"link"`
 	}
@@ -1977,6 +1978,7 @@ func TestOpenAPI(t *testing.T) {
 
 		openapiBody := w.Body.String()
 		assert.Equal(t, 200, w.Code, openapiBody)
+		assert.Contains(t, openapiBody, "link")
 		assert.NotContains(t, openapiBody, "PaginationHeaders")
 	})
 }
