@@ -1935,7 +1935,13 @@ Content of example2.txt.
 func TestOpenAPI(t *testing.T) {
 	r, api := humatest.New(t, huma.DefaultConfig("Features Test API", "1.0.0"))
 
+	// Used to validate exclusion of embedded structs from response headers
+	type PaginationHeaders struct {
+		Link string `header:"link"`
+	}
+
 	type Resp struct {
+		PaginationHeaders
 		Body struct {
 			Greeting string `json:"greeting"`
 		}
@@ -1964,6 +1970,17 @@ func TestOpenAPI(t *testing.T) {
 
 		assert.Equal(t, 200, w.Code, w.Body.String())
 	}
+
+	t.Run("ignore-anonymous-header-structs", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/openapi.yaml", nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		openapiBody := w.Body.String()
+		assert.Equal(t, 200, w.Code, openapiBody)
+		assert.Contains(t, openapiBody, "link")
+		assert.NotContains(t, openapiBody, "PaginationHeaders")
+	})
 }
 
 type IntNot3 int

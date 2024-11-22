@@ -230,6 +230,11 @@ type headerInfo struct {
 
 func findHeaders(t reflect.Type) *findResult[*headerInfo] {
 	return findInType(t, nil, func(sf reflect.StructField, i []int) *headerInfo {
+		// Ignore embedded fields
+		if sf.Anonymous {
+			return nil
+		}
+
 		header := sf.Tag.Get("header")
 		if header == "" {
 			header = sf.Name
