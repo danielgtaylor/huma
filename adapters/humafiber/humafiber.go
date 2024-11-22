@@ -15,6 +15,35 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// avoid race condition inside fasthttp need to cache Context().Done() and UserContext().Value
+type contextAdapter struct {
+	*fiber.Ctx
+	done <-chan struct{}
+	user func(any) any
+}
+
+var _ context.Context = &contextAdapter{}
+
+func (ca *contextAdapter) Deadline() (deadline time.Time, ok bool) {
+	return ca.Ctx.Context().Deadline()
+}
+
+func (ca *contextAdapter) Done() <-chan struct{} {
+	return ca.done
+}
+
+func (ca *contextAdapter) Err() error {
+	return ca.Ctx.Context().Err()
+}
+
+func (ca *contextAdapter) Value(key any) any {
+	var value = ca.user(key)
+	if value != nil {
+		return value
+	}
+	return ca.Ctx.Context().Value(key)
+}
+
 type fiberCtx struct {
 	op     *huma.Operation
 	orig   *fiber.Ctx
@@ -33,7 +62,11 @@ func (c *fiberCtx) Matched() string {
 }
 
 func (c *fiberCtx) Context() context.Context {
-	return c.orig.Context()
+	return &contextAdapter{
+		Ctx:  c.orig,
+		done: c.orig.Context().Done(),
+		user: c.orig.UserContext().Value,
+	}
 }
 
 func (c *fiberCtx) Method() string {
