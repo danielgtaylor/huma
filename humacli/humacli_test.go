@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"syscall"
 	"testing"
 	"time"
 
@@ -213,9 +212,14 @@ func TestCLIShutdown(t *testing.T) {
 		})
 	})
 
+	p, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatalf("failed to find process: %v", os.Getpid())
+	}
+
 	go func() {
 		time.Sleep(10 * time.Millisecond)
-		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+		p.Kill()
 	}()
 
 	cli.Root().SetArgs([]string{})
