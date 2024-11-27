@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/go-chi/chi/v5"
 )
 
 // Step 1: Create your input struct where you want to do additional validation.
@@ -35,7 +34,7 @@ func (b *ExampleInputBody) Resolve(ctx huma.Context, prefix *huma.PathBuffer) []
 
 func ExampleResolver() {
 	// Create the API.
-	r := chi.NewRouter()
+	r := http.NewServeMux()
 	api := NewExampleAPI(r, huma.DefaultConfig("Example API", "1.0.0"))
 
 	huma.Register(api, huma.Operation{

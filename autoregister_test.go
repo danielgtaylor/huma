@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/go-chi/chi/v5"
 )
 
 // Item represents a single item with a unique ID.
@@ -40,7 +39,7 @@ func (s *ItemsHandler) RegisterListItems(api huma.API) {
 
 func ExampleAutoRegister() {
 	// Create the router and API.
-	router := chi.NewMux()
+	router := http.NewServeMux()
 	api := NewExampleAPI(router, huma.DefaultConfig("My Service", "1.0.0"))
 
 	// Create the item handler and register all of its operations.

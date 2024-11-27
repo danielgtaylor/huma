@@ -6,9 +6,7 @@ import (
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/danielgtaylor/huma/v2/humatest"
-	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -88,41 +86,4 @@ func TestContextValue(t *testing.T) {
 
 	resp := api.Get("/test")
 	assert.Equal(t, http.StatusNoContent, resp.Code)
-}
-
-func TestChiRouterPrefix(t *testing.T) {
-	mux := chi.NewMux()
-	var api huma.API
-	mux.Route("/api", func(r chi.Router) {
-		config := huma.DefaultConfig("My API", "1.0.0")
-		config.Servers = []*huma.Server{{URL: "http://localhost:8888/api"}}
-		api = humachi.New(r, config)
-	})
-
-	type TestOutput struct {
-		Body struct {
-			Field string `json:"field"`
-		}
-	}
-
-	// Register a simple hello world operation in the API.
-	huma.Get(api, "/test", func(ctx context.Context, input *struct{}) (*TestOutput, error) {
-		return &TestOutput{}, nil
-	})
-
-	// Create a test API around the underlying router to make easier requests.
-	tapi := humatest.Wrap(t, humachi.New(mux, huma.DefaultConfig("Test", "1.0.0")))
-
-	// The top-level router should respond to the full path even though the
-	// operation was registered with just `/test`.
-	resp := tapi.Get("/api/test")
-	assert.Equal(t, http.StatusOK, resp.Code)
-
-	// The transformer should generate links with the full URL path.
-	assert.Contains(t, resp.Header().Get("Link"), "/api/schemas/TestOutputBody.json")
-
-	// The docs HTML should point to the full URL including base path.
-	resp = tapi.Get("/api/docs")
-	assert.Equal(t, http.StatusOK, resp.Code)
-	assert.Contains(t, resp.Body.String(), "/api/openapi.yaml")
 }

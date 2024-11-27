@@ -12,9 +12,8 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/danielgtaylor/huma/v2/adapters/humago"
 	"github.com/danielgtaylor/huma/v2/humacli"
-	"github.com/go-chi/chi/v5"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
@@ -33,8 +32,8 @@ func ExampleCLI() {
 			opts.Debug, opts.Host, opts.Port)
 
 		// Set up the router & API
-		router := chi.NewRouter()
-		api := humachi.New(router, huma.DefaultConfig("My API", "1.0.0"))
+		mux := http.NewServeMux()
+		api := humago.New(mux, huma.DefaultConfig("My API", "1.0.0"))
 
 		huma.Register(api, huma.Operation{
 			OperationID: "hello",
@@ -47,7 +46,7 @@ func ExampleCLI() {
 
 		srv := &http.Server{
 			Addr:    fmt.Sprintf("%s:%d", opts.Host, opts.Port),
-			Handler: router,
+			Handler: mux,
 			// TODO: Set up timeouts!
 		}
 

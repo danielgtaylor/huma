@@ -17,18 +17,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/danielgtaylor/huma/v2/adapters/humago"
 	"github.com/danielgtaylor/huma/v2/humatest"
 )
 
 var NewExampleAdapter = humatest.NewAdapter
-var NewExampleAPI = humachi.New
+var NewExampleAPI = humago.New
 
 // Recoverer is a really simple recovery middleware we can use during tests.
 func Recoverer(next http.Handler) http.Handler {
@@ -1899,13 +1898,12 @@ Content of example2.txt.
 		},
 	} {
 		t.Run(feature.Name, func(t *testing.T) {
-			r := chi.NewRouter()
-			r.Use(Recoverer)
+			r := http.NewServeMux()
 			config := huma.DefaultConfig("Features Test API", "1.0.0")
 			if feature.Transformers != nil {
 				config.Transformers = append(config.Transformers, feature.Transformers...)
 			}
-			api := humatest.Wrap(t, humachi.New(r, config))
+			api := humatest.Wrap(t, humago.New(r, config))
 			feature.Register(t, api)
 
 			var body io.Reader = nil
@@ -1917,7 +1915,7 @@ Content of example2.txt.
 				req.Header.Set(k, v)
 			}
 			w := httptest.NewRecorder()
-			r.ServeHTTP(w, req)
+			Recoverer(r).ServeHTTP(w, req)
 			b, _ := api.OpenAPI().YAML()
 			t.Log(string(b))
 			b, _ = httputil.DumpResponse(w.Result(), true)
