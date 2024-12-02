@@ -219,7 +219,7 @@ func TestCLIShutdown(t *testing.T) {
 
 	go func() {
 		time.Sleep(10 * time.Millisecond)
-		p.Kill()
+		p.Signal(os.Interrupt)
 	}()
 
 	cli.Root().SetArgs([]string{})
