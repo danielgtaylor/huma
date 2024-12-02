@@ -7,14 +7,12 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"syscall"
 	"testing"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/danielgtaylor/huma/v2/adapters/humago"
 	"github.com/danielgtaylor/huma/v2/humacli"
-	"github.com/go-chi/chi/v5"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
@@ -33,8 +31,8 @@ func ExampleCLI() {
 			opts.Debug, opts.Host, opts.Port)
 
 		// Set up the router & API
-		router := chi.NewRouter()
-		api := humachi.New(router, huma.DefaultConfig("My API", "1.0.0"))
+		mux := http.NewServeMux()
+		api := humago.New(mux, huma.DefaultConfig("My API", "1.0.0"))
 
 		huma.Register(api, huma.Operation{
 			OperationID: "hello",
@@ -47,7 +45,7 @@ func ExampleCLI() {
 
 		srv := &http.Server{
 			Addr:    fmt.Sprintf("%s:%d", opts.Host, opts.Port),
-			Handler: router,
+			Handler: mux,
 			// TODO: Set up timeouts!
 		}
 
@@ -214,9 +212,14 @@ func TestCLIShutdown(t *testing.T) {
 		})
 	})
 
+	p, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		t.Fatalf("failed to find process: %v", os.Getpid())
+	}
+
 	go func() {
 		time.Sleep(10 * time.Millisecond)
-		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+		p.Signal(os.Interrupt)
 	}()
 
 	cli.Root().SetArgs([]string{})

@@ -5,9 +5,8 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/danielgtaylor/huma/v2/adapters/humago"
 	"github.com/danielgtaylor/huma/v2/sse"
-	"github.com/go-chi/chi/v5"
 )
 
 func ExampleRegister_sse() {
@@ -25,8 +24,8 @@ func ExampleRegister_sse() {
 	type UserDeletedEvent UserEvent
 
 	// 2. Set up the API.
-	router := chi.NewMux()
-	api := humachi.New(router, huma.DefaultConfig("My API", "1.0.0"))
+	mux := http.NewServeMux()
+	api := humago.New(mux, huma.DefaultConfig("My API", "1.0.0"))
 
 	// 3. Register an SSE operation.
 	sse.Register(api, huma.Operation{
