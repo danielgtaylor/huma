@@ -555,6 +555,30 @@ func TestFeatures(t *testing.T) {
 			Body: `{"name":"foo"}`,
 		},
 		{
+			Name: "request-body-embed",
+			Register: func(t *testing.T, api huma.API) {
+				type Input struct {
+					RawBody []byte
+					Body    struct {
+						Name string `json:"name"`
+					}
+				}
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					Input
+				}) (*struct{}, error) {
+					assert.Equal(t, `{"name":"foo"}`, string(input.RawBody))
+					assert.Equal(t, "foo", input.Body.Name)
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   `{"name":"foo"}`,
+		},
+		{
 			Name: "request-body-description",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
