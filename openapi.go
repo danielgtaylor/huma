@@ -938,8 +938,24 @@ type Operation struct {
 	// Callbacks is a map of possible out-of band callbacks related to the parent
 	// operation. The key is a unique identifier for the Callback Object. Each
 	// value in the map is a Callback Object that describes a request that may be
-	// initiated by the API provider and the expected responses.
-	Callbacks map[string]*PathItem `yaml:"callbacks,omitempty"`
+	// initiated by the API provider and the expected responses. The Callback
+	// Object consists of a map of possible request URL expressions to PathItem
+	// objects describing the request.
+	//
+	// 	callbacks:
+	// 	  myName:
+	// 	    '{$request.body#/url}':
+	// 	      post:
+	// 	        requestBody:
+	// 	          description: callback payload
+	// 	          content:
+	// 	            application/json:
+	// 	              schema:
+	// 	                $ref: '#/components/schemas/SomePayload'
+	// 	        responses:
+	// 	          '200':
+	// 	            description: callback response
+	Callbacks map[string]map[string]*PathItem `yaml:"callbacks,omitempty"`
 
 	// Deprecated declares this operation to be deprecated. Consumers SHOULD
 	// refrain from usage of the declared operation. Default value is false.
