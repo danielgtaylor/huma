@@ -617,7 +617,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		panic("input must be a struct")
 	}
 	inputParams := findParams(registry, &op, inputType)
-	inputBodyIndex := make([]int, 0)
+	inputBodyIndex := []int{}
 	hasInputBody := false
 	if f, ok := inputType.FieldByName("Body"); ok {
 		hasInputBody = true
@@ -658,11 +658,11 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			op.MaxBodyBytes = 1024 * 1024
 		}
 	}
-	rawBodyIndex := -1
+	rawBodyIndex := []int{}
 	rawBodyMultipart := false
 	rawBodyDecodedMultipart := false
 	if f, ok := inputType.FieldByName("RawBody"); ok {
-		rawBodyIndex = f.Index[0]
+		rawBodyIndex = f.Index
 		if op.RequestBody == nil {
 			op.RequestBody = &RequestBody{
 				Required: true,
@@ -1229,7 +1229,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		})
 
 		// Read input body if defined.
-		if hasInputBody || rawBodyIndex != -1 {
+		if hasInputBody || len(rawBodyIndex) > 0 {
 			if op.BodyReadTimeout > 0 {
 				ctx.SetReadDeadline(time.Now().Add(op.BodyReadTimeout))
 			} else if op.BodyReadTimeout < 0 {
@@ -1245,7 +1245,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						Message:  "cannot read multipart form: " + err.Error(),
 					})
 				} else {
-					f := v.Field(rawBodyIndex)
+					f := v
+					for _, i := range rawBodyIndex {
+						f = f.Field(i)
+					}
 					if rawBodyMultipart {
 						f.Set(reflect.ValueOf(*form))
 					} else {
@@ -1297,8 +1300,11 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				}
 				body := buf.Bytes()
 
-				if rawBodyIndex != -1 {
-					f := v.Field(rawBodyIndex)
+				if len(rawBodyIndex) > 0 {
+					f := v
+					for _, i := range rawBodyIndex {
+						f = f.Field(i)
+					}
 					f.SetBytes(body)
 				}
 
@@ -1372,7 +1378,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						}
 					}
 
-					if rawBodyIndex != -1 {
+					if len(rawBodyIndex) > 0 {
 						// If the raw body is used, then we must wait until *AFTER* the
 						// handler has run to return the body byte buffer to the pool, as
 						// the handler can read and modify this buffer. The safest way is
