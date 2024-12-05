@@ -2024,7 +2024,7 @@ func TestContentTypeFilter(t *testing.T) {
 	})
 
 	responses := api.OpenAPI().Paths["/ct-filter"].Get.Responses["200"].Content
-	assert.Equal(t, 1, len(responses))
+	assert.Len(t, responses, 1)
 	for k := range responses {
 		assert.Equal(t, "application/custom+json", k)
 	}
