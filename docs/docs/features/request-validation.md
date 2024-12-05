@@ -156,7 +156,7 @@ type MyInput struct {
 }
 ```
 
-If you had used `bool` instead of `*bool` then the zero value of `false` would get overridden by the default value of `true`, even if false is explictly sent by the client.
+If you had used `bool` instead of `*bool` then the zero value of `false` would get overridden by the default value of `true`, even if false is explicitly sent by the client.
 
 ### Read and Write Only
 
@@ -168,7 +168,7 @@ Write-only fields, if stored in a datastore, can be combined with `omitempty` an
 
 !!! info "Note"
 
-    If a write-only field needs to be required on the request but the same struct is re-used in the response, you can use `json:"name,omitempy"` with `required:"true"`.
+    If a write-only field needs to be required on the request but the same struct is re-used in the response, you can use `json:"name,omitempty"` with `required:"true"`.
 
 ## Strict vs. Loose Field Validation
 
