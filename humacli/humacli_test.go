@@ -95,14 +95,9 @@ func TestCLIEnv(t *testing.T) {
 		Port  int
 	}
 
-	os.Setenv("SERVICE_DEBUG", "true")
-	os.Setenv("SERVICE_HOST", "localhost")
-	os.Setenv("SERVICE_PORT", "8001")
-	defer func() {
-		os.Unsetenv("SERVICE_DEBUG")
-		os.Unsetenv("SERVICE_HOST")
-		os.Unsetenv("SERVICE_PORT")
-	}()
+	t.Setenv("SERVICE_DEBUG", "true")
+	t.Setenv("SERVICE_HOST", "localhost")
+	t.Setenv("SERVICE_PORT", "8001")
 
 	cli := humacli.New(func(hooks humacli.Hooks, options *Options) {
 		assert.True(t, options.Debug)

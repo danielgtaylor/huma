@@ -8,6 +8,8 @@ linters:
     - nolintlint
     - perfsprint
     - prealloc
+    - tenv
     - testifylint
     - unparam
+    - unconvert
     - wastedassign
