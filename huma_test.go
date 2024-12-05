@@ -2005,6 +2005,31 @@ func TestOpenAPI(t *testing.T) {
 	})
 }
 
+type CTFilterBody struct {
+	Field string `json:"field"`
+}
+
+func (b *CTFilterBody) ContentType(ct string) string {
+	return "application/custom+json"
+}
+
+var _ huma.ContentTypeFilter = (*CTFilterBody)(nil)
+
+func TestContentTypeFilter(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Get(api, "/ct-filter", func(ctx context.Context, i *struct{}) (*struct {
+		Body CTFilterBody
+	}, error) {
+		return nil, nil
+	})
+
+	responses := api.OpenAPI().Paths["/ct-filter"].Get.Responses["200"].Content
+	assert.Len(t, responses, 1)
+	for k := range responses {
+		assert.Equal(t, "application/custom+json", k)
+	}
+}
+
 type IntNot3 int
 
 func (i IntNot3) Resolve(ctx huma.Context, prefix *huma.PathBuffer) []error {
