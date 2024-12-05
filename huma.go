@@ -1091,7 +1091,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 								if err != nil {
 									return 0, err
 								}
-								return int64(val), nil
+								return val, nil
 							})
 							if err != nil {
 								res.Add(pb, value, "invalid integer")
@@ -1151,7 +1151,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 								if err != nil {
 									return 0, err
 								}
-								return uint64(val), nil
+								return val, nil
 							})
 							if err != nil {
 								res.Add(pb, value, "invalid integer")
