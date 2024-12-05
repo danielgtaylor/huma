@@ -804,11 +804,17 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			if op.Responses[statusStr].Content == nil {
 				op.Responses[statusStr].Content = map[string]*MediaType{}
 			}
-			if len(op.Responses[statusStr].Content) == 0 {
-				op.Responses[statusStr].Content["application/json"] = &MediaType{}
+			// Check if the field's type implements ContentTypeFilter
+			contentType := "application/json"
+			if reflect.PointerTo(f.Type).Implements(reflect.TypeFor[ContentTypeFilter]()) {
+				instance := reflect.New(f.Type).Interface().(ContentTypeFilter)
+				contentType = instance.ContentType(contentType)
 			}
-			if op.Responses[statusStr].Content["application/json"] != nil && op.Responses[statusStr].Content["application/json"].Schema == nil {
-				op.Responses[statusStr].Content["application/json"].Schema = outSchema
+			if len(op.Responses[statusStr].Content) == 0 {
+				op.Responses[statusStr].Content[contentType] = &MediaType{}
+			}
+			if op.Responses[statusStr].Content[contentType] != nil && op.Responses[statusStr].Content[contentType].Schema == nil {
+				op.Responses[statusStr].Content[contentType].Schema = outSchema
 			}
 		}
 	}
