@@ -18,13 +18,13 @@ Huma does not provide any built-in access token issuing functionality. Instead, 
 
 ```mermaid
 graph LR
-	User -->|1. Login| Auth0
-	Auth0 -->|2. Issue access token| User
+	User -->|1: Login| Auth0
+	Auth0 -->|2: Issue access token| User
 	Auth0 -.->|Refresh JWKS| API
-	User --->|3. Make request| API
-	API -->|4. Verify access token & roles| Validate
-	Validate -->|5. Accept/reject| API
-	API --->|6. Success| Handler
+	User --->|3: Make request| API
+	API -->|4: Verify access token & roles| Validate
+	Validate -->|5: Accept/reject| API
+	API --->|6: Success| Handler
 ```
 
 The access token may be issued in different flavors & formats, but for the remainder of this document we will assume they are [JWTs](https://jwt.io/).
