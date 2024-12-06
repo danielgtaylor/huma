@@ -1245,7 +1245,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 			if rawBodyMultipart || rawBodyDecodedMultipart {
 				form, err := ctx.GetMultipartForm()
-				if err != nil || form == nil {
+				if err != nil {
 					res.Errors = append(res.Errors, &ErrorDetail{
 						Location: "body",
 						Message:  "cannot read multipart form: " + err.Error(),
