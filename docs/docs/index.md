@@ -9,6 +9,8 @@ sponsors:
     - victoraugustolls
     - phoenixtechnologies-io
     - chenjr0719
+    - vinogradovkonst
+    - miyamo2
 ---
 
 # Huma {.hidden}
