@@ -1661,7 +1661,7 @@ Content of example2.txt.
 
 				// Ensure the OpenAPI spec is correct.
 				assert.Len(t, api.OpenAPI().Paths["/response-image"].Get.Responses["200"].Content, 1)
-				assert.NotEmpty(t, "binary", api.OpenAPI().Paths["/response-image"].Get.Responses["200"].Content["image/png"])
+				assert.NotEmpty(t, api.OpenAPI().Paths["/response-image"].Get.Responses["200"].Content["image/png"])
 			},
 			Method: http.MethodGet,
 			URL:    "/response-image",
