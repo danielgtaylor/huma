@@ -67,12 +67,17 @@ func (c *fiberCtx) Err() error {
 }
 
 func (c *fiberCtx) Value(key any) any {
-	var orig = c.orig()
-	var value = orig.UserContext().Value(key)
-	if value != nil {
-		return value
+	var orig = c.unsafeFiberCtx
+	select {
+	case <-c.unsafeGolangCtx.Done():
+		return nil
+	default:
+		var value = orig.UserContext().Value(key)
+		if value != nil {
+			return value
+		}
+		return orig.Context().Value(key)
 	}
-	return orig.Context().Value(key)
 }
 
 func (c *fiberCtx) Operation() *huma.Operation {
