@@ -150,6 +150,24 @@ func (m *MultipartFormFiles[T]) readMultipleFiles(key string, opMediaType *Media
 	return files, errors
 }
 
+func (m *MultipartFormFiles[T]) readSingleString(key string, opMediaType *MediaType) (string, *ErrorDetail) {
+	values := m.Form.Value[key]
+	if len(values) > 1 {
+		return "", &ErrorDetail{
+			Message:  "Multiple strings received but only one was expected",
+			Location: key,
+		}
+	}
+	if len(values) == 0 {
+		if opMediaType.Schema.requiredMap[key] {
+			return "", &ErrorDetail{Message: "String required", Location: key}
+		} else {
+			return "", nil
+		}
+	}
+	return values[0], nil
+}
+
 func (m *MultipartFormFiles[T]) Data() *T {
 	return m.data
 }
@@ -184,7 +202,13 @@ func (m *MultipartFormFiles[T]) Decode(opMediaType *MediaType) []error {
 				continue
 			}
 			field.Set(reflect.ValueOf(files))
-
+		case field.Type().Kind() == reflect.String:
+			s, err := m.readSingleString(key, opMediaType)
+			if err != nil {
+				errors = append(errors, err)
+				continue
+			}
+			field.Set(reflect.ValueOf(s))
 		default:
 			continue
 		}
@@ -221,6 +245,8 @@ func multiPartFormFileSchema(t reflect.Type) *Schema {
 				Type:  "array",
 				Items: multiPartFileSchema(f),
 			}
+		case f.Type.Kind() == reflect.String:
+			schema.Properties[name] = &Schema{Type: TypeString}
 		default:
 			// Should we panic if [T] struct defines fields with unsupported types ?
 			continue
@@ -250,9 +276,19 @@ func multiPartContentEncoding(t reflect.Type) map[string]*Encoding {
 	for i := 0; i < nFields; i++ {
 		f := t.Field(i)
 		name := formDataFieldName(f)
-		contentType := f.Tag.Get("contentType")
-		if contentType == "" {
-			contentType = "application/octet-stream"
+		var contentType string
+		switch {
+		case f.Type == reflect.TypeOf(FormFile{}):
+			fallthrough
+		case f.Type == reflect.TypeOf([]FormFile{}):
+			contentType = f.Tag.Get("contentType")
+			if contentType == "" {
+				contentType = "application/octet-stream"
+			}
+		case f.Type.Kind() == reflect.String:
+			contentType = "text/plain"
+		default:
+			continue
 		}
 		encoding[name] = &Encoding{
 			ContentType: contentType,

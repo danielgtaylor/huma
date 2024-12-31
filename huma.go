@@ -1336,7 +1336,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 							res.Errors = append(res.Errors, &ErrorDetail{
 								Location: "body",
 								Message:  err.Error(),
-								Value:    string(body),
+								Value:    body,
 							})
 							parseErrCount++
 						} else {
