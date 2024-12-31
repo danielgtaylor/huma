@@ -1002,24 +1002,21 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					}
 					f.SetBool(v)
 					pv = v
-				default:
-					if f.Type().Kind() == reflect.Slice {
-						var values []string
-						if p.Explode {
-							u := ctx.URL()
-							values = (&u).Query()[p.Name]
-						} else {
-							values = strings.Split(value, ",")
-						}
-						pvSlice, err := parseSliceInto(f, values)
-						pv = pvSlice
-						if err != nil && !errors.Is(err, errUnparsable) {
-							res.Add(pb, value, err.Error())
-							return
-						}
-						break
+				case reflect.Slice:
+					var values []string
+					if p.Explode {
+						u := ctx.URL()
+						values = (&u).Query()[p.Name]
+					} else {
+						values = strings.Split(value, ",")
 					}
-
+					pvSlice, err := parseSliceInto(f, values)
+					pv = pvSlice
+					if err != nil && !errors.Is(err, errUnparsable) {
+						res.Add(pb, value, err.Error())
+						return
+					}
+				default:
 					// Special case: time.Time
 					if f.Type() == timeType {
 						t, err := time.Parse(p.TimeFormat, value)
