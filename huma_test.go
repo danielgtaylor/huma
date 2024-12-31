@@ -1368,6 +1368,82 @@ Content of example2.txt.
 			},
 		},
 		{
+			Name: "request-body-multipart-file-decoded-with-strings-required",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						HelloWorld huma.FormFile `form:"file" contentType:"text/plain"`
+						Sender     string        `form:"sender" required:"true"`
+					}]
+				}) (*struct{}, error) {
+					fileData := input.RawBody.Data()
+
+					assert.Equal(t, "text/plain", fileData.HelloWorld.ContentType)
+					assert.Equal(t, "test.txt", fileData.HelloWorld.Filename)
+					assert.Equal(t, len("Hello, World!"), int(fileData.HelloWorld.Size))
+					assert.True(t, fileData.HelloWorld.IsSet)
+					b, err := io.ReadAll(fileData.HelloWorld)
+					require.NoError(t, err)
+					assert.Equal(t, "Hello, World!", string(b))
+
+					assert.Equal(t, "Your favorite sender", fileData.Sender)
+					return nil, nil
+				})
+
+				// Ensure OpenAPI spec is listed as a multipart/form-data upload with
+				// the appropriate schema.
+				mpContent := api.OpenAPI().Paths["/upload"].Post.RequestBody.Content["multipart/form-data"]
+				assert.Equal(t, "text/plain", mpContent.Encoding["file"].ContentType)
+				assert.Equal(t, "text/plain", mpContent.Encoding["sender"].ContentType)
+				assert.Equal(t, "string", mpContent.Schema.Properties["sender"].Type)
+				assert.Contains(t, mpContent.Schema.Required, "sender")
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+Hello, World!
+--SimpleBoundary
+Content-Disposition: form-data; name="sender"
+Content-Type: text/plain
+
+Your favorite sender
+--SimpleBoundary--`,
+		},
+		{
+			Name: "request-body-multipart-file-decoded-with-strings-required-missing",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						Sender string `form:"sender" required:"true"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body:    `--SimpleBoundary--`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				if ok := assert.Equal(t, http.StatusUnprocessableEntity, resp.Code); ok {
+					var errors huma.ErrorModel
+					err := json.Unmarshal(resp.Body.Bytes(), &errors)
+					require.NoError(t, err)
+					assert.Equal(t, "sender", errors.Errors[0].Location)
+				}
+			},
+		},
+		{
 			Name: "handler-error",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
