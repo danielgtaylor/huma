@@ -953,7 +953,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			pb.Push(p.Loc)
 			pb.Push(p.Name)
 
-			if value == "" && p.Default != "" {
+			if value == "" {
 				value = p.Default
 			}
 
@@ -964,92 +964,16 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			}
 
 			if value != "" {
-				var pv any
-
-				switch p.Type.Kind() {
-				case reflect.String:
-					f.SetString(value)
-					pv = value
-				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-					v, err := strconv.ParseInt(value, 10, 64)
-					if err != nil {
-						res.Add(pb, value, "invalid integer")
-						return
-					}
-					f.SetInt(v)
-					pv = v
-				case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-					v, err := strconv.ParseUint(value, 10, 64)
-					if err != nil {
-						res.Add(pb, value, "invalid integer")
-						return
-					}
-					f.SetUint(v)
-					pv = v
-				case reflect.Float32, reflect.Float64:
-					v, err := strconv.ParseFloat(value, 64)
-					if err != nil {
-						res.Add(pb, value, "invalid float")
-						return
-					}
-					f.SetFloat(v)
-					pv = v
-				case reflect.Bool:
-					v, err := strconv.ParseBool(value)
-					if err != nil {
-						res.Add(pb, value, "invalid boolean")
-						return
-					}
-					f.SetBool(v)
-					pv = v
-				case reflect.Slice:
-					var values []string
-					if p.Explode {
-						u := ctx.URL()
-						values = (&u).Query()[p.Name]
-					} else {
-						values = strings.Split(value, ",")
-					}
-					pvSlice, err := parseSliceInto(f, values)
-					pv = pvSlice
-					if err != nil && !errors.Is(err, errUnparsable) {
-						res.Add(pb, value, err.Error())
-						return
-					}
-				default:
-					// Special case: time.Time
-					if f.Type() == timeType {
-						t, err := time.Parse(p.TimeFormat, value)
-						if err != nil {
-							res.Add(pb, value, "invalid date/time for format "+p.TimeFormat)
-							return
-						}
-						f.Set(reflect.ValueOf(t))
-						pv = value
-						break
-						// Special case: url.URL
-					} else if f.Type() == urlType {
-						u, err := url.Parse(value)
-						if err != nil {
-							res.Add(pb, value, "invalid url.URL value")
-							return
-						}
-						f.Set(reflect.ValueOf(*u))
-						pv = value
-						break
-					}
-
-					// Last resort: use the `encoding.TextUnmarshaler` interface.
-					if fn, ok := f.Addr().Interface().(encoding.TextUnmarshaler); ok {
-						if err := fn.UnmarshalText([]byte(value)); err != nil {
-							res.Add(pb, value, "invalid value: "+err.Error())
-							return
-						}
-						pv = value
-						break
-					}
-
-					panic("unsupported param type " + p.Type.String())
+				s := splittableString{Raw: value}
+				if p.Explode {
+					u := ctx.URL()
+					s.Splitted = (&u).Query()[p.Name]
+				} else {
+					s.Splitted = strings.Split(value, ",")
+				}
+				pv, err := parseInto(f, s, *p)
+				if err != nil {
+					res.Add(pb, value, err.Error())
 				}
 
 				if !op.SkipValidateParams {
@@ -1354,6 +1278,91 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 }
 
 var errUnparsable = errors.New("unparsable value")
+
+type splittableString struct {
+	Raw      string
+	Splitted []string
+}
+
+// parseInto converts the string s.Raw into the expected type using the parameter
+// field information p and sets the result on f. If s is to be parsed into a
+// slice of values, then the string encodings of those individual values should
+// be available in s.Splitted.
+func parseInto(f reflect.Value, s splittableString, p paramFieldInfo) (any, error) {
+	value := s.Raw
+	// built-in types
+	switch p.Type.Kind() {
+	case reflect.String:
+		f.SetString(value)
+		return value, nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		v, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return nil, errors.New("invalid integer")
+		}
+		f.SetInt(v)
+		return v, nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		v, err := strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			return nil, errors.New("invalid integer")
+		}
+		f.SetUint(v)
+		return v, nil
+	case reflect.Float32, reflect.Float64:
+		v, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return nil, errors.New("invalid float")
+		}
+		f.SetFloat(v)
+		return v, nil
+	case reflect.Bool:
+		v, err := strconv.ParseBool(value)
+		if err != nil {
+			return nil, errors.New("invalid boolean")
+		}
+		f.SetBool(v)
+		return v, nil
+	case reflect.Slice:
+		pv, err := parseSliceInto(f, s.Splitted)
+		if err != nil {
+			if errors.Is(err, errUnparsable) {
+				break
+			}
+			return nil, err
+		}
+		return pv, nil
+	}
+
+	// special types
+	switch f.Type() {
+	case timeType: // Special case: time.Time
+		// return nil, errors.New(value)
+		t, err := time.Parse(p.TimeFormat, value)
+		if err != nil {
+			return nil, errors.New("invalid date/time for format " + p.TimeFormat)
+		}
+		f.Set(reflect.ValueOf(t))
+		return value, nil
+	case urlType: // Special case: url.URL
+		u, err := url.Parse(value)
+		if err != nil {
+			return nil, errors.New("invalid url.URL value")
+		}
+		f.Set(reflect.ValueOf(*u))
+		return value, nil
+	}
+
+	// Last resort: use the `encoding.TextUnmarshaler` interface.
+	if fn, ok := f.Addr().Interface().(encoding.TextUnmarshaler); ok {
+		if err := fn.UnmarshalText([]byte(value)); err != nil {
+			return nil, errors.New("invalid value: " + err.Error())
+		}
+		return value, nil
+	}
+
+	panic("unsupported param type " + p.Type.String())
+}
 
 // parseSliceInto converts a slice of string values into the expected type of f
 // and sets the result on f.
