@@ -663,15 +663,12 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			if f.Kind() == reflect.Invalid {
 				return
 			}
-			var value string
-			switch p.Loc {
-			case "path":
-				value = ctx.Param(p.Name)
-			case "query":
-				value = ctx.Query(p.Name)
-			case "header":
-				value = ctx.Header(p.Name)
-			case "cookie":
+
+			pb.Reset()
+			pb.Push(p.Loc)
+			pb.Push(p.Name)
+
+			if p.Loc == "cookie" {
 				if cookies == nil {
 					// Only parse the cookie headers once, on-demand.
 					cookies = map[string]*http.Cookie{}
@@ -679,48 +676,37 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						cookies[c.Name] = c
 					}
 				}
-				if c, ok := cookies[p.Name]; ok {
+				if c, ok := cookies[p.Name]; ok && f.Type() == cookieType {
 					// Special case: http.Cookie type, meaning we want the entire parsed
 					// cookie struct, not just the value.
-					if f.Type() == cookieType {
-						f.Set(reflect.ValueOf(cookies[p.Name]).Elem())
-						return
-					}
-
-					value = c.Value
+					f.Set(reflect.ValueOf(c).Elem())
+					return
 				}
 			}
 
-			pb.Reset()
-			pb.Push(p.Loc)
-			pb.Push(p.Name)
-
+			value := getParamValue(*p, ctx, cookies)
 			if value == "" {
-				value = p.Default
-			}
-
-			if !op.SkipValidateParams && p.Required && value == "" {
-				// Path params are always required.
-				res.Add(pb, "", "required "+p.Loc+" parameter is missing")
+				if !op.SkipValidateParams && p.Required {
+					// Path params are always required.
+					res.Add(pb, "", "required "+p.Loc+" parameter is missing")
+				}
 				return
 			}
 
-			if value != "" {
-				s := splittableString{Raw: value}
-				if p.Explode {
-					u := ctx.URL()
-					s.Splitted = (&u).Query()[p.Name]
-				} else {
-					s.Splitted = strings.Split(value, ",")
-				}
-				pv, err := parseInto(f, s, *p)
-				if err != nil {
-					res.Add(pb, value, err.Error())
-				}
+			s := splittableString{Raw: value}
+			if p.Explode {
+				u := ctx.URL()
+				s.Splitted = (&u).Query()[p.Name]
+			} else {
+				s.Splitted = strings.Split(value, ",")
+			}
+			pv, err := parseInto(f, s, *p)
+			if err != nil {
+				res.Add(pb, value, err.Error())
+			}
 
-				if !op.SkipValidateParams {
-					Validate(oapi.Components.Schemas, p.Schema, pb, ModeWriteToServer, pv, res)
-				}
+			if !op.SkipValidateParams {
+				Validate(oapi.Components.Schemas, p.Schema, pb, ModeWriteToServer, pv, res)
 			}
 		})
 
@@ -1323,6 +1309,29 @@ func defineErrors(op *Operation, registry Registry) {
 			},
 		}
 	}
+}
+
+// getParamValue extracts the requested parameter from the relevant
+// context or cookie source. If unset, the function returns the default value
+// for this parameter.
+func getParamValue(p paramFieldInfo, ctx Context, cookies map[string]*http.Cookie) string {
+	var value string
+	switch p.Loc {
+	case "path":
+		value = ctx.Param(p.Name)
+	case "query":
+		value = ctx.Query(p.Name)
+	case "header":
+		value = ctx.Header(p.Name)
+	case "cookie":
+		if c, ok := cookies[p.Name]; ok {
+			value = c.Value
+		}
+	}
+	if value == "" {
+		value = p.Default
+	}
+	return value
 }
 
 var errUnparsable = errors.New("unparsable value")
