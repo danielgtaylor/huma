@@ -617,40 +617,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	if inputType.Kind() != reflect.Struct {
 		panic("input must be a struct")
 	}
-	inputParams := findParams(registry, &op, inputType)
-	inputBodyIndex := []int{}
-	hasInputBody := false
-	if f, ok := inputType.FieldByName("Body"); ok {
-		hasInputBody = true
-		inputBodyIndex = f.Index
-		initRequestBody(&op)
-		setRequestBodyFromBody(&op, registry, f, inputType)
-		ensureBodyReadTimeout(&op)
-		ensureMaxBodyBytes(&op)
-	}
-	rawBodyIndex := []int{}
-	var rbt rawBodyType
-	if f, ok := inputType.FieldByName("RawBody"); ok {
-		rawBodyIndex = f.Index
-		initRequestBody(&op, setRequestBodyRequired)
-		rbt = setRequestBodyFromRawBody(&op, f)
-	}
-
-	if op.RequestBody != nil {
-		for _, mediatype := range op.RequestBody.Content {
-			if mediatype.Schema != nil {
-				// Ensure all schema validation errors are set up properly as some
-				// parts of the schema may have been user-supplied.
-				mediatype.Schema.PrecomputeMessages()
-			}
-		}
-	}
-
-	var inSchema *Schema
-	if op.RequestBody != nil && op.RequestBody.Content != nil && op.RequestBody.Content["application/json"] != nil && op.RequestBody.Content["application/json"].Schema != nil {
-		hasInputBody = true
-		inSchema = op.RequestBody.Content["application/json"].Schema
-	}
+	inputParams, inputBodyIndex, hasInputBody, rawBodyIndex, rbt, inSchema := processInputType(inputType, &op, registry)
 
 	resolvers := findResolvers(resolverType, inputType)
 	defaults := findDefaults(registry, inputType)
@@ -1087,6 +1054,46 @@ func initResponses(op *Operation) {
 	if op.Responses == nil {
 		op.Responses = map[string]*Response{}
 	}
+}
+
+// processInputType validates the input type, extracts expected requests and
+// defines them on the operation op.
+func processInputType(inputType reflect.Type, op *Operation, registry Registry) (*findResult[*paramFieldInfo], []int, bool, []int, rawBodyType, *Schema) {
+	inputParams := findParams(registry, op, inputType)
+	inputBodyIndex := []int{}
+	hasInputBody := false
+	if f, ok := inputType.FieldByName("Body"); ok {
+		hasInputBody = true
+		inputBodyIndex = f.Index
+		initRequestBody(op)
+		setRequestBodyFromBody(op, registry, f, inputType)
+		ensureBodyReadTimeout(op)
+		ensureMaxBodyBytes(op)
+	}
+	rawBodyIndex := []int{}
+	var rbt rawBodyType
+	if f, ok := inputType.FieldByName("RawBody"); ok {
+		rawBodyIndex = f.Index
+		initRequestBody(op, setRequestBodyRequired)
+		rbt = setRequestBodyFromRawBody(op, f)
+	}
+
+	if op.RequestBody != nil {
+		for _, mediatype := range op.RequestBody.Content {
+			if mediatype.Schema != nil {
+				// Ensure all schema validation errors are set up properly as some
+				// parts of the schema may have been user-supplied.
+				mediatype.Schema.PrecomputeMessages()
+			}
+		}
+	}
+
+	var inSchema *Schema
+	if op.RequestBody != nil && op.RequestBody.Content != nil && op.RequestBody.Content["application/json"] != nil && op.RequestBody.Content["application/json"].Schema != nil {
+		hasInputBody = true
+		inSchema = op.RequestBody.Content["application/json"].Schema
+	}
+	return inputParams, inputBodyIndex, hasInputBody, rawBodyIndex, rbt, inSchema
 }
 
 // ensureMaxBodyBytes sets the MaxBodyBytes to a default value if it was unset.
