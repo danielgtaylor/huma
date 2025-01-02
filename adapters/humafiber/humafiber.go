@@ -61,6 +61,10 @@ func (c *fiberCtx) Matched() string {
 	return c.orig.Route().Path
 }
 
+func (c *fiberCtx) WrappedContext() interface{} {
+	return c.orig
+}
+
 func (c *fiberCtx) Context() context.Context {
 	return &contextAdapter{
 		Ctx:  c.orig,

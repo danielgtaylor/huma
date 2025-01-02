@@ -31,6 +31,10 @@ func (c *ginCtx) Operation() *huma.Operation {
 	return c.op
 }
 
+func (c *ginCtx) WrappedContext() interface{} {
+	return c.orig
+}
+
 func (c *ginCtx) Context() context.Context {
 	return c.orig.Request.Context()
 }

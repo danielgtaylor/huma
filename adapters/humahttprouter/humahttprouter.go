@@ -34,6 +34,10 @@ func (c *httprouterContext) Operation() *huma.Operation {
 	return c.op
 }
 
+func (c *httprouterContext) WrappedContext() interface{} {
+	return c.r
+}
+
 func (c *httprouterContext) Context() context.Context {
 	return c.r.Context()
 }

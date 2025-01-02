@@ -32,6 +32,10 @@ func (c *chiContext) Operation() *huma.Operation {
 	return c.op
 }
 
+func (c *chiContext) WrappedContext() interface{} {
+	return c.r
+}
+
 func (c *chiContext) Context() context.Context {
 	return c.r.Context()
 }
