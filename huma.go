@@ -611,6 +611,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	if op.Method == "" || op.Path == "" {
 		panic("method and path must be specified in operation")
 	}
+	initResponses(&op)
 
 	inputType := reflect.TypeOf((*I)(nil)).Elem()
 	if inputType.Kind() != reflect.Struct {
@@ -653,10 +654,6 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 	resolvers := findResolvers(resolverType, inputType)
 	defaults := findDefaults(registry, inputType)
-
-	if op.Responses == nil {
-		op.Responses = map[string]*Response{}
-	}
 
 	outputType := reflect.TypeOf((*O)(nil)).Elem()
 	if outputType.Kind() != reflect.Struct {
@@ -1083,6 +1080,13 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			ctx.SetStatus(status)
 		}
 	})))
+}
+
+// initResponses initializes Responses if it was unset.
+func initResponses(op *Operation) {
+	if op.Responses == nil {
+		op.Responses = map[string]*Response{}
+	}
 }
 
 // ensureMaxBodyBytes sets the MaxBodyBytes to a default value if it was unset.
