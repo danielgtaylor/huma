@@ -64,6 +64,12 @@ type Context interface {
 	// Operation returns the OpenAPI operation that matched the request.
 	Operation() *Operation
 
+	// WrappedContext returns the underlying Adapter original
+	// Request context. For example, `*http.Request` for the `http` adapter.
+	// This is useful for accessing router-specific information and
+	// transitioning existing handler functionality.
+	WrappedContext() interface{}
+
 	// Context returns the underlying request context.
 	Context() context.Context
 

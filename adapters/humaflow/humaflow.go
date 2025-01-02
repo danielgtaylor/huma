@@ -30,6 +30,10 @@ func (c *goContext) Operation() *huma.Operation {
 	return c.op
 }
 
+func (c *goContext) WrappedContext() interface{} {
+	return c.r
+}
+
 func (c *goContext) Context() context.Context {
 	return c.r.Context()
 }

@@ -32,6 +32,10 @@ func (c *gmuxContext) Operation() *huma.Operation {
 	return c.op
 }
 
+func (c *gmuxContext) WrappedContext() interface{} {
+	return c.r
+}
+
 func (c *gmuxContext) Context() context.Context {
 	return c.r.Context()
 }
