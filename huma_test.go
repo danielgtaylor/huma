@@ -75,6 +75,17 @@ type StructWithDefaultField struct {
 	Field string `json:"field" default:"default"`
 }
 
+// MyTextUnmarshaler is a custom type that implements the
+// `encoding.TextUnmarshaler` interface
+type MyTextUnmarshaler struct {
+	value string
+}
+
+func (m *MyTextUnmarshaler) UnmarshalText(text []byte) error {
+	m.value = "Hello, World!"
+	return nil
+}
+
 func TestFeatures(t *testing.T) {
 	for _, feature := range []struct {
 		Name         string
@@ -531,6 +542,22 @@ func TestFeatures(t *testing.T) {
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusNoContent, resp.Code)
 			},
+		},
+		{
+			Name: "parse-with-textunmarshaler",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/{mytext}",
+				}, func(ctx context.Context, i *struct {
+					MyText MyTextUnmarshaler `path:"mytext"`
+				}) (*struct{}, error) {
+					assert.Equal(t, "Hello, World!", i.MyText.value)
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
 		},
 		{
 			Name: "request-body",
