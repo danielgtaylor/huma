@@ -657,104 +657,12 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	if op.Responses == nil {
 		op.Responses = map[string]*Response{}
 	}
+
 	outputType := reflect.TypeOf((*O)(nil)).Elem()
 	if outputType.Kind() != reflect.Struct {
 		panic("output must be a struct")
 	}
-
-	outStatusIndex := -1
-	if f, ok := outputType.FieldByName("Status"); ok {
-		outStatusIndex = f.Index[0]
-		if f.Type.Kind() != reflect.Int {
-			panic("status field must be an int")
-		}
-		// TODO: enum tag?
-		// TODO: register each of the possible responses with the right model
-		//       and headers down below.
-	}
-	outHeaders := findHeaders(outputType)
-	outBodyIndex := -1
-	outBodyFunc := false
-	if f, ok := outputType.FieldByName("Body"); ok {
-		outBodyIndex = f.Index[0]
-		if f.Type.Kind() == reflect.Func {
-			outBodyFunc = true
-
-			if f.Type != bodyCallbackType {
-				panic("body field must be a function with signature func(huma.Context)")
-			}
-		}
-		status := op.DefaultStatus
-		if status == 0 {
-			status = http.StatusOK
-		}
-		statusStr := strconv.Itoa(status)
-		if op.Responses[statusStr] == nil {
-			op.Responses[statusStr] = &Response{}
-		}
-		if op.Responses[statusStr].Description == "" {
-			op.Responses[statusStr].Description = http.StatusText(status)
-		}
-		if op.Responses[statusStr].Headers == nil {
-			op.Responses[statusStr].Headers = map[string]*Param{}
-		}
-		if !outBodyFunc {
-			hint := getHint(outputType, f.Name, op.OperationID+"Response")
-			if nameHint := f.Tag.Get("nameHint"); nameHint != "" {
-				hint = nameHint
-			}
-			outSchema := SchemaFromField(registry, f, hint)
-			if op.Responses[statusStr].Content == nil {
-				op.Responses[statusStr].Content = map[string]*MediaType{}
-			}
-			// Check if the field's type implements ContentTypeFilter
-			contentType := "application/json"
-			if reflect.PointerTo(f.Type).Implements(reflect.TypeFor[ContentTypeFilter]()) {
-				instance := reflect.New(f.Type).Interface().(ContentTypeFilter)
-				contentType = instance.ContentType(contentType)
-			}
-			if len(op.Responses[statusStr].Content) == 0 {
-				op.Responses[statusStr].Content[contentType] = &MediaType{}
-			}
-			if op.Responses[statusStr].Content[contentType] != nil && op.Responses[statusStr].Content[contentType].Schema == nil {
-				op.Responses[statusStr].Content[contentType].Schema = outSchema
-			}
-		}
-	}
-	if op.DefaultStatus == 0 {
-		if outBodyIndex != -1 {
-			op.DefaultStatus = http.StatusOK
-		} else {
-			op.DefaultStatus = http.StatusNoContent
-		}
-	}
-	defaultStatusStr := strconv.Itoa(op.DefaultStatus)
-	if op.Responses[defaultStatusStr] == nil {
-		op.Responses[defaultStatusStr] = &Response{
-			Description: http.StatusText(op.DefaultStatus),
-		}
-	}
-	for _, entry := range outHeaders.Paths {
-		// Document the header's name and type.
-		if op.Responses[defaultStatusStr].Headers == nil {
-			op.Responses[defaultStatusStr].Headers = map[string]*Param{}
-		}
-		v := entry.Value
-		f := v.Field
-		if f.Type.Kind() == reflect.Slice {
-			f.Type = deref(f.Type.Elem())
-		}
-		if reflect.PointerTo(f.Type).Implements(fmtStringerType) {
-			// Special case: this field will be written as a string by calling
-			// `.String()` on the value.
-			f.Type = stringType
-		}
-		op.Responses[defaultStatusStr].Headers[v.Name] = &Header{
-			// We need to generate the schema from the field to get validation info
-			// like min/max and enums. Useful to let the client know possible values.
-			Schema: SchemaFromField(registry, f, getHint(outputType, f.Name, op.OperationID+defaultStatusStr+v.Name)),
-		}
-	}
+	outHeaders, outStatusIndex, outBodyIndex, outBodyFunc := processOutputType(outputType, &op, registry)
 
 	if len(op.Errors) > 0 && (len(inputParams.Paths) > 0 || hasInputBody) {
 		op.Errors = append(op.Errors, http.StatusUnprocessableEntity)
@@ -1302,6 +1210,105 @@ func initRequestBody(op *Operation, rbOpts ...func(*RequestBody)) {
 
 func setRequestBodyRequired(rb *RequestBody) {
 	rb.Required = true
+}
+
+// processOutputType validates the output type, extracts possible responses and
+// defines them on the operation op.
+func processOutputType(outputType reflect.Type, op *Operation, registry Registry) (*findResult[*headerInfo], int, int, bool) {
+	outStatusIndex := -1
+	if f, ok := outputType.FieldByName("Status"); ok {
+		outStatusIndex = f.Index[0]
+		if f.Type.Kind() != reflect.Int {
+			panic("status field must be an int")
+		}
+		// TODO: enum tag?
+		// TODO: register each of the possible responses with the right model
+		//       and headers down below.
+	}
+	outBodyIndex := -1
+	outBodyFunc := false
+	if f, ok := outputType.FieldByName("Body"); ok {
+		outBodyIndex = f.Index[0]
+		if f.Type.Kind() == reflect.Func {
+			outBodyFunc = true
+
+			if f.Type != bodyCallbackType {
+				panic("body field must be a function with signature func(huma.Context)")
+			}
+		}
+		status := op.DefaultStatus
+		if status == 0 {
+			status = http.StatusOK
+		}
+		statusStr := strconv.Itoa(status)
+		if op.Responses[statusStr] == nil {
+			op.Responses[statusStr] = &Response{}
+		}
+		if op.Responses[statusStr].Description == "" {
+			op.Responses[statusStr].Description = http.StatusText(status)
+		}
+		if op.Responses[statusStr].Headers == nil {
+			op.Responses[statusStr].Headers = map[string]*Param{}
+		}
+		if !outBodyFunc {
+			hint := getHint(outputType, f.Name, op.OperationID+"Response")
+			if nameHint := f.Tag.Get("nameHint"); nameHint != "" {
+				hint = nameHint
+			}
+			outSchema := SchemaFromField(registry, f, hint)
+			if op.Responses[statusStr].Content == nil {
+				op.Responses[statusStr].Content = map[string]*MediaType{}
+			}
+			// Check if the field's type implements ContentTypeFilter
+			contentType := "application/json"
+			if reflect.PointerTo(f.Type).Implements(reflect.TypeFor[ContentTypeFilter]()) {
+				instance := reflect.New(f.Type).Interface().(ContentTypeFilter)
+				contentType = instance.ContentType(contentType)
+			}
+			if len(op.Responses[statusStr].Content) == 0 {
+				op.Responses[statusStr].Content[contentType] = &MediaType{}
+			}
+			if op.Responses[statusStr].Content[contentType] != nil && op.Responses[statusStr].Content[contentType].Schema == nil {
+				op.Responses[statusStr].Content[contentType].Schema = outSchema
+			}
+		}
+	}
+	if op.DefaultStatus == 0 {
+		if outBodyIndex != -1 {
+			op.DefaultStatus = http.StatusOK
+		} else {
+			op.DefaultStatus = http.StatusNoContent
+		}
+	}
+	defaultStatusStr := strconv.Itoa(op.DefaultStatus)
+	if op.Responses[defaultStatusStr] == nil {
+		op.Responses[defaultStatusStr] = &Response{
+			Description: http.StatusText(op.DefaultStatus),
+		}
+	}
+	outHeaders := findHeaders(outputType)
+	for _, entry := range outHeaders.Paths {
+		// Document the header's name and type.
+		if op.Responses[defaultStatusStr].Headers == nil {
+			op.Responses[defaultStatusStr].Headers = map[string]*Param{}
+		}
+		v := entry.Value
+		f := v.Field
+		if f.Type.Kind() == reflect.Slice {
+			f.Type = deref(f.Type.Elem())
+		}
+		if reflect.PointerTo(f.Type).Implements(fmtStringerType) {
+			// Special case: this field will be written as a string by calling
+			// `.String()` on the value.
+			f.Type = stringType
+		}
+		op.Responses[defaultStatusStr].Headers[v.Name] = &Header{
+			// We need to generate the schema from the field to get validation info
+			// like min/max and enums. Useful to let the client know possible values.
+			Schema: SchemaFromField(registry, f, getHint(outputType, f.Name, op.OperationID+defaultStatusStr+v.Name)),
+		}
+	}
+	return outHeaders, outStatusIndex, outBodyIndex, outBodyFunc
 }
 
 var errUnparsable = errors.New("unparsable value")
