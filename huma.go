@@ -619,57 +619,27 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	}
 	inputParams, inputBodyIndex, hasInputBody, rawBodyIndex, rbt, inSchema := processInputType(inputType, &op, registry)
 
-	resolvers := findResolvers(resolverType, inputType)
-	defaults := findDefaults(registry, inputType)
-
 	outputType := reflect.TypeOf((*O)(nil)).Elem()
 	if outputType.Kind() != reflect.Struct {
 		panic("output must be a struct")
 	}
 	outHeaders, outStatusIndex, outBodyIndex, outBodyFunc := processOutputType(outputType, &op, registry)
 
-	if len(op.Errors) > 0 && (len(inputParams.Paths) > 0 || hasInputBody) {
-		op.Errors = append(op.Errors, http.StatusUnprocessableEntity)
-	}
 	if len(op.Errors) > 0 {
+		if len(inputParams.Paths) > 0 || hasInputBody {
+			op.Errors = append(op.Errors, http.StatusUnprocessableEntity)
+		}
 		op.Errors = append(op.Errors, http.StatusInternalServerError)
 	}
-
-	exampleErr := NewError(0, "")
-	errContentType := "application/json"
-	if ctf, ok := exampleErr.(ContentTypeFilter); ok {
-		errContentType = ctf.ContentType(errContentType)
-	}
-	errType := deref(reflect.TypeOf(exampleErr))
-	errSchema := registry.Schema(errType, true, getHint(errType, "", "Error"))
-	for _, code := range op.Errors {
-		op.Responses[strconv.Itoa(code)] = &Response{
-			Description: http.StatusText(code),
-			Content: map[string]*MediaType{
-				errContentType: {
-					Schema: errSchema,
-				},
-			},
-		}
-	}
-	if len(op.Responses) <= 1 && len(op.Errors) == 0 {
-		// No errors are defined, so set a default response.
-		op.Responses["default"] = &Response{
-			Description: "Error",
-			Content: map[string]*MediaType{
-				errContentType: {
-					Schema: errSchema,
-				},
-			},
-		}
-	}
+	defineErrors(&op, registry)
 
 	if !op.Hidden {
 		oapi.AddOperation(&op)
 	}
 
+	resolvers := findResolvers(resolverType, inputType)
+	defaults := findDefaults(registry, inputType)
 	a := api.Adapter()
-
 	a.Handle(&op, api.Middlewares().Handler(op.Middlewares.Handler(func(ctx Context) {
 		var input I
 
@@ -1320,6 +1290,39 @@ func processOutputType(outputType reflect.Type, op *Operation, registry Registry
 		}
 	}
 	return outHeaders, outStatusIndex, outBodyIndex, outBodyFunc
+}
+
+// defineErrors extracts possible error responses and defines them on the
+// operation op.
+func defineErrors(op *Operation, registry Registry) {
+	exampleErr := NewError(0, "")
+	errContentType := "application/json"
+	if ctf, ok := exampleErr.(ContentTypeFilter); ok {
+		errContentType = ctf.ContentType(errContentType)
+	}
+	errType := deref(reflect.TypeOf(exampleErr))
+	errSchema := registry.Schema(errType, true, getHint(errType, "", "Error"))
+	for _, code := range op.Errors {
+		op.Responses[strconv.Itoa(code)] = &Response{
+			Description: http.StatusText(code),
+			Content: map[string]*MediaType{
+				errContentType: {
+					Schema: errSchema,
+				},
+			},
+		}
+	}
+	if len(op.Responses) <= 1 && len(op.Errors) == 0 {
+		// No errors are defined, so set a default response.
+		op.Responses["default"] = &Response{
+			Description: "Error",
+			Content: map[string]*MediaType{
+				errContentType: {
+					Schema: errSchema,
+				},
+			},
+		}
+	}
 }
 
 var errUnparsable = errors.New("unparsable value")
