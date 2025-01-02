@@ -1011,187 +1011,11 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						} else {
 							values = strings.Split(value, ",")
 						}
-						switch f.Type().Elem().Kind() {
-
-						case reflect.String:
-							if f.Type() == reflect.TypeOf(values) {
-								f.Set(reflect.ValueOf(values))
-							} else {
-								// Change element type to support slice of string subtypes (enums)
-								enumValues := reflect.New(f.Type()).Elem()
-								for _, val := range values {
-									enumVal := reflect.New(f.Type().Elem()).Elem()
-									enumVal.SetString(val)
-									enumValues.Set(reflect.Append(enumValues, enumVal))
-								}
-								f.Set(enumValues)
-							}
-							pv = values
-
-						case reflect.Int:
-							vs, err := parseArrElement(values, func(s string) (int, error) {
-								val, err := strconv.ParseInt(s, 10, strconv.IntSize)
-								if err != nil {
-									return 0, err
-								}
-								return int(val), nil
-							})
-							if err != nil {
-								res.Add(pb, value, "invalid integer")
-								return
-							}
-							f.Set(reflect.ValueOf(vs))
-							pv = vs
-
-						case reflect.Int8:
-							vs, err := parseArrElement(values, func(s string) (int8, error) {
-								val, err := strconv.ParseInt(s, 10, 8)
-								if err != nil {
-									return 0, err
-								}
-								return int8(val), nil
-							})
-							if err != nil {
-								res.Add(pb, value, "invalid integer")
-								return
-							}
-							f.Set(reflect.ValueOf(vs))
-							pv = vs
-
-						case reflect.Int16:
-							vs, err := parseArrElement(values, func(s string) (int16, error) {
-								val, err := strconv.ParseInt(s, 10, 16)
-								if err != nil {
-									return 0, err
-								}
-								return int16(val), nil
-							})
-							if err != nil {
-								res.Add(pb, value, "invalid integer")
-								return
-							}
-							f.Set(reflect.ValueOf(vs))
-							pv = vs
-
-						case reflect.Int32:
-							vs, err := parseArrElement(values, func(s string) (int32, error) {
-								val, err := strconv.ParseInt(s, 10, 32)
-								if err != nil {
-									return 0, err
-								}
-								return int32(val), nil
-							})
-							if err != nil {
-								res.Add(pb, value, "invalid integer")
-								return
-							}
-							f.Set(reflect.ValueOf(vs))
-							pv = vs
-
-						case reflect.Int64:
-							vs, err := parseArrElement(values, func(s string) (int64, error) {
-								val, err := strconv.ParseInt(s, 10, 64)
-								if err != nil {
-									return 0, err
-								}
-								return val, nil
-							})
-							if err != nil {
-								res.Add(pb, value, "invalid integer")
-								return
-							}
-							f.Set(reflect.ValueOf(vs))
-							pv = vs
-
-						case reflect.Uint:
-							vs, err := parseArrElement(values, func(s string) (uint, error) {
-								val, err := strconv.ParseUint(s, 10, strconv.IntSize)
-								if err != nil {
-									return 0, err
-								}
-								return uint(val), nil
-							})
-							if err != nil {
-								res.Add(pb, value, "invalid integer")
-								return
-							}
-							f.Set(reflect.ValueOf(vs))
-							pv = vs
-
-						case reflect.Uint16:
-							vs, err := parseArrElement(values, func(s string) (uint16, error) {
-								val, err := strconv.ParseUint(s, 10, 16)
-								if err != nil {
-									return 0, err
-								}
-								return uint16(val), nil
-							})
-							if err != nil {
-								res.Add(pb, value, "invalid integer")
-								return
-							}
-							f.Set(reflect.ValueOf(vs))
-							pv = vs
-
-						case reflect.Uint32:
-							vs, err := parseArrElement(values, func(s string) (uint32, error) {
-								val, err := strconv.ParseUint(s, 10, 32)
-								if err != nil {
-									return 0, err
-								}
-								return uint32(val), nil
-							})
-							if err != nil {
-								res.Add(pb, value, "invalid integer")
-								return
-							}
-							f.Set(reflect.ValueOf(vs))
-							pv = vs
-
-						case reflect.Uint64:
-							vs, err := parseArrElement(values, func(s string) (uint64, error) {
-								val, err := strconv.ParseUint(s, 10, 64)
-								if err != nil {
-									return 0, err
-								}
-								return val, nil
-							})
-							if err != nil {
-								res.Add(pb, value, "invalid integer")
-								return
-							}
-							f.Set(reflect.ValueOf(vs))
-							pv = vs
-
-						case reflect.Float32:
-							vs, err := parseArrElement(values, func(s string) (float32, error) {
-								val, err := strconv.ParseFloat(s, 32)
-								if err != nil {
-									return 0, err
-								}
-								return float32(val), nil
-							})
-							if err != nil {
-								res.Add(pb, value, "invalid floating value")
-								return
-							}
-							f.Set(reflect.ValueOf(vs))
-							pv = vs
-
-						case reflect.Float64:
-							vs, err := parseArrElement(values, func(s string) (float64, error) {
-								val, err := strconv.ParseFloat(s, 64)
-								if err != nil {
-									return 0, err
-								}
-								return float64(val), nil
-							})
-							if err != nil {
-								res.Add(pb, value, "invalid floating value")
-								return
-							}
-							f.Set(reflect.ValueOf(vs))
-							pv = vs
+						pvSlice, err := parseSliceInto(f, values)
+						pv = pvSlice
+						if err != nil && !errors.Is(err, errUnparsable) {
+							res.Add(pb, value, err.Error())
+							return
 						}
 						break
 					}
@@ -1530,6 +1354,185 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			ctx.SetStatus(status)
 		}
 	})))
+}
+
+var errUnparsable = errors.New("unparsable value")
+
+// parseSliceInto converts a slice of string values into the expected type of f
+// and sets the result on f.
+func parseSliceInto(f reflect.Value, values []string) (any, error) {
+	switch f.Type().Elem().Kind() {
+
+	case reflect.String:
+		if f.Type() == reflect.TypeOf(values) {
+			f.Set(reflect.ValueOf(values))
+		} else {
+			// Change element type to support slice of string subtypes (enums)
+			enumValues := reflect.New(f.Type()).Elem()
+			for _, val := range values {
+				enumVal := reflect.New(f.Type().Elem()).Elem()
+				enumVal.SetString(val)
+				enumValues.Set(reflect.Append(enumValues, enumVal))
+			}
+			f.Set(enumValues)
+		}
+		return values, nil
+
+	case reflect.Int:
+		vs, err := parseArrElement(values, func(s string) (int, error) {
+			val, err := strconv.ParseInt(s, 10, strconv.IntSize)
+			if err != nil {
+				return 0, err
+			}
+			return int(val), nil
+		})
+		if err != nil {
+			return nil, errors.New("invalid integer")
+		}
+		f.Set(reflect.ValueOf(vs))
+		return vs, nil
+
+	case reflect.Int8:
+		vs, err := parseArrElement(values, func(s string) (int8, error) {
+			val, err := strconv.ParseInt(s, 10, 8)
+			if err != nil {
+				return 0, err
+			}
+			return int8(val), nil
+		})
+		if err != nil {
+			return nil, errors.New("invalid integer")
+		}
+		f.Set(reflect.ValueOf(vs))
+		return vs, nil
+
+	case reflect.Int16:
+		vs, err := parseArrElement(values, func(s string) (int16, error) {
+			val, err := strconv.ParseInt(s, 10, 16)
+			if err != nil {
+				return 0, err
+			}
+			return int16(val), nil
+		})
+		if err != nil {
+			return nil, errors.New("invalid integer")
+		}
+		f.Set(reflect.ValueOf(vs))
+		return vs, nil
+
+	case reflect.Int32:
+		vs, err := parseArrElement(values, func(s string) (int32, error) {
+			val, err := strconv.ParseInt(s, 10, 32)
+			if err != nil {
+				return 0, err
+			}
+			return int32(val), nil
+		})
+		if err != nil {
+			return nil, errors.New("invalid integer")
+		}
+		f.Set(reflect.ValueOf(vs))
+		return vs, nil
+
+	case reflect.Int64:
+		vs, err := parseArrElement(values, func(s string) (int64, error) {
+			val, err := strconv.ParseInt(s, 10, 64)
+			if err != nil {
+				return 0, err
+			}
+			return val, nil
+		})
+		if err != nil {
+			return nil, errors.New("invalid integer")
+		}
+		f.Set(reflect.ValueOf(vs))
+		return vs, nil
+
+	case reflect.Uint:
+		vs, err := parseArrElement(values, func(s string) (uint, error) {
+			val, err := strconv.ParseUint(s, 10, strconv.IntSize)
+			if err != nil {
+				return 0, err
+			}
+			return uint(val), nil
+		})
+		if err != nil {
+			return nil, errors.New("invalid integer")
+		}
+		f.Set(reflect.ValueOf(vs))
+		return vs, nil
+
+	case reflect.Uint16:
+		vs, err := parseArrElement(values, func(s string) (uint16, error) {
+			val, err := strconv.ParseUint(s, 10, 16)
+			if err != nil {
+				return 0, err
+			}
+			return uint16(val), nil
+		})
+		if err != nil {
+			return nil, errors.New("invalid integer")
+		}
+		f.Set(reflect.ValueOf(vs))
+		return vs, nil
+
+	case reflect.Uint32:
+		vs, err := parseArrElement(values, func(s string) (uint32, error) {
+			val, err := strconv.ParseUint(s, 10, 32)
+			if err != nil {
+				return 0, err
+			}
+			return uint32(val), nil
+		})
+		if err != nil {
+			return nil, errors.New("invalid integer")
+		}
+		f.Set(reflect.ValueOf(vs))
+		return vs, nil
+
+	case reflect.Uint64:
+		vs, err := parseArrElement(values, func(s string) (uint64, error) {
+			val, err := strconv.ParseUint(s, 10, 64)
+			if err != nil {
+				return 0, err
+			}
+			return val, nil
+		})
+		if err != nil {
+			return nil, errors.New("invalid integer")
+		}
+		f.Set(reflect.ValueOf(vs))
+		return vs, nil
+
+	case reflect.Float32:
+		vs, err := parseArrElement(values, func(s string) (float32, error) {
+			val, err := strconv.ParseFloat(s, 32)
+			if err != nil {
+				return 0, err
+			}
+			return float32(val), nil
+		})
+		if err != nil {
+			return nil, errors.New("invalid floating value")
+		}
+		f.Set(reflect.ValueOf(vs))
+		return vs, nil
+
+	case reflect.Float64:
+		vs, err := parseArrElement(values, func(s string) (float64, error) {
+			val, err := strconv.ParseFloat(s, 64)
+			if err != nil {
+				return 0, err
+			}
+			return float64(val), nil
+		})
+		if err != nil {
+			return nil, errors.New("invalid floating value")
+		}
+		f.Set(reflect.ValueOf(vs))
+		return vs, nil
+	}
+	return nil, errUnparsable
 }
 
 // AutoRegister auto-detects operation registration methods and registers them
