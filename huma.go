@@ -725,13 +725,51 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					return
 				}
 			} else {
-				errorStatus, cErr := processRegularMsgBody(api, op, ctx, res, v, rawBodyIndex, hasInputBody, pb, oapi.Components.Schemas, inSchema, inputBodyIndex, defaults)
-				if errorStatus > 0 {
-					errStatus = errorStatus
+				// Read body
+				buf := bufPool.Get().(*bytes.Buffer)
+				bufCloser := func() {
+					buf.Reset()
+					bufPool.Put(buf)
 				}
-				if cErr != nil {
+				if cErr := readBody(buf, ctx, op.MaxBodyBytes); cErr != nil {
+					bufCloser()
 					writeErr(api, ctx, cErr, *res)
 					return
+				}
+				body := buf.Bytes()
+
+				// Store raw body
+				if len(rawBodyIndex) > 0 {
+					f := getSubField(v, rawBodyIndex)
+					f.SetBytes(body)
+				}
+
+				// Process body
+				unmarshaler := func(data []byte, v any) error { return api.Unmarshal(ctx.Header("Content-Type"), data, v) }
+				validator := func(data any, res *ValidateResult) {
+					pb.Reset()
+					pb.Push("body")
+					Validate(oapi.Components.Schemas, inSchema, pb, ModeWriteToServer, data, res)
+				}
+				processErrStatus, cErr := processRegularMsgBody(body, op, v, hasInputBody, inputBodyIndex, unmarshaler, validator, defaults, res)
+				if processErrStatus > 0 {
+					errStatus = processErrStatus
+				}
+				if cErr != nil {
+					bufCloser()
+					writeErr(api, ctx, cErr, *res)
+					return
+				}
+
+				// Clean up
+				// If the raw body is used, then we must wait until *AFTER* the
+				// handler has run to return the body byte buffer to the pool, as
+				// the handler can read and modify this buffer. The safest way is
+				// to just wait until the end of this handler via defer.
+				if len(rawBodyIndex) > 0 {
+					defer bufCloser()
+				} else {
+					bufCloser()
 				}
 			}
 		}
@@ -1494,9 +1532,10 @@ func processMultipartMsgBody(op Operation, ctx Context, inputValue reflect.Value
 		f.FieldByName("Form").Set(reflect.ValueOf(form))
 		r := f.Addr().
 			MethodByName("Decode").
-			Call([]reflect.Value{
-				reflect.ValueOf(op.RequestBody.Content["multipart/form-data"]),
-			})
+			Call(
+				[]reflect.Value{
+					reflect.ValueOf(op.RequestBody.Content["multipart/form-data"]),
+				})
 		errs := r[0].Interface().([]error)
 		if errs != nil {
 			return &contextError{Code: http.StatusUnprocessableEntity, Msg: "validation failed", Errs: errs}
@@ -1505,9 +1544,107 @@ func processMultipartMsgBody(op Operation, ctx Context, inputValue reflect.Value
 	return nil
 }
 
-func processRegularMsgBody(api API, op Operation, ctx Context, res *ValidateResult, v reflect.Value, rawBodyIndex []int, hasInputBody bool, pb *PathBuffer, r Registry, inSchema *Schema, inputBodyIndex []int, defaults *findResult[any]) (int, *contextError) {
+type intoUnmarshaler = func(data []byte, v any) error
+
+// processRegularMsgBody parses the raw body with unmarshaler and validates it
+// with validator. Validation errors are documented in res and the
+// corresponding error code is returned. If no errors were found, the return
+// value is -1.
+func processRegularMsgBody(body []byte, op Operation, v reflect.Value, hasInputBody bool, inputBodyIndex []int, unmarshaler intoUnmarshaler, validator func(data any, res *ValidateResult), defaults *findResult[any], res *ValidateResult) (int, *contextError) {
 	errStatus := -1
-	buf := bufPool.Get().(*bytes.Buffer)
+	// Check preconditions
+	if len(body) == 0 {
+		if op.RequestBody != nil && op.RequestBody.Required {
+			return errStatus, &contextError{Code: http.StatusBadRequest, Msg: "request body is required"}
+		}
+		return errStatus, nil
+	}
+	if !hasInputBody {
+		return errStatus, nil
+	}
+
+	// Validate
+	isValid := true
+	if !op.SkipValidateBody {
+		validateErrStatus := validateBody(body, unmarshaler, validator, res)
+		errStatus = validateErrStatus
+		if errStatus > 0 {
+			isValid = false
+		}
+	}
+
+	// Parse into value
+	if len(inputBodyIndex) > 0 {
+		if err := parseBodyInto(v, inputBodyIndex, unmarshaler, body, defaults); err != nil && isValid {
+			// Hmm, this should have worked... validator missed something?
+			res.Errors = append(res.Errors, err)
+		}
+	}
+	return errStatus, nil
+}
+
+// validateBody parses the raw body with u and validates it with the validator.
+// Any errors are documented in res and the corresponding error code is
+// returned. If no errors were found, the return value is -1.
+func validateBody(body []byte, u intoUnmarshaler, validator func(data any, res *ValidateResult), res *ValidateResult) int {
+	errStatus := -1
+	// Validate the input. First, parse the body into []any or map[string]any
+	// or equivalent, which can be easily validated. Then, convert to the
+	// expected struct type to call the handler.
+	var parsed any
+	if err := u(body, &parsed); err != nil {
+		errStatus = http.StatusBadRequest
+		if errors.Is(err, ErrUnknownContentType) {
+			errStatus = http.StatusUnsupportedMediaType
+		}
+
+		res.Errors = append(res.Errors, &ErrorDetail{
+			Location: "body",
+			Message:  err.Error(),
+			Value:    string(body),
+		})
+	} else {
+		preValidationErrCount := len(res.Errors)
+		validator(parsed, res)
+		if len(res.Errors)-preValidationErrCount > 0 {
+			errStatus = http.StatusUnprocessableEntity
+		}
+	}
+	return errStatus
+}
+
+// parseBodyInto parses the raw body with u and populates the result in v at
+// index bodyIndex. Afterwards, it sets default values on v for all fields that
+// were not populated with body.
+func parseBodyInto(v reflect.Value, bodyIndex []int, u intoUnmarshaler, body []byte, defaults *findResult[any]) *ErrorDetail {
+	// We need to get the body into the correct type now that it has been
+	// validated. Benchmarks on Go 1.20 show that using `json.Unmarshal` a
+	// second time is faster than `mapstructure.Decode` or any of the other
+	// common reflection-based approaches when using real-world medium-sized
+	// JSON payloads with lots of strings.
+	f := getSubField(v, bodyIndex)
+	if err := u(body, f.Addr().Interface()); err != nil {
+		return &ErrorDetail{
+			Location: "body",
+			Message:  err.Error(),
+			Value:    string(body),
+		}
+	}
+	// Set defaults for any fields that were not in the input.
+	defaults.Every(v, func(item reflect.Value, def any) {
+		if item.IsZero() {
+			if item.Kind() == reflect.Pointer {
+				item.Set(reflect.New(item.Type().Elem()))
+				item = item.Elem()
+			}
+			item.Set(reflect.Indirect(reflect.ValueOf(def)))
+		}
+	})
+	return nil
+}
+
+// readBody reads the message body from ctx into buf, respecting the
+func readBody(buf io.Writer, ctx Context, maxBytes int64) *contextError {
 	reader := ctx.BodyReader()
 	if reader == nil {
 		reader = bytes.NewReader(nil)
@@ -1515,124 +1652,35 @@ func processRegularMsgBody(api API, op Operation, ctx Context, res *ValidateResu
 	if closer, ok := reader.(io.Closer); ok {
 		defer closer.Close()
 	}
-	if op.MaxBodyBytes > 0 {
-		reader = io.LimitReader(reader, op.MaxBodyBytes)
+	if maxBytes > 0 {
+		reader = io.LimitReader(reader, maxBytes)
 	}
 	count, err := io.Copy(buf, reader)
-	if op.MaxBodyBytes > 0 {
-		if count == op.MaxBodyBytes {
-			buf.Reset()
-			bufPool.Put(buf)
-			return errStatus, &contextError{Code: http.StatusRequestEntityTooLarge, Msg: fmt.Sprintf("request body is too large limit=%d bytes", op.MaxBodyBytes)}
+	if maxBytes > 0 {
+		if count == maxBytes {
+			return &contextError{Code: http.StatusRequestEntityTooLarge, Msg: fmt.Sprintf("request body is too large limit=%d bytes", maxBytes)}
 		}
 	}
 	if err != nil {
-		buf.Reset()
-		bufPool.Put(buf)
-
 		if e, ok := err.(net.Error); ok && e.Timeout() {
-			return errStatus, &contextError{Code: http.StatusRequestTimeout, Msg: "request body read timeout"}
+			return &contextError{Code: http.StatusRequestTimeout, Msg: "request body read timeout"}
 		}
 
-		return errStatus, &contextError{Code: http.StatusInternalServerError, Msg: "cannot read request body", Errs: []error{err}}
+		return &contextError{Code: http.StatusInternalServerError, Msg: "cannot read request body", Errs: []error{err}}
 	}
-	body := buf.Bytes()
+	return nil
+}
 
-	if len(rawBodyIndex) > 0 {
-		f := v
-		for _, i := range rawBodyIndex {
-			f = f.Field(i)
-		}
-		f.SetBytes(body)
+// getSubField extracts a nested field from v. The field of interest is
+// identified by its indices.
+//
+// For example, getSubField(v, [3, 1]) returns v.Field[3].Field[1]
+func getSubField(v reflect.Value, indices []int) reflect.Value {
+	f := v
+	for _, i := range indices {
+		f = f.Field(i)
 	}
-
-	if len(body) == 0 {
-		if op.RequestBody != nil && op.RequestBody.Required {
-			buf.Reset()
-			bufPool.Put(buf)
-			return errStatus, &contextError{Code: http.StatusBadRequest, Msg: "request body is required"}
-		}
-		return errStatus, nil
-	}
-
-	parseErrCount := 0
-	if hasInputBody && !op.SkipValidateBody {
-		// Validate the input. First, parse the body into []any or map[string]any
-		// or equivalent, which can be easily validated. Then, convert to the
-		// expected struct type to call the handler.
-		var parsed any
-		if err := api.Unmarshal(ctx.Header("Content-Type"), body, &parsed); err != nil {
-			errStatus = http.StatusBadRequest
-			if errors.Is(err, ErrUnknownContentType) {
-				errStatus = http.StatusUnsupportedMediaType
-			}
-
-			res.Errors = append(res.Errors, &ErrorDetail{
-				Location: "body",
-				Message:  err.Error(),
-				Value:    string(body),
-			})
-			parseErrCount++
-		} else {
-			pb.Reset()
-			pb.Push("body")
-			count := len(res.Errors)
-			Validate(r, inSchema, pb, ModeWriteToServer, parsed, res)
-			parseErrCount = len(res.Errors) - count
-			if parseErrCount > 0 {
-				errStatus = http.StatusUnprocessableEntity
-			}
-		}
-	}
-
-	if hasInputBody && len(inputBodyIndex) > 0 {
-		// We need to get the body into the correct type now that it has been
-		// validated. Benchmarks on Go 1.20 show that using `json.Unmarshal` a
-		// second time is faster than `mapstructure.Decode` or any of the other
-		// common reflection-based approaches when using real-world medium-sized
-		// JSON payloads with lots of strings.
-		f := v
-		for _, index := range inputBodyIndex {
-			f = f.Field(index)
-		}
-		if err := api.Unmarshal(ctx.Header("Content-Type"), body, f.Addr().Interface()); err != nil {
-			if parseErrCount == 0 {
-				// Hmm, this should have worked... validator missed something?
-				res.Errors = append(res.Errors, &ErrorDetail{
-					Location: "body",
-					Message:  err.Error(),
-					Value:    string(body),
-				})
-			}
-		} else {
-			// Set defaults for any fields that were not in the input.
-			defaults.Every(v, func(item reflect.Value, def any) {
-				if item.IsZero() {
-					if item.Kind() == reflect.Pointer {
-						item.Set(reflect.New(item.Type().Elem()))
-						item = item.Elem()
-					}
-					item.Set(reflect.Indirect(reflect.ValueOf(def)))
-				}
-			})
-		}
-	}
-
-	if len(rawBodyIndex) > 0 {
-		// If the raw body is used, then we must wait until *AFTER* the
-		// handler has run to return the body byte buffer to the pool, as
-		// the handler can read and modify this buffer. The safest way is
-		// to just wait until the end of this handler via defer.
-		defer bufPool.Put(buf)
-		defer buf.Reset()
-	} else {
-		// No raw body, and the body has already been unmarshalled above, so
-		// we can return the buffer to the pool now as we don't need the
-		// bytes any more.
-		buf.Reset()
-		bufPool.Put(buf)
-	}
-	return errStatus, nil
+	return f
 }
 
 // AutoRegister auto-detects operation registration methods and registers them
