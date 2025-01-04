@@ -1803,6 +1803,52 @@ Content of example2.txt.
 			},
 		},
 		{
+			Name: "defaultstatus-takes-precedence-over-non-int-dynamic-status",
+			Register: func(t *testing.T, api huma.API) {
+				type Resp struct {
+					Status string
+				}
+
+				huma.Register(api, huma.Operation{
+					Method:        http.MethodGet,
+					Path:          "/status",
+					DefaultStatus: http.StatusOK,
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					resp := &Resp{}
+					resp.Status = "this is fine 🔥"
+					return resp, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/status",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+			},
+		},
+		{
+			Name: "defaultstatus-takes-precedence-over-int-dynamic-status",
+			Register: func(t *testing.T, api huma.API) {
+				type Resp struct {
+					Status int
+				}
+
+				huma.Register(api, huma.Operation{
+					Method:        http.MethodGet,
+					Path:          "/status",
+					DefaultStatus: http.StatusOK,
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					resp := &Resp{}
+					resp.Status = 6666 // non-standard status code is ignored b/c DefaultStatus is set
+					return resp, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/status",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+			},
+		},
+		{
 			// Simulate a request with a body that came from another call, which
 			// includes the `$schema` field. It should be allowed to be passed
 			// to the new operation as input without modification.

@@ -761,14 +761,18 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 	outStatusIndex := -1
 	if f, ok := outputType.FieldByName("Status"); ok {
-		outStatusIndex = f.Index[0]
-		if f.Type.Kind() != reflect.Int {
-			panic("status field must be an int")
+		if op.DefaultStatus == 0 {
+			if f.Type.Kind() != reflect.Int {
+				panic("status field must be an int or route must specify a 'DefaultStatus'") // No DefaultStatus and no status defined on the output struct
+			} else {
+				outStatusIndex = f.Index[0]
+			}
 		}
 		// TODO: enum tag?
 		// TODO: register each of the possible responses with the right model
 		//       and headers down below.
 	}
+
 	outHeaders := findHeaders(outputType)
 	outBodyIndex := -1
 	outBodyFunc := false
@@ -1503,8 +1507,8 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		})
 
 		status := op.DefaultStatus
-		if outStatusIndex != -1 {
-			status = int(vo.Field(outStatusIndex).Int())
+		if outStatusIndex != -1 && op.DefaultStatus != 0 {
+			status = int(vo.Field(outStatusIndex).Int()) // only use the response model's status if no default is set
 		}
 
 		if outBodyIndex != -1 {
