@@ -207,7 +207,7 @@ func multiPartFormFileSchema(t reflect.Type) *Schema {
 		Properties:  make(map[string]*Schema, nFields),
 		requiredMap: make(map[string]bool, nFields),
 	}
-	requiredFields := make([]string, nFields)
+	requiredFields := make([]string, 0, nFields)
 	for i := 0; i < nFields; i++ {
 		f := t.Field(i)
 		name := formDataFieldName(f)
@@ -226,7 +226,7 @@ func multiPartFormFileSchema(t reflect.Type) *Schema {
 		}
 
 		if _, ok := f.Tag.Lookup("required"); ok && boolTag(f, "required", false) {
-			requiredFields[i] = name
+			requiredFields = append(requiredFields, name)
 			schema.requiredMap[name] = true
 		}
 	}
