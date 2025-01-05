@@ -1471,6 +1471,171 @@ Content of example2.txt.
 			},
 		},
 		{
+			Name: "request-body-multipart-file-decoded-with-formvalues-required",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						HelloWorld huma.FormFile `form:"file" contentType:"text/plain"`
+						MyString   string        `form:"myString" required:"true"`
+						MyStrings  []string      `form:"myStrings" required:"true"`
+						MyInt      int           `form:"myInt" required:"true"`
+						MyInts     []int         `form:"myInts" required:"true"`
+					}]
+				}) (*struct{}, error) {
+					fileData := input.RawBody.Data()
+
+					assert.Equal(t, "text/plain", fileData.HelloWorld.ContentType)
+					assert.Equal(t, "test.txt", fileData.HelloWorld.Filename)
+					assert.Equal(t, len("Hello, World!"), int(fileData.HelloWorld.Size))
+					assert.True(t, fileData.HelloWorld.IsSet)
+					b, err := io.ReadAll(fileData.HelloWorld)
+					require.NoError(t, err)
+					assert.Equal(t, "Hello, World!", string(b))
+
+					assert.Equal(t, "Some string", fileData.MyString)
+					assert.Equal(t, []string{"Some other string"}, fileData.MyStrings)
+					assert.Equal(t, 42, fileData.MyInt)
+					assert.Equal(t, []int{1, 2}, fileData.MyInts)
+					return nil, nil
+				})
+
+				// Ensure OpenAPI spec is listed as a multipart/form-data upload with
+				// the appropriate schema.
+				mpContent := api.OpenAPI().Paths["/upload"].Post.RequestBody.Content["multipart/form-data"]
+				assert.Equal(t, "text/plain", mpContent.Encoding["file"].ContentType)
+				assert.Equal(t, "text/plain", mpContent.Encoding["myString"].ContentType)
+				assert.Equal(t, "string", mpContent.Schema.Properties["myString"].Type)
+				assert.Contains(t, mpContent.Schema.Required, "myString")
+				assert.Equal(t, "array", mpContent.Schema.Properties["myStrings"].Type)
+				assert.Equal(t, "string", mpContent.Schema.Properties["myStrings"].Items.Type)
+				assert.Contains(t, mpContent.Schema.Required, "myStrings")
+				assert.Equal(t, "integer", mpContent.Schema.Properties["myInt"].Type)
+				assert.Contains(t, mpContent.Schema.Required, "myInt")
+				assert.Equal(t, "array", mpContent.Schema.Properties["myInts"].Type)
+				assert.Equal(t, "integer", mpContent.Schema.Properties["myInts"].Items.Type)
+				assert.Contains(t, mpContent.Schema.Required, "myInts")
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+Hello, World!
+--SimpleBoundary
+Content-Disposition: form-data; name="myString"
+Content-Type: text/plain
+
+Some string
+--SimpleBoundary
+Content-Disposition: form-data; name="myStrings"
+Content-Type: text/plain
+
+Some other string
+--SimpleBoundary
+Content-Disposition: form-data; name="myInt"
+Content-Type: text/plain
+
+42
+--SimpleBoundary
+Content-Disposition: form-data; name="myInts"
+Content-Type: text/plain
+
+1
+--SimpleBoundary
+Content-Disposition: form-data; name="myInts"
+Content-Type: text/plain
+
+2
+--SimpleBoundary--`,
+		},
+		{
+			Name: "request-body-multipart-file-decoded-with-formvalue-required-missing",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						MyString string `form:"myString" required:"true"`
+						MyInt    int    `form:"myInt" required:"true"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body:    `--SimpleBoundary--`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				if ok := assert.Equal(t, http.StatusUnprocessableEntity, resp.Code); ok {
+					var errors huma.ErrorModel
+					err := json.Unmarshal(resp.Body.Bytes(), &errors)
+					require.NoError(t, err)
+					assert.Equal(t, "form.myString", errors.Errors[0].Location)
+					assert.Equal(t, "form.myInt", errors.Errors[1].Location)
+				}
+			},
+		}, {
+			Name: "request-body-multipart-file-decoded-with-formvalue-invalid",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						MyString   string `form:"myString" maxLength:"3"`
+						MyInt      int    `form:"myInt" minimum:"500"`
+						MyOtherInt int    `form:"myOtherInt"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="myString"
+Content-Type: text/plain
+
+Your favorite sender
+--SimpleBoundary
+Content-Disposition: form-data; name="myInt"
+Content-Type: text/plain
+
+42
+--SimpleBoundary
+Content-Disposition: form-data; name="myOtherInt"
+Content-Type: text/plain
+
+1
+--SimpleBoundary
+Content-Disposition: form-data; name="myOtherInt"
+Content-Type: text/plain
+
+2
+--SimpleBoundary--`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				if ok := assert.Equal(t, http.StatusUnprocessableEntity, resp.Code); ok {
+					var errors huma.ErrorModel
+					err := json.Unmarshal(resp.Body.Bytes(), &errors)
+					require.NoError(t, err)
+					assert.Equal(t, "form.myString", errors.Errors[0].Location)
+					assert.Contains(t, errors.Errors[0].Message, "expected length \u003c= 3")
+					assert.Equal(t, "form.myInt", errors.Errors[1].Location)
+					assert.Contains(t, errors.Errors[1].Message, "expected number \u003e= 500")
+					assert.Equal(t, "form.myOtherInt", errors.Errors[2].Location)
+					assert.Contains(t, errors.Errors[2].Message, "expected at most one value, but received multiple values")
+				}
+			},
+		},
+		{
 			Name: "handler-error",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
