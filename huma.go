@@ -740,7 +740,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 				// Store raw body
 				if len(rawBodyIndex) > 0 {
-					f := getSubField(v, rawBodyIndex)
+					f := v.FieldByIndex(rawBodyIndex)
 					f.SetBytes(body)
 				}
 
@@ -1622,7 +1622,7 @@ func parseBodyInto(v reflect.Value, bodyIndex []int, u intoUnmarshaler, body []b
 	// second time is faster than `mapstructure.Decode` or any of the other
 	// common reflection-based approaches when using real-world medium-sized
 	// JSON payloads with lots of strings.
-	f := getSubField(v, bodyIndex)
+	f := v.FieldByIndex(bodyIndex)
 	if err := u(body, f.Addr().Interface()); err != nil {
 		return &ErrorDetail{
 			Location: "body",
@@ -1669,18 +1669,6 @@ func readBody(buf io.Writer, ctx Context, maxBytes int64) *contextError {
 		return &contextError{Code: http.StatusInternalServerError, Msg: "cannot read request body", Errs: []error{err}}
 	}
 	return nil
-}
-
-// getSubField extracts a nested field from v. The field of interest is
-// identified by its indices.
-//
-// For example, getSubField(v, [3, 1]) returns v.Field[3].Field[1]
-func getSubField(v reflect.Value, indices []int) reflect.Value {
-	f := v
-	for _, i := range indices {
-		f = f.Field(i)
-	}
-	return f
 }
 
 // AutoRegister auto-detects operation registration methods and registers them
