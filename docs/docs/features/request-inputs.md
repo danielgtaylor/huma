@@ -116,7 +116,46 @@ huma.Register(api, huma.Operation{
 })
 ```
 
-This will be useful for supporting file uploads.
+This will be useful for supporting file uploads. Moreover, Huma can process files from the multipart form into a struct for you. In this case, you should define what the processed struct should look like:
+
+```go title="multipart_form_files.go"
+huma.Register(api, huma.Operation{
+	OperationID: "upload-and-decode-files"
+	Method:      http.MethodPost,
+	Path:        "/upload",
+}, func(ctx context.Context, input *struct {
+	RawBody huma.MultipartFormFiles[struct {
+		HelloWorld         huma.FormFile   `form:"file" contentType:"text/plain" required:"true"`
+		Greetings          []huma.FormFile `form:"greetings" contentType:"text/plain" required:"true"`
+		NoTagBinding       huma.FormFile   `contentType:"text/plain"`
+		NonFilesAreIgnored string  // ignored
+	}]
+}) (*struct{}, error) {
+	// The raw multipart.Form body is again available under input.RawBody.Form.
+	// E.g. input.RawBody.Form.File("file")
+	// E.g. input.RawBody.Form.Value("NonFilesAreIgnored")
+
+	// The processed input struct is available under input.RawBody.Data().
+	fileData := input.RawBody.Data()
+
+	// Process files here.
+	b, err := io.ReadAll(fileData.HelloWorld)
+	fmt.Println(string(b))
+
+	for _, f := range fileData.Greetings {
+		b, err := io.ReadAll(f)
+		fmt.Println(string(b))
+	}
+
+	// Optional check for optional file.
+	if fileData.NoTagBinding.IsSet {
+		fmt.Println("The form contained an file entry with name 'NoTagBinding'!")
+	}
+	return nil, nil
+})
+```
+
+The files are decoded according to the specified contentType. If no contentType is provided, it defaults to `application/octet-stream`.
 
 ## Request Example
 
