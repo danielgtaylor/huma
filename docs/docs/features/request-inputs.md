@@ -61,7 +61,7 @@ The special struct field `Body` will be treated as the input request body and ca
 The following special types are supported out of the box:
 
 | Type              | Schema                                      | Example                       |
-|-------------------| ------------------------------------------- | ----------------------------- |
+| ----------------- | ------------------------------------------- | ----------------------------- |
 | `time.Time`       | `{"type": "string", "format": "date-time"}` | `"2020-01-01T12:00:00Z"`      |
 | `url.URL`         | `{"type": "string", "format": "uri"}`       | `"https://example.com"`       |
 | `net.IP`          | `{"type": "string", "format": "ipv4"}`      | `"127.0.0.1"`                 |
@@ -92,13 +92,11 @@ This enables you to also do your own parsing of the input, if needed.
 
 ### Multipart Form Data
 
-Multipart form data is supported by using a `RawBody` with a type of
-`multipart.Form` type in the input struct. This will parse the request using
-Go standard library multipart processing implementation.
+Multipart form data is supported by using a `RawBody` with a type of [`multipart.Form`](https://pkg.go.dev/mime/multipart#Form) in the input struct. This will parse the request using Go standard library multipart processing implementation.
 
 For example:
 
-```go title="code.go"
+```go title="multipart.go"
 huma.Register(api, huma.Operation{
 	OperationID: "upload-files",
     Method:      http.MethodPost,
@@ -108,6 +106,12 @@ huma.Register(api, huma.Operation{
     RawBody multipart.Form
 }) (*struct{}, error) {
     // Process multipart form here.
+	for name, _ := range input.RawBody.File {
+	    fmt.Printf("Obtained file with name '%s'", name)
+	}
+	for name, val := range input.RawBody.Value {
+	    fmt.Printf("Obtained value with name '%s' and value '%s'", name, val)
+	}
     return nil, nil
 })
 ```
