@@ -149,7 +149,7 @@ huma.Register(api, huma.Operation{
 
 	// Optional check for optional file.
 	if fileData.NoTagBinding.IsSet {
-		fmt.Println("The form contained an file entry with name 'NoTagBinding'!")
+		fmt.Println("The form contained a file entry with name 'NoTagBinding'!")
 	}
 	return nil, nil
 })
