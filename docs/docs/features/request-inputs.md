@@ -61,7 +61,7 @@ The special struct field `Body` will be treated as the input request body and ca
 The following special types are supported out of the box:
 
 | Type              | Schema                                      | Example                       |
-|-------------------| ------------------------------------------- | ----------------------------- |
+| ----------------- | ------------------------------------------- | ----------------------------- |
 | `time.Time`       | `{"type": "string", "format": "date-time"}` | `"2020-01-01T12:00:00Z"`      |
 | `url.URL`         | `{"type": "string", "format": "uri"}`       | `"https://example.com"`       |
 | `net.IP`          | `{"type": "string", "format": "ipv4"}`      | `"127.0.0.1"`                 |
@@ -92,13 +92,11 @@ This enables you to also do your own parsing of the input, if needed.
 
 ### Multipart Form Data
 
-Multipart form data is supported by using a `RawBody` with a type of
-`multipart.Form` type in the input struct. This will parse the request using
-Go standard library multipart processing implementation.
+Multipart form data is supported by using a `RawBody` with a type of [`multipart.Form`](https://pkg.go.dev/mime/multipart#Form) in the input struct. This will parse the request using Go standard library multipart processing implementation.
 
 For example:
 
-```go title="code.go"
+```go title="multipart.go"
 huma.Register(api, huma.Operation{
 	OperationID: "upload-files",
     Method:      http.MethodPost,
@@ -108,11 +106,56 @@ huma.Register(api, huma.Operation{
     RawBody multipart.Form
 }) (*struct{}, error) {
     // Process multipart form here.
+	for name, _ := range input.RawBody.File {
+	    fmt.Printf("Obtained file with name '%s'", name)
+	}
+	for name, val := range input.RawBody.Value {
+	    fmt.Printf("Obtained value with name '%s' and value '%s'", name, val)
+	}
     return nil, nil
 })
 ```
 
-This will be useful for supporting file uploads.
+This will be useful for supporting file uploads. Moreover, Huma can process files from the multipart form into a struct for you. In this case, you should define what the processed struct should look like:
+
+```go title="multipart_form_files.go"
+huma.Register(api, huma.Operation{
+	OperationID: "upload-and-decode-files"
+	Method:      http.MethodPost,
+	Path:        "/upload",
+}, func(ctx context.Context, input *struct {
+	RawBody huma.MultipartFormFiles[struct {
+		HelloWorld         huma.FormFile   `form:"file" contentType:"text/plain" required:"true"`
+		Greetings          []huma.FormFile `form:"greetings" contentType:"text/plain" required:"true"`
+		NoTagBinding       huma.FormFile   `contentType:"text/plain"`
+		NonFilesAreIgnored string  // ignored
+	}]
+}) (*struct{}, error) {
+	// The raw multipart.Form body is again available under input.RawBody.Form.
+	// E.g. input.RawBody.Form.File("file")
+	// E.g. input.RawBody.Form.Value("NonFilesAreIgnored")
+
+	// The processed input struct is available under input.RawBody.Data().
+	fileData := input.RawBody.Data()
+
+	// Process files here.
+	b, err := io.ReadAll(fileData.HelloWorld)
+	fmt.Println(string(b))
+
+	for _, f := range fileData.Greetings {
+		b, err := io.ReadAll(f)
+		fmt.Println(string(b))
+	}
+
+	// Optional check for optional file.
+	if fileData.NoTagBinding.IsSet {
+		fmt.Println("The form contained a file entry with name 'NoTagBinding'!")
+	}
+	return nil, nil
+})
+```
+
+The files are decoded according to the specified contentType. If no contentType is provided, it defaults to `application/octet-stream`.
 
 ## Request Example
 
