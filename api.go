@@ -469,9 +469,8 @@ func NewAPI(config Config, a Adapter) API {
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <title>` + title + `</title>
     <!-- Embed elements Elements via Web Component -->
-    <link href="https://unpkg.com/@stoplight/elements@8.1.0/styles.min.css" rel="stylesheet" />
-    <script src="https://unpkg.com/@stoplight/elements@8.1.0/web-components.min.js"
-            integrity="sha256-985sDMZYbGa0LDS8jYmC4VbkVlh7DZ0TWejFv+raZII="
+    <link href="https://unpkg.com/@stoplight/elements@9.0.0/styles.min.css" rel="stylesheet" />
+    <script src="https://unpkg.com/@stoplight/elements@9.0.0/web-components.min.js" integrity="sha256-Tqvw1qE2abI+G6dPQBc5zbeHqfVwGoamETU3/TSpUw4="
             crossorigin="anonymous"></script>
   </head>
   <body style="height: 100vh;">
