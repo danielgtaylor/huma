@@ -615,6 +615,82 @@ func TestFeatures(t *testing.T) {
 			Body:   `{"name":"foo"}`,
 		},
 		{
+			Name: "request-body-examples",
+			Register: func(t *testing.T, api huma.API) {
+				schema := &huma.Schema{
+					Type:       huma.TypeObject,
+					Properties: map[string]*huma.Schema{"name": {Type: huma.TypeString}},
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+					RequestBody: &huma.RequestBody{
+						Description: "A description",
+						Content: map[string]*huma.MediaType{
+							"application/json": {
+								Schema: schema,
+								Examples: map[string]*huma.Example{
+									"Example 1": {
+										Summary: "Example summary",
+										Value: struct {
+											Name string `json:"name"`
+										}{
+											Name: "foo",
+										},
+									},
+									"Example 2": {
+										Summary: "Example summary",
+										Value: struct {
+											Name string `json:"name"`
+										}{
+											Name: "bar",
+										},
+									},
+								},
+							},
+						},
+					},
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name string `json:"name"`
+					}
+				}) (*struct{}, error) {
+					assert.Equal(t, "foo", input.Body.Name)
+					return nil, nil
+				})
+				b, _ := api.OpenAPI().Paths["/body"].Put.RequestBody.MarshalJSON()
+				assert.JSONEq(t, `{
+					"description": "A description",
+					"required": true,
+					"content": {
+						"application/json": {
+							"examples": {
+								"Example 1": {
+									"summary": "Example summary",
+									"value": {
+										"name": "foo"
+									}
+								},
+								"Example 2": {
+									"summary": "Example summary",
+									"value": {
+										"name": "bar"
+									}
+								}
+							},
+							"schema": {
+								"$ref": "#/components/schemas/Request"
+							}
+						}
+					}
+				}`, string(b))
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   `{"name":"foo"}`,
+		},
+		{
 			Name: "request-body-nested-struct-readOnly",
 			Register: func(t *testing.T, api huma.API) {
 				type NestedStruct struct {
