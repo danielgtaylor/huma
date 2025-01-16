@@ -85,7 +85,92 @@ func (v MimeTypeValidator) Validate(fh *multipart.FileHeader, location string) (
 	}
 }
 
-func (m *MultipartFormFiles[T]) readFile(
+func (m *MultipartFormFiles[T]) Data() *T {
+	return m.data
+}
+
+// Decodes multipart.Form data into *T, returning []*ErrorDetail if any
+// Schema is used to check for validation constraints
+func (m *MultipartFormFiles[T]) Decode(opMediaType *MediaType) []error {
+	var (
+		dataType = reflect.TypeOf(m.data).Elem()
+		value    = reflect.New(dataType)
+		errors   []error
+	)
+	for i := 0; i < dataType.NumField(); i++ {
+		field := value.Elem().Field(i)
+		structField := dataType.Field(i)
+		key := structField.Tag.Get("form")
+		if key == "" {
+			key = structField.Name
+		}
+		fileHeaders := m.Form.File[key]
+		switch {
+		case field.Type() == reflect.TypeOf(FormFile{}):
+			file, err := readSingleFile(fileHeaders, key, opMediaType)
+			if err != nil {
+				errors = append(errors, err)
+				continue
+			}
+			field.Set(reflect.ValueOf(file))
+		case field.Type() == reflect.TypeOf([]FormFile{}):
+			files, errs := readMultipleFiles(fileHeaders, key, opMediaType)
+			if errs != nil {
+				errors = append(errors, errs...)
+				continue
+			}
+			field.Set(reflect.ValueOf(files))
+
+		default:
+			continue
+		}
+	}
+	m.data = value.Interface().(*T)
+	return errors
+}
+
+func readSingleFile(fileHeaders []*multipart.FileHeader, key string, opMediaType *MediaType) (FormFile, *ErrorDetail) {
+	if len(fileHeaders) == 0 {
+		if opMediaType.Schema.requiredMap[key] {
+			return FormFile{}, &ErrorDetail{Message: "File required", Location: key}
+		} else {
+			return FormFile{}, nil
+		}
+	} else if len(fileHeaders) == 1 {
+		validator := NewMimeTypeValidator(opMediaType.Encoding[key])
+		return readFile(fileHeaders[0], key, validator)
+	}
+	return FormFile{}, &ErrorDetail{
+		Message:  "Multiple files received but only one was expected",
+		Location: key,
+	}
+}
+
+func readMultipleFiles(fileHeaders []*multipart.FileHeader, key string, opMediaType *MediaType) ([]FormFile, []error) {
+	var (
+		files  = make([]FormFile, len(fileHeaders))
+		errors []error
+	)
+	if opMediaType.Schema.requiredMap[key] && len(fileHeaders) == 0 {
+		return nil, []error{&ErrorDetail{Message: "At least one file is required", Location: key}}
+	}
+	validator := NewMimeTypeValidator(opMediaType.Encoding[key])
+	for i, fh := range fileHeaders {
+		file, err := readFile(
+			fh,
+			fmt.Sprintf("%s[%d]", key, i),
+			validator,
+		)
+		if err != nil {
+			errors = append(errors, err)
+			continue
+		}
+		files[i] = file
+	}
+	return files, errors
+}
+
+func readFile(
 	fh *multipart.FileHeader,
 	location string,
 	validator MimeTypeValidator,
@@ -107,92 +192,6 @@ func (m *MultipartFormFiles[T]) readFile(
 	}, nil
 }
 
-func (m *MultipartFormFiles[T]) readSingleFile(key string, opMediaType *MediaType) (FormFile, *ErrorDetail) {
-	fileHeaders := m.Form.File[key]
-	if len(fileHeaders) == 0 {
-		if opMediaType.Schema.requiredMap[key] {
-			return FormFile{}, &ErrorDetail{Message: "File required", Location: key}
-		} else {
-			return FormFile{}, nil
-		}
-	} else if len(fileHeaders) == 1 {
-		validator := NewMimeTypeValidator(opMediaType.Encoding[key])
-		return m.readFile(fileHeaders[0], key, validator)
-	}
-	return FormFile{}, &ErrorDetail{
-		Message:  "Multiple files received but only one was expected",
-		Location: key,
-	}
-}
-
-func (m *MultipartFormFiles[T]) readMultipleFiles(key string, opMediaType *MediaType) ([]FormFile, []error) {
-	fileHeaders := m.Form.File[key]
-	var (
-		files  = make([]FormFile, len(fileHeaders))
-		errors []error
-	)
-	if opMediaType.Schema.requiredMap[key] && len(fileHeaders) == 0 {
-		return nil, []error{&ErrorDetail{Message: "At least one file is required", Location: key}}
-	}
-	validator := NewMimeTypeValidator(opMediaType.Encoding[key])
-	for i, fh := range fileHeaders {
-		file, err := m.readFile(
-			fh,
-			fmt.Sprintf("%s[%d]", key, i),
-			validator,
-		)
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
-		files[i] = file
-	}
-	return files, errors
-}
-
-func (m *MultipartFormFiles[T]) Data() *T {
-	return m.data
-}
-
-// Decodes multipart.Form data into *T, returning []*ErrorDetail if any
-// Schema is used to check for validation constraints
-func (m *MultipartFormFiles[T]) Decode(opMediaType *MediaType) []error {
-	var (
-		dataType = reflect.TypeOf(m.data).Elem()
-		value    = reflect.New(dataType)
-		errors   []error
-	)
-	for i := 0; i < dataType.NumField(); i++ {
-		field := value.Elem().Field(i)
-		structField := dataType.Field(i)
-		key := structField.Tag.Get("form")
-		if key == "" {
-			key = structField.Name
-		}
-		switch {
-		case field.Type() == reflect.TypeOf(FormFile{}):
-			file, err := m.readSingleFile(key, opMediaType)
-			if err != nil {
-				errors = append(errors, err)
-				continue
-			}
-			field.Set(reflect.ValueOf(file))
-		case field.Type() == reflect.TypeOf([]FormFile{}):
-			files, errs := m.readMultipleFiles(key, opMediaType)
-			if errs != nil {
-				errors = append(errors, errs...)
-				continue
-			}
-			field.Set(reflect.ValueOf(files))
-
-		default:
-			continue
-		}
-	}
-	m.data = value.Interface().(*T)
-	return errors
-}
-
 func formDataFieldName(f reflect.StructField) string {
 	name := f.Name
 	if formDataKey := f.Tag.Get("form"); formDataKey != "" {
@@ -208,7 +207,7 @@ func multiPartFormFileSchema(t reflect.Type) *Schema {
 		Properties:  make(map[string]*Schema, nFields),
 		requiredMap: make(map[string]bool, nFields),
 	}
-	requiredFields := make([]string, nFields)
+	requiredFields := make([]string, 0, nFields)
 	for i := 0; i < nFields; i++ {
 		f := t.Field(i)
 		name := formDataFieldName(f)
@@ -227,7 +226,7 @@ func multiPartFormFileSchema(t reflect.Type) *Schema {
 		}
 
 		if _, ok := f.Tag.Lookup("required"); ok && boolTag(f, "required", false) {
-			requiredFields[i] = name
+			requiredFields = append(requiredFields, name)
 			schema.requiredMap[name] = true
 		}
 	}
