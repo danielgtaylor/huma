@@ -36,7 +36,7 @@ func GetErrorHandler(
 		var foundJSONRPCError *JSONRPCError
 		message := gotMessage
 		details := make([]string, 0)
-		details = append(details, fmt.Sprintf("Message:%s", gotMessage))
+		details = append(details, "Message: "+gotMessage)
 		// Add the HTTP status to details and set status sent back as 200
 		details = append(details, fmt.Sprintf("HTTP Status:%d", gotStatus))
 		status := 200

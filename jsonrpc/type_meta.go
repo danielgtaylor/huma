@@ -3,7 +3,6 @@ package jsonrpc
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"reflect"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -49,7 +48,7 @@ func unmarshalMeta[T any](data []byte, isBatch *bool, items *[]T) error {
 			if err := json.Unmarshal(msg, &item); err != nil {
 				return &JSONRPCError{
 					Code:    ParseError,
-					Message: fmt.Sprintf("Failed to unmarshal batch item: %s", err.Error()),
+					Message: "Failed to unmarshal batch item: " + err.Error(),
 				}
 			}
 			*items = append(*items, item)
@@ -59,7 +58,7 @@ func unmarshalMeta[T any](data []byte, isBatch *bool, items *[]T) error {
 		if err := json.Unmarshal(data, &item); err != nil {
 			return &JSONRPCError{
 				Code:    ParseError,
-				Message: fmt.Sprintf("Failed to unmarshal single item: %s", err.Error()),
+				Message: "Failed to unmarshal single item: %s" + err.Error(),
 			}
 		}
 		*isBatch = false

@@ -3,8 +3,8 @@ package example
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -605,7 +605,7 @@ func jsonStringsEqual(a, b string) bool {
 }
 
 func getJSONStrings(args ...interface{}) ([]string, error) {
-	var ret []string
+	ret := make([]string, 0, len(args))
 	for _, a := range args {
 		jsonBytes, err := json.Marshal(a)
 		if err != nil {
@@ -619,7 +619,7 @@ func getJSONStrings(args ...interface{}) ([]string, error) {
 func jsonStructEqual(arg1 interface{}, arg2 interface{}) (bool, error) {
 	vals, err := getJSONStrings(arg1, arg2)
 	if err != nil {
-		log.Fatalf("Could not encode struct to json")
+		return false, errors.New("Could not encode struct to json")
 	}
 	return jsonStringsEqual(vals[0], vals[1]), nil
 }

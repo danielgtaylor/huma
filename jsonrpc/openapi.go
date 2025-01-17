@@ -212,9 +212,8 @@ func AddSchemasToAPI(
 	methodMap map[string]IMethodHandler,
 	notificationMap map[string]INotificationHandler,
 ) {
-	// Prepare slices to hold per-method request and response schemas
-	var reqSchemas []*huma.Schema
-	var resSchemas []*huma.Schema
+	reqSchemas := make([]*huma.Schema, 0, len(methodMap)+len(notificationMap))
+	resSchemas := make([]*huma.Schema, 0, len(methodMap))
 
 	// Process method handlers
 	for methodName, handler := range methodMap {

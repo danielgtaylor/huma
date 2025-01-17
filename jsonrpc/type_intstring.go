@@ -2,7 +2,8 @@ package jsonrpc
 
 import (
 	"encoding/json"
-	"fmt"
+
+	"errors"
 
 	"github.com/danielgtaylor/huma/v2"
 )
@@ -16,7 +17,7 @@ func (is *IntString) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
 		// If the input is "null", return an error for non-pointer types
 		// (UnmarshalJSON is called only for non-pointer types in this case)
-		return fmt.Errorf("IntString cannot be null")
+		return errors.New("IntString cannot be null")
 	}
 
 	// Try to unmarshal data into an int
@@ -34,7 +35,7 @@ func (is *IntString) UnmarshalJSON(data []byte) error {
 	}
 
 	// If neither int nor string, return an error
-	return fmt.Errorf("IntString must be a string or an integer")
+	return errors.New("IntString must be a string or an integer")
 }
 
 // MarshalJSON implements the json.Marshaler interface.
@@ -45,7 +46,7 @@ func (is IntString) MarshalJSON() ([]byte, error) {
 	case string:
 		return json.Marshal(v)
 	default:
-		return nil, fmt.Errorf("IntString contains unsupported type")
+		return nil, errors.New("IntString contains unsupported type")
 	}
 }
 
