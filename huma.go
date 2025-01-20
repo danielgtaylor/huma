@@ -697,14 +697,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				return
 			}
 
-			s := splittableString{Raw: value}
-			if p.Explode {
-				u := ctx.URL()
-				s.Splitted = (&u).Query()[p.Name]
-			} else {
-				s.Splitted = strings.Split(value, ",")
-			}
-			pv, err := parseInto(f, s, *p)
+			pv, err := parseInto(ctx, f, value, *p)
 			if err != nil {
 				res.Add(pb, value, err.Error())
 			}
@@ -1291,17 +1284,9 @@ func getParamValue(p paramFieldInfo, ctx Context, cookies map[string]*http.Cooki
 
 var errUnparsable = errors.New("unparsable value")
 
-type splittableString struct {
-	Raw      string
-	Splitted []string
-}
-
-// parseInto converts the string s.Raw into the expected type using the parameter
-// field information p and sets the result on f. If s is to be parsed into a
-// slice of values, then the string encodings of those individual values should
-// be available in s.Splitted.
-func parseInto(f reflect.Value, s splittableString, p paramFieldInfo) (any, error) {
-	value := s.Raw
+// parseInto converts the string value into the expected type using the
+// parameter field information p and sets the result on f.
+func parseInto(ctx Context, f reflect.Value, value string, p paramFieldInfo) (any, error) {
 	// built-in types
 	switch p.Type.Kind() {
 	case reflect.String:
@@ -1336,7 +1321,14 @@ func parseInto(f reflect.Value, s splittableString, p paramFieldInfo) (any, erro
 		f.SetBool(v)
 		return v, nil
 	case reflect.Slice:
-		pv, err := parseSliceInto(f, s.Splitted)
+		var values []string
+		if p.Explode {
+			u := ctx.URL()
+			values = (&u).Query()[p.Name]
+		} else {
+			values = strings.Split(value, ",")
+		}
+		pv, err := parseSliceInto(f, values)
 		if err != nil {
 			if errors.Is(err, errUnparsable) {
 				break
