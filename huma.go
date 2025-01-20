@@ -697,7 +697,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				return
 			}
 
-			pv, err := parseInto(ctx, f, value, *p)
+			pv, err := parseInto(ctx, f, value, nil, *p)
 			if err != nil {
 				res.Add(pb, value, err.Error())
 			}
@@ -758,8 +758,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 									res.Add(pb, value, "expected at most one value, but received multiple values")
 									return
 								}
-								s := splittableString{Raw: value[0], Splitted: value}
-								pv, err := parseInto(f, s, *p)
+								pv, err := parseInto(ctx, f, value[0], value, *p)
 								if err != nil {
 									res.Add(pb, value, err.Error())
 								}
@@ -1286,7 +1285,7 @@ var errUnparsable = errors.New("unparsable value")
 
 // parseInto converts the string value into the expected type using the
 // parameter field information p and sets the result on f.
-func parseInto(ctx Context, f reflect.Value, value string, p paramFieldInfo) (any, error) {
+func parseInto(ctx Context, f reflect.Value, value string, preSplit []string, p paramFieldInfo) (any, error) {
 	// built-in types
 	switch p.Type.Kind() {
 	case reflect.String:
@@ -1322,11 +1321,15 @@ func parseInto(ctx Context, f reflect.Value, value string, p paramFieldInfo) (an
 		return v, nil
 	case reflect.Slice:
 		var values []string
-		if p.Explode {
-			u := ctx.URL()
-			values = (&u).Query()[p.Name]
+		if preSplit != nil {
+			values = preSplit
 		} else {
-			values = strings.Split(value, ",")
+			if p.Explode {
+				u := ctx.URL()
+				values = (&u).Query()[p.Name]
+			} else {
+				values = strings.Split(value, ",")
+			}
 		}
 		pv, err := parseSliceInto(f, values)
 		if err != nil {
