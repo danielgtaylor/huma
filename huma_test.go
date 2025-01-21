@@ -1471,7 +1471,7 @@ Content of example2.txt.
 			},
 		},
 		{
-			Name: "request-body-multipart-file-decoded-with-formvalues-required",
+			Name: "request-body-multipart-file-decoded-with-formvalue-required",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
 					Method: http.MethodPost,
