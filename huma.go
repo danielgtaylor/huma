@@ -126,7 +126,6 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			pfi.Loc = "header"
 			name = h
 		} else if fo := f.Tag.Get("form"); fo != "" {
-			// TODO: clearify in README that "form" tag is REQUIRED
 			pfi.Loc = "form"
 			name = fo
 		} else if c := f.Tag.Get("cookie"); c != "" {
