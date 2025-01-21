@@ -560,6 +560,78 @@ func TestFeatures(t *testing.T) {
 			URL:    "/test",
 		},
 		{
+			Name: "param-deepObject-struct",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Test struct {
+						Int     int     `json:"int"`
+						Uint    uint    `json:"uint"`
+						Float   float64 `json:"float"`
+						Bool    bool    `json:"bool"`
+						String  string  `json:"string"`
+						Default string  `json:"default,omitempty" default:"foo"`
+					} `query:"test,deepObject"`
+				}) (*struct{}, error) {
+					assert.Equal(t, i.Test.Int, 1)
+					assert.Equal(t, i.Test.Uint, uint(12))
+					assert.Equal(t, i.Test.Float, 123.0)
+					assert.Equal(t, i.Test.Bool, true)
+					assert.Equal(t, i.Test.String, "foo")
+					assert.Equal(t, i.Test.Default, "foo")
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?test[int]=1&test[uint]=12&test[float]=123.0&test[bool]=true&test[string]=foo",
+		},
+		{
+			Name: "param-deepObject-map",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Test map[string]string `query:"test,deepObject"`
+				}) (*struct{}, error) {
+					assert.Equal(t, i.Test["a"], "foo_a")
+					assert.Equal(t, i.Test["b"], "foo_b")
+					assert.Equal(t, i.Test["c"], "foo_c")
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?test[a]=foo_a&test[b]=foo_b&test[c]=foo_c",
+		},
+		{
+			Name: "param-deepObject-error",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Test struct {
+						Int   int     `json:"int"`
+						Uint  uint    `json:"uint"`
+						Float float64 `json:"float"`
+						Bool  bool    `json:"bool"`
+					} `query:"test,deepObject"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?test[int]=a&test[uint]=a&test[float]=a&test[bool]=a",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "invalid integer")
+				assert.Contains(t, resp.Body.String(), "invalid float")
+				assert.Contains(t, resp.Body.String(), "invalid boolean")
+			},
+		},
+		{
 			Name: "request-body",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
