@@ -69,6 +69,9 @@ func NewHumaAPI() huma.API {
 	// ...
 	api := humachi.New(router, config)
 	api.UseMiddleware(MyMiddleware)
+
+	// Register the handler after UseMiddleware() for the middleware to take effect
+	huma.Get(api, "/greeting/{name}", handler.GreetingGetHandler)
 }
 ```
 
