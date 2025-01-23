@@ -575,12 +575,12 @@ func TestFeatures(t *testing.T) {
 						Default string  `json:"default,omitempty" default:"foo"`
 					} `query:"test,deepObject"`
 				}) (*struct{}, error) {
-					assert.Equal(t, i.Test.Int, 1)
-					assert.Equal(t, i.Test.Uint, uint(12))
-					assert.Equal(t, i.Test.Float, 123.0)
-					assert.Equal(t, i.Test.Bool, true)
-					assert.Equal(t, i.Test.String, "foo")
-					assert.Equal(t, i.Test.Default, "foo")
+					assert.Equal(t, 1, i.Test.Int)
+					assert.Equal(t, uint(12), i.Test.Uint)
+					assert.InDelta(t, 123.0, i.Test.Float, 1e-6)
+					assert.True(t, i.Test.Bool)
+					assert.Equal(t, "foo", i.Test.String)
+					assert.Equal(t, "foo", i.Test.Default)
 					return nil, nil
 				})
 			},
@@ -596,9 +596,9 @@ func TestFeatures(t *testing.T) {
 				}, func(ctx context.Context, i *struct {
 					Test map[string]string `query:"test,deepObject"`
 				}) (*struct{}, error) {
-					assert.Equal(t, i.Test["a"], "foo_a")
-					assert.Equal(t, i.Test["b"], "foo_b")
-					assert.Equal(t, i.Test["c"], "foo_c")
+					assert.Equal(t, "foo_a", i.Test["a"])
+					assert.Equal(t, "foo_b", i.Test["b"])
+					assert.Equal(t, "foo_c", i.Test["c"])
 					return nil, nil
 				})
 			},
