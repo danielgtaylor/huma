@@ -938,9 +938,6 @@ func parseDeepObjectQuery(query url.Values, name string) map[string]string {
 
 func setDeepObjectValue(pb *PathBuffer, res *ValidateResult, f reflect.Value, data map[string]string) map[string]any {
 	t := f.Type()
-	if t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
 	result := make(map[string]any)
 	switch t.Kind() {
 	case reflect.Map:

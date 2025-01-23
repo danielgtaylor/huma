@@ -572,6 +572,7 @@ func TestFeatures(t *testing.T) {
 						Float   float64 `json:"float"`
 						Bool    bool    `json:"bool"`
 						String  string  `json:"string"`
+						Any     any     `json:"any"`
 						Default string  `json:"default,omitempty" default:"foo"`
 					} `query:"test,deepObject"`
 				}) (*struct{}, error) {
@@ -580,12 +581,13 @@ func TestFeatures(t *testing.T) {
 					assert.InDelta(t, 123.0, i.Test.Float, 1e-6)
 					assert.True(t, i.Test.Bool)
 					assert.Equal(t, "foo", i.Test.String)
+					assert.Equal(t, "foo", i.Test.Any)
 					assert.Equal(t, "foo", i.Test.Default)
 					return nil, nil
 				})
 			},
 			Method: http.MethodGet,
-			URL:    "/test?test[int]=1&test[uint]=12&test[float]=123.0&test[bool]=true&test[string]=foo",
+			URL:    "/test?test[int]=1&test[uint]=12&test[float]=123.0&test[bool]=true&test[string]=foo&test[any]=foo",
 		},
 		{
 			Name: "param-deepObject-map",
@@ -606,29 +608,50 @@ func TestFeatures(t *testing.T) {
 			URL:    "/test?test[a]=foo_a&test[b]=foo_b&test[c]=foo_c",
 		},
 		{
-			Name: "param-deepObject-error",
+			Name: "param-deepObject-map-error",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Test map[string]int `query:"test,deepObject"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?test[a]=foo_a",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "invalid integer")
+			},
+		},
+		{
+			Name: "param-deepObject-struct-error",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
 					Path:   "/test",
 				}, func(ctx context.Context, i *struct {
 					Test struct {
-						Int   int     `json:"int"`
-						Uint  uint    `json:"uint"`
-						Float float64 `json:"float"`
-						Bool  bool    `json:"bool"`
+						Int   int       `json:"int"`
+						Uint  uint      `json:"uint"`
+						Float float64   `json:"float"`
+						Bool  bool      `json:"bool"`
+						Date  time.Time `json:"date"`
 					} `query:"test,deepObject"`
 				}) (*struct{}, error) {
 					return nil, nil
 				})
 			},
 			Method: http.MethodGet,
-			URL:    "/test?test[int]=a&test[uint]=a&test[float]=a&test[bool]=a",
+			URL:    "/test?test[int]=a&test[uint]=a&test[float]=a&test[bool]=a&test[date]=a",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
 				assert.Contains(t, resp.Body.String(), "invalid integer")
 				assert.Contains(t, resp.Body.String(), "invalid float")
 				assert.Contains(t, resp.Body.String(), "invalid boolean")
+				assert.Contains(t, resp.Body.String(), "unsupported type")
 			},
 		},
 		{
