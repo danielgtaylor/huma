@@ -417,3 +417,43 @@ func TestMakeOptionalSchemaNestedSchemas(t *testing.T) {
 	assert.Empty(t, optionalNestedSchema.Required)
 	assert.Empty(t, optionalNestedSchema.Properties["nested"].Required)
 }
+
+type findRelativeRessourcePathTest struct {
+	requestPath string
+	putPath     string
+	expected    string
+}
+
+func TestFindRelativeRessourcePath(t *testing.T) {
+	tests := []findRelativeRessourcePathTest{
+		{
+			requestPath: "/things/test",
+			putPath:     "/things/{id}",
+			expected:    "/things/test",
+		},
+		{
+			requestPath: "/api/things/test",
+			putPath:     "/things/{id}",
+			expected:    "/things/test",
+		},
+		{
+			requestPath: "/test",
+			putPath:     "/{id}",
+			expected:    "/test",
+		},
+		{
+			requestPath: "/api/v1/super/things/test",
+			putPath:     "/things/{id}",
+			expected:    "/things/test",
+		},
+		{
+			requestPath: "/api/v1/test",
+			putPath:     "{id}",
+			expected:    "/api/v1/test", // we check that we falback to the request path if unsupported
+		},
+	}
+
+	for _, test := range tests {
+		assert.Equal(t, test.expected, findRelativeRessourcePath(test.requestPath, test.putPath))
+	}
+}
