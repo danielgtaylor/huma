@@ -446,6 +446,11 @@ func TestFindRelativeResourcePath(t *testing.T) {
 			putPath:     "/things/{id}",
 			expected:    "/things/test",
 		},
+		{
+			requestPath: "/api/v1/test",
+			putPath:     "{id}",
+			expected:    "/api/v1/test", // we check that we falback to the request path if unsupported
+		},
 	}
 
 	for _, test := range tests {
