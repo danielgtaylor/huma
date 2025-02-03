@@ -696,6 +696,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			pv, err := parseInto(ctx, f, value, *p)
 			if err != nil {
 				res.Add(pb, value, err.Error())
+				return
 			}
 
 			if !op.SkipValidateParams {
