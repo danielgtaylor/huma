@@ -467,6 +467,7 @@ func TestFeatures(t *testing.T) {
 					QueryInts32   []int32   `query:"ints32"`
 					QueryInts64   []int64   `query:"ints64"`
 					QueryUints    []uint    `query:"uints"`
+					QueryUints8   []uint8   `query:"uints8"`
 					QueryUints16  []uint16  `query:"uints16"`
 					QueryUints32  []uint32  `query:"uints32"`
 					QueryUints64  []uint64  `query:"uints64"`
@@ -479,7 +480,7 @@ func TestFeatures(t *testing.T) {
 				})
 			},
 			Method: http.MethodGet,
-			URL:    "/test-params/bad/not-a-uuid?int=bad&float=bad&before=bad&date=bad&url=:&uint=bad&bool=bad&ints=bad&ints8=bad&ints16=bad&ints32=bad&ints64=bad&uints=bad&uints16=bad&uints32=bad&uints64=bad&floats32=bad&floats64=bad",
+			URL:    "/test-params/bad/not-a-uuid?int=bad&float=bad&before=bad&date=bad&url=:&uint=bad&bool=bad&ints=bad&ints8=bad&ints16=bad&ints32=bad&ints64=bad&uints=bad&uints8=bad&uints16=bad&uints32=bad&uints64=bad&floats32=bad&floats64=bad",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
 
@@ -489,7 +490,7 @@ func TestFeatures(t *testing.T) {
 				err := json.Unmarshal(resp.Body.Bytes(), &body)
 				require.NoError(t, err)
 
-				assert.Len(t, body.Errors, 22)
+				assert.Len(t, body.Errors, 23)
 				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "path.int", Value: "bad"})
 				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid value: invalid UUID length: 10", Location: "path.uuid", Value: "not-a-uuid"})
 				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.int", Value: "bad"})
@@ -505,6 +506,7 @@ func TestFeatures(t *testing.T) {
 				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.ints32", Value: "bad"})
 				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.ints64", Value: "bad"})
 				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.uints", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.uints8", Value: "bad"})
 				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.uints16", Value: "bad"})
 				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.uints32", Value: "bad"})
 				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.uints64", Value: "bad"})

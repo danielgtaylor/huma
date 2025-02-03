@@ -1414,6 +1414,20 @@ func parseSliceInto(f reflect.Value, values []string) (any, error) {
 		f.Set(reflect.ValueOf(vs))
 		return vs, nil
 
+	case reflect.Uint8:
+		vs, err := parseArrElement(values, func(s string) (uint8, error) {
+			val, err := strconv.ParseUint(s, 10, 8)
+			if err != nil {
+				return 0, err
+			}
+			return uint8(val), nil
+		})
+		if err != nil {
+			return nil, errors.New("invalid integer")
+		}
+		f.Set(reflect.ValueOf(vs))
+		return vs, nil
+
 	case reflect.Uint16:
 		vs, err := parseArrElement(values, func(s string) (uint16, error) {
 			val, err := strconv.ParseUint(s, 10, 16)
