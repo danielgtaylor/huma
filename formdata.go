@@ -22,6 +22,10 @@ type MultipartFormFiles[T any] struct {
 	data *T
 }
 
+func (m *MultipartFormFiles[T]) Data() *T {
+	return m.data
+}
+
 type MimeTypeValidator struct {
 	accept []string
 }
@@ -85,13 +89,9 @@ func (v MimeTypeValidator) Validate(fh *multipart.FileHeader, location string) (
 	}
 }
 
-func (m *MultipartFormFiles[T]) Data() *T {
-	return m.data
-}
-
 // Decodes multipart.Form data into *T, returning []*ErrorDetail if any
 // Schema is used to check for validation constraints
-func (m *MultipartFormFiles[T]) Decode(opMediaType *MediaType) []error {
+func (m *MultipartFormFiles[T]) Decode(opMediaType *MediaType, formValueParser func(val reflect.Value)) []error {
 	var (
 		dataType = reflect.TypeOf(m.data).Elem()
 		value    = reflect.New(dataType)
@@ -120,11 +120,9 @@ func (m *MultipartFormFiles[T]) Decode(opMediaType *MediaType) []error {
 				continue
 			}
 			field.Set(reflect.ValueOf(files))
-
-		default:
-			continue
 		}
 	}
+	formValueParser(value)
 	m.data = value.Interface().(*T)
 	return errors
 }
@@ -200,7 +198,7 @@ func formDataFieldName(f reflect.StructField) string {
 	return name
 }
 
-func multiPartFormFileSchema(t reflect.Type) *Schema {
+func multiPartFormFileSchema(r Registry, t reflect.Type) *Schema {
 	nFields := t.NumField()
 	schema := &Schema{
 		Type:        "object",
@@ -221,8 +219,9 @@ func multiPartFormFileSchema(t reflect.Type) *Schema {
 				Items: multiPartFileSchema(f),
 			}
 		default:
+			schema.Properties[name] = SchemaFromField(r, f, name)
+
 			// Should we panic if [T] struct defines fields with unsupported types ?
-			continue
 		}
 
 		if _, ok := f.Tag.Lookup("required"); ok && boolTag(f, "required", false) {
@@ -249,9 +248,13 @@ func multiPartContentEncoding(t reflect.Type) map[string]*Encoding {
 	for i := 0; i < nFields; i++ {
 		f := t.Field(i)
 		name := formDataFieldName(f)
-		contentType := f.Tag.Get("contentType")
-		if contentType == "" {
-			contentType = "application/octet-stream"
+
+		contentType := "text/plain"
+		if f.Type == reflect.TypeOf(FormFile{}) || f.Type == reflect.TypeOf([]FormFile{}) {
+			contentType = f.Tag.Get("contentType")
+			if contentType == "" {
+				contentType = "application/octet-stream"
+			}
 		}
 		encoding[name] = &Encoding{
 			ContentType: contentType,
