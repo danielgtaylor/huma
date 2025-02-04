@@ -699,6 +699,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			pv, err := parseInto(ctx, f, value, nil, *p)
 			if err != nil {
 				res.Add(pb, value, err.Error())
+				return
 			}
 
 			if !op.SkipValidateParams {
@@ -1467,6 +1468,20 @@ func parseSliceInto(f reflect.Value, values []string) (any, error) {
 				return 0, err
 			}
 			return uint(val), nil
+		})
+		if err != nil {
+			return nil, errors.New("invalid integer")
+		}
+		f.Set(reflect.ValueOf(vs))
+		return vs, nil
+
+	case reflect.Uint8:
+		vs, err := parseArrElement(values, func(s string) (uint8, error) {
+			val, err := strconv.ParseUint(s, 10, 8)
+			if err != nil {
+				return 0, err
+			}
+			return uint8(val), nil
 		})
 		if err != nil {
 			return nil, errors.New("invalid integer")
