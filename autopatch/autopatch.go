@@ -181,8 +181,10 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 			return
 		}
 
+		resourcePath := findRelativeResourcePath(ctx.URL().Path, put.Path)
+
 		// Perform the get!
-		origReq, err := http.NewRequest(http.MethodGet, ctx.URL().Path, nil)
+		origReq, err := http.NewRequest(http.MethodGet, resourcePath, nil)
 		if err != nil {
 			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to get resource", err)
 			return
@@ -281,7 +283,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 		}
 
 		// Write the updated data back to the server!
-		putReq, err := http.NewRequest(http.MethodPut, ctx.URL().Path, bytes.NewReader(patched))
+		putReq, err := http.NewRequest(http.MethodPut, resourcePath, bytes.NewReader(patched))
 		if err != nil {
 			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to put modified resource", err)
 			return
@@ -399,4 +401,33 @@ func makeOptionalSchema(s *huma.Schema) *huma.Schema {
 	optionalSchema.Required = nil
 
 	return optionalSchema
+}
+
+// This function help to find the relative path of the resource to patch
+// this allow to handle potential prefix in the path
+// for example if the requestPath is /api/v1/user/1 and the put path is /user/{id}
+// the function will return /user/1
+func findRelativeResourcePath(requestPath string, putPath string) string {
+	putPathParts := strings.Split(putPath, "/")
+	// if the path is not deep enough, we return the original path
+	if len(putPathParts) < 2 {
+		return requestPath
+	}
+	wantedPrefix := putPathParts[1]
+	workingPath := requestPath
+	for !strings.HasPrefix(workingPath, wantedPrefix) {
+		// we find the next /
+		slashIndex := strings.Index(workingPath, "/")
+		// if we don't have a / anymore, we return the original path
+		if slashIndex == -1 {
+			return requestPath
+		}
+		// we remove till the next /
+		workingPath = workingPath[slashIndex+1:]
+		// if we reach the end of the path, we return the original path
+		if workingPath == "" {
+			return requestPath
+		}
+	}
+	return "/" + workingPath
 }
