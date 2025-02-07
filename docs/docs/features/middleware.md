@@ -98,6 +98,20 @@ func MyMiddleware(ctx huma.Context, next func(huma.Context)) {
 }
 ```
 
+Then you can get the value in the handler context:
+
+``` go title="handler.go"
+huma.Get(api, "/greeting/{name}", func(ctx context.Context, input *struct{
+		Name string `path:"name" maxLength:"30" example:"world" doc:"Name to greet"`
+	}) (*GreetingOutput, error) {
+		// "some-value"
+		ctx.Value("some-key")
+		resp := &GreetingOutput{}
+		resp.Body.Message = fmt.Sprintf("Hello, %s!", input.Name)
+		return resp, nil
+	})
+```
+
 ### Cookies
 
 You can use the `huma.Context` interface along with [`huma.ReadCookie`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ReadCookie) or [`huma.ReadCookies`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ReadCookies) to access cookies from middleware, and can also write cookies by adding `Set-Cookie` headers in the response:

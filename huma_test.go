@@ -452,14 +452,14 @@ func TestFeatures(t *testing.T) {
 					Method: http.MethodGet,
 					Path:   "/test-params/{int}/{uuid}",
 				}, func(ctx context.Context, input *struct {
-					PathInt       string    `path:"int"`
+					PathInt       int       `path:"int"`
 					PathUUID      UUID      `path:"uuid"`
 					QueryInt      int       `query:"int"`
 					QueryFloat    float32   `query:"float"`
 					QueryBefore   time.Time `query:"before"`
 					QueryDate     time.Time `query:"date" timeFormat:"2006-01-02"`
 					QueryURL      url.URL   `query:"url"`
-					QueryUint     uint32    `query:"uint"`
+					QueryUint     uint      `query:"uint"`
 					QueryBool     bool      `query:"bool"`
 					QueryInts     []int     `query:"ints"`
 					QueryInts8    []int8    `query:"ints8"`
@@ -467,6 +467,7 @@ func TestFeatures(t *testing.T) {
 					QueryInts32   []int32   `query:"ints32"`
 					QueryInts64   []int64   `query:"ints64"`
 					QueryUints    []uint    `query:"uints"`
+					QueryUints8   []uint8   `query:"uints8"`
 					QueryUints16  []uint16  `query:"uints16"`
 					QueryUints32  []uint32  `query:"uints32"`
 					QueryUints64  []uint64  `query:"uints64"`
@@ -479,30 +480,40 @@ func TestFeatures(t *testing.T) {
 				})
 			},
 			Method: http.MethodGet,
-			URL:    "/test-params/bad/not-a-uuid?int=bad&float=bad&before=bad&date=bad&url=:&uint=bad&bool=bad&ints=bad&ints8=bad&ints16=bad&ints32=bad&ints64=bad&uints=bad&uints16=bad&uints32=bad&uints64=bad&floats32=bad&floats64=bad",
+			URL:    "/test-params/bad/not-a-uuid?int=bad&float=bad&before=bad&date=bad&url=:&uint=bad&bool=bad&ints=bad&ints8=bad&ints16=bad&ints32=bad&ints64=bad&uints=bad&uints8=bad&uints16=bad&uints32=bad&uints64=bad&floats32=bad&floats64=bad",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
 
-				assert.Contains(t, resp.Body.String(), "invalid integer")
-				assert.Contains(t, resp.Body.String(), "invalid value: invalid UUID length: 10")
-				assert.Contains(t, resp.Body.String(), "invalid float")
-				assert.Contains(t, resp.Body.String(), "invalid date/time")
-				assert.Contains(t, resp.Body.String(), "invalid url.URL")
-				assert.Contains(t, resp.Body.String(), "invalid bool")
-				assert.Contains(t, resp.Body.String(), "required query parameter is missing")
-				assert.Contains(t, resp.Body.String(), "required header parameter is missing")
+				var body struct {
+					Errors []huma.ErrorDetail `json:"errors"`
+				}
+				err := json.Unmarshal(resp.Body.Bytes(), &body)
+				require.NoError(t, err)
 
-				assert.Contains(t, resp.Body.String(), "query.ints")
-				assert.Contains(t, resp.Body.String(), "query.ints8")
-				assert.Contains(t, resp.Body.String(), "query.ints16")
-				assert.Contains(t, resp.Body.String(), "query.ints32")
-				assert.Contains(t, resp.Body.String(), "query.ints64")
-				assert.Contains(t, resp.Body.String(), "query.uints")
-				assert.Contains(t, resp.Body.String(), "query.uints16")
-				assert.Contains(t, resp.Body.String(), "query.uints32")
-				assert.Contains(t, resp.Body.String(), "query.uints64")
-				assert.Contains(t, resp.Body.String(), "query.floats32")
-				assert.Contains(t, resp.Body.String(), "query.floats64")
+				assert.Len(t, body.Errors, 23)
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "path.int", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid value: invalid UUID length: 10", Location: "path.uuid", Value: "not-a-uuid"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.int", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid float", Location: "query.float", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid date/time for format 2006-01-02T15:04:05.999999999Z07:00", Location: "query.before", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid date/time for format 2006-01-02", Location: "query.date", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid url.URL value", Location: "query.url", Value: ":"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.uint", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid boolean", Location: "query.bool", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.ints", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.ints8", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.ints16", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.ints32", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.ints64", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.uints", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.uints8", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.uints16", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.uints32", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid integer", Location: "query.uints64", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid floating value", Location: "query.floats32", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "invalid floating value", Location: "query.floats64", Value: "bad"})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "required query parameter is missing", Location: "query.req", Value: ""})
+				assert.Contains(t, body.Errors, huma.ErrorDetail{Message: "required header parameter is missing", Location: "header.req", Value: ""})
 			},
 		},
 		{
@@ -1468,6 +1479,171 @@ Content of example2.txt.
 			Body:    `invalid`,
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+			},
+		},
+		{
+			Name: "request-body-multipart-file-decoded-with-formvalue-required",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						HelloWorld huma.FormFile `form:"file" contentType:"text/plain"`
+						MyString   string        `form:"myString" required:"true"`
+						MyStrings  []string      `form:"myStrings" required:"true"`
+						MyInt      int           `form:"myInt" required:"true"`
+						MyInts     []int         `form:"myInts" required:"true"`
+					}]
+				}) (*struct{}, error) {
+					fileData := input.RawBody.Data()
+
+					assert.Equal(t, "text/plain", fileData.HelloWorld.ContentType)
+					assert.Equal(t, "test.txt", fileData.HelloWorld.Filename)
+					assert.Equal(t, len("Hello, World!"), int(fileData.HelloWorld.Size))
+					assert.True(t, fileData.HelloWorld.IsSet)
+					b, err := io.ReadAll(fileData.HelloWorld)
+					require.NoError(t, err)
+					assert.Equal(t, "Hello, World!", string(b))
+
+					assert.Equal(t, "Some string", fileData.MyString)
+					assert.Equal(t, []string{"Some other string"}, fileData.MyStrings)
+					assert.Equal(t, 42, fileData.MyInt)
+					assert.Equal(t, []int{1, 2}, fileData.MyInts)
+					return nil, nil
+				})
+
+				// Ensure OpenAPI spec is listed as a multipart/form-data upload with
+				// the appropriate schema.
+				mpContent := api.OpenAPI().Paths["/upload"].Post.RequestBody.Content["multipart/form-data"]
+				assert.Equal(t, "text/plain", mpContent.Encoding["file"].ContentType)
+				assert.Equal(t, "text/plain", mpContent.Encoding["myString"].ContentType)
+				assert.Equal(t, "string", mpContent.Schema.Properties["myString"].Type)
+				assert.Contains(t, mpContent.Schema.Required, "myString")
+				assert.Equal(t, "array", mpContent.Schema.Properties["myStrings"].Type)
+				assert.Equal(t, "string", mpContent.Schema.Properties["myStrings"].Items.Type)
+				assert.Contains(t, mpContent.Schema.Required, "myStrings")
+				assert.Equal(t, "integer", mpContent.Schema.Properties["myInt"].Type)
+				assert.Contains(t, mpContent.Schema.Required, "myInt")
+				assert.Equal(t, "array", mpContent.Schema.Properties["myInts"].Type)
+				assert.Equal(t, "integer", mpContent.Schema.Properties["myInts"].Items.Type)
+				assert.Contains(t, mpContent.Schema.Required, "myInts")
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+Hello, World!
+--SimpleBoundary
+Content-Disposition: form-data; name="myString"
+Content-Type: text/plain
+
+Some string
+--SimpleBoundary
+Content-Disposition: form-data; name="myStrings"
+Content-Type: text/plain
+
+Some other string
+--SimpleBoundary
+Content-Disposition: form-data; name="myInt"
+Content-Type: text/plain
+
+42
+--SimpleBoundary
+Content-Disposition: form-data; name="myInts"
+Content-Type: text/plain
+
+1
+--SimpleBoundary
+Content-Disposition: form-data; name="myInts"
+Content-Type: text/plain
+
+2
+--SimpleBoundary--`,
+		},
+		{
+			Name: "request-body-multipart-file-decoded-with-formvalue-required-missing",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						MyString string `form:"myString" required:"true"`
+						MyInt    int    `form:"myInt" required:"true"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body:    `--SimpleBoundary--`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				if ok := assert.Equal(t, http.StatusUnprocessableEntity, resp.Code); ok {
+					var errors huma.ErrorModel
+					err := json.Unmarshal(resp.Body.Bytes(), &errors)
+					require.NoError(t, err)
+					assert.Equal(t, "form.myString", errors.Errors[0].Location)
+					assert.Equal(t, "form.myInt", errors.Errors[1].Location)
+				}
+			},
+		}, {
+			Name: "request-body-multipart-file-decoded-with-formvalue-invalid",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						MyString   string `form:"myString" maxLength:"3"`
+						MyInt      int    `form:"myInt" minimum:"500"`
+						MyOtherInt int    `form:"myOtherInt"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="myString"
+Content-Type: text/plain
+
+Your favorite sender
+--SimpleBoundary
+Content-Disposition: form-data; name="myInt"
+Content-Type: text/plain
+
+42
+--SimpleBoundary
+Content-Disposition: form-data; name="myOtherInt"
+Content-Type: text/plain
+
+1
+--SimpleBoundary
+Content-Disposition: form-data; name="myOtherInt"
+Content-Type: text/plain
+
+2
+--SimpleBoundary--`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				if ok := assert.Equal(t, http.StatusUnprocessableEntity, resp.Code); ok {
+					var errors huma.ErrorModel
+					err := json.Unmarshal(resp.Body.Bytes(), &errors)
+					require.NoError(t, err)
+					assert.Equal(t, "form.myString", errors.Errors[0].Location)
+					assert.Contains(t, errors.Errors[0].Message, "expected length \u003c= 3")
+					assert.Equal(t, "form.myInt", errors.Errors[1].Location)
+					assert.Contains(t, errors.Errors[1].Message, "expected number \u003e= 500")
+					assert.Equal(t, "form.myOtherInt", errors.Errors[2].Location)
+					assert.Contains(t, errors.Errors[2].Message, "expected at most one value, but received multiple values")
+				}
 			},
 		},
 		{
