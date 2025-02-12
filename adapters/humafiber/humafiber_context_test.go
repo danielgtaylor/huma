@@ -232,7 +232,7 @@ func TestHumaFiber(t *testing.T) {
 	retries := 10
 	simulator := SimulateAccessToContextOutsideHandler(ctx, &wait, timeout, retries)
 
-	ln, err := net.Listen("tcp4", ":0") //nolint:gosec
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
 	require.NoError(t, err)
 	port := ln.Addr().(*net.TCPAddr).Port
 	require.NotZero(t, port)
