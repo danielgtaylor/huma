@@ -13,6 +13,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -84,6 +85,23 @@ type MyTextUnmarshaler struct {
 func (m *MyTextUnmarshaler) UnmarshalText(text []byte) error {
 	m.value = "Hello, World!"
 	return nil
+}
+
+type OptionalParam[T any] struct {
+	Value T
+	IsSet bool
+}
+
+func (o OptionalParam[T]) Schema(r huma.Registry) *huma.Schema {
+	return huma.SchemaFromType(r, reflect.TypeOf(o.Value))
+}
+
+func (o *OptionalParam[T]) Receiver() reflect.Value {
+	return reflect.ValueOf(o).Elem().Field(0)
+}
+
+func (o *OptionalParam[T]) OnParamSet(isSet bool, parsed any) {
+	o.IsSet = isSet
 }
 
 func TestFeatures(t *testing.T) {
@@ -569,6 +587,23 @@ func TestFeatures(t *testing.T) {
 			},
 			Method: http.MethodGet,
 			URL:    "/test",
+		},
+		{
+			Name: "parse-with-param-receiver",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Param OptionalParam[int] `query:"param"`
+				}) (*struct{}, error) {
+					assert.Equal(t, 42, i.Param.Value)
+					assert.True(t, i.Param.IsSet)
+					return nil, nil
+				})
+			},
+			URL:    "/test?param=42",
+			Method: http.MethodGet,
 		},
 		{
 			Name: "request-body",
