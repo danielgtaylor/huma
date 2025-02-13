@@ -20,7 +20,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: v1.60.1
-      - run: go test -coverprofile=coverage.txt -covermode=atomic ./...
+      - run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
       - uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
