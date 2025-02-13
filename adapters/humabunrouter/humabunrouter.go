@@ -34,6 +34,10 @@ func (c *bunContext) Operation() *huma.Operation {
 	return c.op
 }
 
+func (c *bunContext) WrappedContext() interface{} {
+	return c.r
+}
+
 func (c *bunContext) Context() context.Context {
 	return c.r.Context()
 }

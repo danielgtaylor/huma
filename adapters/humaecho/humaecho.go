@@ -31,6 +31,10 @@ func (c *echoCtx) Operation() *huma.Operation {
 	return c.op
 }
 
+func (c *echoCtx) WrappedContext() interface{} {
+	return c.orig
+}
+
 func (c *echoCtx) Context() context.Context {
 	return c.orig.Request().Context()
 }
