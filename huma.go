@@ -1069,16 +1069,17 @@ func setRequestBodyFromBody(op *Operation, registry Registry, fBody reflect.Stru
 	if c := fBody.Tag.Get("contentType"); c != "" {
 		contentType = c
 	}
-	hint := getHint(inputType, fBody.Name, op.OperationID+"Request")
-	if nameHint := fBody.Tag.Get("nameHint"); nameHint != "" {
-		hint = nameHint
-	}
-	s := SchemaFromField(registry, fBody, hint)
 	if op.RequestBody.Content[contentType] == nil {
 		op.RequestBody.Content[contentType] = &MediaType{}
 	}
-	op.RequestBody.Content[contentType].Schema = s
-
+	if op.RequestBody.Content[contentType].Schema == nil {
+		hint := getHint(inputType, fBody.Name, op.OperationID+"Request")
+		if nameHint := fBody.Tag.Get("nameHint"); nameHint != "" {
+			hint = nameHint
+		}
+		s := SchemaFromField(registry, fBody, hint)
+		op.RequestBody.Content[contentType].Schema = s
+	}
 }
 
 type rawBodyType int
