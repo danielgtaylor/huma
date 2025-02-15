@@ -102,6 +102,10 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			Type: f.Type,
 		}
 
+		if reflect.PointerTo(f.Type).Implements(reflect.TypeFor[ParamWrapper]()) {
+			pfi.Type = reflect.New(f.Type).Interface().(ParamWrapper).Receiver().Type()
+		}
+
 		if def := f.Tag.Get("default"); def != "" {
 			pfi.Default = def
 		}
@@ -696,10 +700,19 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				return
 			}
 
-			pv, err := parseInto(ctx, f, value, nil, *p)
+			var receiver = f
+			if f.Addr().Type().Implements(reflect.TypeFor[ParamWrapper]()) {
+				receiver = f.Addr().Interface().(ParamWrapper).Receiver()
+			}
+
+			pv, err := parseInto(ctx, receiver, value, nil, *p)
 			if err != nil {
 				res.Add(pb, value, err.Error())
 				return
+			}
+
+			if f.Addr().Type().Implements(reflect.TypeFor[ParamReactor]()) {
+				f.Addr().Interface().(ParamReactor).OnParamSet(value != "", pv)
 			}
 
 			if !op.SkipValidateParams {
@@ -950,6 +963,38 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			ctx.SetStatus(status)
 		}
 	})))
+}
+
+// ParamWrapper is an interface that can be implemented by a wrapping type
+// to expose a field into which request parameters may be parsed.
+// Must have pointer receiver.
+// Example:
+//
+//	type OptionalParam[T any] struct {
+//		Value T
+//		IsSet bool
+//	}
+//	func (o *OptionalParam[T]) Receiver() reflect.Value {
+//		return reflect.ValueOf(o).Elem().Field(0)
+//	}
+type ParamWrapper interface {
+	Receiver() reflect.Value
+}
+
+// ParamReactor is an interface that can be implemented to react to request
+// parameters being set on the field. Must have pointer receiver.
+// Intended to be combined with ParamWrapper interface.
+//
+// First argument is a boolean indicating if the parameter was set in the request.
+// Second argument is the parsed value from Huma.
+//
+// Example:
+//
+//	func (o *OptionalParam[T]) OnParamSet(isSet bool, parsed any) {
+//		 o.IsSet = isSet
+//	}
+type ParamReactor interface {
+	OnParamSet(isSet bool, parsed any)
 }
 
 // initResponses initializes Responses if it was unset.
