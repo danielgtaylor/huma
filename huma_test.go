@@ -655,11 +655,6 @@ func TestFeatures(t *testing.T) {
 		{
 			Name: "request-body-examples",
 			Register: func(t *testing.T, api huma.API) {
-				schema := &huma.Schema{
-					Type:       huma.TypeObject,
-					Properties: map[string]*huma.Schema{"name": {Type: huma.TypeString}},
-				}
-
 				huma.Register(api, huma.Operation{
 					Method: http.MethodPut,
 					Path:   "/body",
@@ -667,7 +662,6 @@ func TestFeatures(t *testing.T) {
 						Description: "A description",
 						Content: map[string]*huma.MediaType{
 							"application/json": {
-								Schema: schema,
 								Examples: map[string]*huma.Example{
 									"Example 1": {
 										Summary: "Example summary",
@@ -884,6 +878,40 @@ func TestFeatures(t *testing.T) {
 					return nil, nil
 				})
 				assert.Equal(t, "#/components/schemas/ANameHint", api.OpenAPI().Paths["/body"].Put.RequestBody.Content["application/json"].Schema.Ref)
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   `{"name": "Name"}`,
+		},
+		{
+			Name: "request-body-custom-schema",
+			Register: func(t *testing.T, api huma.API) {
+				api.OpenAPI().Components.Schemas.Map()["Dummy"] = &huma.Schema{
+					Type: huma.TypeObject,
+					Properties: map[string]*huma.Schema{
+						"name": {Type: huma.TypeString},
+					},
+				}
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+					RequestBody: &huma.RequestBody{
+						Content: map[string]*huma.MediaType{
+							"application/json": {
+								Schema: &huma.Schema{
+									Ref: "#/components/schemas/Dummy",
+								},
+							},
+						},
+					},
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name string `json:"name"`
+					}
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+				assert.Equal(t, "#/components/schemas/Dummy", api.OpenAPI().Paths["/body"].Put.RequestBody.Content["application/json"].Schema.Ref)
 			},
 			Method: http.MethodPut,
 			URL:    "/body",
