@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"strings"
 )
 
 type schemaField struct {
@@ -49,7 +50,7 @@ func NewSchemaLinkTransformer(prefix, schemasPath string) *SchemaLinkTransformer
 }
 
 func (t *SchemaLinkTransformer) addSchemaField(oapi *OpenAPI, content *MediaType) bool {
-	if content == nil || content.Schema == nil || content.Schema.Ref == "" {
+	if content == nil || content.Schema == nil || content.Schema.Ref == "" || !strings.HasPrefix(content.Schema.Ref, "#/") {
 		return true
 	}
 
