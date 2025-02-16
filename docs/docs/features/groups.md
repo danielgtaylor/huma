@@ -39,7 +39,7 @@ Middleware functions are run before each operation handler in the group. They ca
 ```go
 grp.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
 	// Do something before the operation runs
-	return next(ctx, input)
+	next(ctx)
 })
 ```
 
