@@ -100,7 +100,7 @@ func MyMiddleware(ctx huma.Context, next func(huma.Context)) {
 
 Then you can get the value in the handler context:
 
-``` go title="handler.go"
+```go title="handler.go"
 huma.Get(api, "/greeting/{name}", func(ctx context.Context, input *struct{
 		Name string `path:"name" maxLength:"30" example:"world" doc:"Name to greet"`
 	}) (*GreetingOutput, error) {
@@ -201,7 +201,7 @@ It's also possible for global middleware to run only for certain paths by checki
 
 -   Reference
     -   [`huma.Context`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Context) a router-agnostic request/response context
-    -   [`huma.Middlewares`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Middlewares) the API instance
+    -   [`huma.Middlewares`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Middlewares) list of middleware
     -   [`huma.ReadCookie`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ReadCookie) reads a named cookie from a request
     -   [`huma.ReadCookies`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ReadCookies) reads cookies from a request
     -   [`huma.WriteErr`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#WriteErr) function to write error responses
