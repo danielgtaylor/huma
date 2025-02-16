@@ -2145,6 +2145,45 @@ Content-Type: text/plain
 			},
 		},
 		{
+			Name: "response-external-schema",
+			Register: func(t *testing.T, api huma.API) {
+				type Resp struct {
+					Body struct {
+						Greeting string `json:"greeting"`
+					}
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/response",
+					Responses: map[string]*huma.Response{
+						"200": {
+							Description: "Success",
+							Content: map[string]*huma.MediaType{
+								"application/json": {
+									Schema: &huma.Schema{
+										// Using an external schema should not break.
+										// https://github.com/danielgtaylor/huma/issues/703
+										Ref: "http://example.com/schemas/foo.json",
+									},
+								},
+							},
+						},
+					},
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					resp := &Resp{}
+					resp.Body.Greeting = "Hello, world!"
+					return resp, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/response",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				assert.JSONEq(t, `{"greeting":"Hello, world!"}`, resp.Body.String())
+			},
+		},
+		{
 			// Simulate a request with a body that came from another call, which
 			// includes the `$schema` field. It should be allowed to be passed
 			// to the new operation as input without modification.
