@@ -2,7 +2,7 @@ package huma_test
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net/http"
 	"testing"
 
@@ -87,7 +87,7 @@ type FailingTransformAPI struct {
 }
 
 func (a *FailingTransformAPI) Transform(ctx huma.Context, status string, v any) (any, error) {
-	return nil, fmt.Errorf("whoops")
+	return nil, errors.New("whoops")
 }
 
 func TestGroupTransformUnderlyingError(t *testing.T) {
@@ -112,7 +112,7 @@ func TestGroupTransformError(t *testing.T) {
 	grp := huma.NewGroup(api, "/v1")
 
 	grp.UseTransformer(func(ctx huma.Context, status string, v any) (any, error) {
-		return v, fmt.Errorf("whoops")
+		return v, errors.New("whoops")
 	})
 
 	huma.Get(grp, "/users", func(ctx context.Context, input *struct{}) (*struct {
