@@ -82,6 +82,8 @@ type StreamResponse struct {
 	Body func(ctx Context)
 }
 
+const styleDeepObject = "deepObject"
+
 type paramFieldInfo struct {
 	Type       reflect.Type
 	Name       string
@@ -90,6 +92,7 @@ type paramFieldInfo struct {
 	Default    string
 	TimeFormat string
 	Explode    bool
+	Style      string
 	Schema     *Schema
 }
 
@@ -124,6 +127,9 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			// easier if we use comma-separated values, so we disable explode by default.
 			if slices.Contains(split[1:], "explode") {
 				pfi.Explode = true
+			}
+			if slices.Contains(split[1:], styleDeepObject) {
+				pfi.Style = styleDeepObject
 			}
 			explode = &pfi.Explode
 		} else if h := f.Tag.Get("header"); h != "" {
@@ -199,6 +205,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 				Required:    pfi.Required,
 				Schema:      pfi.Schema,
 				Example:     example,
+				Style:       pfi.Style,
 			})
 		}
 
@@ -691,28 +698,48 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				}
 			}
 
-			value := getParamValue(*p, ctx, cookies)
-			if value == "" {
-				if !op.SkipValidateParams && p.Required {
-					// Path params are always required.
-					res.Add(pb, "", "required "+p.Loc+" parameter is missing")
-				}
-				return
-			}
-
 			var receiver = f
 			if f.Addr().Type().Implements(reflect.TypeFor[ParamWrapper]()) {
 				receiver = f.Addr().Interface().(ParamWrapper).Receiver()
 			}
 
-			pv, err := parseInto(ctx, receiver, value, nil, *p)
-			if err != nil {
-				res.Add(pb, value, err.Error())
-				return
+			var pv any
+			var isSet bool
+			if p.Loc == "query" && p.Style == styleDeepObject {
+				// Deep object style is a special case where we need to parse the
+				// query parameter into a struct. We do this by parsing the query
+				// parameter into a map, then iterating over the map and setting
+				// the fields on the struct.
+				u := ctx.URL()
+				value := parseDeepObjectQuery(u.Query(), p.Name)
+				isSet = len(value) > 0
+				if len(value) == 0 {
+					if !op.SkipValidateParams && p.Required {
+						res.Add(pb, "", "required "+p.Loc+" parameter is missing")
+					}
+					return
+				}
+				pv = setDeepObjectValue(pb, res, receiver, value)
+			} else {
+				value := getParamValue(*p, ctx, cookies)
+				isSet = value != ""
+				if value == "" {
+					if !op.SkipValidateParams && p.Required {
+						// Path params are always required.
+						res.Add(pb, "", "required "+p.Loc+" parameter is missing")
+					}
+					return
+				}
+				var err error
+				pv, err = parseInto(ctx, receiver, value, nil, *p)
+				if err != nil {
+					res.Add(pb, value, err.Error())
+					return
+				}
 			}
 
 			if f.Addr().Type().Implements(reflect.TypeFor[ParamReactor]()) {
-				f.Addr().Interface().(ParamReactor).OnParamSet(value != "", pv)
+				f.Addr().Interface().(ParamReactor).OnParamSet(isSet, pv)
 			}
 
 			if !op.SkipValidateParams {
@@ -963,6 +990,111 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			ctx.SetStatus(status)
 		}
 	})))
+}
+
+func parseDeepObjectQuery(query url.Values, name string) map[string]string {
+	result := make(map[string]string)
+
+	for key, values := range query {
+		if strings.Contains(key, "[") {
+			// Nested object
+			keys := strings.Split(key, "[")
+			if keys[0] != name {
+				continue
+			}
+			k := strings.Trim(keys[1], "]")
+			result[k] = values[0]
+		}
+	}
+	return result
+}
+
+func setDeepObjectValue(pb *PathBuffer, res *ValidateResult, f reflect.Value, data map[string]string) map[string]any {
+	t := f.Type()
+	result := make(map[string]any)
+	switch t.Kind() {
+	case reflect.Map:
+		if t.Key().Kind() != reflect.String {
+			panic("unsupported map key type")
+		}
+		f.Set(reflect.MakeMap(t))
+		for k, v := range data {
+			key := reflect.New(t.Key()).Elem()
+			key.SetString(k)
+			value := reflect.New(t.Elem()).Elem()
+			if err := setFieldValue(value, v); err != nil {
+				pb.Push(k)
+				res.Add(pb, v, err.Error())
+				pb.Pop()
+			} else {
+				f.SetMapIndex(key, value)
+				result[k] = value.Interface()
+			}
+		}
+	case reflect.Struct:
+		for i := 0; i < t.NumField(); i++ {
+			field := t.Field(i)
+			// Get the field name
+			fieldName := field.Name
+
+			if name := jsonName(field); name != "" {
+				fieldName = name
+			}
+
+			fv := f.Field(i)
+			if val, ok := data[fieldName]; ok {
+				if err := setFieldValue(fv, val); err != nil {
+					pb.Push(fieldName)
+					res.Add(pb, val, err.Error())
+					pb.Pop()
+				} else {
+					result[fieldName] = fv.Interface()
+				}
+			} else {
+				if val := field.Tag.Get("default"); val != "" {
+					setFieldValue(fv, val)
+					result[fieldName] = fv.Interface()
+				}
+			}
+		}
+	}
+	return result
+}
+
+func setFieldValue(f reflect.Value, value string) error {
+	switch f.Kind() {
+	case reflect.String:
+		f.SetString(value)
+	case reflect.Interface:
+		f.Set(reflect.ValueOf(value))
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		v, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return errors.New("invalid integer")
+		}
+		f.SetInt(v)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		v, err := strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			return errors.New("invalid integer")
+		}
+		f.SetUint(v)
+	case reflect.Float32, reflect.Float64:
+		v, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return errors.New("invalid float")
+		}
+		f.SetFloat(v)
+	case reflect.Bool:
+		v, err := strconv.ParseBool(value)
+		if err != nil {
+			return errors.New("invalid boolean")
+		}
+		f.SetBool(v)
+	default:
+		return errors.New("unsupported type")
+	}
+	return nil
 }
 
 // ParamWrapper is an interface that can be implemented by a wrapping type
