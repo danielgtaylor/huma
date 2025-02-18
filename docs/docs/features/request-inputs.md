@@ -45,6 +45,43 @@ type MyInput struct {
 
 Then you can access e.g. `input.Session.Name` or `input.Session.Value`.
 
+### Custom wrapper types
+
+Request parameters can be parsed into custom wrapper types, by implementing the [`ParamWrapper`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ParamWrapper) interface, which should give access to the wrapper field as a [`reflect.Value`](https://pkg.go.dev/reflect#Value).
+
+Interface [`ParamReactor`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ParamReactor) may optionally be implemented to define a callback to execute after a request parameter was parsed.
+
+Example usage with a custom wrapper to handle null query parameters:
+
+```go
+type OptionalParam[T any] struct {
+	Value T
+	IsSet bool
+}
+
+// Define schema to use wrapped type
+func (o OptionalParam[T]) Schema(r huma.Registry) *huma.Schema {
+	return huma.SchemaFromType(r, reflect.TypeOf(o.Value))
+}
+
+// Expose wrapped value to receive parsed value from Huma
+// MUST have pointer receiver
+func (o *OptionalParam[T]) Receiver() reflect.Value {
+	return reflect.ValueOf(o).Elem().Field(0)
+}
+
+// React to request param being parsed to update internal state
+// MUST have pointer receiver
+func (o *OptionalParam[T]) OnParamSet(isSet bool, parsed any) {
+	o.IsSet = isSet
+}
+
+// Define request input with the wrapper type
+type MyRequestInput struct {
+    MaybeText OptionalParam[string] `query:"text"`
+}
+```
+
 ## Request Body
 
 The special struct field `Body` will be treated as the input request body and can refer to any other type or you can embed a struct or slice inline. If the body is a pointer, then it is optional. All doc & validation tags are allowed on the body in addition to these tags:
@@ -116,7 +153,7 @@ huma.Register(api, huma.Operation{
 })
 ```
 
-This will be useful for supporting file uploads. Moreover, Huma can process files from the multipart form into a struct for you. In this case, you should define what the processed struct should look like:
+This will be useful for supporting file uploads. Moreover, Huma can process files and values from the multipart form into a struct for you. In this case, you should define what the processed struct should look like:
 
 ```go title="multipart_form_files.go"
 huma.Register(api, huma.Operation{
@@ -125,30 +162,44 @@ huma.Register(api, huma.Operation{
 	Path:        "/upload",
 }, func(ctx context.Context, input *struct {
 	RawBody huma.MultipartFormFiles[struct {
-		HelloWorld         huma.FormFile   `form:"file" contentType:"text/plain" required:"true"`
-		Greetings          []huma.FormFile `form:"greetings" contentType:"text/plain" required:"true"`
-		NoTagBinding       huma.FormFile   `contentType:"text/plain"`
-		NonFilesAreIgnored string  // ignored
+		MyFile                    huma.FormFile   `form:"file" contentType:"text/plain" required:"true"`
+		SomeOtherFiles            []huma.FormFile `form:"other-files" contentType:"text/plain" required:"true"`
+		NoTagBindingFile          huma.FormFile   `contentType:"text/plain"`
+		MyGreeting                string          `form:"greeting", minLength:"6"`
+		SomeNumbers               []int           `form:"numbers"`
+		NonTaggedValuesAreIgnored string  // ignored
 	}]
 }) (*struct{}, error) {
 	// The raw multipart.Form body is again available under input.RawBody.Form.
 	// E.g. input.RawBody.Form.File("file")
-	// E.g. input.RawBody.Form.Value("NonFilesAreIgnored")
+	// E.g. input.RawBody.Form.Value("greeting")
 
 	// The processed input struct is available under input.RawBody.Data().
-	fileData := input.RawBody.Data()
+	formData := input.RawBody.Data()
+
+	// Non-files are available and validated if they have a "form" tag
+	fmt.Println(formData.MyGreeting)
+	fmt.Println("These are your numbers:")
+	for _, n := range formData.SomeNumbers {
+		fmt.Println(n)
+	}
+
+	// Non-files without "form" tag are not available
+	if formData.NonTaggedValuesAreIgnored != nil {
+		panic("This should not happen")
+	}
 
 	// Process files here.
-	b, err := io.ReadAll(fileData.HelloWorld)
+	b, err := io.ReadAll(formData.MyFile)
 	fmt.Println(string(b))
 
-	for _, f := range fileData.Greetings {
+	for _, f := range formData.SomeOtherFiles {
 		b, err := io.ReadAll(f)
 		fmt.Println(string(b))
 	}
 
-	// Optional check for optional file.
-	if fileData.NoTagBinding.IsSet {
+	// Flag for checking optional file existence.
+	if formData.NoTagBindingFile.IsSet {
 		fmt.Println("The form contained a file entry with name 'NoTagBinding'!")
 	}
 	return nil, nil

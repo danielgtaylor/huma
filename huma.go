@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
@@ -100,9 +101,12 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		if f.Anonymous {
 			return nil
 		}
-
 		pfi := &paramFieldInfo{
 			Type: f.Type,
+		}
+
+		if reflect.PointerTo(f.Type).Implements(reflect.TypeFor[ParamWrapper]()) {
+			pfi.Type = reflect.New(f.Type).Interface().(ParamWrapper).Receiver().Type()
 		}
 
 		if def := f.Tag.Get("default"); def != "" {
@@ -131,6 +135,9 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		} else if h := f.Tag.Get("header"); h != "" {
 			pfi.Loc = "header"
 			name = h
+		} else if fo := f.Tag.Get("form"); fo != "" {
+			pfi.Loc = "form"
+			name = fo
 		} else if c := f.Tag.Get("cookie"); c != "" {
 			pfi.Loc = "cookie"
 			name = c
@@ -691,7 +698,13 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				}
 			}
 
+			var receiver = f
+			if f.Addr().Type().Implements(reflect.TypeFor[ParamWrapper]()) {
+				receiver = f.Addr().Interface().(ParamWrapper).Receiver()
+			}
+
 			var pv any
+			isSet := false
 			if p.Loc == "query" && p.Style == styleDeepObject {
 				// Deep object style is a special case where we need to parse the
 				// query parameter into a struct. We do this by parsing the query
@@ -699,16 +712,17 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				// the fields on the struct.
 				u := ctx.URL()
 				value := parseDeepObjectQuery(u.Query(), p.Name)
+				isSet = len(value) > 0
 				if len(value) == 0 {
 					if !op.SkipValidateParams && p.Required {
 						res.Add(pb, "", "required "+p.Loc+" parameter is missing")
 					}
 					return
 				}
-				pv = setDeepObjectValue(pb, res, f, value)
-
+				pv = setDeepObjectValue(pb, res, receiver, value)
 			} else {
 				value := getParamValue(*p, ctx, cookies)
+				isSet = value != ""
 				if value == "" {
 					if !op.SkipValidateParams && p.Required {
 						// Path params are always required.
@@ -717,10 +731,15 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					return
 				}
 				var err error
-				pv, err = parseInto(ctx, f, value, *p)
+				pv, err = parseInto(ctx, receiver, value, nil, *p)
 				if err != nil {
 					res.Add(pb, value, err.Error())
+					return
 				}
+			}
+
+			if f.Addr().Type().Implements(reflect.TypeFor[ParamReactor]()) {
+				f.Addr().Interface().(ParamReactor).OnParamSet(isSet, pv)
 			}
 
 			if !op.SkipValidateParams {
@@ -738,9 +757,63 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			}
 
 			if rbt.isMultipart() {
-				if cErr := processMultipartMsgBody(op, ctx, v, rbt, rawBodyIndex, res); cErr != nil {
-					writeErr(api, ctx, cErr, *res)
-					return
+				// Read form
+				form, err := readForm(ctx)
+
+				if err != nil {
+					res.Errors = append(res.Errors, err)
+				} else {
+					var formValueParser func(val reflect.Value)
+					if rbt == rbtMultipart {
+						formValueParser = func(val reflect.Value) {}
+					} else {
+						rawBodyF := v.FieldByIndex(rawBodyIndex)
+						rawBodyDataF := rawBodyF.FieldByName("data")
+						rawBodyDataT := rawBodyDataF.Type()
+
+						rawBodyInputParams := findParams(oapi.Components.Schemas, &op, rawBodyDataT)
+						formValueParser = func(val reflect.Value) {
+							rawBodyInputParams.Every(val, func(f reflect.Value, p *paramFieldInfo) {
+								f = reflect.Indirect(f)
+								if f.Kind() == reflect.Invalid {
+									return
+								}
+
+								pb.Reset()
+								pb.Push(p.Loc)
+								pb.Push(p.Name)
+
+								value, ok := form.Value[p.Name]
+								if !ok {
+									_, isFile := form.File[p.Name]
+									if !op.SkipValidateParams && p.Required && !isFile {
+										res.Add(pb, "", "required "+p.Loc+" parameter is missing")
+									}
+									return
+								}
+
+								// Validation should fail if multiple values are
+								// provided but the type of f is not a slice.
+								if len(value) > 1 && f.Type().Kind() != reflect.Slice {
+									res.Add(pb, value, "expected at most one value, but received multiple values")
+									return
+								}
+								pv, err := parseInto(ctx, f, value[0], value, *p)
+								if err != nil {
+									res.Add(pb, value, err.Error())
+								}
+
+								if !op.SkipValidateParams {
+									Validate(oapi.Components.Schemas, p.Schema, pb, ModeWriteToServer, pv, res)
+								}
+							})
+						}
+					}
+
+					if cErr := processMultipartMsgBody(form, op, v, rbt, rawBodyIndex, formValueParser); cErr != nil {
+						writeErr(api, ctx, cErr, *res)
+						return
+					}
 				}
 			} else {
 				// Read body
@@ -987,6 +1060,7 @@ func setDeepObjectValue(pb *PathBuffer, res *ValidateResult, f reflect.Value, da
 	}
 	return result
 }
+
 func setFieldValue(f reflect.Value, value string) error {
 	switch f.Kind() {
 	case reflect.String:
@@ -1023,6 +1097,38 @@ func setFieldValue(f reflect.Value, value string) error {
 	return nil
 }
 
+// ParamWrapper is an interface that can be implemented by a wrapping type
+// to expose a field into which request parameters may be parsed.
+// Must have pointer receiver.
+// Example:
+//
+//	type OptionalParam[T any] struct {
+//		Value T
+//		IsSet bool
+//	}
+//	func (o *OptionalParam[T]) Receiver() reflect.Value {
+//		return reflect.ValueOf(o).Elem().Field(0)
+//	}
+type ParamWrapper interface {
+	Receiver() reflect.Value
+}
+
+// ParamReactor is an interface that can be implemented to react to request
+// parameters being set on the field. Must have pointer receiver.
+// Intended to be combined with ParamWrapper interface.
+//
+// First argument is a boolean indicating if the parameter was set in the request.
+// Second argument is the parsed value from Huma.
+//
+// Example:
+//
+//	func (o *OptionalParam[T]) OnParamSet(isSet bool, parsed any) {
+//		 o.IsSet = isSet
+//	}
+type ParamReactor interface {
+	OnParamSet(isSet bool, parsed any)
+}
+
 // initResponses initializes Responses if it was unset.
 func initResponses(op *Operation) {
 	if op.Responses == nil {
@@ -1049,7 +1155,7 @@ func processInputType(inputType reflect.Type, op *Operation, registry Registry) 
 	if f, ok := inputType.FieldByName("RawBody"); ok {
 		rawBodyIndex = f.Index
 		initRequestBody(op, setRequestBodyRequired)
-		rbt = setRequestBodyFromRawBody(op, f)
+		rbt = setRequestBodyFromRawBody(op, registry, f)
 	}
 
 	if op.RequestBody != nil {
@@ -1095,16 +1201,17 @@ func setRequestBodyFromBody(op *Operation, registry Registry, fBody reflect.Stru
 	if c := fBody.Tag.Get("contentType"); c != "" {
 		contentType = c
 	}
-	hint := getHint(inputType, fBody.Name, op.OperationID+"Request")
-	if nameHint := fBody.Tag.Get("nameHint"); nameHint != "" {
-		hint = nameHint
-	}
-	s := SchemaFromField(registry, fBody, hint)
 	if op.RequestBody.Content[contentType] == nil {
 		op.RequestBody.Content[contentType] = &MediaType{}
 	}
-	op.RequestBody.Content[contentType].Schema = s
-
+	if op.RequestBody.Content[contentType].Schema == nil {
+		hint := getHint(inputType, fBody.Name, op.OperationID+"Request")
+		if nameHint := fBody.Tag.Get("nameHint"); nameHint != "" {
+			hint = nameHint
+		}
+		s := SchemaFromField(registry, fBody, hint)
+		op.RequestBody.Content[contentType].Schema = s
+	}
 }
 
 type rawBodyType int
@@ -1120,7 +1227,7 @@ func (r rawBodyType) isMultipart() bool {
 }
 
 // setRequestBodyFromRawBody configures op.RequestBody from the RawBody field.
-func setRequestBodyFromRawBody(op *Operation, fRawBody reflect.StructField) rawBodyType {
+func setRequestBodyFromRawBody(op *Operation, r Registry, fRawBody reflect.StructField) rawBodyType {
 	rbt := rbtOther
 	contentType := "application/octet-stream"
 	if fRawBody.Type.String() == "multipart.Form" {
@@ -1172,7 +1279,7 @@ func setRequestBodyFromRawBody(op *Operation, fRawBody reflect.StructField) rawB
 			panic("Expected type MultipartFormFiles[T] to have a 'data *T' generic pointer field")
 		}
 		op.RequestBody.Content["multipart/form-data"] = &MediaType{
-			Schema:   multiPartFormFileSchema(dataField.Type.Elem()),
+			Schema:   multiPartFormFileSchema(r, dataField.Type.Elem()),
 			Encoding: multiPartContentEncoding(dataField.Type.Elem()),
 		}
 		op.RequestBody.Required = false
@@ -1356,7 +1463,7 @@ var errUnparsable = errors.New("unparsable value")
 
 // parseInto converts the string value into the expected type using the
 // parameter field information p and sets the result on f.
-func parseInto(ctx Context, f reflect.Value, value string, p paramFieldInfo) (any, error) {
+func parseInto(ctx Context, f reflect.Value, value string, preSplit []string, p paramFieldInfo) (any, error) {
 	// built-in types
 	switch p.Type.Kind() {
 	case reflect.String:
@@ -1392,11 +1499,15 @@ func parseInto(ctx Context, f reflect.Value, value string, p paramFieldInfo) (an
 		return v, nil
 	case reflect.Slice:
 		var values []string
-		if p.Explode {
-			u := ctx.URL()
-			values = (&u).Query()[p.Name]
+		if preSplit != nil {
+			values = preSplit
 		} else {
-			values = strings.Split(value, ",")
+			if p.Explode {
+				u := ctx.URL()
+				values = (&u).Query()[p.Name]
+			} else {
+				values = strings.Split(value, ",")
+			}
 		}
 		pv, err := parseSliceInto(f, values)
 		if err != nil {
@@ -1542,6 +1653,20 @@ func parseSliceInto(f reflect.Value, values []string) (any, error) {
 		f.Set(reflect.ValueOf(vs))
 		return vs, nil
 
+	case reflect.Uint8:
+		vs, err := parseArrElement(values, func(s string) (uint8, error) {
+			val, err := strconv.ParseUint(s, 10, 8)
+			if err != nil {
+				return 0, err
+			}
+			return uint8(val), nil
+		})
+		if err != nil {
+			return nil, errors.New("invalid integer")
+		}
+		f.Set(reflect.ValueOf(vs))
+		return vs, nil
+
 	case reflect.Uint16:
 		vs, err := parseArrElement(values, func(s string) (uint16, error) {
 			val, err := strconv.ParseUint(s, 10, 16)
@@ -1633,29 +1758,21 @@ func writeErr(api API, ctx Context, cErr *contextError, res ValidateResult) {
 	}
 }
 
-func processMultipartMsgBody(op Operation, ctx Context, inputValue reflect.Value, rbt rawBodyType, rawBodyIndex []int, res *ValidateResult) *contextError {
-	form, err := ctx.GetMultipartForm()
-	if err != nil {
-		res.Errors = append(res.Errors, &ErrorDetail{
-			Location: "body",
-			Message:  "cannot read multipart form: " + err.Error(),
-		})
-		return nil
-	}
-	f := inputValue
-	for _, i := range rawBodyIndex {
-		f = f.Field(i)
-	}
+func processMultipartMsgBody(form *multipart.Form, op Operation, v reflect.Value, rbt rawBodyType, rawBodyIndex []int, formValueParser func(val reflect.Value)) *contextError {
+	f := v.FieldByIndex(rawBodyIndex)
 	switch rbt {
 	case rbtMultipart:
+		// f is of type multipart.Form
 		f.Set(reflect.ValueOf(*form))
 	case rbtMultipartDecoded:
+		// f is of type MultipartFormFiles[T]
 		f.FieldByName("Form").Set(reflect.ValueOf(form))
 		r := f.Addr().
 			MethodByName("Decode").
 			Call(
 				[]reflect.Value{
 					reflect.ValueOf(op.RequestBody.Content["multipart/form-data"]),
+					reflect.ValueOf(formValueParser),
 				})
 		errs := r[0].Interface().([]error)
 		if errs != nil {
@@ -1663,6 +1780,17 @@ func processMultipartMsgBody(op Operation, ctx Context, inputValue reflect.Value
 		}
 	}
 	return nil
+}
+
+func readForm(ctx Context) (*multipart.Form, *ErrorDetail) {
+	form, err := ctx.GetMultipartForm()
+	if err != nil {
+		return form, &ErrorDetail{
+			Location: "body",
+			Message:  "cannot read multipart form: " + err.Error(),
+		}
+	}
+	return form, nil
 }
 
 type intoUnmarshaler = func(data []byte, v any) error

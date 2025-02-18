@@ -69,6 +69,9 @@ func NewHumaAPI() huma.API {
 	// ...
 	api := humachi.New(router, config)
 	api.UseMiddleware(MyMiddleware)
+
+	// Register the handler after UseMiddleware() for the middleware to take effect
+	huma.Get(api, "/greeting/{name}", handler.GreetingGetHandler)
 }
 ```
 
@@ -93,6 +96,20 @@ func MyMiddleware(ctx huma.Context, next func(huma.Context)) {
 	// operation handler as well.
 	next(ctx)
 }
+```
+
+Then you can get the value in the handler context:
+
+``` go title="handler.go"
+huma.Get(api, "/greeting/{name}", func(ctx context.Context, input *struct{
+		Name string `path:"name" maxLength:"30" example:"world" doc:"Name to greet"`
+	}) (*GreetingOutput, error) {
+		// "some-value"
+		ctx.Value("some-key")
+		resp := &GreetingOutput{}
+		resp.Body.Message = fmt.Sprintf("Hello, %s!", input.Name)
+		return resp, nil
+	})
 ```
 
 ### Cookies
