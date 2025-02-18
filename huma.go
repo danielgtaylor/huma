@@ -704,7 +704,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			}
 
 			var pv any
-			isSet := false
+			var isSet bool
 			if p.Loc == "query" && p.Style == styleDeepObject {
 				// Deep object style is a special case where we need to parse the
 				// query parameter into a struct. We do this by parsing the query
