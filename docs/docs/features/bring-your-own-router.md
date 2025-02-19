@@ -99,7 +99,7 @@ graph LR
 	OperationHandler[Operation Handler]
 
 	Request --> Router
-	Router -->|http.Request\nfiber.Ctx\netc| huma.Adapter
+	Router -->|http.Request<br>fiber.Ctx<br>etc| huma.Adapter
 	subgraph huma.API
 		huma.Adapter -->|huma.Context| OperationHandler
 	end
