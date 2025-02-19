@@ -93,6 +93,10 @@ func (i *MyInput) Resolve(ctx huma.Context) []error {
 
     Exhaustive errors lessen frustration for users. It's better to return three errors in response to one request than to have the user make three requests which each return a new different error.
 
+### Unwrapping
+
+While generally not recommended, if you need to access the underlying router-specific request and response objects, you can `Unwrap()` them using the router-specific adapter package you used to create the API instance. See the [middleware documentation](./middleware.md#unwrapping) for more information.
+
 ## Implementation Check
 
 There is a Go trick for ensuring that a struct implements a certain interface, and you can utilize it to ensure your resolvers will be called as expected. For example:

@@ -75,6 +75,25 @@ func NewHumaAPI() huma.API {
 }
 ```
 
+### Unwrapping
+
+While generally not recommended, if you need to access the underlying router-specific request and response objects, you can `Unwrap()` them using the router-specific adapter package you used to create the API instance (e.g. `humachi.Unwrap()` for Chi or `humago.Unwrap()` for Go's `http` package):
+
+```go title="code.go"
+func MyMiddleware(ctx huma.Context, next func(huma.Context)) {
+	// Unwrap the request and response objects.
+	r, w := humago.Unwrap(ctx)
+
+	// Do something with the request and response objects.
+	otherMiddleware(func (_ http.Handler) {
+		// Note this assumes the request/response are modified in-place.
+		next(ctx)
+	}).ServeHTTP(w, r)
+}
+```
+
+This can be useful when migrating a large existing project to Huma as you can apply router-specific middleware to individual operations through router-agnostic middleware on the `huma.Operation.Middleware` field.
+
 ### Context Values
 
 The `huma.Context` interface provides a `Context()` method to retrieve the underlying request `context.Context` value. This can be used to retrieve context values in middleware and operation handlers, such as request-scoped loggers, metrics, or user information.
@@ -100,7 +119,7 @@ func MyMiddleware(ctx huma.Context, next func(huma.Context)) {
 
 Then you can get the value in the handler context:
 
-``` go title="handler.go"
+```go title="handler.go"
 huma.Get(api, "/greeting/{name}", func(ctx context.Context, input *struct{
 		Name string `path:"name" maxLength:"30" example:"world" doc:"Name to greet"`
 	}) (*GreetingOutput, error) {

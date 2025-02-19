@@ -18,6 +18,15 @@ import (
 // form data.
 var MultipartMaxMemory int64 = 8 * 1024
 
+// Unwrap extracts the underlying HTTP request and response writer from a Huma
+// context. If passed a context from a different adapter it will panic.
+func Unwrap(ctx huma.Context) (*http.Request, http.ResponseWriter) {
+	if c, ok := ctx.(*chiContext); ok {
+		return c.Unwrap()
+	}
+	panic("not a humachi context")
+}
+
 type chiContext struct {
 	op     *huma.Operation
 	r      *http.Request
@@ -27,6 +36,10 @@ type chiContext struct {
 
 // check that chiContext implements huma.Context
 var _ huma.Context = &chiContext{}
+
+func (c *chiContext) Unwrap() (*http.Request, http.ResponseWriter) {
+	return c.r, c.w
+}
 
 func (c *chiContext) Operation() *huma.Operation {
 	return c.op

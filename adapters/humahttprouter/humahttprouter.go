@@ -19,6 +19,15 @@ import (
 // form data.
 var MultipartMaxMemory int64 = 8 * 1024
 
+// Unwrap extracts the underlying HTTP request and response writer from a Huma
+// context. If passed a context from a different adapter it will panic.
+func Unwrap(ctx huma.Context) (*http.Request, http.ResponseWriter, httprouter.Params) {
+	if c, ok := ctx.(*httprouterContext); ok {
+		return c.Unwrap()
+	}
+	panic("not an httprouter context")
+}
+
 type httprouterContext struct {
 	op     *huma.Operation
 	r      *http.Request
@@ -29,6 +38,10 @@ type httprouterContext struct {
 
 // check that httprouterContext implements huma.Context
 var _ huma.Context = &httprouterContext{}
+
+func (c *httprouterContext) Unwrap() (*http.Request, http.ResponseWriter, httprouter.Params) {
+	return c.r, c.w, c.ps
+}
 
 func (c *httprouterContext) Operation() *huma.Operation {
 	return c.op

@@ -15,6 +15,18 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// Unwrap extracts the underlying Fiber context from a Huma context. If passed a
+// context from a different adapter it will panic. Keep in mind the limitations
+// of the underlying Fiber/fasthttp libraries and how that impacts
+// memory-safety: https://docs.gofiber.io/#zero-allocation. Do not keep
+// references to the underlying context or its values!
+func Unwrap(ctx huma.Context) *fiber.Ctx {
+	if c, ok := ctx.(*fiberWrapper); ok {
+		return c.Unwrap()
+	}
+	panic("not a humafiber context")
+}
+
 type fiberAdapter struct {
 	tester requestTester
 	router router
@@ -29,6 +41,10 @@ type fiberWrapper struct {
 
 // check that fiberCtx implements huma.Context
 var _ huma.Context = &fiberWrapper{}
+
+func (c *fiberWrapper) Unwrap() *fiber.Ctx {
+	return c.orig
+}
 
 func (c *fiberWrapper) Operation() *huma.Operation {
 	return c.op
