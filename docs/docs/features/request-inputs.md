@@ -117,7 +117,7 @@ huma.Register(api, huma.Operation{
 	Method:      http.MethodPost,
 	Path:        "/text",
 	Summary:     "Example to post plain text input",
-}, func(ctx context.Context, input struct {
+}, func(ctx context.Context, input *struct {
 	RawBody []byte `contentType:"text/plain"`
 }) (*struct{}, error) {
 	fmt.Println("Got input:", input.RawBody)
@@ -139,7 +139,7 @@ huma.Register(api, huma.Operation{
     Method:      http.MethodPost,
     Path:        "/upload",
     Summary:     "Example to upload a file",
-}, func(ctx context.Context, input struct {
+}, func(ctx context.Context, input *struct {
     RawBody multipart.Form
 }) (*struct{}, error) {
     // Process multipart form here.
@@ -256,7 +256,7 @@ huma.Register(api, huma.Operation{
 	Method:      http.MethodGet,
 	Path:        "/things",
 	Summary:     "Get a filtered list of things",
-}, func(ctx context.Context, input struct {
+}, func(ctx context.Context, input *struct {
 	// Embed both structs to compose your input.
 	AuthParam
 	PaginationParams
