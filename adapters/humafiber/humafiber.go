@@ -24,7 +24,7 @@ func Unwrap(ctx huma.Context) *fiber.Ctx {
 	if c, ok := ctx.(*fiberWrapper); ok {
 		return c.Unwrap()
 	}
-	panic("context does not implement humafiber.ContextUnwrapper")
+	panic("not a humafiber context")
 }
 
 type fiberAdapter struct {
