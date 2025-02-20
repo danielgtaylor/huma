@@ -29,6 +29,9 @@ func TestGroupNoPrefix(t *testing.T) {
 func TestGroupMultiPrefix(t *testing.T) {
 	_, api := humatest.New(t)
 
+	// Ensure paths exist for when the shallow copy is made.
+	api.OpenAPI().Paths = map[string]*huma.PathItem{}
+
 	grp := huma.NewGroup(api, "/v1", "/v2")
 
 	huma.Get(grp, "/users", func(ctx context.Context, input *struct{}) (*struct{}, error) {
@@ -52,15 +55,21 @@ func TestGroupCustomizations(t *testing.T) {
 
 	grp := huma.NewGroup(api, "/v1")
 
-	opModifierCalled := false
-	middlewareCalled := false
+	opModifier1Called := false
+	opModifier2Called := false
+	middleware1Called := false
+	middleware2Called := false
 	transformerCalled := false
-	grp.UseOperationModifier(func(op *huma.Operation) {
-		opModifierCalled = true
+	grp.UseSimpleModifier(func(op *huma.Operation) {
+		opModifier1Called = true
 	})
 
 	grp.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
-		middlewareCalled = true
+		middleware1Called = true
+		next(ctx)
+	})
+	grp.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+		middleware2Called = true
 		next(ctx)
 	})
 
@@ -69,7 +78,13 @@ func TestGroupCustomizations(t *testing.T) {
 		return v, nil
 	})
 
-	huma.Get(grp, "/users", func(ctx context.Context, input *struct{}) (*struct {
+	// Ensure nested groups behave properly.
+	childGrp := huma.NewGroup(grp)
+	childGrp.UseSimpleModifier(func(op *huma.Operation) {
+		opModifier2Called = true
+	})
+
+	huma.Get(childGrp, "/users", func(ctx context.Context, input *struct{}) (*struct {
 		Body string
 	}, error) {
 		return &struct{ Body string }{Body: ""}, nil
@@ -77,8 +92,10 @@ func TestGroupCustomizations(t *testing.T) {
 
 	resp := api.Get("/v1/users")
 	assert.Equal(t, 200, resp.Result().StatusCode)
-	assert.True(t, opModifierCalled)
-	assert.True(t, middlewareCalled)
+	assert.True(t, opModifier1Called)
+	assert.True(t, opModifier2Called)
+	assert.True(t, middleware1Called)
+	assert.True(t, middleware2Called)
 	assert.True(t, transformerCalled)
 }
 

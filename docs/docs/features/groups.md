@@ -21,7 +21,7 @@ The above example will register a `GET /v1/users` operation with the `authMiddle
 
 !!! info "Groups & Documentation"
 
-    Groups assume that `api.AddOperation` is invoked for any operation you want to register and have documented in the OpenAPI. This is done by default with `huma.Register` & its convenience functions. If you use custom registration functions you may need to manually add operations to the OpenAPI.
+    Groups assume that `OpenAPI().AddOperation(...)` is invoked for any operation you want to register and have documented in the OpenAPI. This is done by default with `huma.Register` & its convenience functions. If you use custom registration functions you may need to manually invoke `OpenAPI().OnAddOperation` to ensure the operation is documented. Note: you should not manually modify the group's OpenAPI, as this may not be propagated to the parent API's OpenAPI.
 
 ## Group Features
 
@@ -45,10 +45,20 @@ grp.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
 
 ## Operation Modifiers
 
-Operation modifiers are functions that run at operation registration time. They can be used to modify the operation before it is registered. Operation modifiers are registered using the `UseOperationModifier` method on a group.
+Operation modifiers are functions that run at operation registration time. They can be used to modify the operation before it is registered. Operation modifiers are registered using the `UseModifier` method on a group.
 
 ```go
-grp.UseOperationModifier(func(op *huma.Operation) {
+grp.UseModifier(func(op *huma.Operation, next(*huma.Operation)) {
+	op.Summary = "A summary for all operations in this group"
+	op.Tags = []string{"my-tag"}
+    next(op)
+})
+```
+
+There is also a simplified form you can use:
+
+```go
+grp.UseSimpleModifier(func(op *huma.Operation)) {
 	op.Summary = "A summary for all operations in this group"
 	op.Tags = []string{"my-tag"}
 })
