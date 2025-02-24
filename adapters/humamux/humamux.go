@@ -18,6 +18,15 @@ import (
 // form data.
 var MultipartMaxMemory int64 = 8 * 1024
 
+// Unwrap extracts the underlying HTTP request and response writer from a Huma
+// context. If passed a context from a different adapter it will panic.
+func Unwrap(ctx huma.Context) (*http.Request, http.ResponseWriter) {
+	if c, ok := ctx.(*gmuxContext); ok {
+		return c.Unwrap()
+	}
+	panic("not a humamux context")
+}
+
 type gmuxContext struct {
 	op     *huma.Operation
 	r      *http.Request
@@ -27,6 +36,10 @@ type gmuxContext struct {
 
 // check that gmuxContext implements huma.Context
 var _ huma.Context = &gmuxContext{}
+
+func (c *gmuxContext) Unwrap() (*http.Request, http.ResponseWriter) {
+	return c.r, c.w
+}
 
 func (c *gmuxContext) Operation() *huma.Operation {
 	return c.op
