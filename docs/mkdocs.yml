@@ -34,6 +34,7 @@ nav:
           - "Model Validation": features/model-validation.md
       - "Operations":
           - "Operations": features/operations.md
+          - "Groups": features/groups.md
           - "Requests":
               - "Request Inputs": features/request-inputs.md
               - "Validation": features/request-validation.md
@@ -46,8 +47,8 @@ nav:
               - "Streaming": features/response-streaming.md
               - "Transformers": features/response-transformers.md
       - "Extra Packages":
-          - "Conditional Requests": features/conditional-requests.md
           - "Auto PATCH Operations": features/auto-patch.md
+          - "Conditional Requests": features/conditional-requests.md
           - "Server Sent Events (SSE)": features/server-sent-events-sse.md
           - "Test Utilities": features/test-utilities.md
       - "Clients":

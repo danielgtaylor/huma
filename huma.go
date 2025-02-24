@@ -647,8 +647,13 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	}
 	defineErrors(&op, registry)
 
-	if !op.Hidden {
-		oapi.AddOperation(&op)
+	if documenter, ok := api.(OperationDocumenter); ok {
+		// Enables customization of OpenAPI documentation behavior for operations.
+		documenter.DocumentOperation(&op)
+	} else {
+		if !op.Hidden {
+			oapi.AddOperation(&op)
+		}
 	}
 
 	resolvers := findResolvers(resolverType, inputType)
