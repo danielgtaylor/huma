@@ -12,7 +12,7 @@ Operations can be grouped under common route prefixes and share middleware, oper
 grp := huma.NewGroup(api, "/v1")
 grp.UseMiddleware(authMiddleware)
 
-huma.Get(grp, "/users", func(ctx context.Context, input *struct{}) ([]User, error) {
+huma.Get(grp, "/users", func(ctx context.Context, input *struct{}) (*UsersResponse, error) {
 	// ...
 })
 ```
@@ -21,7 +21,7 @@ The above example will register a `GET /v1/users` operation with the `authMiddle
 
 !!! info "Groups & Documentation"
 
-    Groups assume that `OpenAPI().AddOperation(...)` is invoked for any operation you want to register and have documented in the OpenAPI. This is done by default with `huma.Register` & its convenience functions. If you use custom registration functions you may need to manually invoke `OpenAPI().OnAddOperation` to ensure the operation is documented. Note: you should not manually modify the group's OpenAPI, as this may not be propagated to the parent API's OpenAPI.
+    Groups assume that `huma.Register` or one of its convenience wrappers is used to register operations. If you are not, then you may need to invoke `group.DocumentOperation(*huma.Operation)` to ensure that the operation is documented correctly.
 
 ## Group Features
 
@@ -31,6 +31,23 @@ Groups support the following features:
 -   Middleware that runs before each operation in the group.
 -   Operation modifiers that run at operation registration time.
 -   Response transformers that run after each operation in the group.
+
+## Prefixes
+
+Groups can have one or more path prefixes that are prepended to all operations in the group. This is useful for grouping related operations under a common prefix and is typically done with a single prefix.
+
+```go
+grp := huma.NewGroup(api, "/prefix1", "/prefix2", "...")
+```
+
+This is just a convenience for the following equivalent code:
+
+```go
+grp := huma.NewGroup(api)
+grp.UseModifier(huma.PrefixModifier("/prefix1", "/prefix2", "..."))
+```
+
+The built-in [`huma.PrefixModifier`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#PrefixModifier) will adjust the operation's ID and tags when more than one prefix is used. If you with to customize this behavior, you can write your own operation modifier.
 
 ## Middleware
 
@@ -75,6 +92,29 @@ grp.UseTransformer(func(ctx huma.Context, status string, v any) (any, error) {
 })
 ```
 
+## Customizing Documentation
+
+Groups implement [`huma.OperationDocumenter`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#OperationDocumenter) which bypasses the normal flow of documentation generation and instead calls a function. This allows you to customize the documentation for all operations in the group. You can override the `DocumentOperation` method to customize the documentation if needed:
+
+```go
+type MyGroup huma.Group
+
+func (g *MyGroup) DocumentOperation(op *huma.Operation) {
+	g.ModifyOperation(op, func(op *huma.Operation) {
+		if documenter, ok := g.API.(huma.OperationDocumenter); ok {
+			// Support nested operation documenters (i.e. groups of groups).
+			documenter.DocumentOperation(op)
+		} else {
+			// Default behavior to add operations.
+			if op.Hidden {
+				return
+			}
+			g.OpenAPI().AddOperation(op)
+		}
+	})
+}
+```
+
 ## Dive Deeper
 
 -   Features
@@ -85,4 +125,5 @@ grp.UseTransformer(func(ctx huma.Context, status string, v any) (any, error) {
     -   [`huma.Register`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Register) register an operation
     -   [`huma.Middlewares`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Middlewares) list of middleware
     -   [`huma.Transformer`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Transformer) response transformers
+    -   [`huma.OperationDocumenter`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#OperationDocumenter) to customize OpenAPI generation
     -   [`huma.API`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#API) the API instance

@@ -33,20 +33,21 @@ func TestGroupMultiPrefix(t *testing.T) {
 	api.OpenAPI().Paths = map[string]*huma.PathItem{}
 
 	grp := huma.NewGroup(api, "/v1", "/v2")
+	child := huma.NewGroup(grp, "/prefix")
 
-	huma.Get(grp, "/users", func(ctx context.Context, input *struct{}) (*struct{}, error) {
+	huma.Get(child, "/users", func(ctx context.Context, input *struct{}) (*struct{}, error) {
 		return nil, nil
 	})
 
 	assert.Nil(t, api.OpenAPI().Paths["/users"])
-	assert.NotNil(t, api.OpenAPI().Paths["/v1/users"])
-	assert.NotNil(t, api.OpenAPI().Paths["/v2/users"])
-	assert.NotEqual(t, api.OpenAPI().Paths["/v1/users"].Get.OperationID, api.OpenAPI().Paths["/v2/users"].Get.OperationID)
+	assert.NotNil(t, api.OpenAPI().Paths["/v1/prefix/users"])
+	assert.NotNil(t, api.OpenAPI().Paths["/v2/prefix/users"])
+	assert.NotEqual(t, api.OpenAPI().Paths["/v1/prefix/users"].Get.OperationID, api.OpenAPI().Paths["/v2/prefix/users"].Get.OperationID)
 
-	resp := api.Get("/v1/users")
+	resp := api.Get("/v1/prefix/users")
 	assert.Equal(t, http.StatusNoContent, resp.Result().StatusCode)
 
-	resp = api.Get("/v2/users")
+	resp = api.Get("/v2/prefix/users")
 	assert.Equal(t, http.StatusNoContent, resp.Result().StatusCode)
 }
 
@@ -90,6 +91,12 @@ func TestGroupCustomizations(t *testing.T) {
 		return &struct{ Body string }{Body: ""}, nil
 	})
 
+	// Manual OpenAPI modification
+	childGrp.OpenAPI().Info.Title = "Set from group"
+
+	assert.NotNil(t, api.OpenAPI().Paths["/v1/users"])
+	assert.Equal(t, "Set from group", api.OpenAPI().Info.Title)
+
 	resp := api.Get("/v1/users")
 	assert.Equal(t, 200, resp.Result().StatusCode)
 	assert.True(t, opModifier1Called)
@@ -97,6 +104,21 @@ func TestGroupCustomizations(t *testing.T) {
 	assert.True(t, middleware1Called)
 	assert.True(t, middleware2Called)
 	assert.True(t, transformerCalled)
+}
+
+func TestGroupHiddenOp(t *testing.T) {
+	_, api := humatest.New(t)
+	grp := huma.NewGroup(api, "/v1")
+	huma.Register(grp, huma.Operation{
+		OperationID: "get-users",
+		Method:      http.MethodGet,
+		Path:        "/users",
+		Hidden:      true,
+	}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	assert.Nil(t, api.OpenAPI().Paths["/v1/users"])
 }
 
 type FailingTransformAPI struct {

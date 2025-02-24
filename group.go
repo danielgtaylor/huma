@@ -4,6 +4,16 @@ import (
 	"strings"
 )
 
+// OperationDocumenter is an interface that can be implemented by an API or
+// group to document operations in the OpenAPI document. This bypasses the
+// normal `huma.Register` logic and provides complete customization of how
+// operations are documented.
+type OperationDocumenter interface {
+	// DocumentOperation adds an operation to the OpenAPI document. This is
+	// called by `huma.Register` when a new operation is registered.
+	DocumentOperation(op *Operation)
+}
+
 // PrefixModifier provides a fan-out to register one or more operations with
 // the given prefix for every one operation added to a group.
 func PrefixModifier(prefixes []string) func(o *Operation, next func(*Operation)) {
@@ -75,27 +85,22 @@ func (g *Group) Adapter() Adapter {
 	return g.adapter
 }
 
-// OpenAPI returns the group's OpenAPI, which acts as a passthrough to the
-// underlying API's OpenAPI. You should not modify this directly as changes
-// may not be propagated to the underlying API. Instead, only modify the
-// original API's OpenAPI directly.
-func (g *Group) OpenAPI() *OpenAPI {
-	// Provide a callback that `huma.Register` will call, and take the operation
-	// that is added and modify it as needed, registering it with the real
-	// underlying OpenAPI document. This ensure the documentation matches the
-	// server behavior! The one caveat is that this *only* works for operations
-	// which invoke the `OpenAPI.AddOperation(...)` call.
-	openapi := *g.API.OpenAPI()
-	openapi.Paths = nil
-	openapi.OnAddOperation = []AddOpFunc{
-		func(oapi *OpenAPI, op *Operation) {
-			oapi.Paths = nil // discourage manual edits
-			g.ModifyOperation(op, func(op *Operation) {
-				g.API.OpenAPI().AddOperation(op)
-			})
-		},
-	}
-	return &openapi
+// DocumentOperation adds an operation to the OpenAPI document. This is called
+// by `huma.Register` when a new operation is registered. All modifiers will be
+// run on the operation before it is added to the OpenAPI document, so for
+// groups with multiple prefixes this will result in multiple operations in the
+// OpenAPI document.
+func (g *Group) DocumentOperation(op *Operation) {
+	g.ModifyOperation(op, func(op *Operation) {
+		if documenter, ok := g.API.(OperationDocumenter); ok {
+			documenter.DocumentOperation(op)
+		} else {
+			if op.Hidden {
+				return
+			}
+			g.OpenAPI().AddOperation(op)
+		}
+	})
 }
 
 // UseModifier adds an operation modifier function to the group that will be run
