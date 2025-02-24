@@ -65,7 +65,7 @@ grp.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
 Operation modifiers are functions that run at operation registration time. They can be used to modify the operation before it is registered. Operation modifiers are registered using the `UseModifier` method on a group.
 
 ```go
-grp.UseModifier(func(op *huma.Operation, next(*huma.Operation)) {
+grp.UseModifier(func(op *huma.Operation, next func(*huma.Operation)) {
 	op.Summary = "A summary for all operations in this group"
 	op.Tags = []string{"my-tag"}
     next(op)
