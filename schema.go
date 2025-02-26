@@ -816,8 +816,9 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 			fieldSet[f.Name] = struct{}{}
 
 			// Controls whether the field is required or not. All fields start as
-			// required, then can be made optional with the `omitempty` JSON tag or it
-			// can be overridden manually via the `required` tag.
+			// required, then can be made optional with the `omitempty` JSON tag,
+			// `omitzero` JSON tag, or it can be overridden manually via the
+			// `required` tag.
 			fieldRequired := true
 
 			name := f.Name
@@ -826,6 +827,9 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 					name = n
 				}
 				if strings.Contains(j, "omitempty") {
+					fieldRequired = false
+				}
+				if strings.Contains(j, "omitzero") {
 					fieldRequired = false
 				}
 			}
