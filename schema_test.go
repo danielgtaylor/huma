@@ -500,6 +500,36 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-optional-with-omitempty",
+			input: struct {
+				Value string `json:"value,omitempty"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			}`,
+		},
+		{
+			name: "field-optional-with-omitzero",
+			input: struct {
+				Value string `json:"value,omitzero"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "string"
+					}
+				},
+				"additionalProperties": false
+			}`,
+		},
+		{
 			name: "field-example-custom",
 			input: struct {
 				Value CustomSchema `json:"value" example:"foo"`

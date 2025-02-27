@@ -25,8 +25,9 @@ Fields being optional/required is determined automatically but can be overridden
 
 1. Start with all fields required.
 2. If a field has `omitempty`, it is optional.
-3. If a field has `required:"false"`, it is optional.
-4. If a field has `required:"true"`, it is required.
+3. If a field has `omitzero`, it is optional.
+4. If a field has `required:"false"`, it is optional.
+5. If a field has `required:"true"`, it is required.
 
 Pointers have no effect on optional/required. The same rules apply regardless of whether the struct is being used for request input or response output. Some examples:
 
@@ -39,8 +40,10 @@ type MyStruct struct {
 
     // The following are all optional.
     Optional1 string  `json:"optional1,omitempty"`
-    Optional2 *string `json:"optional2,omitempty"`
-    Optional3 string  `json:"optional3" required:"false"`
+    Optional2 string  `json:"optional2,omitzero"`
+    Optional3 *string `json:"optional3,omitempty"`
+    Optional4 *string `json:"optional4,omitempty,omitzero"`
+    Optional5 string  `json:"optional5" required:"false"`
 }
 ```
 
