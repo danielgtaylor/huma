@@ -40,10 +40,10 @@ type MyStruct struct {
 
     // The following are all optional.
     Optional1 string  `json:"optional1,omitempty"`
-    Optional1 string  `json:"optional1,omitzero"`
-    Optional2 *string `json:"optional2,omitempty"`
-    Optional2 *string `json:"optional2,omitempty,omitzero"`
-    Optional3 string  `json:"optional3" required:"false"`
+    Optional2 string  `json:"optional2,omitzero"`
+    Optional3 *string `json:"optional3,omitempty"`
+    Optional4 *string `json:"optional4,omitempty,omitzero"`
+    Optional5 string  `json:"optional5" required:"false"`
 }
 ```
 
