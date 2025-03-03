@@ -75,7 +75,7 @@ grp.UseModifier(func(op *huma.Operation, next func(*huma.Operation)) {
 There is also a simplified form you can use:
 
 ```go
-grp.UseSimpleModifier(func(op *huma.Operation)) {
+grp.UseSimpleModifier(func(op *huma.Operation) {
 	op.Summary = "A summary for all operations in this group"
 	op.Tags = []string{"my-tag"}
 })
