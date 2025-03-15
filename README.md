@@ -88,6 +88,7 @@ A big thank you to our current & former sponsors!
 - [@chenjr0719](https://github.com/chenjr0719)
 - [@vinogradovkonst](https://github.com/vinogradovkonst)
 - [@miyamo2](https://github.com/miyamo2)
+- [@nielskrijger](https://github.com/nielskrijger)
 
 ## Testimonials
 

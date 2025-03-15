@@ -11,6 +11,7 @@ sponsors:
     - chenjr0719
     - vinogradovkonst
     - miyamo2
+    - nielskrijger
 ---
 
 # Huma {.hidden}
