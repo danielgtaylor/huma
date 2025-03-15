@@ -15,7 +15,9 @@ import (
 //	}
 var DefaultJSONFormat = Format{
 	Marshal: func(w io.Writer, v any) error {
-		return json.NewEncoder(w).Encode(v)
+		enc := json.NewEncoder(w)
+		enc.SetEscapeHTML(false)
+		return enc.Encode(v)
 	},
 	Unmarshal: json.Unmarshal,
 }

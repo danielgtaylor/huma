@@ -3002,7 +3002,7 @@ func TestCustomSchemaErrors(t *testing.T) {
 	resp := api.Post("/test", map[string]any{"test": 1})
 
 	assert.Equal(t, http.StatusUnprocessableEntity, resp.Result().StatusCode)
-	assert.Contains(t, resp.Body.String(), `expected number \u003e= 10`)
+	assert.Contains(t, resp.Body.String(), `expected number >= 10`)
 }
 
 func TestBodyRace(t *testing.T) {
