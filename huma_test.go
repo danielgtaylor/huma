@@ -2899,6 +2899,12 @@ func TestConvenienceMethods(t *testing.T) {
 	assert.Equal(t, []string{"Things"}, api.OpenAPI().Paths[path].Post.Tags)
 
 	path = path + "/{thing-id}"
+	huma.Head(api, path, func(ctx context.Context, input *Input) (*struct{}, error) {
+		return nil, nil
+	}, huma.OperationTags("Things"))
+	assert.Equal(t, "head-things-by-thing-id", api.OpenAPI().Paths[path].Head.OperationID)
+	assert.Equal(t, []string{"Things"}, api.OpenAPI().Paths[path].Head.Tags)
+
 	huma.Put(api, path, func(ctx context.Context, input *Input) (*struct{}, error) {
 		return nil, nil
 	}, huma.OperationTags("Things"))

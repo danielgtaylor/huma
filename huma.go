@@ -2048,7 +2048,7 @@ func convenience[I, O any](api API, method, path string, handler func(context.Co
 //		Body []Thing
 //	}) (*ListThingOutput, error) {
 //		// TODO: list things from DB...
-//		resp := &PostThingOutput{}
+//		resp := &ListThingOutput{}
 //		resp.Body = []Thing{{ID: "1", Name: "Thing 1"}}
 //		return resp, nil
 //	})
@@ -2077,6 +2077,26 @@ func Get[I, O any](api API, path string, handler func(context.Context, *I) (*O, 
 // This is a convenience wrapper around `huma.Register`.
 func Post[I, O any](api API, path string, handler func(context.Context, *I) (*O, error), operationHandlers ...func(o *Operation)) {
 	convenience(api, http.MethodPost, path, handler, operationHandlers...)
+}
+
+// Head HTTP operation handler for an API. The handler must be a function that
+// takes a context and a pointer to the input struct and returns a pointer to the
+// output struct and an error. The input struct must be a struct with fields
+// for the request path/query/header/cookie parameters. The output struct must be a
+// struct with fields for the output headers of the operation, if any.
+//
+//	huma.Head(api, "/things/{thing-id}", func(ctx context.Context, input *struct{
+//		ID string `path:"thing-id"`
+//		Header string `header:"X-My-Header"`
+//	}) (*HeadThingOutput, error) {
+//		// TODO: get info from DB...
+//		resp := &HeadThingOutput{}
+//		return resp, nil
+//	})
+//
+// This is a convenience wrapper around `huma.Register`.
+func Head[I, O any](api API, path string, handler func(context.Context, *I) (*O, error), operationHandlers ...func(o *Operation)) {
+	convenience(api, http.MethodHead, path, handler, operationHandlers...)
 }
 
 // Put HTTP operation handler for an API. The handler must be a function that
