@@ -17,7 +17,7 @@ type MyExample struct {
 var value any
 json.Unmarshal([]byte(`{"name": "abcdefg", "age": 1}`), &value)
 
-validator := huma.ModelValidator()
+validator := huma.NewModelValidator()
 errs := validator.Validate(reflect.TypeOf(MyExample{}), value)
 if errs != nil {
 	fmt.Println("Validation error", errs)
