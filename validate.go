@@ -814,7 +814,7 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 //	var value any
 //	json.Unmarshal([]byte(`{"name": "abcdefg", "age": 1}`), &value)
 //
-//	validator := ModelValidator()
+//	validator := huma.NewModelValidator()
 //	errs := validator.Validate(reflect.TypeOf(MyExample{}), value)
 //	if errs != nil {
 //		fmt.Println("Validation error", errs)
