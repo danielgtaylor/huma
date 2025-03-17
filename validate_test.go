@@ -123,7 +123,13 @@ var validateTests = []struct {
 		name:  "expected number int",
 		typ:   reflect.TypeOf(0),
 		input: "",
-		errs:  []string{"expected number"},
+		errs:  []string{"expected integer"},
+	},
+	{
+		name:  "expected number int from float64",
+		typ:   reflect.TypeOf(0),
+		input: float64(1.5),
+		errs:  []string{"expected integer"},
 	},
 	{
 		name:  "expected number float64",
@@ -731,13 +737,13 @@ var validateTests = []struct {
 		name:  "expected map item",
 		typ:   reflect.TypeOf(map[any]int{}),
 		input: map[string]any{"one": 1, "two": true},
-		errs:  []string{"expected number"},
+		errs:  []string{"expected integer"},
 	},
 	{
 		name:  "expected map any item",
 		typ:   reflect.TypeOf(map[any]int{}),
 		input: map[any]any{"one": 1, "two": true},
-		errs:  []string{"expected number"},
+		errs:  []string{"expected integer"},
 	},
 	{
 		name: "map minProps success",

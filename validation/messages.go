@@ -23,6 +23,7 @@ var (
 	MsgExpectedPropertyNameInObject       = "expected propertyName value to be present in object"
 	MsgExpectedBoolean                    = "expected boolean"
 	MsgExpectedNumber                     = "expected number"
+	MsgExpectedInteger                    = "expected integer"
 	MsgExpectedString                     = "expected string"
 	MsgExpectedBase64String               = "expected string to be base64 encoded"
 	MsgExpectedArray                      = "expected array"
