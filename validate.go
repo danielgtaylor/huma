@@ -428,8 +428,16 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		case uint64:
 			num = float64(v)
 		default:
-			res.Add(path, v, validation.MsgExpectedNumber)
+			if s.Type == TypeInteger {
+				res.Add(path, v, validation.MsgExpectedInteger)
+			} else {
+				res.Add(path, v, validation.MsgExpectedNumber)
+			}
 			return
+		}
+
+		if s.Type == TypeInteger && num != math.Trunc(num) {
+			res.Add(path, v, validation.MsgExpectedInteger)
 		}
 
 		if s.Minimum != nil {
