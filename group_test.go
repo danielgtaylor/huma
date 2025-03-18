@@ -51,6 +51,70 @@ func TestGroupMultiPrefix(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, resp.Result().StatusCode)
 }
 
+func TestGroupConvenienceEquivalency(t *testing.T) {
+	_, api := humatest.New(t)
+
+	// Register a normal route via convenience function.
+	huma.Get(api, "/v1/users", func(ctx context.Context, input *struct{}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	// Upgrade to groups and expect the same behavior.
+	grp2 := huma.NewGroup(api, "/v2")
+
+	huma.Get(grp2, "/users", func(ctx context.Context, input *struct{}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	// Ensure convenience overrides still work.
+	grp3 := huma.NewGroup(api, "/v3")
+	huma.Get(grp3, "/users", func(ctx context.Context, input *struct{}) (*struct{}, error) {
+		return nil, nil
+	}, func(o *huma.Operation) {
+		o.OperationID = "custom-id"
+		o.Summary = "Custom summary"
+	})
+
+	// Ensure group overrides still work.
+	grp4 := huma.NewGroup(api, "/v4")
+	grp4.UseModifier(func(op *huma.Operation, next func(*huma.Operation)) {
+		op.OperationID = "custom-id"
+		op.Summary = "Custom summary"
+		next(op)
+	})
+	huma.Get(grp4, "/users", func(ctx context.Context, input *struct{}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	// Groups of groups should continue to work as well, including both groups in
+	// the generated ID/summary.
+	grp5 := huma.NewGroup(api, "/v5")
+	grp6 := huma.NewGroup(grp5, "/users")
+	huma.Get(grp6, "/", func(ctx context.Context, input *struct{}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	oapi := api.OpenAPI()
+
+	assert.NotNil(t, oapi.Paths["/v1/users"])
+	assert.NotNil(t, oapi.Paths["/v2/users"])
+	assert.NotNil(t, oapi.Paths["/v3/users"])
+	assert.NotNil(t, oapi.Paths["/v4/users"])
+	assert.NotNil(t, oapi.Paths["/v5/users/"])
+
+	assert.Equal(t, "get-v1-users", oapi.Paths["/v1/users"].Get.OperationID)
+	assert.Equal(t, "get-v2-users", oapi.Paths["/v2/users"].Get.OperationID)
+	assert.Equal(t, "custom-id", oapi.Paths["/v3/users"].Get.OperationID)
+	assert.Equal(t, "custom-id", oapi.Paths["/v4/users"].Get.OperationID)
+	assert.Equal(t, "get-v5-users", oapi.Paths["/v5/users/"].Get.OperationID)
+
+	assert.Equal(t, "Get v1 users", oapi.Paths["/v1/users"].Get.Summary)
+	assert.Equal(t, "Get v2 users", oapi.Paths["/v2/users"].Get.Summary)
+	assert.Equal(t, "Custom summary", oapi.Paths["/v3/users"].Get.Summary)
+	assert.Equal(t, "Custom summary", oapi.Paths["/v4/users"].Get.Summary)
+	assert.Equal(t, "Get v5 users", oapi.Paths["/v5/users/"].Get.Summary)
+}
+
 func TestGroupCustomizations(t *testing.T) {
 	_, api := humatest.New(t)
 

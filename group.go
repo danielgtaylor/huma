@@ -127,7 +127,34 @@ func (g *Group) UseSimpleModifier(modifier func(o *Operation)) {
 // operation, in the order they were added. This is useful for modifying an
 // operation before it is registered with the router or OpenAPI document.
 func (g *Group) ModifyOperation(op *Operation, next func(*Operation)) {
-	chain := next
+	chain := func(op *Operation) {
+		// If this came from unmodified convenience functions, we may need to
+		// regenerate the operation ID and summary as they are based on things
+		// like the path which may have changed.
+		if op.Metadata != nil {
+			// Copy so we don't modify the original map.
+			meta := make(map[string]any, len(op.Metadata))
+			for k, v := range op.Metadata {
+				meta[k] = v
+			}
+			op.Metadata = meta
+
+			// If the conveniences are set, we need to regenerate the operation ID and
+			// summary based on the new path. We also update the metadata to reflect
+			// the new generated operation ID and summary so groups of groups can
+			// continue to modify them as needed.
+			if op.Metadata["_convenience_id"] == op.OperationID {
+				op.OperationID = GenerateOperationID(op.Method, op.Path, op.Metadata["_convenience_id_out"])
+				op.Metadata["_convenience_id"] = op.OperationID
+			}
+			if op.Metadata["_convenience_summary"] == op.Summary {
+				op.Summary = GenerateSummary(op.Method, op.Path, op.Metadata["_convenience_summary_out"])
+				op.Metadata["_convenience_summary"] = op.Summary
+			}
+		}
+		// Call the final handler.
+		next(op)
+	}
 	for i := len(g.modifiers) - 1; i >= 0; i-- {
 		// Use an inline func to provide a closure around the index & chain.
 		func(i int, n func(*Operation)) {

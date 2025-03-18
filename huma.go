@@ -2025,14 +2025,26 @@ func OperationTags(tags ...string) func(o *Operation) {
 
 func convenience[I, O any](api API, method, path string, handler func(context.Context, *I) (*O, error), operationHandlers ...func(o *Operation)) {
 	var o *O
+	opID := GenerateOperationID(method, path, o)
+	opSummary := GenerateSummary(method, path, o)
 	operation := Operation{
-		OperationID: GenerateOperationID(method, path, o),
-		Summary:     GenerateSummary(method, path, o),
+		OperationID: opID,
+		Summary:     opSummary,
 		Method:      method,
 		Path:        path,
+		Metadata:    map[string]any{},
 	}
 	for _, oh := range operationHandlers {
 		oh(&operation)
+	}
+	// If not modified, hint that these were auto-generated!
+	if operation.OperationID == opID {
+		operation.Metadata["_convenience_id"] = opID
+		operation.Metadata["_convenience_id_out"] = o
+	}
+	if operation.Summary == opSummary {
+		operation.Metadata["_convenience_summary"] = opSummary
+		operation.Metadata["_convenience_summary_out"] = o
 	}
 	Register(api, operation, handler)
 }
