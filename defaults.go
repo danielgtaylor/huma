@@ -3,7 +3,11 @@ package huma
 import (
 	"encoding/json"
 	"io"
+	"path"
 )
+
+// DefaultSchemaNamer is the default prefix used to reference schemas in the API spec.
+const DefaultSchemaRefPrefix = "#/components/schemas/"
 
 // DefaultJSONFormat is the default JSON formatter that can be set in the API's
 // `Config.Formats` map. This is used by the `DefaultConfig` function.
@@ -53,10 +57,7 @@ var DefaultFormats = map[string]Format{
 //
 //	import _ "github.com/danielgtaylor/huma/v2/formats/cbor"
 func DefaultConfig(title string, version string) Config {
-	schemaPrefix := "#/components/schemas/"
-	schemasPath := "/schemas"
-
-	registry := NewMapRegistry(schemaPrefix, DefaultSchemaNamer)
+	registry := NewMapRegistry(DefaultSchemaRefPrefix, DefaultSchemaNamer)
 
 	return Config{
 		OpenAPI: &OpenAPI{
@@ -73,23 +74,27 @@ func DefaultConfig(title string, version string) Config {
 		registryConfig:               getConfig[registryConfig](registry),
 		DocsPath:                     "/docs",
 		DocsRenderer:                 DocsRendererStoplightElements,
-		SchemasPath:                  schemasPath,
+		SchemasPath:                  "/schemas",
 		Formats:                      DefaultFormats,
 		DefaultFormat:                "application/json",
 		NoFormatFallback:             false,
 		RejectUnknownQueryParameters: false,
 		Transformers:                 nil,
 		CreateHooks: []func(Config) Config{
-			func(c Config) Config {
-				// Add a link transformer to the API. This adds `Link` headers and
-				// puts `$schema` fields in the response body which point to the JSON
-				// Schema that describes the response structure.
-				// This is a create hook so we get the latest schema path setting.
-				linkTransformer := NewSchemaLinkTransformer(schemaPrefix, c.SchemasPath)
-				c.OnAddOperation = append(c.OnAddOperation, linkTransformer.OnAddOperation)
-				c.Transformers = append(c.Transformers, linkTransformer.Transform)
-				return c
-			},
+			DefaultSchemaLinkHook(DefaultSchemaRefPrefix, ""),
 		},
+	}
+}
+
+// DefaultSchemaLinkHook adds a link transformer to the API.
+// This adds `Link` headers and puts `$schema` fields in the response body which
+// point to the JSON Schema that describes the response structure.
+// This is a create hook so we get the latest schema path setting.
+func DefaultSchemaLinkHook(schemaRefPrefix, schemaPathPrefix string) func(c Config) Config {
+	return func(c Config) Config {
+		linkTransformer := NewSchemaLinkTransformer(schemaRefPrefix, path.Join(schemaPathPrefix, c.SchemasPath))
+		c.OnAddOperation = append(c.OnAddOperation, linkTransformer.OnAddOperation)
+		c.Transformers = append(c.Transformers, linkTransformer.Transform)
+		return c
 	}
 }

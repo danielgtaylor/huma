@@ -226,6 +226,15 @@ type Config struct {
 	// them here does nothing.
 	DocsRendererConfig any
 
+	// DocsAdapter is an optional [Adapter] that will be used to serve the API
+	// documentation. If unset, the main adapter will be used.
+	// Setting this allows you to use a different router or middleware stack for
+	// the documentation.
+	// Note that if this [Adapter] has a different path than the main one, the
+	// default CreateHook set in [DefaultConfig] needs to be modified to account
+	// for it.
+	DocsAdapter Adapter
+
 	// SchemasPath is the path to the API schemas. If set to `/schemas` it will
 	// allow clients to get `/schemas/{schema}` to view the schema in a browser
 	// or for use in editors like VSCode to provide autocomplete & validation.
@@ -510,7 +519,7 @@ func parseContentType(contentType string) (int, int, error) {
 //	config := huma.DefaultConfig("Example API", "1.0.0")
 //	api := huma.NewAPI(config, adapter)
 func NewAPI(config Config, a Adapter) API {
-	for i := 0; i < len(config.CreateHooks); i++ {
+	for i := range config.CreateHooks {
 		config = config.CreateHooks[i](config)
 	}
 
@@ -556,9 +565,14 @@ func NewAPI(config Config, a Adapter) API {
 		newAPI.formatKeys = append(newAPI.formatKeys, k)
 	}
 
+	docsAdapter := newAPI.adapter
+	if config.DocsAdapter != nil {
+		docsAdapter = config.DocsAdapter
+	}
+
 	if config.OpenAPIPath != "" {
 		var specJSON []byte
-		a.Handle(&Operation{
+		docsAdapter.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + ".json",
 		}, func(ctx Context) {
@@ -570,7 +584,7 @@ func NewAPI(config Config, a Adapter) API {
 		})
 
 		var specJSON30 []byte
-		a.Handle(&Operation{
+		docsAdapter.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + "-3.0.json",
 		}, func(ctx Context) {
@@ -582,7 +596,7 @@ func NewAPI(config Config, a Adapter) API {
 		})
 
 		var specYAML []byte
-		a.Handle(&Operation{
+		docsAdapter.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + ".yaml",
 		}, func(ctx Context) {
@@ -594,7 +608,7 @@ func NewAPI(config Config, a Adapter) API {
 		})
 
 		var specYAML30 []byte
-		a.Handle(&Operation{
+		docsAdapter.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + "-3.0.yaml",
 		}, func(ctx Context) {
@@ -611,7 +625,7 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	if config.SchemasPath != "" {
-		a.Handle(&Operation{
+		docsAdapter.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.SchemasPath + "/{schema}",
 		}, func(ctx Context) {
@@ -628,8 +642,14 @@ func NewAPI(config Config, a Adapter) API {
 }
 
 func (a *api) registerDocsRoute() {
+	docsAdapter := a.adapter
 	openAPIPath := a.config.OpenAPIPath
-	if prefix := getAPIPrefix(a.OpenAPI()); prefix != "" {
+	if a.config.DocsAdapter != nil {
+		// The API prefix describes the main adapter, not the docs adapter, so
+		// link to the spec relative to the docs page instead.
+		docsAdapter = a.config.DocsAdapter
+		openAPIPath = strings.TrimPrefix(openAPIPath, "/")
+	} else if prefix := getAPIPrefix(a.OpenAPI()); prefix != "" {
 		openAPIPath = path.Join(prefix, openAPIPath)
 	}
 
@@ -780,7 +800,7 @@ func (a *api) registerDocsRoute() {
 		panic("missing CSP for docs renderer: " + a.config.DocsRenderer)
 	}
 
-	a.adapter.Handle(&Operation{
+	docsAdapter.Handle(&Operation{
 		Method: http.MethodGet,
 		Path:   a.config.DocsPath,
 	}, func(ctx Context) {
