@@ -1215,6 +1215,7 @@ type SecurityScheme struct {
 	// Scheme is REQUIRED. The name of the HTTP Authorization scheme to be used in
 	// the Authorization header as defined in [RFC7235]. The values used SHOULD be
 	// registered in the IANA Authentication Scheme registry.
+	// See: http://www.iana.org/assignments/http-authschemes/http-authschemes.xhtml
 	Scheme string `yaml:"scheme,omitempty"`
 
 	// BearerFormat is a hint to the client to identify how the bearer token is
