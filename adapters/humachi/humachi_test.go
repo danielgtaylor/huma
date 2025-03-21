@@ -350,7 +350,8 @@ func TestChiRouterPrefix(t *testing.T) {
 	// The docs HTML should point to the full URL including base path.
 	resp = tapi.Get("/api/docs")
 	assert.Equal(t, http.StatusOK, resp.Code)
-	assert.Contains(t, resp.Body.String(), "/api/openapi.yaml")
+	// The openapi.yaml should be a relative path.
+	assert.Contains(t, resp.Body.String(), `apiDescriptionUrl="openapi.yaml"`)
 }
 
 // func BenchmarkHumaV1Chi(t *testing.B) {
