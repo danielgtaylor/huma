@@ -322,6 +322,9 @@ func TestChiRouterPrefix(t *testing.T) {
 	mux.Route("/api", func(r chi.Router) {
 		config := huma.DefaultConfig("My API", "1.0.0")
 		config.Servers = []*huma.Server{{URL: "http://localhost:8888/api"}}
+		// config.CreateHooks = []func(huma.Config) huma.Config{
+		// 	huma.DefaultSchemaLinkHook("/api"),
+		// }
 		api = New(r, config)
 	})
 

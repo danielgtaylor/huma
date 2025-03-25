@@ -3,7 +3,6 @@ package huma
 import (
 	"encoding/json"
 	"io"
-	"path"
 )
 
 // DefaultSchemaNamer is the default prefix used to reference schemas in the API spec.
@@ -76,7 +75,7 @@ func DefaultConfig(title, version string) Config {
 		Formats:       DefaultFormats,
 		DefaultFormat: "application/json",
 		CreateHooks: []func(Config) Config{
-			DefaultSchemaLinkHook(DefaultSchemaRefPrefix, ""),
+			DefaultSchemaLinkHook(""), // assume schemas are on mounted the root
 		},
 	}
 }
@@ -85,9 +84,9 @@ func DefaultConfig(title, version string) Config {
 // This adds `Link` headers and puts `$schema` fields in the response body which
 // point to the JSON Schema that describes the response structure.
 // This is a create hook so we get the latest schema path setting.
-func DefaultSchemaLinkHook(schemaRefPrefix, schemaPathPrefix string) func(c Config) Config {
+func DefaultSchemaLinkHook(schemaPathPrefix string) func(c Config) Config {
 	return func(c Config) Config {
-		linkTransformer := NewSchemaLinkTransformer(schemaRefPrefix, path.Join(schemaPathPrefix, c.SchemasPath))
+		linkTransformer := NewSchemaLinkTransformer(schemaPathPrefix, c.SchemasPath)
 		c.OpenAPI.OnAddOperation = append(c.OpenAPI.OnAddOperation, linkTransformer.OnAddOperation)
 		c.Transformers = append(c.Transformers, linkTransformer.Transform)
 		return c
