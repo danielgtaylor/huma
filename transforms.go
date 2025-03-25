@@ -21,7 +21,7 @@ type schemaField struct {
 // VSCode.
 type SchemaLinkTransformer struct {
 	oapi        *OpenAPI
-	prefix      string
+	apiPrefix   string
 	schemasPath string
 	types       map[any][]schemaLinkType
 }
@@ -40,9 +40,9 @@ type schemaLinkType struct {
 // to understand the structure of the response and enables things like
 // as-you-type validation & completion of HTTP resources in editors like
 // VSCode.
-func NewSchemaLinkTransformer(prefix, schemasPath string) *SchemaLinkTransformer {
+func NewSchemaLinkTransformer(apiPrefix, schemasPath string) *SchemaLinkTransformer {
 	return &SchemaLinkTransformer{
-		prefix:      prefix,
+		apiPrefix:   apiPrefix,
 		schemasPath: schemasPath,
 		types:       map[any][]schemaLinkType{},
 	}
@@ -96,8 +96,10 @@ func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
 	// Figure out if there should be a base path prefix. This might be set when
 	// using a sub-router / group or if the gateway consumes a part of the path.
 	schemasPath := t.schemasPath
-	if prefix := getAPIPrefix(oapi); prefix != "" {
-		schemasPath = path.Join(prefix, schemasPath)
+	if apiPrefix := getAPIPrefix(oapi); apiPrefix != "" {
+		schemasPath = path.Join(apiPrefix, schemasPath)
+	} else if t.apiPrefix != "" {
+		schemasPath = path.Join(t.apiPrefix, schemasPath)
 	}
 
 	registry := oapi.Components.Schemas
