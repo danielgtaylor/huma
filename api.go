@@ -23,6 +23,8 @@ var rxSchema = regexp.MustCompile(`#/components/schemas/([^"]+)`)
 
 var ErrUnknownContentType = errors.New("unknown content type")
 
+var DoWrapDocsRouteWithPrefix = true
+
 // Resolver runs a `Resolve` function after a request has been parsed, enabling
 // you to run custom validation or other code that can modify the request and /
 // or return errors.
@@ -453,8 +455,10 @@ func NewAPI(config Config, a Adapter) API {
 			Path:   config.DocsPath,
 		}, func(ctx Context) {
 			openAPIPath := config.OpenAPIPath
-			if prefix := getAPIPrefix(newAPI.OpenAPI()); prefix != "" {
-				openAPIPath = path.Join(prefix, openAPIPath)
+			if DoWrapDocsRouteWithPrefix {
+				if prefix := getAPIPrefix(newAPI.OpenAPI()); prefix != "" {
+					openAPIPath = path.Join(prefix, openAPIPath)
+				}
 			}
 			ctx.SetHeader("Content-Type", "text/html")
 			title := "Elements in HTML"
