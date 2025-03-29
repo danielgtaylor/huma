@@ -5,6 +5,9 @@ import (
 	"io"
 )
 
+// DefaultSchemaNamer is the default prefix used to reference schemas in the API spec.
+const DefaultSchemaRefPrefix = "#/components/schemas/"
+
 // DefaultJSONFormat is the default JSON formatter that can be set in the API's
 // `Config.Formats` map. This is used by the `DefaultConfig` function.
 //
@@ -53,10 +56,7 @@ var DefaultFormats = map[string]Format{
 //
 //	import _ "github.com/danielgtaylor/huma/v2/formats/cbor"
 func DefaultConfig(title, version string) Config {
-	schemaPrefix := "#/components/schemas/"
-	schemasPath := "/schemas"
-
-	registry := NewMapRegistry(schemaPrefix, DefaultSchemaNamer)
+	registry := NewMapRegistry(DefaultSchemaRefPrefix, DefaultSchemaNamer)
 
 	return Config{
 		OpenAPI: &OpenAPI{
@@ -71,20 +71,24 @@ func DefaultConfig(title, version string) Config {
 		},
 		OpenAPIPath:   "/openapi",
 		DocsPath:      "/docs",
-		SchemasPath:   schemasPath,
+		SchemasPath:   "/schemas",
 		Formats:       DefaultFormats,
 		DefaultFormat: "application/json",
 		CreateHooks: []func(Config) Config{
-			func(c Config) Config {
-				// Add a link transformer to the API. This adds `Link` headers and
-				// puts `$schema` fields in the response body which point to the JSON
-				// Schema that describes the response structure.
-				// This is a create hook so we get the latest schema path setting.
-				linkTransformer := NewSchemaLinkTransformer(schemaPrefix, c.SchemasPath)
-				c.OpenAPI.OnAddOperation = append(c.OpenAPI.OnAddOperation, linkTransformer.OnAddOperation)
-				c.Transformers = append(c.Transformers, linkTransformer.Transform)
-				return c
-			},
+			DefaultSchemaLinkHook(""), // assume schemas are on mounted the root
 		},
+	}
+}
+
+// DefaultSchemaLinkHook adds a link transformer to the API.
+// This adds `Link` headers and puts `$schema` fields in the response body which
+// point to the JSON Schema that describes the response structure.
+// This is a create hook so we get the latest schema path setting.
+func DefaultSchemaLinkHook(schemaPathPrefix string) func(c Config) Config {
+	return func(c Config) Config {
+		linkTransformer := NewSchemaLinkTransformer(schemaPathPrefix, c.SchemasPath)
+		c.OpenAPI.OnAddOperation = append(c.OpenAPI.OnAddOperation, linkTransformer.OnAddOperation)
+		c.Transformers = append(c.Transformers, linkTransformer.Transform)
+		return c
 	}
 }
