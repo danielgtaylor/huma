@@ -163,8 +163,8 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		pfi.Schema = SchemaFromField(registry, f, "")
 
 		var example any
-		if e := f.Tag.Get("example"); e != "" {
-			example = jsonTagValue(registry, f.Type.Name(), pfi.Schema, f.Tag.Get("example"))
+		if value, ok := f.Tag.Lookup("example"); ok {
+			example = jsonTagValue(registry, f.Type.Name(), pfi.Schema, value)
 		}
 		if example == nil && len(pfi.Schema.Examples) > 0 {
 			example = pfi.Schema.Examples[0]
