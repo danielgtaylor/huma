@@ -558,7 +558,7 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 		fs.Default = defaultValue
 	}
 
-	if value , present := f.Tag.Lookup("example"); present {
+	if value, ok := f.Tag.Lookup("example"); ok {
 		if e := jsonTagValue(registry, f.Name, fs, value); e != nil {
 			fs.Examples = []any{e}
 		}
