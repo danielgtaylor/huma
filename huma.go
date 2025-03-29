@@ -240,10 +240,16 @@ type headerInfo struct {
 	Field      reflect.StructField
 	Name       string
 	TimeFormat string
+	ShouldSkip bool
 }
 
 func findHeaders(t reflect.Type) *findResult[*headerInfo] {
-	return findInType(t, nil, func(sf reflect.StructField, i []int) *headerInfo {
+	return findInType(t, func(r reflect.Type, ints []int) *headerInfo {
+		if r.Kind() == reflect.Slice && deref(r.Elem()) == cookieType {
+			return &headerInfo{ShouldSkip: true}
+		}
+		return nil
+	}, func(sf reflect.StructField, i []int) *headerInfo {
 		// Ignore embedded fields
 		if sf.Anonymous {
 			return nil
@@ -260,7 +266,7 @@ func findHeaders(t reflect.Type) *findResult[*headerInfo] {
 				timeFormat = f
 			}
 		}
-		return &headerInfo{sf, header, timeFormat}
+		return &headerInfo{sf, header, timeFormat, false}
 	}, false, "Status", "Body")
 }
 
@@ -404,15 +410,11 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 	t = deref(t)
 	zero := reflect.Zero(reflect.TypeOf((*T)(nil)).Elem()).Interface()
 
-	ignoreAnonymous := false
+	resolved := false
 	if onType != nil {
 		if v := onType(t, path); v != zero {
 			result.Paths = append(result.Paths, findResultPath[T]{path, v})
-
-			// Found what we were looking for in the type, no need to go deeper.
-			// We do still want to potentially process each non-anonymous field,
-			// so only skip anonymous ones.
-			ignoreAnonymous = true
+			resolved = true
 		}
 	}
 
@@ -429,7 +431,9 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 			if slices.Contains(ignore, f.Name) {
 				continue
 			}
-			if ignoreAnonymous && f.Anonymous {
+			// We do still want to potentially process each non-anonymous field,
+			// so only skip anonymous ones.
+			if resolved && f.Anonymous {
 				continue
 			}
 			fi := append([]int{}, path...)
@@ -439,18 +443,22 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 					result.Paths = append(result.Paths, findResultPath[T]{fi, v})
 				}
 			}
+
 			if f.Anonymous || recurseFields || deref(f.Type).Kind() != reflect.Struct {
-				// Always process embedded structs and named fields which are not
-				// structs. If `recurseFields` is true then we also process named
-				// struct fields recursively.
 				visited[t] = struct{}{}
 				_findInType(f.Type, fi, result, onType, onField, recurseFields, visited, ignore...)
 				delete(visited, t)
 			}
 		}
 	case reflect.Slice:
+		if resolved {
+			return
+		}
 		_findInType(t.Elem(), path, result, onType, onField, recurseFields, visited, ignore...)
 	case reflect.Map:
+		if resolved {
+			return
+		}
 		_findInType(t.Elem(), path, result, onType, onField, recurseFields, visited, ignore...)
 	}
 }
@@ -1385,6 +1393,10 @@ func processOutputType(outputType reflect.Type, op *Operation, registry Registry
 	}
 	outHeaders := findHeaders(outputType)
 	for _, entry := range outHeaders.Paths {
+		if entry.Value.ShouldSkip {
+			continue
+		}
+
 		// Document the header's name and type.
 		if op.Responses[defaultStatusStr].Headers == nil {
 			op.Responses[defaultStatusStr].Headers = map[string]*Param{}
