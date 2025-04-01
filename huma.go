@@ -789,7 +789,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 								pb.Push(p.Name)
 
 								value, ok := form.Value[p.Name]
-								if !ok {
+								if !ok || (len(value) > 0 && value[0] == "") {
 									_, isFile := form.File[p.Name]
 									if !op.SkipValidateParams && p.Required && !isFile {
 										res.Add(pb, "", "required "+p.Loc+" parameter is missing")
