@@ -1693,3 +1693,10 @@ func Test_validateWithDiscriminator(t *testing.T) {
 		})
 	}
 }
+
+func TestPathBuffer_WithIndex_ReturnsExpectedString(t *testing.T) {
+	pb := huma.NewPathBuffer([]byte(""), 0)
+	pb.Push("prefix")
+
+	assert.Equal(t, "prefix[1]", pb.WithIndex(1))
+}
