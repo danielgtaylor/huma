@@ -129,6 +129,18 @@ func (b *PathBuffer) With(s string) string {
 	return tmp
 }
 
+// WithIndex is short for push index, convert to string, and pop. This is useful
+// when you want the location of the index given a path buffer as a prefix.
+//
+//	pb.Push("foo")
+//	pb.WithIndex(1) // return foo[1]
+func (b *PathBuffer) WithIndex(i int) string {
+	b.PushIndex(i)
+	tmp := b.String()
+	b.Pop()
+	return tmp
+}
+
 // Len returns the length of the current path.
 func (b *PathBuffer) Len() int {
 	return b.off
