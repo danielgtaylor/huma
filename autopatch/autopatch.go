@@ -330,6 +330,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 			if extension, ok := oapi.Extensions[MergePatchNullabilityExtension]; ok {
 				if nullabilitySettings, ok = extension.(MergePatchNullabilitySettings); !ok {
 					huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to parse nullability settings", fmt.Errorf("invalid nullability settings type"))
+					return
 				} else if nullabilitySettings.Enabled {
 					preserveNullsInMergePatch = true
 				}
