@@ -6,6 +6,7 @@ import (
 	"math"
 	"net"
 	"net/mail"
+	"net/netip"
 	"net/url"
 	"reflect"
 	"regexp"
@@ -234,6 +235,10 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 	case "ipv6":
 		if ip := net.ParseIP(str); ip == nil || ip.To16() == nil {
 			res.Add(path, str, validation.MsgExpectedRFC2373IPv6)
+		}
+	case "ip":
+		if _, err := netip.ParseAddr(str); err != nil {
+			res.Add(path, str, validation.MsgExpectedRFCIPAddr)
 		}
 	case "uri", "uri-reference", "iri", "iri-reference":
 		if _, err := url.Parse(str); err != nil {
