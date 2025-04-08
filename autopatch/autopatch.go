@@ -11,6 +11,7 @@ package autopatch
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -23,6 +24,86 @@ import (
 	"github.com/danielgtaylor/shorthand/v2"
 	jsonpatch "github.com/evanphx/json-patch/v5"
 )
+
+const MergePatchNullabilityExtension = "x-merge-patch-nullability"
+
+type MergePatchNullabilitySettings struct {
+	Enabled                    bool
+	StringRepresentationOfNull string
+}
+
+func RegisterNullabilityExtension(api huma.API, stringRepresentationOfNull string) {
+	if api.OpenAPI().Extensions == nil {
+		api.OpenAPI().Extensions = make(map[string]any)
+	}
+	api.OpenAPI().Extensions[MergePatchNullabilityExtension] = MergePatchNullabilitySettings{
+		Enabled:                    true,
+		StringRepresentationOfNull: stringRepresentationOfNull,
+	}
+}
+
+func replaceNulls(data []byte, settings MergePatchNullabilitySettings) ([]byte, error) {
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+
+	var replaceNullsInValue func(v any) any
+	replaceNullsInValue = func(v any) any {
+		switch x := v.(type) {
+		case nil:
+			return settings.StringRepresentationOfNull
+		case map[string]any:
+			for k, v := range x {
+				x[k] = replaceNullsInValue(v)
+			}
+			return x
+		case []any:
+			for i, v := range x {
+				x[i] = replaceNullsInValue(v)
+			}
+			return x
+		default:
+			return v
+		}
+	}
+
+	result := replaceNullsInValue(raw)
+	return json.Marshal(result)
+}
+
+func restoreNulls(data []byte, settings MergePatchNullabilitySettings) ([]byte, error) {
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+
+	var restoreNullsInValue func(v any) any
+	restoreNullsInValue = func(v any) any {
+		switch x := v.(type) {
+		case string:
+			if x == settings.StringRepresentationOfNull {
+				return nil
+			}
+			return x
+		case map[string]any:
+			for k, v := range x {
+				x[k] = restoreNullsInValue(v)
+			}
+			return x
+		case []any:
+			for i, v := range x {
+				x[i] = restoreNullsInValue(v)
+			}
+			return x
+		default:
+			return v
+		}
+	}
+
+	result := restoreNullsInValue(raw)
+	return json.Marshal(result)
+}
 
 // jsonPatchOp describes an RFC 6902 JSON Patch operation. See also:
 // https://www.rfc-editor.org/rfc/rfc6902
@@ -243,10 +324,37 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 			}
 		case "application/merge-patch+json", "application/json", "":
 			// Assume most cases are merge-patch.
+			// Check if we are using the merge-patch-nullability extension
+			var preserveNullsInMergePatch bool
+			var nullabilitySettings MergePatchNullabilitySettings
+			if extension, ok := oapi.Extensions[MergePatchNullabilityExtension]; ok {
+				if nullabilitySettings, ok = extension.(MergePatchNullabilitySettings); !ok {
+					huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to parse nullability settings", fmt.Errorf("invalid nullability settings type"))
+					return
+				} else if nullabilitySettings.Enabled {
+					preserveNullsInMergePatch = true
+				}
+			}
+			if preserveNullsInMergePatch {
+				// Replace nulls with the string representation
+				patchData, err = replaceNulls(patchData, nullabilitySettings)
+				if err != nil {
+					huma.WriteErr(api, ctx, http.StatusUnprocessableEntity, "failed to replace nulls in request", err)
+					return
+				}
+			}
 			patched, err = jsonpatch.MergePatch(origWriter.Body.Bytes(), patchData)
 			if err != nil {
 				huma.WriteErr(api, ctx, http.StatusUnprocessableEntity, "Unable to apply patch", err)
 				return
+			}
+			if preserveNullsInMergePatch {
+				// Replace null string representations with nulls
+				patched, err = restoreNulls(patched, nullabilitySettings)
+				if err != nil {
+					huma.WriteErr(api, ctx, http.StatusUnprocessableEntity, "failed to replace nulls in request", err)
+					return
+				}
 			}
 		case "application/merge-patch+shorthand":
 			// Load the original data so it can be used as a base.
