@@ -190,7 +190,7 @@ func TestSchema(t *testing.T) {
 		{
 			name:     "ipAddr",
 			input:    netip.AddrFrom4([4]byte{127, 0, 0, 1}),
-			expected: `{"type": "string", "format": "ipv4"}`,
+			expected: `{"type": "string", "format": "ip"}`,
 		},
 		{
 			name:     "json.RawMessage",
