@@ -925,3 +925,69 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 
 	return &s
 }
+
+func mergeAllOfSchemas(schemas []*Schema, r Registry) *Schema {
+	if len(schemas) == 0 {
+		return nil
+	}
+
+	merged := &Schema{
+		AdditionalProperties: false,
+		Properties:           make(map[string]*Schema),
+	}
+
+	requiredSet := make(map[string]struct{})
+
+	mergeFn := func(s *Schema) {
+		if s == nil {
+			return
+		}
+
+		if s.Ref != "" {
+			s = r.SchemaFromRef(s.Ref)
+		}
+
+		if merged.Type == "" {
+			merged.Type = s.Type
+		}
+
+		for name, prop := range s.Properties {
+			if _, exists := merged.Properties[name]; !exists {
+				merged.Properties[name] = prop
+			}
+		}
+
+		for _, r := range s.Required {
+			if _, ok := requiredSet[r]; !ok {
+				requiredSet[r] = struct{}{}
+			}
+		}
+
+		if s.Minimum != nil {
+			merged.Minimum = s.Minimum
+		}
+
+		if s.Maximum != nil {
+			merged.Maximum = s.Maximum
+		}
+
+		if s.MinLength != nil {
+			merged.MinLength = s.MinLength
+		}
+
+		if s.MaxLength != nil {
+			merged.MaxLength = s.MaxLength
+		}
+	}
+
+	for _, s := range schemas {
+		mergeFn(s)
+	}
+
+	for r := range requiredSet {
+		merged.Required = append(merged.Required, r)
+	}
+
+	merged.PrecomputeMessages()
+	return merged
+}

@@ -1693,3 +1693,89 @@ func Test_validateWithDiscriminator(t *testing.T) {
 		})
 	}
 }
+
+type Pet struct {
+	Age uint `json:"age" required:"true" maximum:"99"`
+}
+
+func Test_mergeAllOfSchemas_simpleCase(t *testing.T) {
+	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	catSchema := registry.Schema(reflect.TypeOf(Cat{}), true, "Cat")
+	petSchema := registry.Schema(reflect.TypeOf(Pet{}), true, "Pet")
+
+	s := &huma.Schema{
+		Type:        huma.TypeObject,
+		Description: "Pet",
+		AllOf: []*huma.Schema{
+			{Ref: petSchema.Ref},
+			catSchema,
+		},
+	}
+
+	pb := huma.NewPathBuffer([]byte(""), 0)
+	res := &huma.ValidateResult{}
+
+	tests := []struct {
+		name     string
+		input    any
+		wantErrs []string
+	}{
+		{
+			name: "unknown kind",
+			input: map[string]any{
+				"kind": "unknown",
+				"age":  1,
+				"name": "valid",
+			},
+			wantErrs: []string{"expected value to be one of \"cat\""},
+		},
+		{
+			name: "cat - minLength case",
+			input: map[string]any{
+				"kind": "cat",
+				"age":  1,
+				"name": "c",
+			},
+			wantErrs: []string{"expected length >= 2"},
+		},
+		{
+			name: "pet - missing age",
+			input: map[string]any{
+				"kind": "cat",
+				"name": "valid",
+			},
+			wantErrs: []string{"expected required property age to be present"},
+		},
+		{
+			name: "pet - invalid age",
+			input: map[string]any{
+				"kind": "cat",
+				"name": "valid",
+				"age":  100,
+			},
+			wantErrs: []string{"expected number <= 99"},
+		},
+		{
+			name: "pet - unknown field",
+			input: map[string]any{
+				"kind":    "cat",
+				"name":    "valid",
+				"age":     1,
+				"unknown": "unknown",
+			},
+			wantErrs: []string{"unexpected property"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pb.Reset()
+			res.Reset()
+			huma.Validate(registry, s, pb, huma.ModeWriteToServer, tc.input, res)
+			require.Len(t, res.Errors, len(tc.wantErrs))
+			for i, wantErr := range tc.wantErrs {
+				assert.Contains(t, res.Errors[i].Error(), wantErr)
+			}
+		})
+	}
+}

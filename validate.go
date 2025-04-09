@@ -376,9 +376,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 	}
 
 	if s.AllOf != nil {
-		for _, sub := range s.AllOf {
-			Validate(r, sub, path, mode, v, res)
-		}
+		Validate(r, mergeAllOfSchemas(s.AllOf, r), path, mode, v, res)
 	}
 
 	if s.Not != nil {
