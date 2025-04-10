@@ -10,9 +10,11 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -401,13 +403,14 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	if config.OpenAPIPath != "" {
+		cacheDisabled := isOpenAPICachingDisabled()
 		var specJSON []byte
 		a.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + ".json",
 		}, func(ctx Context) {
 			ctx.SetHeader("Content-Type", "application/vnd.oai.openapi+json")
-			if specJSON == nil {
+			if specJSON == nil || cacheDisabled {
 				specJSON, _ = json.Marshal(newAPI.OpenAPI())
 			}
 			ctx.BodyWriter().Write(specJSON)
@@ -418,7 +421,7 @@ func NewAPI(config Config, a Adapter) API {
 			Path:   config.OpenAPIPath + "-3.0.json",
 		}, func(ctx Context) {
 			ctx.SetHeader("Content-Type", "application/vnd.oai.openapi+json")
-			if specJSON30 == nil {
+			if specJSON30 == nil || cacheDisabled {
 				specJSON30, _ = newAPI.OpenAPI().Downgrade()
 			}
 			ctx.BodyWriter().Write(specJSON30)
@@ -429,7 +432,7 @@ func NewAPI(config Config, a Adapter) API {
 			Path:   config.OpenAPIPath + ".yaml",
 		}, func(ctx Context) {
 			ctx.SetHeader("Content-Type", "application/vnd.oai.openapi+yaml")
-			if specYAML == nil {
+			if specYAML == nil || cacheDisabled {
 				specYAML, _ = newAPI.OpenAPI().YAML()
 			}
 			ctx.BodyWriter().Write(specYAML)
@@ -440,7 +443,7 @@ func NewAPI(config Config, a Adapter) API {
 			Path:   config.OpenAPIPath + "-3.0.yaml",
 		}, func(ctx Context) {
 			ctx.SetHeader("Content-Type", "application/vnd.oai.openapi+yaml")
-			if specYAML30 == nil {
+			if specYAML30 == nil || cacheDisabled {
 				specYAML30, _ = newAPI.OpenAPI().DowngradeYAML()
 			}
 			ctx.BodyWriter().Write(specYAML30)
@@ -502,4 +505,13 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	return newAPI
+}
+
+func isOpenAPICachingDisabled() (result bool) {
+	if val, exists := os.LookupEnv("DISABLE_OPENAPI_CACHING"); exists {
+		if parsed, err := strconv.ParseBool(val); err == nil {
+			result = parsed
+		}
+	}
+	return
 }
