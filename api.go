@@ -300,7 +300,7 @@ func (a *api) Negotiate(accept string) (string, error) {
 		ct = a.formatKeys[0]
 	}
 	if _, ok := a.formats[ct]; !ok {
-		return ct, fmt.Errorf("unknown content type: %s", ct)
+		return ct, fmt.Errorf("%w: %s", ErrUnknownContentType, ct)
 	}
 	return ct, nil
 }
@@ -323,7 +323,7 @@ func (a *api) Marshal(w io.Writer, ct string, v any) error {
 		f, ok = a.formats[ct[start:]]
 	}
 	if !ok {
-		return fmt.Errorf("unknown content type: %s", ct)
+		return fmt.Errorf("%w: %s", ErrUnknownContentType, ct)
 	}
 	return f.Marshal(w, v)
 }
