@@ -9,6 +9,8 @@ import (
 	"os"
 	"reflect"
 	"runtime/debug"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -104,6 +106,10 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 
 		dataSchemas = append(dataSchemas, s)
 	}
+
+	slices.SortFunc(dataSchemas, func(b, c *huma.Schema) int {
+		return strings.Compare(b.Title, c.Title)
+	})
 
 	schema := &huma.Schema{
 		Title:       "Server Sent Events",
