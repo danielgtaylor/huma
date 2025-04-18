@@ -131,39 +131,39 @@ data: {"error": "encode error: json: unsupported type: chan int"}
 			api.Adapter().ServeHTTP(w, req)
 		},
 	},
-	// {
-	// 	Title: "sse stable event order in openapi",
-	// 	TestFunc: func(t *testing.T) {
-	// 		_, api := humatest.New(t)
-	// 		sse.Register(api, huma.Operation{
-	// 			OperationID: "sse",
-	// 			Method:      http.MethodGet,
-	// 			Path:        "/sse",
-	// 		}, map[string]any{
-	// 			"message":    &DefaultMessage{},
-	// 			"userCreate": UserCreatedEvent{},
-	// 			"zMessage":   ZMessage{},
-	// 			"userDelete": UserDeletedEvent{},
-	// 			"aMessage":   AMessage{},
-	// 		}, func(ctx context.Context, input *struct{}, send sse.Sender) {
-	// 			send.Data(DefaultMessage{Message: "Hello, world!"})
-	// 		})
+	{
+		Title: "sse stable event order in openapi",
+		TestFunc: func(t *testing.T) {
+			_, api := humatest.New(t)
+			sse.Register(api, huma.Operation{
+				OperationID: "sse",
+				Method:      http.MethodGet,
+				Path:        "/sse",
+			}, map[string]any{
+				"message":    &DefaultMessage{},
+				"userCreate": UserCreatedEvent{},
+				"zMessage":   ZMessage{},
+				"userDelete": UserDeletedEvent{},
+				"aMessage":   AMessage{},
+			}, func(ctx context.Context, input *struct{}, send sse.Sender) {
+				send.Data(DefaultMessage{Message: "Hello, world!"})
+			})
 
-	// 		o := api.OpenAPI()
-	// 		events := o.Paths["/sse"].Get.Responses["200"].Content["text/event-stream"].Schema.Items.Extensions["oneOf"].([]*huma.Schema)
-	// 		titles := make([]string, len(events))
-	// 		for i, event := range events {
-	// 			titles[i] = event.Title
-	// 		}
-	// 		assert.Equal(t, []string{
-	// 			"Event aMessage",
-	// 			"Event message",
-	// 			"Event userCreate",
-	// 			"Event userDelete",
-	// 			"Event zMessage",
-	// 		}, titles)
-	// 	},
-	// },
+			o := api.OpenAPI()
+			events := o.Paths["/sse"].Get.Responses["200"].Content["text/event-stream"].Schema.Items.Extensions["oneOf"].([]*huma.Schema)
+			titles := make([]string, len(events))
+			for i, event := range events {
+				titles[i] = event.Title
+			}
+			assert.Equal(t, []string{
+				"Event aMessage",
+				"Event message",
+				"Event userCreate",
+				"Event userDelete",
+				"Event zMessage",
+			}, titles)
+		},
+	},
 }
 
 func TestSSE(t *testing.T) {
