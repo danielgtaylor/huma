@@ -622,8 +622,13 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	oapi := api.OpenAPI()
 	registry := oapi.Components.Schemas
 
-	if op.Method == "" || op.Path == "" {
-		panic("method and path must be specified in operation")
+	if op.Method == "" {
+		panic("method must be specified in operation")
+	}
+	if op.Path == "" {
+		if grp, ok := api.(*Group); !ok || len(grp.prefixes) == 0 {
+			panic("path must be specified in operation")
+		}
 	}
 	initResponses(&op)
 

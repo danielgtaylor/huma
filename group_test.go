@@ -26,6 +26,24 @@ func TestGroupNoPrefix(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, resp.Result().StatusCode)
 }
 
+func TestGroupEmptyPath(t *testing.T) {
+	_, api := humatest.New(t)
+
+	grp := huma.NewGroup(api, "/users")
+
+	huma.Get(grp, "", func(ctx context.Context, input *struct{}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	assert.Nil(t, api.OpenAPI().Paths["/"])
+	assert.Nil(t, api.OpenAPI().Paths[""])
+	assert.NotNil(t, api.OpenAPI().Paths["/users"])
+
+	resp := api.Get("/users")
+	assert.Equal(t, http.StatusNoContent, resp.Result().StatusCode)
+
+}
+
 func TestGroupMultiPrefix(t *testing.T) {
 	_, api := humatest.New(t)
 
