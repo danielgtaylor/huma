@@ -75,7 +75,6 @@ func TestCustomMiddleware(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.Code)
 	assert.Equal(t, "my-value", resp.Header().Get("MyHeader"))
 	assert.Equal(t, "test-value", resp.Header().Get("TestHeader"))
-
 }
 
 func BenchmarkHumaGorillaMux(b *testing.B) {
