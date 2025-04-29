@@ -10,7 +10,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
-	"path"
 	"reflect"
 	"regexp"
 	"strings"
@@ -180,6 +179,15 @@ type Config struct {
 	// you wish to provide your own documentation renderer, you can leave this
 	// blank and attach it directly to the router or adapter.
 	DocsPath string
+
+	// DocsAdapter is an optional [Adapter] that will be used to serve the API
+	// documentation. If unset, the main adapter will be used.
+	// Setting this allows you to use a different router or middleware stack for
+	// the documentation.
+	// Note that if this [Adapter] has a different path than the main one, the
+	// default CreateHook set in [DefaultConfig] needs to be modified to account
+	// for it.
+	DocsAdapter Adapter
 
 	// SchemasPath is the path to the API schemas. If set to `/schemas` it will
 	// allow clients to get `/schemas/{schema}` to view the schema in a browser
@@ -362,7 +370,7 @@ func getAPIPrefix(oapi *OpenAPI) string {
 //	config := huma.DefaultConfig("Example API", "1.0.0")
 //	api := huma.NewAPI(config, adapter)
 func NewAPI(config Config, a Adapter) API {
-	for i := 0; i < len(config.CreateHooks); i++ {
+	for i := range config.CreateHooks {
 		config = config.CreateHooks[i](config)
 	}
 
@@ -400,9 +408,14 @@ func NewAPI(config Config, a Adapter) API {
 		newAPI.formatKeys = append(newAPI.formatKeys, k)
 	}
 
+	docsAdapter := newAPI.adapter
+	if config.DocsAdapter != nil {
+		docsAdapter = config.DocsAdapter
+	}
+
 	if config.OpenAPIPath != "" {
 		var specJSON []byte
-		a.Handle(&Operation{
+		docsAdapter.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + ".json",
 		}, func(ctx Context) {
@@ -413,7 +426,7 @@ func NewAPI(config Config, a Adapter) API {
 			ctx.BodyWriter().Write(specJSON)
 		})
 		var specJSON30 []byte
-		a.Handle(&Operation{
+		docsAdapter.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + "-3.0.json",
 		}, func(ctx Context) {
@@ -424,7 +437,7 @@ func NewAPI(config Config, a Adapter) API {
 			ctx.BodyWriter().Write(specJSON30)
 		})
 		var specYAML []byte
-		a.Handle(&Operation{
+		docsAdapter.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + ".yaml",
 		}, func(ctx Context) {
@@ -435,7 +448,7 @@ func NewAPI(config Config, a Adapter) API {
 			ctx.BodyWriter().Write(specYAML)
 		})
 		var specYAML30 []byte
-		a.Handle(&Operation{
+		docsAdapter.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + "-3.0.yaml",
 		}, func(ctx Context) {
@@ -448,14 +461,10 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	if config.DocsPath != "" {
-		a.Handle(&Operation{
+		docsAdapter.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.DocsPath,
 		}, func(ctx Context) {
-			openAPIPath := config.OpenAPIPath
-			if prefix := getAPIPrefix(newAPI.OpenAPI()); prefix != "" {
-				openAPIPath = path.Join(prefix, openAPIPath)
-			}
 			ctx.SetHeader("Content-Type", "text/html")
 			title := "Elements in HTML"
 			if config.Info != nil && config.Info.Title != "" {
@@ -476,7 +485,7 @@ func NewAPI(config Config, a Adapter) API {
   <body style="height: 100vh;">
 
     <elements-api
-      apiDescriptionUrl="` + openAPIPath + `.yaml"
+      apiDescriptionUrl="` + strings.TrimPrefix(config.OpenAPIPath, "/") + `.yaml"
       router="hash"
       layout="sidebar"
       tryItCredentialsPolicy="same-origin"
@@ -488,7 +497,7 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	if config.SchemasPath != "" {
-		a.Handle(&Operation{
+		docsAdapter.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.SchemasPath + "/{schema}",
 		}, func(ctx Context) {
