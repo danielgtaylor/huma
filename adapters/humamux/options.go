@@ -7,11 +7,14 @@ import (
 
 type Option func(*options)
 
+// WithRouteCustomizer allows customizing a mux route, like adding HTTP middlewares.
 func WithRouteCustomizer(f func(op *huma.Operation, r *mux.Route)) Option {
 	return func(o *options) {
 		o.routeCustomizer = f
 	}
 }
+
+// options
 
 func parseOptions(optionList []Option) options {
 	var optns options
