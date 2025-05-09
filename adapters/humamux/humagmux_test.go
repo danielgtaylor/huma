@@ -2,6 +2,7 @@ package humamux
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,10 +10,72 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/assert"
 )
 
 var lastModified = time.Now()
+
+type TestInput struct {
+	Group      string `path:"group"`
+	Verbose    bool   `query:"verbose"`
+	Auth       string `header:"Authorization"`
+	TestHeader string `header:"TestHeader"`
+	Body       struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	}
+}
+
+// Test outputs (headers, body).
+type TestOutput struct {
+	MyHeader   string `header:"MyHeader"`
+	TestHeader string `header:"TestHeader"`
+	Body       struct {
+		Message string `json:"message"`
+	}
+}
+
+func testHandler(ctx context.Context, input *TestInput) (*TestOutput, error) {
+	resp := &TestOutput{}
+	resp.MyHeader = "my-value"
+	resp.TestHeader = input.TestHeader
+	resp.Body.Message = fmt.Sprintf("Hello, %s <%s>! (%s, %v, %s)", input.Body.Name, input.Body.Email, input.Group, input.Verbose, input.Auth)
+	return resp, nil
+}
+
+func TestCustomMiddleware(t *testing.T) {
+	mw1 := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Header.Set("TestHeader", "test-value")
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	r := mux.NewRouter()
+	api := New(r, huma.DefaultConfig("Test", "1.0.0"),
+		WithRouteCustomizer(func(op *huma.Operation, r *mux.Route) {
+			r.Handler(mw1(r.GetHandler()))
+		}))
+
+	huma.Register(api, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodGet,
+		Path:        "/{group}",
+	}, testHandler)
+
+	testAPI := humatest.Wrap(t, api)
+	resp := testAPI.Do(http.MethodGet, "/foo",
+		"Host: localhost",
+		"Authorization: Bearer abc123",
+		strings.NewReader(`{"name": "Daniel", "email": "daniel@example.com"}`),
+	)
+
+	assert.Equal(t, http.StatusOK, resp.Code)
+	assert.Equal(t, "my-value", resp.Header().Get("MyHeader"))
+	assert.Equal(t, "test-value", resp.Header().Get("TestHeader"))
+}
 
 func BenchmarkHumaGorillaMux(b *testing.B) {
 	type GreetingInput struct {

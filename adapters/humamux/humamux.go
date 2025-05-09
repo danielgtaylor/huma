@@ -132,23 +132,27 @@ func (c *gmuxContext) BodyWriter() io.Writer {
 }
 
 type gMux struct {
+	options
 	router *mux.Router
 }
 
 func (a *gMux) Handle(op *huma.Operation, handler func(huma.Context)) {
-	a.router.
+	route := a.router.
 		NewRoute().
 		Path(op.Path).
 		Methods(op.Method).
 		HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			handler(&gmuxContext{op: op, r: r, w: w})
 		})
+	if a.routeCustomizer != nil {
+		a.routeCustomizer(op, route)
+	}
 }
 
 func (a *gMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a.router.ServeHTTP(w, r)
 }
 
-func New(r *mux.Router, config huma.Config) huma.API {
-	return huma.NewAPI(config, &gMux{router: r})
+func New(r *mux.Router, config huma.Config, options ...Option) huma.API {
+	return huma.NewAPI(config, &gMux{router: r, options: parseOptions(options)})
 }
