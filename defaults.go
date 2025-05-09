@@ -81,7 +81,7 @@ func DefaultConfig(title, version string) Config {
 				// Schema that describes the response structure.
 				// This is a create hook so we get the latest schema path setting.
 				linkTransformer := NewSchemaLinkTransformer(schemaPrefix, c.SchemasPath)
-				c.OpenAPI.OnAddOperation = append(c.OpenAPI.OnAddOperation, linkTransformer.OnAddOperation)
+				c.OnAddOperation = append(c.OnAddOperation, linkTransformer.OnAddOperation)
 				c.Transformers = append(c.Transformers, linkTransformer.Transform)
 				return c
 			},

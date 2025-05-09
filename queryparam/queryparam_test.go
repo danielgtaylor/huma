@@ -109,7 +109,7 @@ func TestParseQuery(t *testing.T) {
 				}
 			} else {
 				// Doesn't get stuck, doesn't crash.
-				assert.Equal(t, "", Get(test.query, "missingvalue"))
+				assert.Empty(t, Get(test.query, "missingvalue"))
 			}
 		})
 	}

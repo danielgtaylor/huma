@@ -15,7 +15,7 @@ Adapters are in the [`adapters`](https://github.com/danielgtaylor/huma/tree/main
 -   [Echo](https://echo.labstack.com/) via [`humaecho`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humaecho)
 -   [Fiber](https://gofiber.io/) via [`humafiber`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humafiber)
 -   [gin](https://gin-gonic.com/) via [`humagin`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humagin)
--   [Go 1.22+ `http.ServeMux`](https://pkg.go.dev/net/http@master#ServeMux) via [`humago`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humago) (requires `go 1.22` in `go.mod`)
+-   [Go 1.22+ `http.ServeMux`](https://pkg.go.dev/net/http@master#ServeMux) via [`humago`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humago) (requires `go 1.22` or newer in `go.mod`)
 -   [gorilla/mux](https://github.com/gorilla/mux) via [`humamux`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humamux)
 -   [httprouter](https://github.com/julienschmidt/httprouter) via [`humahttprouter`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2/adapters/humahttprouter)
 

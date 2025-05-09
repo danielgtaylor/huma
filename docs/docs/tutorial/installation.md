@@ -6,7 +6,7 @@ description: Learn how to install Huma and create your first API.
 
 ## Prerequisites
 
-Huma requires [Go 1.21 or newer](https://go.dev/dl/), so install that first. You'll also want some kind of [text editor or IDE](https://code.visualstudio.com/) to write code and a terminal to run commands.
+Huma requires [Go 1.23 or newer](https://go.dev/dl/), so install that first. You'll also want some kind of [text editor or IDE](https://code.visualstudio.com/) to write code and a terminal to run commands.
 
 ## Project Setup
 
