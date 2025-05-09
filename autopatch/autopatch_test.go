@@ -25,10 +25,11 @@ func (m SaleModel) String() string {
 }
 
 type ThingModel struct {
-	ID    string      `json:"id"`
-	Price float32     `json:"price,omitempty"`
-	Sales []SaleModel `json:"sales,omitempty"`
-	Tags  []string    `json:"tags,omitempty"`
+	ID      string      `json:"id"`
+	Price   float32     `json:"price,omitempty"`
+	Sales   []SaleModel `json:"sales,omitempty"`
+	Tags    []string    `json:"tags,omitempty"`
+	Comment *string     `json:"comment"`
 }
 
 func (m ThingModel) ETag() string {
@@ -330,6 +331,92 @@ func TestDeprecatedPatch(t *testing.T) {
 
 	assert.True(t, api.OpenAPI().Paths["/things/{thing-id}"].Patch.Deprecated)
 }
+
+func TestNullabilityExtension(t *testing.T) {
+	comment := "comment1"
+	db := map[string]*ThingModel{
+		"test": {
+			ID:    "test",
+			Price: 1.00,
+			Sales: []SaleModel{
+				{Location: "US", Count: 123},
+			},
+			Tags:    []string{"tag1", "tag2"},
+			Comment: &comment,
+		},
+	}
+
+	_, api := humatest.New(t)
+
+	// Register the nullability extension
+	RegisterNullabilityExtension(api, "__NULL__")
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-thing",
+		Method:      http.MethodGet,
+		Path:        "/things/{thing-id}",
+		Errors:      []int{404},
+	}, func(ctx context.Context, input *struct {
+		ThingIDParam
+	}) (*struct {
+		Body *ThingModel
+	}, error) {
+		thing := db[input.ThingID]
+		if thing == nil {
+			return nil, huma.Error404NotFound("Not found")
+		}
+		return &struct{ Body *ThingModel }{thing}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "put-thing",
+		Method:      http.MethodPut,
+		Path:        "/things/{thing-id}",
+		Errors:      []int{404},
+	}, func(ctx context.Context, input *struct {
+		ThingIDParam
+		Body ThingModel
+	}) (*struct {
+		Body *ThingModel
+	}, error) {
+		db[input.ThingID] = &input.Body
+		return &struct{ Body *ThingModel }{&input.Body}, nil
+	})
+
+	AutoPatch(api)
+
+	// Test setting an array field to null using the string representation
+	w := api.Patch("/things/test",
+		"Content-Type: application/merge-patch+json",
+		strings.NewReader(`{"tags": "__NULL__"}`),
+	)
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	// Verify the field was actually set to null; expect it to be omitted
+	w = api.Get("/things/test")
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotContains(t, w.Body.String(), `"tags"`)
+
+	// Test setting a nullable string field to null
+	w = api.Patch("/things/test",
+		"Content-Type: application/merge-patch+json",
+		strings.NewReader(`{"comment": null}`),
+	)
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+
+	// Verify the nested field was set to null
+	w = api.Get("/things/test")
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), `"comment":null`)
+
+	// Test error handling for invalid JSON
+	w = api.Patch("/things/test",
+		"Content-Type: application/merge-patch+json",
+		strings.NewReader(`{invalid`),
+	)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+}
+
 func TestMakeOptionalSchemaBasicProperties(t *testing.T) {
 	originalSchema := &huma.Schema{
 		Type: "object",
@@ -395,6 +482,98 @@ func TestMakeOptionalSchemaNot(t *testing.T) {
 
 func TestMakeOptionalSchemaNilInput(t *testing.T) {
 	assert.Nil(t, makeOptionalSchema(nil))
+}
+
+func TestReplaceNulls(t *testing.T) {
+	settings := MergePatchNullabilitySettings{
+		Enabled:                    true,
+		StringRepresentationOfNull: "__NULL__",
+	}
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "simple null",
+			input:    `{"name": null}`,
+			expected: `{"name":"__NULL__"}`,
+		},
+		{
+			name:     "nested null",
+			input:    `{"user": {"name": null, "active": true}}`,
+			expected: `{"user":{"active":true,"name":"__NULL__"}}`,
+		},
+		{
+			name:     "array with null",
+			input:    `{"tags": ["a", null, "c"]}`,
+			expected: `{"tags":["a","__NULL__","c"]}`,
+		},
+		{
+			name:     "no nulls",
+			input:    `{"name": "test", "count": 42}`,
+			expected: `{"count":42,"name":"test"}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := replaceNulls([]byte(tc.input), settings)
+			assert.NoError(t, err)
+			assert.JSONEq(t, tc.expected, string(result))
+		})
+	}
+
+	// Test error case
+	_, err := replaceNulls([]byte(`{invalid json`), settings)
+	assert.Error(t, err)
+}
+
+func TestRestoreNulls(t *testing.T) {
+	settings := MergePatchNullabilitySettings{
+		Enabled:                    true,
+		StringRepresentationOfNull: "__NULL__",
+	}
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "simple null string",
+			input:    `{"name": "__NULL__"}`,
+			expected: `{"name":null}`,
+		},
+		{
+			name:     "nested null string",
+			input:    `{"user": {"name": "__NULL__", "active": true}}`,
+			expected: `{"user":{"name":null,"active":true}}`,
+		},
+		{
+			name:     "array with null string",
+			input:    `{"tags": ["a", "__NULL__", "c"]}`,
+			expected: `{"tags":["a",null,"c"]}`,
+		},
+		{
+			name:     "no null strings",
+			input:    `{"name": "test", "count": 42}`,
+			expected: `{"name":"test","count":42}`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := restoreNulls([]byte(tc.input), settings)
+			assert.NoError(t, err)
+			assert.JSONEq(t, tc.expected, string(result))
+		})
+	}
+
+	// Test error case
+	_, err := restoreNulls([]byte(`{invalid json`), settings)
+	assert.Error(t, err)
 }
 
 func TestMakeOptionalSchemaNestedSchemas(t *testing.T) {
