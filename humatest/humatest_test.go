@@ -129,7 +129,7 @@ func TestContext(t *testing.T) {
 }
 
 func TestAdapter(t *testing.T) {
-	var _ huma.Adapter = NewAdapter()
+	var _ huma.Adapter = NewAdapter() //nolint:staticcheck
 }
 
 func TestNewAPI(t *testing.T) {

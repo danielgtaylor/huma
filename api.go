@@ -381,12 +381,12 @@ func NewAPI(config Config, a Adapter) API {
 		config.OpenAPI.OpenAPI = "3.1.0"
 	}
 
-	if config.OpenAPI.Components == nil {
-		config.OpenAPI.Components = &Components{}
+	if config.Components == nil {
+		config.Components = &Components{}
 	}
 
-	if config.OpenAPI.Components.Schemas == nil {
-		config.OpenAPI.Components.Schemas = NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+	if config.Components.Schemas == nil {
+		config.Components.Schemas = NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
 	}
 
 	if config.DefaultFormat == "" && config.Formats["application/json"].Marshal != nil {
@@ -495,7 +495,7 @@ func NewAPI(config Config, a Adapter) API {
 			// Some routers dislike a path param+suffix, so we strip it here instead.
 			schema := strings.TrimSuffix(ctx.Param("schema"), ".json")
 			ctx.SetHeader("Content-Type", "application/json")
-			b, _ := json.Marshal(config.OpenAPI.Components.Schemas.Map()[schema])
+			b, _ := json.Marshal(config.Components.Schemas.Map()[schema])
 			b = rxSchema.ReplaceAll(b, []byte(config.SchemasPath+`/$1.json`))
 			ctx.BodyWriter().Write(b)
 		})

@@ -235,7 +235,7 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC5322Email, err))
 		}
 	case "hostname":
-		if !(rxHostname.MatchString(str) && len(str) < 256) {
+		if len(str) >= 256 || !rxHostname.MatchString(str) {
 			res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
 		}
 	// TODO: proper idn-hostname support... need to figure out how.

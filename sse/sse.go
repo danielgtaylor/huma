@@ -175,10 +175,10 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 
 					// Write optional fields
 					if msg.ID > 0 {
-						bw.Write([]byte(fmt.Sprintf("id: %d\n", msg.ID)))
+						bw.Write(fmt.Appendf(nil, "id: %d\n", msg.ID))
 					}
 					if msg.Retry > 0 {
-						bw.Write([]byte(fmt.Sprintf("retry: %d\n", msg.Retry)))
+						bw.Write(fmt.Appendf(nil, "retry: %d\n", msg.Retry))
 					}
 
 					event, ok := typeToEvent[deref(reflect.TypeOf(msg.Data))]

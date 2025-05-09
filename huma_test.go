@@ -731,7 +731,7 @@ func TestFeatures(t *testing.T) {
 						Name string `json:"name"`
 					}
 				}) (*struct{}, error) {
-					assert.Equal(t, `{"name":"foo"}`, string(input.RawBody))
+					assert.JSONEq(t, `{"name":"foo"}`, string(input.RawBody))
 					assert.Equal(t, "foo", input.Body.Name)
 					return nil, nil
 				})
@@ -756,7 +756,7 @@ func TestFeatures(t *testing.T) {
 				}, func(ctx context.Context, input *struct {
 					Input
 				}) (*struct{}, error) {
-					assert.Equal(t, `{"name":"foo"}`, string(input.RawBody))
+					assert.JSONEq(t, `{"name":"foo"}`, string(input.RawBody))
 					assert.Equal(t, "foo", input.Body.Name)
 					return nil, nil
 				})
@@ -955,10 +955,10 @@ func TestFeatures(t *testing.T) {
 						} `json:"items,omitempty"`
 					}
 				}) (*struct{}, error) {
-					assert.EqualValues(t, "Huma", *input.Body.Name)
+					assert.Equal(t, "Huma", *input.Body.Name)
 					assert.True(t, *input.Body.Enabled)
-					assert.EqualValues(t, []*string{Ptr("foo"), Ptr("bar")}, input.Body.Tags)
-					assert.EqualValues(t, []*int{Ptr(1), Ptr(2), Ptr(3)}, input.Body.Numbers)
+					assert.Equal(t, []*string{Ptr("foo"), Ptr("bar")}, input.Body.Tags)
+					assert.Equal(t, []*int{Ptr(1), Ptr(2), Ptr(3)}, input.Body.Numbers)
 					assert.Equal(t, 1, input.Body.Items[0].ID)
 					assert.True(t, *input.Body.Items[0].Verified)
 					assert.Equal(t, 2, input.Body.Items[1].ID)
@@ -984,7 +984,7 @@ func TestFeatures(t *testing.T) {
 					}
 				}) (*struct{}, error) {
 					// Ensure we can send the zero value and it doesn't get overridden.
-					assert.EqualValues(t, "", *input.Body.Name)
+					assert.Empty(t, *input.Body.Name)
 					assert.False(t, *input.Body.Enabled)
 					return nil, nil
 				})
@@ -1158,7 +1158,7 @@ func TestFeatures(t *testing.T) {
 						Name string `json:"name"`
 					}
 				}) (*struct{}, error) {
-					assert.Equal(t, `{"name":"foo"}`, string(input.RawBody))
+					assert.JSONEq(t, `{"name":"foo"}`, string(input.RawBody))
 					assert.Equal(t, "foo", input.Body.Name)
 					return nil, nil
 				})
@@ -2673,7 +2673,7 @@ func TestCustomError(t *testing.T) {
 	})
 
 	resp := api.Get("/error", "Host: localhost")
-	assert.Equal(t, `{"$schema":"http://localhost/schemas/MyError.json","message":"not found","details":["some-other-error"]}`+"\n", resp.Body.String())
+	assert.JSONEq(t, `{"$schema":"http://localhost/schemas/MyError.json","message":"not found","details":["some-other-error"]}`, resp.Body.String())
 }
 
 type BrokenWriter struct {

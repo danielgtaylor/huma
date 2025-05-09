@@ -23,7 +23,7 @@ func TestAcceptSingle(t *testing.T) {
 }
 
 func TestNoMatch(t *testing.T) {
-	assert.Equal(t, "", SelectQValue("a; q=1.0, b;q=1.0,c; q=0.3", []string{"d", "e"}))
+	assert.Empty(t, SelectQValue("a; q=1.0, b;q=1.0,c; q=0.3", []string{"d", "e"}))
 }
 
 func TestAcceptFast(t *testing.T) {
@@ -47,14 +47,14 @@ func TestAcceptBestFast(t *testing.T) {
 }
 
 func TestNoMatchFast(t *testing.T) {
-	assert.Equal(t, "", SelectQValueFast("a; q=1.0, b;q=1.0,c; q=0.3", []string{"d", "e"}))
+	assert.Empty(t, SelectQValueFast("a; q=1.0, b;q=1.0,c; q=0.3", []string{"d", "e"}))
 }
 
 func TestMalformedFast(t *testing.T) {
-	assert.Equal(t, "", SelectQValueFast("a;,", []string{"d", "e"}))
+	assert.Empty(t, SelectQValueFast("a;,", []string{"d", "e"}))
 	assert.Equal(t, "a", SelectQValueFast(",a ", []string{"a", "b"}))
-	assert.Equal(t, "", SelectQValueFast("a;;", []string{"a", "b"}))
-	assert.Equal(t, "", SelectQValueFast(";,", []string{"a", "b"}))
+	assert.Empty(t, SelectQValueFast("a;;", []string{"a", "b"}))
+	assert.Empty(t, SelectQValueFast(";,", []string{"a", "b"}))
 	assert.Equal(t, "a", SelectQValueFast("a;q=invalid", []string{"a", "b"}))
 }
 

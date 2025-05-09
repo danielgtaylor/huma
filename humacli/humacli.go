@@ -70,7 +70,7 @@ var durationType = reflect.TypeOf((*time.Duration)(nil)).Elem()
 //	})
 func WithOptions[Options any](f func(cmd *cobra.Command, args []string, options *Options)) func(*cobra.Command, []string) {
 	return func(cmd *cobra.Command, s []string) {
-		var options *Options = cmd.Context().Value(optionsKey).(*Options)
+		var options = cmd.Context().Value(optionsKey).(*Options)
 		f(cmd, s, options)
 	}
 }

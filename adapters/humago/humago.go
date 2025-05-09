@@ -66,14 +66,7 @@ func (c *goContext) URL() url.URL {
 }
 
 func (c *goContext) Param(name string) string {
-	// For now, support Go 1.22+ while still compiling in older versions by
-	// checking for the existence of the new method.
-	// TODO: eventually remove when the minimum Go version goes to 1.22.
-	var v any = c.r
-	if pv, ok := v.(interface{ PathValue(string) string }); ok {
-		return pv.PathValue(name)
-	}
-	panic("requires Go 1.22+")
+	return c.r.PathValue(name)
 }
 
 func (c *goContext) Query(name string) string {
@@ -169,11 +162,6 @@ func NewAdapter(m Mux, prefix string) huma.Adapter {
 //	mux := http.NewServeMux()
 //	api := humago.New(mux, huma.DefaultConfig("My API", "1.0.0"))
 func New(m Mux, config huma.Config) huma.API {
-	// Panic if Go version is less than 1.22
-	var v any = &http.Request{}
-	if _, ok := v.(interface{ PathValue(string) string }); !ok {
-		panic("This adapter requires Go 1.22+")
-	}
 	return huma.NewAPI(config, &goAdapter{m, ""})
 }
 
