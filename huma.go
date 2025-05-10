@@ -2039,8 +2039,14 @@ func convenience[I, O any](api API, method, path string, handler func(context.Co
 		Path:        path,
 		Metadata:    map[string]any{},
 	}
-	for _, oh := range operationHandlers {
-		oh(&operation)
+	if grp, ok := api.(*Group); ok {
+		for _, oh := range operationHandlers {
+			grp.UseSimpleModifier(oh)
+		}
+	} else {
+		for _, oh := range operationHandlers {
+			oh(&operation)
+		}
 	}
 	// If not modified, hint that these were auto-generated!
 	if operation.OperationID == opID {
