@@ -16,6 +16,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var lastModified = time.Now()
@@ -380,14 +381,14 @@ func TestPathParamDecoding(t *testing.T) {
 	resp := tapi.Get("/test/hello")
 	assert.Equal(t, http.StatusOK, resp.Code)
 	var normal Output
-	assert.NoError(t, json.Unmarshal(resp.Body.Bytes(), &normal.Body))
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &normal.Body))
 	assert.Equal(t, "hello", normal.Body.Value)
 
 	// URL-encoded path parameters should be decoded correctly
 	resp = tapi.Get("/test/hello%20%2Fworld%3Ftest%23fragment")
 	assert.Equal(t, http.StatusOK, resp.Code)
 	var special Output
-	assert.NoError(t, json.Unmarshal(resp.Body.Bytes(), &special.Body))
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &special.Body))
 	assert.Equal(t, "hello /world?test#fragment", special.Body.Value)
 }
 
