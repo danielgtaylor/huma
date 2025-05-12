@@ -66,8 +66,11 @@ func (c *chiContext) URL() url.URL {
 }
 
 func (c *chiContext) Param(name string) string {
-	// TODO: switch to c.r.PathValue when go.mod requires go >= 1.22
-	return chi.URLParam(c.r, name)
+	if c.r.URL.RawPath != "" {
+		r, _ := url.PathUnescape(c.r.PathValue(name))
+		return r
+	}
+	return c.r.PathValue(name)
 }
 
 func (c *chiContext) Query(name string) string {

@@ -353,6 +353,44 @@ func TestChiRouterPrefix(t *testing.T) {
 	assert.Contains(t, resp.Body.String(), "/api/openapi.yaml")
 }
 
+func TestPathParamDecoding(t *testing.T) {
+	r := chi.NewMux()
+	app := New(r, huma.DefaultConfig("Test", "1.0.0"))
+
+	type PathInput struct {
+		Value string `path:"value"`
+	}
+
+	type Output struct {
+		Body struct {
+			Value string `json:"value"`
+		}
+	}
+
+	// Register a handler that returns the path parameter
+	huma.Get(app, "/test/{value}", func(ctx context.Context, input *PathInput) (*Output, error) {
+		out := &Output{}
+		out.Body.Value = input.Value
+		return out, nil
+	})
+
+	tapi := humatest.Wrap(t, app)
+
+	// No changes for simple path parameters
+	resp := tapi.Get("/test/hello")
+	assert.Equal(t, http.StatusOK, resp.Code)
+	var normal Output
+	assert.NoError(t, json.Unmarshal(resp.Body.Bytes(), &normal.Body))
+	assert.Equal(t, "hello", normal.Body.Value)
+
+	// URL-encoded path parameters should be decoded correctly
+	resp = tapi.Get("/test/hello%20%2Fworld%3Ftest%23fragment")
+	assert.Equal(t, http.StatusOK, resp.Code)
+	var special Output
+	assert.NoError(t, json.Unmarshal(resp.Body.Bytes(), &special.Body))
+	assert.Equal(t, "hello /world?test#fragment", special.Body.Value)
+}
+
 // func BenchmarkHumaV1Chi(t *testing.B) {
 // 	type GreetingInput struct {
 // 		ID          string `path:"id"`
