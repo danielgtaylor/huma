@@ -66,11 +66,15 @@ func (c *chiContext) URL() url.URL {
 }
 
 func (c *chiContext) Param(name string) string {
-	if c.r.URL.RawPath != "" {
-		r, _ := url.PathUnescape(c.r.PathValue(name))
-		return r
+	v := c.r.PathValue(name)
+	if c.r.URL.RawPath == "" {
+		return v // RawPath empty means no escaping was done
 	}
-	return c.r.PathValue(name)
+	u, err := url.PathUnescape(v)
+	if err != nil {
+		return v // not supposed to happen, but if it does, return the original value
+	}
+	return u
 }
 
 func (c *chiContext) Query(name string) string {
