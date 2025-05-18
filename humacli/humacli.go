@@ -156,8 +156,7 @@ func (c *cli[O]) OnStop(fn func()) {
 	c.stop = fn
 }
 
-func (c *cli[O]) setupOptions(t reflect.Type, path []int) {
-	var err error
+func (c *cli[O]) setupOptions(t reflect.Type, path []int) error {
 	flags := c.root.PersistentFlags()
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
@@ -200,14 +199,17 @@ func (c *cli[O]) setupOptions(t reflect.Type, path []int) {
 			var def int64
 			if defaultValue != "" {
 				if fieldType == durationType {
-					var t time.Duration
-					t, err = time.ParseDuration(defaultValue)
+					t, err := time.ParseDuration(defaultValue)
+					if err != nil {
+						return fmt.Errorf("failed to parse duration for field %s: %w", field.Name, err)
+					}
 					def = int64(t)
 				} else {
+					var err error
 					def, err = strconv.ParseInt(defaultValue, 10, 64)
-				}
-				if err != nil {
-					panic(err)
+					if err != nil {
+						return fmt.Errorf("failed to parse int for field %s: %w", field.Name, err)
+					}
 				}
 			}
 			if fieldType == durationType {
@@ -218,16 +220,19 @@ func (c *cli[O]) setupOptions(t reflect.Type, path []int) {
 		case reflect.Bool:
 			var def bool
 			if defaultValue != "" {
+				var err error
 				def, err = strconv.ParseBool(defaultValue)
 				if err != nil {
-					panic(err)
+					return fmt.Errorf("failed to parse bool for field %q: %w", field.Name, err)
 				}
 			}
 			flags.BoolP(name, field.Tag.Get("short"), def, field.Tag.Get("doc"))
 		default:
-			panic("Unsupported option type: " + field.Type.Kind().String())
+			return fmt.Errorf("unsupported option type for field %q: %q", field.Name, field.Type.Kind().String())
 		}
 	}
+
+	return nil
 }
 
 // New creates a new CLI. The `onParsed` callback is called after the command
@@ -278,7 +283,9 @@ func New[O any](onParsed func(Hooks, *O)) CLI {
 	}
 
 	var o O
-	c.setupOptions(reflect.TypeOf(o), []int{})
+	if err := c.setupOptions(reflect.TypeOf(o), []int{}); err != nil {
+		panic(err)
+	}
 
 	c.root.Run = func(cmd *cobra.Command, args []string) {
 		done := make(chan struct{}, 1)
