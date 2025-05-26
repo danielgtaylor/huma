@@ -21,7 +21,7 @@ var MultipartMaxMemory int64 = 8 * 1024
 // Unwrap extracts the underlying HTTP request and response writer from a Huma
 // context. If passed a context from a different adapter it will panic.
 func Unwrap(ctx huma.Context) (*http.Request, http.ResponseWriter) {
-	if c, ok := ctx.(*goContext); ok {
+	if c, ok := huma.OriginalContext(ctx).(*goContext); ok {
 		return c.Unwrap()
 	}
 	panic("not a humago context")

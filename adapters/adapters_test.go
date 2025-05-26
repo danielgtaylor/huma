@@ -27,6 +27,8 @@ import (
 	"github.com/uptrace/bunrouter"
 )
 
+type key struct{}
+
 // Test the various input types (path, query, header, body).
 type TestInput struct {
 	Group   string `path:"group"`
@@ -90,7 +92,7 @@ func TestAdapters(t *testing.T) {
 		return huma.DefaultConfig("Test", "1.0.0")
 	}
 
-	wrap := func(h huma.API, isFiber bool) huma.API {
+	wrap := func(h huma.API, isFiber bool, unwrapper func(ctx huma.Context)) huma.API {
 		h.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
 			assert.Nil(t, ctx.TLS())
 			v := ctx.Version()
@@ -101,6 +103,14 @@ func TestAdapters(t *testing.T) {
 			} else {
 				assert.Equal(t, "http", v.Proto)
 			}
+
+			// Make sure huma.WithValue works correctly
+			ctx = huma.WithContext(ctx, context.WithValue(ctx.Context(), key{}, "value"))
+
+			next(ctx)
+		}, func(ctx huma.Context, next func(huma.Context)) {
+			// Make sure the Unwrap func does not panic even when the context is wrapped by WithContext
+			assert.NotPanics(t, func() { unwrapper(ctx) })
 			next(ctx)
 		})
 		return h
@@ -110,14 +120,32 @@ func TestAdapters(t *testing.T) {
 		name string
 		new  func() huma.API
 	}{
-		{"chi", func() huma.API { return wrap(humachi.New(chi.NewMux(), config()), false) }},
-		{"echo", func() huma.API { return wrap(humaecho.New(echo.New(), config()), false) }},
-		{"fiber", func() huma.API { return wrap(humafiber.New(fiber.New(), config()), true) }},
-		{"gin", func() huma.API { return wrap(humagin.New(gin.New(), config()), false) }},
-		{"httprouter", func() huma.API { return wrap(humahttprouter.New(httprouter.New(), config()), false) }},
-		{"mux", func() huma.API { return wrap(humamux.New(mux.NewRouter(), config()), false) }},
-		{"bunrouter", func() huma.API { return wrap(humabunrouter.New(bunrouter.New(), config()), false) }},
-		{"bunroutercompat", func() huma.API { return wrap(humabunrouter.NewCompat(bunrouter.New().Compat(), config()), false) }},
+		{"chi", func() huma.API {
+			return wrap(humachi.New(chi.NewMux(), config()), false, func(ctx huma.Context) { humachi.Unwrap(ctx) })
+		}},
+		{"echo", func() huma.API {
+			return wrap(humaecho.New(echo.New(), config()), false, func(ctx huma.Context) { humaecho.Unwrap(ctx) })
+		}},
+		{"fiber", func() huma.API {
+			return wrap(humafiber.New(fiber.New(), config()), true, func(ctx huma.Context) { humafiber.Unwrap(ctx) })
+		}},
+		{"gin", func() huma.API {
+			return wrap(humagin.New(gin.New(), config()), false, func(ctx huma.Context) { humagin.Unwrap(ctx) })
+		}},
+		{"httprouter", func() huma.API {
+			return wrap(humahttprouter.New(httprouter.New(), config()), false, func(ctx huma.Context) { humahttprouter.Unwrap(ctx) })
+		}},
+		{"mux", func() huma.API {
+			return wrap(humamux.New(mux.NewRouter(), config()), false, func(ctx huma.Context) { humamux.Unwrap(ctx) })
+		}},
+		{"bunrouter", func() huma.API {
+			return wrap(humabunrouter.New(bunrouter.New(), config()), false, func(ctx huma.Context) { humabunrouter.Unwrap(ctx) })
+		}},
+		{"bunroutercompat", func() huma.API {
+			return wrap(humabunrouter.NewCompat(bunrouter.New().Compat(), config()), false, func(ctx huma.Context) {
+				// FIXME: humabunrouter.Unwrap(ctx) doesn't work with compat mode
+			})
+		}},
 	} {
 		t.Run(adapter.name, func(t *testing.T) {
 			testAdapter(t, adapter.new())
