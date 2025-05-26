@@ -14,6 +14,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humaecho"
 	"github.com/danielgtaylor/huma/v2/adapters/humafiber"
 	"github.com/danielgtaylor/huma/v2/adapters/humagin"
+	"github.com/danielgtaylor/huma/v2/adapters/humago"
 	"github.com/danielgtaylor/huma/v2/adapters/humahttprouter"
 	"github.com/danielgtaylor/huma/v2/adapters/humamux"
 	"github.com/danielgtaylor/huma/v2/humatest"
@@ -96,6 +97,7 @@ func TestAdapters(t *testing.T) {
 		h.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
 			assert.Nil(t, ctx.TLS())
 			v := ctx.Version()
+
 			if !isFiber {
 				assert.Equal(t, "HTTP/1.1", v.Proto)
 				assert.Equal(t, 1, v.ProtoMajor)
@@ -128,6 +130,9 @@ func TestAdapters(t *testing.T) {
 		}},
 		{"fiber", func() huma.API {
 			return wrap(humafiber.New(fiber.New(), config()), true, func(ctx huma.Context) { humafiber.Unwrap(ctx) })
+		}},
+		{"go", func() huma.API {
+			return wrap(humago.New(http.NewServeMux(), config()), false, func(ctx huma.Context) { humago.Unwrap(ctx) })
 		}},
 		{"gin", func() huma.API {
 			return wrap(humagin.New(gin.New(), config()), false, func(ctx huma.Context) { humagin.Unwrap(ctx) })
