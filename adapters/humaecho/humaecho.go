@@ -21,7 +21,7 @@ var MultipartMaxMemory int64 = 8 * 1024
 // Unwrap extracts the underlying Echo context from a Huma context. If passed a
 // context from a different adapter it will panic.
 func Unwrap(ctx huma.Context) echo.Context {
-	if c, ok := ctx.(*echoCtx); ok {
+	if c, ok := huma.OriginalContext(ctx).(*echoCtx); ok {
 		return c.Unwrap()
 	}
 	panic("not a humaecho context")

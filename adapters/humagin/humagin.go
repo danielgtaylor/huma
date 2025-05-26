@@ -21,7 +21,7 @@ var MultipartMaxMemory int64 = 8 * 1024
 // Unwrap extracts the underlying Gin context from a Huma context. If passed a
 // context from a different adapter it will panic.
 func Unwrap(ctx huma.Context) *gin.Context {
-	if c, ok := ctx.(*ginCtx); ok {
+	if c, ok := huma.OriginalContext(ctx).(*ginCtx); ok {
 		return c.Unwrap()
 	}
 	panic("not a humagin context")

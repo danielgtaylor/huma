@@ -143,6 +143,13 @@ func (c subContext) Context() context.Context {
 	return c.override
 }
 
+func (c subContext) HumaContext() humaContext {
+	if sub, ok := c.humaContext.(subContext); ok {
+		return sub.HumaContext()
+	}
+	return c.humaContext
+}
+
 // WithContext returns a new `huma.Context` with the underlying `context.Context`
 // replaced with the given one. This is useful for middleware that needs to
 // modify the request context.
@@ -155,6 +162,15 @@ func WithContext(ctx Context, override context.Context) Context {
 // set request-scoped values.
 func WithValue(ctx Context, key, value any) Context {
 	return WithContext(ctx, context.WithValue(ctx.Context(), key, value))
+}
+
+// OriginalContext returns the original `huma.Context` if the given context is a sub-context result of WithValue, otherwise it returns the context itself.
+func OriginalContext(ctx Context) Context {
+	// If the context is a sub-context, return the original context.
+	if sub, ok := ctx.(subContext); ok {
+		return sub.HumaContext()
+	}
+	return ctx
 }
 
 // Transformer is a function that can modify a response body before it is
