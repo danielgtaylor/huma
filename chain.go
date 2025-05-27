@@ -1,20 +1,15 @@
 package huma
 
+type Middleware func(next func(Context)) func(Context)
+
 // Middlewares is a list of middleware functions that can be attached to an
 // API and will be called for all incoming requests.
-type Middlewares []func(ctx Context, next func(Context))
+type Middlewares []Middleware
 
 // Handler builds and returns a handler func from the chain of middlewares,
 // with `endpoint func` as the final handler.
 func (m Middlewares) Handler(endpoint func(Context)) func(Context) {
 	return m.chain(endpoint)
-}
-
-// wrap user middleware func with the next func to one func
-func wrap(fn func(Context, func(Context)), next func(Context)) func(Context) {
-	return func(ctx Context) {
-		fn(ctx, next)
-	}
 }
 
 // chain builds a Middleware composed of an inline middleware stack and endpoint
@@ -26,9 +21,9 @@ func (m Middlewares) chain(endpoint func(Context)) func(Context) {
 	}
 
 	// Wrap the end handler with the middleware chain
-	w := wrap(m[len(m)-1], endpoint)
+	w := m[len(m)-1](endpoint)
 	for i := len(m) - 2; i >= 0; i-- {
-		w = wrap(m[i], w)
+		w = m[i](w)
 	}
 	return w
 }

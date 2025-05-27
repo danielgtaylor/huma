@@ -11,7 +11,7 @@ package autopatch
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -329,7 +329,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 			var nullabilitySettings MergePatchNullabilitySettings
 			if extension, ok := oapi.Extensions[MergePatchNullabilityExtension]; ok {
 				if nullabilitySettings, ok = extension.(MergePatchNullabilitySettings); !ok {
-					huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to parse nullability settings", fmt.Errorf("invalid nullability settings type"))
+					huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to parse nullability settings", errors.New("invalid nullability settings type"))
 					return
 				} else if nullabilitySettings.Enabled {
 					preserveNullsInMergePatch = true

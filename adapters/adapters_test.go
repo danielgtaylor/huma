@@ -91,17 +91,19 @@ func TestAdapters(t *testing.T) {
 	}
 
 	wrap := func(h huma.API, isFiber bool) huma.API {
-		h.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
-			assert.Nil(t, ctx.TLS())
-			v := ctx.Version()
-			if !isFiber {
-				assert.Equal(t, "HTTP/1.1", v.Proto)
-				assert.Equal(t, 1, v.ProtoMajor)
-				assert.Equal(t, 1, v.ProtoMinor)
-			} else {
-				assert.Equal(t, "http", v.Proto)
+		h.UseMiddleware(func(next func(huma.Context)) func(ctx huma.Context) {
+			return func(ctx huma.Context) {
+				assert.Nil(t, ctx.TLS())
+				v := ctx.Version()
+				if !isFiber {
+					assert.Equal(t, "HTTP/1.1", v.Proto)
+					assert.Equal(t, 1, v.ProtoMajor)
+					assert.Equal(t, 1, v.ProtoMinor)
+				} else {
+					assert.Equal(t, "http", v.Proto)
+				}
+				next(ctx)
 			}
-			next(ctx)
 		})
 		return h
 	}
