@@ -118,13 +118,17 @@ func TestFeatures(t *testing.T) {
 		{
 			Name: "middleware",
 			Register: func(t *testing.T, api huma.API) {
-				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
-					// Just a do-nothing passthrough. Shows that chaining works.
-					next(ctx)
+				api.UseMiddleware(func(next func(huma.Context)) func(ctx huma.Context) {
+					return func(ctx huma.Context) {
+						// Just a do-nothing passthrough. Shows that chaining works.
+						next(ctx)
+					}
 				})
-				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
-					// Return an error response, never calling the next handler.
-					ctx.SetStatus(299)
+				api.UseMiddleware(func(next func(huma.Context)) func(ctx huma.Context) {
+					return func(ctx huma.Context) {
+						// Return an error response, never calling the next handler.
+						ctx.SetStatus(299)
+					}
 				})
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
@@ -144,12 +148,14 @@ func TestFeatures(t *testing.T) {
 		{
 			Name: "middleware-cookie",
 			Register: func(t *testing.T, api huma.API) {
-				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
-					cookie, err := huma.ReadCookie(ctx, "foo")
-					require.NoError(t, err)
-					assert.Equal(t, "bar", cookie.Value)
+				api.UseMiddleware(func(next func(huma.Context)) func(ctx huma.Context) {
+					return func(ctx huma.Context) {
+						cookie, err := huma.ReadCookie(ctx, "foo")
+						require.NoError(t, err)
+						assert.Equal(t, "bar", cookie.Value)
 
-					next(ctx)
+						next(ctx)
+					}
 				})
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
@@ -167,12 +173,14 @@ func TestFeatures(t *testing.T) {
 		{
 			Name: "middleware-empty-cookie",
 			Register: func(t *testing.T, api huma.API) {
-				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
-					cookie, err := huma.ReadCookie(ctx, "foo")
-					assert.Nil(t, cookie)
-					require.ErrorIs(t, err, http.ErrNoCookie)
+				api.UseMiddleware(func(next func(huma.Context)) func(ctx huma.Context) {
+					return func(ctx huma.Context) {
+						cookie, err := huma.ReadCookie(ctx, "foo")
+						assert.Nil(t, cookie)
+						require.ErrorIs(t, err, http.ErrNoCookie)
 
-					next(ctx)
+						next(ctx)
+					}
 				})
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
@@ -190,12 +198,14 @@ func TestFeatures(t *testing.T) {
 		{
 			Name: "middleware-cookie-only-semicolon",
 			Register: func(t *testing.T, api huma.API) {
-				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
-					cookie, err := huma.ReadCookie(ctx, "foo")
-					assert.Nil(t, cookie)
-					require.ErrorIs(t, err, http.ErrNoCookie)
+				api.UseMiddleware(func(next func(huma.Context)) func(ctx huma.Context) {
+					return func(ctx huma.Context) {
+						cookie, err := huma.ReadCookie(ctx, "foo")
+						assert.Nil(t, cookie)
+						require.ErrorIs(t, err, http.ErrNoCookie)
 
-					next(ctx)
+						next(ctx)
+					}
 				})
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
@@ -213,12 +223,14 @@ func TestFeatures(t *testing.T) {
 		{
 			Name: "middleware-read-no-cookie-in-header",
 			Register: func(t *testing.T, api huma.API) {
-				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
-					cookie, err := huma.ReadCookie(ctx, "foo")
-					assert.Nil(t, cookie)
-					require.ErrorIs(t, err, http.ErrNoCookie)
+				api.UseMiddleware(func(next func(huma.Context)) func(ctx huma.Context) {
+					return func(ctx huma.Context) {
+						cookie, err := huma.ReadCookie(ctx, "foo")
+						assert.Nil(t, cookie)
+						require.ErrorIs(t, err, http.ErrNoCookie)
 
-					next(ctx)
+						next(ctx)
+					}
 				})
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
@@ -233,12 +245,14 @@ func TestFeatures(t *testing.T) {
 		{
 			Name: "middleware-cookie-invalid-name",
 			Register: func(t *testing.T, api huma.API) {
-				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
-					cookie, err := huma.ReadCookie(ctx, "foo")
-					assert.Nil(t, cookie)
-					require.ErrorIs(t, err, http.ErrNoCookie)
+				api.UseMiddleware(func(next func(huma.Context)) func(ctx huma.Context) {
+					return func(ctx huma.Context) {
+						cookie, err := huma.ReadCookie(ctx, "foo")
+						assert.Nil(t, cookie)
+						require.ErrorIs(t, err, http.ErrNoCookie)
 
-					next(ctx)
+						next(ctx)
+					}
 				})
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
@@ -256,12 +270,14 @@ func TestFeatures(t *testing.T) {
 		{
 			Name: "middleware-cookie-filter-skip",
 			Register: func(t *testing.T, api huma.API) {
-				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
-					cookie, err := huma.ReadCookie(ctx, "foo")
-					assert.Nil(t, cookie)
-					require.ErrorIs(t, err, http.ErrNoCookie)
+				api.UseMiddleware(func(next func(huma.Context)) func(ctx huma.Context) {
+					return func(ctx huma.Context) {
+						cookie, err := huma.ReadCookie(ctx, "foo")
+						assert.Nil(t, cookie)
+						require.ErrorIs(t, err, http.ErrNoCookie)
 
-					next(ctx)
+						next(ctx)
+					}
 				})
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
@@ -279,12 +295,14 @@ func TestFeatures(t *testing.T) {
 		{
 			Name: "middleware-cookie-parse-double-quote",
 			Register: func(t *testing.T, api huma.API) {
-				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
-					cookie, err := huma.ReadCookie(ctx, "bar")
-					require.NoError(t, err)
-					assert.NotNil(t, cookie)
+				api.UseMiddleware(func(next func(huma.Context)) func(ctx huma.Context) {
+					return func(ctx huma.Context) {
+						cookie, err := huma.ReadCookie(ctx, "bar")
+						require.NoError(t, err)
+						assert.NotNil(t, cookie)
 
-					next(ctx)
+						next(ctx)
+					}
 				})
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
@@ -302,12 +320,14 @@ func TestFeatures(t *testing.T) {
 		{
 			Name: "middleware-cookie-invalid-value-byte-with-semicolon",
 			Register: func(t *testing.T, api huma.API) {
-				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
-					cookie, err := huma.ReadCookie(ctx, "bar")
-					assert.Nil(t, cookie)
-					require.ErrorIs(t, err, http.ErrNoCookie)
+				api.UseMiddleware(func(next func(huma.Context)) func(ctx huma.Context) {
+					return func(ctx huma.Context) {
+						cookie, err := huma.ReadCookie(ctx, "bar")
+						assert.Nil(t, cookie)
+						require.ErrorIs(t, err, http.ErrNoCookie)
 
-					next(ctx)
+						next(ctx)
+					}
 				})
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
@@ -325,12 +345,14 @@ func TestFeatures(t *testing.T) {
 		{
 			Name: "middleware-cookie-invalid-value-byte-with-double-backslash",
 			Register: func(t *testing.T, api huma.API) {
-				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
-					cookie, err := huma.ReadCookie(ctx, "bar")
-					assert.Nil(t, cookie)
-					require.ErrorIs(t, err, http.ErrNoCookie)
+				api.UseMiddleware(func(next func(huma.Context)) func(ctx huma.Context) {
+					return func(ctx huma.Context) {
+						cookie, err := huma.ReadCookie(ctx, "bar")
+						assert.Nil(t, cookie)
+						require.ErrorIs(t, err, http.ErrNoCookie)
 
-					next(ctx)
+						next(ctx)
+					}
 				})
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
@@ -352,13 +374,17 @@ func TestFeatures(t *testing.T) {
 					Method: http.MethodGet,
 					Path:   "/middleware",
 					Middlewares: huma.Middlewares{
-						func(ctx huma.Context, next func(huma.Context)) {
-							// Just a do-nothing passthrough. Shows that chaining works.
-							next(ctx)
+						func(next func(huma.Context)) func(ctx huma.Context) {
+							return func(ctx huma.Context) {
+								// Just a do-nothing passthrough. Shows that chaining works.
+								next(ctx)
+							}
 						},
-						func(ctx huma.Context, next func(huma.Context)) {
-							// Return an error response, never calling the next handler.
-							ctx.SetStatus(299)
+						func(next func(huma.Context)) func(ctx huma.Context) {
+							return func(ctx huma.Context) {
+								// Return an error response, never calling the next handler.
+								ctx.SetStatus(299)
+							}
 						},
 					},
 				}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
@@ -2181,18 +2207,20 @@ Content-Type: text/plain
 				},
 			},
 			Register: func(t *testing.T, api huma.API) {
-				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
-					called := false
-					defer func() {
-						if err := recover(); err != nil {
-							// Ensure the error is the one we expect, possibly wrapped with
-							// additional info.
-							assert.ErrorIs(t, err.(error), http.ErrNotSupported)
-						}
-						called = true
-					}()
-					next(ctx)
-					assert.True(t, called)
+				api.UseMiddleware(func(next func(huma.Context)) func(ctx huma.Context) {
+					return func(ctx huma.Context) {
+						called := false
+						defer func() {
+							if err := recover(); err != nil {
+								// Ensure the error is the one we expect, possibly wrapped with
+								// additional info.
+								assert.ErrorIs(t, err.(error), http.ErrNotSupported)
+							}
+							called = true
+						}()
+						next(ctx)
+						assert.True(t, called)
+					}
 				})
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,

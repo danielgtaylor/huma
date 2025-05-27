@@ -239,7 +239,7 @@ type API interface {
 	// route to a specific handler, which provides opportunity to respond early,
 	// change the course of the request execution, or set request-scoped values for
 	// the next Middleware.
-	UseMiddleware(middlewares ...func(ctx Context, next func(Context)))
+	UseMiddleware(middlewares ...Middleware)
 
 	// Middlewares returns a slice of middleware handler functions that will be
 	// run for all operations. Middleware are run in the order they are added.
@@ -328,7 +328,7 @@ func (a *api) Marshal(w io.Writer, ct string, v any) error {
 	return f.Marshal(w, v)
 }
 
-func (a *api) UseMiddleware(middlewares ...func(ctx Context, next func(Context))) {
+func (a *api) UseMiddleware(middlewares ...Middleware) {
 	a.middlewares = append(a.middlewares, middlewares...)
 }
 

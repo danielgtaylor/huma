@@ -71,11 +71,13 @@ func ExampleAdapter_handle() {
 func TestContextValue(t *testing.T) {
 	_, api := humatest.New(t)
 
-	api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
-		// Make an updated context available to the handler.
-		ctx = huma.WithValue(ctx, "foo", "bar")
-		next(ctx)
-		assert.Equal(t, http.StatusNoContent, ctx.Status())
+	api.UseMiddleware(func(next func(huma.Context)) func(huma.Context) {
+		return func(ctx huma.Context) {
+			// Make an updated context available to the handler.
+			ctx = huma.WithValue(ctx, "foo", "bar")
+			next(ctx)
+			assert.Equal(t, http.StatusNoContent, ctx.Status())
+		}
 	})
 
 	// Register a simple hello world operation in the API.

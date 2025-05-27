@@ -167,7 +167,7 @@ func (g *Group) ModifyOperation(op *Operation, next func(*Operation)) {
 // UseMiddleware adds one or more middleware functions to the group that will be
 // run on all operations in the group. Use this to add common functionality to
 // all operations in the group, e.g. authentication/authorization.
-func (g *Group) UseMiddleware(middlewares ...func(ctx Context, next func(Context))) {
+func (g *Group) UseMiddleware(middlewares ...Middleware) {
 	g.middlewares = append(g.middlewares, middlewares...)
 }
 

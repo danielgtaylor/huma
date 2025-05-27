@@ -213,12 +213,14 @@ func FiberMiddlewareUserContext(c *fiber.Ctx) error {
 	return c.Next()
 }
 
-func HumaMiddleware(ctx huma.Context, next func(huma.Context)) {
-	value := ctx.Header(HeaderNameHuma)
-	if value != "" {
-		ctx = huma.WithValue(ctx, contextValueHuma, value)
+func HumaMiddleware(next func(huma.Context)) func(ctx huma.Context) {
+	return func(ctx huma.Context) {
+		value := ctx.Header(HeaderNameHuma)
+		if value != "" {
+			ctx = huma.WithValue(ctx, contextValueHuma, value)
+		}
+		next(ctx)
 	}
-	next(ctx)
 }
 
 func TestHumaFiber(t *testing.T) {
