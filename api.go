@@ -143,9 +143,9 @@ func (c subContext) Context() context.Context {
 	return c.override
 }
 
-func (c subContext) HumaContext() humaContext {
+func (c subContext) humaCtx() humaContext {
 	if sub, ok := c.humaContext.(subContext); ok {
-		return sub.HumaContext()
+		return sub.humaCtx()
 	}
 	return c.humaContext
 }
@@ -168,7 +168,7 @@ func WithValue(ctx Context, key, value any) Context {
 func OriginalContext(ctx Context) Context {
 	// If the context is a sub-context, return the original context.
 	if sub, ok := ctx.(subContext); ok {
-		return sub.HumaContext()
+		return sub.humaCtx()
 	}
 	return ctx
 }
