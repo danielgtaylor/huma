@@ -130,7 +130,7 @@ func (c *ginCtx) Version() huma.ProtoVersion {
 	}
 }
 
-// NewContext creates a new Huma context from an HTTP request and response.
+// NewContext creates a new Huma context from a Gin context
 func NewContext(op *huma.Operation, c *gin.Context) huma.Context {
 	return &ginCtx{op: op, orig: c}
 }
