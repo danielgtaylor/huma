@@ -9,7 +9,7 @@ description: Automatically generate PATCH operations for resources in your API.
 If a `GET` and a `PUT` exist for the same resource, but no `PATCH` exists at server start up, then a `PATCH` operation can be generated for you to make editing more convenient for clients. You can opt-in to this behavior with the `autopatch` package:
 
 ```go
-import "github.com/danielgtaylor/huma/autopatch"
+import "github.com/danielgtaylor/huma/v2/autopatch"
 
 // ...
 
