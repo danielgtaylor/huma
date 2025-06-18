@@ -130,6 +130,11 @@ func (c *ginCtx) Version() huma.ProtoVersion {
 	}
 }
 
+// NewContext creates a new Huma context from a Gin context
+func NewContext(op *huma.Operation, c *gin.Context) huma.Context {
+	return &ginCtx{op: op, orig: c}
+}
+
 // Router is an interface that wraps the Gin router's Handle method.
 type Router interface {
 	Handle(string, string, ...gin.HandlerFunc) gin.IRoutes

@@ -1378,6 +1378,8 @@ func processOutputType(outputType reflect.Type, op *Operation, registry Registry
 	if op.DefaultStatus == 0 {
 		if outBodyIndex != -1 {
 			op.DefaultStatus = http.StatusOK
+		} else if op.Method == http.MethodHead {
+			op.DefaultStatus = http.StatusOK
 		} else {
 			op.DefaultStatus = http.StatusNoContent
 		}
