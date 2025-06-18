@@ -21,7 +21,14 @@ import (
 // memory-safety: https://docs.gofiber.io/#zero-allocation. Do not keep
 // references to the underlying context or its values!
 func Unwrap(ctx huma.Context) *fiber.Ctx {
-	if c, ok := huma.OriginalContext(ctx).(*fiberWrapper); ok {
+	for {
+		if c, ok := ctx.(interface{ Unwrap() huma.Context }); ok {
+			ctx = c.Unwrap()
+			continue
+		}
+		break
+	}
+	if c, ok := ctx.(*fiberWrapper); ok {
 		return c.Unwrap()
 	}
 	panic("not a humafiber context")
