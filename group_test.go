@@ -147,13 +147,17 @@ func TestGroupCustomizations(t *testing.T) {
 		opModifier1Called = true
 	})
 
-	grp.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
-		middleware1Called = true
-		next(ctx)
+	grp.UseMiddleware(func(next func(huma.Context)) func(huma.Context) {
+		return func(ctx huma.Context) {
+			middleware1Called = true
+			next(ctx)
+		}
 	})
-	grp.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
-		middleware2Called = true
-		next(ctx)
+	grp.UseMiddleware(func(next func(huma.Context)) func(huma.Context) {
+		return func(ctx huma.Context) {
+			middleware2Called = true
+			next(ctx)
+		}
 	})
 
 	grp.UseTransformer(func(ctx huma.Context, status string, v any) (any, error) {
