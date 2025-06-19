@@ -249,3 +249,71 @@ func TestCLIBadDefaults(t *testing.T) {
 		humacli.New(func(hooks humacli.Hooks, options *OptionsInt) {})
 	})
 }
+
+func TestCLINestedOptions(t *testing.T) {
+	type OptionsA struct {
+		One int `name:"one"`
+	}
+
+	type OptionsB struct {
+		Two     int       `name:"two"`
+		APtr    *OptionsA `name:"a-ptr"`
+		ADirect OptionsA  `name:"a-direct"`
+	}
+
+	t.Run("cli", func(t *testing.T) {
+		cli := humacli.New(func(hooks humacli.Hooks, options *OptionsB) {
+			assert.Equal(t, 1, options.APtr.One)
+			assert.Equal(t, 2, options.ADirect.One)
+			assert.Equal(t, 3, options.Two)
+			hooks.OnStart(func() {})
+		})
+
+		cli.Root().SetArgs([]string{
+			"--a-ptr.one", "1",
+			"--a-direct.one", "2",
+			"--two", "3",
+		})
+		cli.Run()
+	})
+
+	t.Run("env", func(t *testing.T) {
+		cli := humacli.New(func(hooks humacli.Hooks, options *OptionsB) {
+			assert.Equal(t, 4, options.APtr.One)
+			assert.Equal(t, 5, options.ADirect.One)
+			assert.Equal(t, 6, options.Two)
+			hooks.OnStart(func() {})
+		})
+
+		t.Setenv("SERVICE_A_PTR_ONE", "4")
+		t.Setenv("SERVICE_A_DIRECT_ONE", "5")
+		t.Setenv("SERVICE_TWO", "6")
+
+		cli.Root().SetArgs([]string{})
+		cli.Run()
+	})
+}
+
+func TestCLIPriority(t *testing.T) {
+	type Options struct {
+		WithEnv  int `name:"with-env"`
+		WithFlag int `name:"with-flag"`
+		WithBoth int `name:"with-both"`
+	}
+
+	cli := humacli.New(func(hooks humacli.Hooks, options *Options) {
+		assert.Equal(t, 1, options.WithEnv)
+		assert.Equal(t, 20, options.WithFlag)
+		assert.Equal(t, 30, options.WithBoth)
+		hooks.OnStart(func() {})
+	})
+
+	t.Setenv("SERVICE_WITH_ENV", "1")
+	t.Setenv("SERVICE_WITH_BOTH", "3")
+
+	cli.Root().SetArgs([]string{
+		"--with-flag", "20",
+		"--with-both", "30",
+	})
+	cli.Run()
+}

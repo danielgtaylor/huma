@@ -143,6 +143,12 @@ func (c subContext) Context() context.Context {
 	return c.override
 }
 
+// Unwrap returns the underlying Huma context, which enables you to access
+// the original adapter-specific request context.
+func (c subContext) Unwrap() Context {
+	return c.humaContext
+}
+
 // WithContext returns a new `huma.Context` with the underlying `context.Context`
 // replaced with the given one. This is useful for middleware that needs to
 // modify the request context.

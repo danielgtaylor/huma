@@ -21,6 +21,13 @@ var MultipartMaxMemory int64 = 8 * 1024
 // Unwrap extracts the underlying Gin context from a Huma context. If passed a
 // context from a different adapter it will panic.
 func Unwrap(ctx huma.Context) *gin.Context {
+	for {
+		if c, ok := ctx.(interface{ Unwrap() huma.Context }); ok {
+			ctx = c.Unwrap()
+			continue
+		}
+		break
+	}
 	if c, ok := ctx.(*ginCtx); ok {
 		return c.Unwrap()
 	}
@@ -128,6 +135,11 @@ func (c *ginCtx) Version() huma.ProtoVersion {
 		ProtoMajor: c.orig.Request.ProtoMajor,
 		ProtoMinor: c.orig.Request.ProtoMinor,
 	}
+}
+
+// NewContext creates a new Huma context from a Gin context
+func NewContext(op *huma.Operation, c *gin.Context) huma.Context {
+	return &ginCtx{op: op, orig: c}
 }
 
 // Router is an interface that wraps the Gin router's Handle method.

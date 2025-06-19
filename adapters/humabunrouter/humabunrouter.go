@@ -23,6 +23,13 @@ var MultipartMaxMemory int64 = 8 * 1024
 // Unwrap extracts the underlying HTTP request and response writer from a Huma
 // context. If passed a context from a different adapter it will panic.
 func Unwrap(ctx huma.Context) (bunrouter.Request, http.ResponseWriter) {
+	for {
+		if c, ok := ctx.(interface{ Unwrap() huma.Context }); ok {
+			ctx = c.Unwrap()
+			continue
+		}
+		break
+	}
 	if c, ok := ctx.(*bunContext); ok {
 		return c.Unwrap()
 	}

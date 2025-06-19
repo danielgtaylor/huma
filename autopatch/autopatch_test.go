@@ -10,6 +10,7 @@ import (
 	"testing/iotest"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/humatest"
@@ -520,7 +521,7 @@ func TestReplaceNulls(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := replaceNulls([]byte(tc.input), settings)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.JSONEq(t, tc.expected, string(result))
 		})
 	}
@@ -566,7 +567,7 @@ func TestRestoreNulls(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := restoreNulls([]byte(tc.input), settings)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.JSONEq(t, tc.expected, string(result))
 		})
 	}
