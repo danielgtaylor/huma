@@ -636,13 +636,12 @@ func getFields(typ reflect.Type, visited map[reflect.Type]struct{}) []fieldInfo 
 
 	for i := 0; i < typ.NumField(); i++ {
 		f := typ.Field(i)
+		if !f.IsExported() {
+			continue
+		}
 
 		if f.Anonymous {
 			embedded = append(embedded, f)
-			continue
-		}
-		// embeds can have exported fields
-		if !f.IsExported() {
 			continue
 		}
 

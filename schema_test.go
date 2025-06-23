@@ -42,10 +42,6 @@ type EmbeddedChild struct {
 	Value string `json:"value" doc:"old doc"`
 }
 
-type embedWithExported struct {
-	Value string `json:"value" doc:"embed doc"`
-}
-
 type Embedded struct {
 	EmbeddedChild
 	Value string `json:"value" doc:"new doc"`
@@ -699,28 +695,6 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
-			name: "field-embed-unexported",
-			input: struct {
-				// the embed is an unexported type, but it can contribute exported properties that will be in the JSON
-				*embedWithExported
-				Value2 string `json:"value2"`
-			}{},
-			expected: `{
-				"type": "object",
-				"additionalProperties": false,
-				"required": ["value2", "value"],
-				"properties": {
-					"value": {
-						"type": "string",
-						"description": "embed doc"
-					},
-					"value2": {
-						"type": "string"
-					}
-				}
-			}`,
-		},
-		{
 			name: "field-embed-override",
 			input: struct {
 				Embedded
@@ -1327,21 +1301,6 @@ func (o OmittableNullable[T]) Schema(r huma.Registry) *huma.Schema {
 	s := r.Schema(reflect.TypeOf(o.Value), true, "")
 	s.Nullable = true
 	return s
-}
-
-func TestUnexportedEmbed(t *testing.T) {
-	// shows value is serialized in the JSON
-	j, err := json.Marshal(struct {
-		*embedWithExported
-		Value2 string `json:"value2"`
-	}{
-		embedWithExported: &embedWithExported{
-			Value: "foo",
-		},
-		Value2: "bar",
-	})
-	require.NoError(t, err)
-	assert.JSONEq(t, `{"value":"foo","value2":"bar"}`, string(j))
 }
 
 func TestCustomUnmarshalType(t *testing.T) {
