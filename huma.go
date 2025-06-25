@@ -499,8 +499,6 @@ func writeResponse(api API, ctx Context, status int, ct string, body any) error 
 		if ctf, ok := body.(ContentTypeFilter); ok {
 			ct = ctf.ContentType(ct)
 		}
-
-		ctx.SetHeader("Content-Type", ct)
 	}
 
 	if err := transformAndWrite(api, ctx, status, ct, body); err != nil {
@@ -544,6 +542,9 @@ func transformAndWrite(api API, ctx Context, status int, ct string, body any) er
 			return fmt.Errorf("error marshaling response for %s %s %d: %w", ctx.Operation().Method, ctx.Operation().Path, status, merr)
 		}
 	}
+
+	ctx.SetHeader("Content-Type", ct)
+
 	return nil
 }
 

@@ -23,6 +23,8 @@ var rxSchema = regexp.MustCompile(`#/components/schemas/([^"]+)`)
 
 var ErrUnknownContentType = errors.New("unknown content type")
 
+var ErrUnknownAcceptContentType = errors.New("unknown accept content type")
+
 // Resolver runs a `Resolve` function after a request has been parsed, enabling
 // you to run custom validation or other code that can modify the request and /
 // or return errors.
@@ -201,6 +203,11 @@ type Config struct {
 	// chosen from the keys of `Formats`.
 	DefaultFormat string
 
+	// NoFormatFallback disables the fallback to application/json (if available)
+	// when the client requests an unknown content type. If set and no format is
+	// negotiated, then a 406 Not Acceptable response will be returned.
+	NoFormatFallback bool
+
 	// Transformers are a way to modify a response body before it is serialized.
 	Transformers []Transformer
 
@@ -302,8 +309,13 @@ func (a *api) Unmarshal(contentType string, data []byte, v any) error {
 
 func (a *api) Negotiate(accept string) (string, error) {
 	ct := negotiation.SelectQValueFast(accept, a.formatKeys)
-	if ct == "" && a.formatKeys != nil {
-		ct = a.formatKeys[0]
+	if ct == "" {
+		if a.config.NoFormatFallback {
+			return "", ErrUnknownAcceptContentType
+		}
+		if a.formatKeys != nil {
+			ct = a.formatKeys[0]
+		}
 	}
 	if _, ok := a.formats[ct]; !ok {
 		return ct, fmt.Errorf("%w: %s", ErrUnknownContentType, ct)
@@ -395,8 +407,10 @@ func NewAPI(config Config, a Adapter) API {
 		config.Components.Schemas = NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
 	}
 
-	if config.DefaultFormat == "" && config.Formats["application/json"].Marshal != nil {
-		config.DefaultFormat = "application/json"
+	if config.DefaultFormat == "" && !config.NoFormatFallback {
+		if config.Formats["application/json"].Marshal != nil {
+			config.DefaultFormat = "application/json"
+		}
 	}
 	if config.DefaultFormat != "" {
 		newAPI.formatKeys = append(newAPI.formatKeys, config.DefaultFormat)
