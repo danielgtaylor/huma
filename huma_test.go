@@ -108,6 +108,7 @@ func TestFeatures(t *testing.T) {
 	for _, feature := range []struct {
 		Name         string
 		Transformers []huma.Transformer
+		Config       huma.Config
 		Register     func(t *testing.T, api huma.API)
 		Method       string
 		URL          string
@@ -1769,7 +1770,8 @@ Content-Type: text/plain
 					assert.Equal(t, "form.myInt", errors.Errors[1].Location)
 				}
 			},
-		}, {
+		},
+		{
 			Name: "request-body-multipart-file-decoded-with-formvalue-invalid",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
@@ -1997,6 +1999,76 @@ Content-Type: text/plain
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusNoContent, resp.Code)
 				assert.Equal(t, "application/custom-type", resp.Header().Get("Content-Type"))
+			},
+		},
+		{
+			Name: "unknown accept header with JSON format fallback",
+			Config: huma.Config{
+				OpenAPI: &huma.OpenAPI{
+					OpenAPI: "3.1.0",
+				},
+				Formats:          huma.DefaultFormats,
+				NoFormatFallback: false, // Explicitly setting false for clarity.
+			},
+			Register: func(t *testing.T, api huma.API) {
+				type Resp struct {
+					Body struct {
+						Value string `json:"value"`
+					}
+				}
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/response-accept",
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					out := new(Resp)
+					out.Body.Value = "hello"
+					return out, nil
+				})
+			},
+			Method: http.MethodGet,
+			Headers: map[string]string{
+				"Accept": "custom/dne",
+			},
+			URL: "/response-accept",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				assert.Equal(t, "application/json", resp.Header().Get("Content-Type"))
+				assert.JSONEq(t, `{"value":"hello"}`, resp.Body.String())
+			},
+		},
+		{
+			Name: "unknown accept header with disabled format fallback returns 406",
+			Config: huma.Config{
+				OpenAPI: &huma.OpenAPI{
+					OpenAPI: "3.1.0",
+				},
+				Formats:          huma.DefaultFormats,
+				NoFormatFallback: true,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				type Resp struct {
+					Body struct {
+						Value string `json:"value"`
+					}
+				}
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/response-accept",
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					out := new(Resp)
+					out.Body.Value = "hello"
+					return out, nil
+				})
+			},
+			Method: http.MethodGet,
+			Headers: map[string]string{
+				"Accept": "custom/dne",
+			},
+			URL: "/response-accept",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNotAcceptable, resp.Code)
+				assert.Equal(t, "application/json", resp.Header().Get("Content-Type"))
+				assert.JSONEq(t, `{"title":"Not Acceptable","status":406,"detail":"unable to marshal response","errors":[{"message":"unknown accept content type"}]}`, resp.Body.String())
 			},
 		},
 		{
@@ -2418,11 +2490,13 @@ Content-Type: text/plain
 	} {
 		t.Run(feature.Name, func(t *testing.T) {
 			r := http.NewServeMux()
-			config := huma.DefaultConfig("Features Test API", "1.0.0")
-			if feature.Transformers != nil {
-				config.Transformers = append(config.Transformers, feature.Transformers...)
+			if feature.Config.OpenAPI == nil {
+				feature.Config = huma.DefaultConfig("Features Test API", "1.0.0")
 			}
-			api := humatest.Wrap(t, humago.New(r, config))
+			if feature.Transformers != nil {
+				feature.Config.Transformers = append(feature.Config.Transformers, feature.Transformers...)
+			}
+			api := humatest.Wrap(t, humago.New(r, feature.Config))
 			feature.Register(t, api)
 
 			var body io.Reader = nil
