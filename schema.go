@@ -722,7 +722,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 	case ipType:
 		return &Schema{Type: TypeString, Nullable: isPointer, Format: "ipv4"}
 	case ipAddrType:
-		return &Schema{Type: TypeString, Nullable: isPointer, Format: "ipv4"}
+		return &Schema{Type: TypeString, Nullable: isPointer, Format: "ip"}
 	case rawMessageType:
 		return &Schema{}
 	}
