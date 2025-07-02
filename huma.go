@@ -490,6 +490,11 @@ func writeResponse(api API, ctx Context, status int, ct string, body any) error 
 		ct, err = api.Negotiate(ctx.Header("Accept"))
 		if err != nil {
 			notAccept := NewErrorWithContext(ctx, http.StatusNotAcceptable, "unable to marshal response", err)
+			ct := "application/json"
+			if ctf, ok := notAccept.(ContentTypeFilter); ok {
+				ct = ctf.ContentType(ct)
+			}
+			ctx.SetHeader("Content-Type", ct)
 			if e := transformAndWrite(api, ctx, http.StatusNotAcceptable, "application/json", notAccept); e != nil {
 				return e
 			}
