@@ -490,6 +490,11 @@ func writeResponse(api API, ctx Context, status int, ct string, body any) error 
 		ct, err = api.Negotiate(ctx.Header("Accept"))
 		if err != nil {
 			notAccept := NewErrorWithContext(ctx, http.StatusNotAcceptable, "unable to marshal response", err)
+			ct := "application/json"
+			if ctf, ok := notAccept.(ContentTypeFilter); ok {
+				ct = ctf.ContentType(ct)
+			}
+			ctx.SetHeader("Content-Type", ct)
 			if e := transformAndWrite(api, ctx, http.StatusNotAcceptable, "application/json", notAccept); e != nil {
 				return e
 			}
@@ -499,6 +504,8 @@ func writeResponse(api API, ctx Context, status int, ct string, body any) error 
 		if ctf, ok := body.(ContentTypeFilter); ok {
 			ct = ctf.ContentType(ct)
 		}
+
+		ctx.SetHeader("Content-Type", ct)
 	}
 
 	if err := transformAndWrite(api, ctx, status, ct, body); err != nil {
@@ -542,8 +549,6 @@ func transformAndWrite(api API, ctx Context, status int, ct string, body any) er
 			return fmt.Errorf("error marshaling response for %s %s %d: %w", ctx.Operation().Method, ctx.Operation().Path, status, merr)
 		}
 	}
-
-	ctx.SetHeader("Content-Type", ct)
 
 	return nil
 }

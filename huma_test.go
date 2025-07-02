@@ -2067,7 +2067,7 @@ Content-Type: text/plain
 			URL: "/response-accept",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusNotAcceptable, resp.Code)
-				assert.Equal(t, "application/json", resp.Header().Get("Content-Type"))
+				assert.Equal(t, "application/problem+json", resp.Header().Get("Content-Type"))
 				assert.JSONEq(t, `{"title":"Not Acceptable","status":406,"detail":"unable to marshal response","errors":[{"message":"unknown accept content type"}]}`, resp.Body.String())
 			},
 		},
