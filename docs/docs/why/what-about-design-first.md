@@ -71,7 +71,7 @@ type Pet struct {
 	Category  *Category `json:"category" doc:"Category that the pet belongs to"`
 	Name      string    `json:"name" example:"Fluffy" doc:"Pet name"`
 	PhotoURLs []string  `json:"photoUrls" example:"https://example.com/fluffy.jpg" doc:"Photo URLs for the pet"`
-	Tags      []Tag     `json:"tags" example:"cute" doc:"Tags for the pet"`
+	Tags      []Tag     `json:"tags" example:'["cute"]' doc:"Tags for the pet"`
 	Status    string    `json:"status" example:"available" doc:"Pet status" enum:"available,pending,sold"`
 }
 
