@@ -438,3 +438,46 @@ func TestPathParamDecoding(t *testing.T) {
 // 		app.ServeHTTP(w, req)
 // 	}
 // }
+
+// See https://github.com/danielgtaylor/huma/issues/859
+func TestWithValueShouldPropagateContext(t *testing.T) {
+	r := chi.NewMux()
+	app := New(r, huma.DefaultConfig("Test", "1.0.0"))
+
+	type (
+		testInput  struct{}
+		testOutput struct{}
+		ctxKey     struct{}
+	)
+
+	ctxValue := "sentinelValue"
+
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Path:        "/test",
+		Method:      http.MethodGet,
+		Middlewares: huma.Middlewares{
+			func(ctx huma.Context, next func(huma.Context)) {
+				ctx = huma.WithValue(ctx, ctxKey{}, ctxValue)
+				next(ctx)
+			},
+			middleware(func(h http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					val, _ := r.Context().Value(ctxKey{}).(string)
+					io.WriteString(w, val)
+				})
+			}),
+		},
+	}, func(ctx context.Context, input *testInput) (*testOutput, error) {
+		out := &testOutput{}
+		return out, nil
+	})
+
+	tapi := humatest.Wrap(t, app)
+
+	resp := tapi.Get("/test")
+	assert.Equal(t, http.StatusOK, resp.Code)
+	out, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, ctxValue, string(out))
+}
