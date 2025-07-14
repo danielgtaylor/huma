@@ -96,6 +96,15 @@ func (c *gmuxContext) Version() huma.ProtoVersion {
 	}
 }
 
+func (c *gmuxContext) WithContext(ctx context.Context) huma.Context {
+	return &gmuxContext{
+		op:     c.op,
+		r:      c.r.WithContext(ctx),
+		w:      c.w,
+		status: c.status,
+	}
+}
+
 func (c *gmuxContext) EachHeader(cb func(name, value string)) {
 	for name, values := range c.r.Header {
 		for _, value := range values {
@@ -162,4 +171,19 @@ func (a *gMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func New(r *mux.Router, config huma.Config, options ...Option) huma.API {
 	return huma.NewAPI(config, &gMux{router: r, options: parseOptions(options)})
+}
+
+// middleware converts a Gin middleware function to a Huma middleware function.
+func middleware(mw func(next http.Handler) http.Handler) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		r, w := Unwrap(ctx)
+		mw(http.HandlerFunc(func(gw http.ResponseWriter, gr *http.Request) {
+			ctx = &gmuxContext{
+				op: ctx.Operation(),
+				r:  gr,
+				w:  gw,
+			}
+			next(ctx)
+		})).ServeHTTP(w, r)
+	}
 }
