@@ -11,6 +11,9 @@
 [**🌎中文文档**](./README_CN.md)
 [**🇯🇵日本語ドキュメント**](./README_JA.md)
 
+> [!IMPORTANT]
+> Enjoying Huma? Please consider hiring me! I'm looking for new opportunities. Here's my [resume](https://registry.jsonresume.org/danielgtaylor).
+
 - [What is huma?](#intro)
 - [Install](#install)
 - [Example](#example)
