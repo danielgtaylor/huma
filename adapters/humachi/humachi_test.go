@@ -351,7 +351,7 @@ func TestChiRouterPrefix(t *testing.T) {
 	// The docs HTML should point to the full URL including base path.
 	resp = tapi.Get("/api/docs")
 	assert.Equal(t, http.StatusOK, resp.Code)
-	assert.Contains(t, resp.Body.String(), "/api/openapi.yaml")
+	assert.Contains(t, resp.Body.String(), "/api/openapi.json")
 }
 
 func TestPathParamDecoding(t *testing.T) {
