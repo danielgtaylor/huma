@@ -496,7 +496,7 @@ func NewAPI(config Config, a Adapter) API {
   <body style="height: 100vh;">
 
     <elements-api
-      apiDescriptionUrl="` + openAPIPath + `.yaml"
+      apiDescriptionUrl="` + openAPIPath + `.json"
       router="hash"
       layout="sidebar"
       tryItCredentialsPolicy="same-origin"
