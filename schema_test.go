@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -191,6 +192,11 @@ func TestSchema(t *testing.T) {
 			name:     "ipAddr",
 			input:    netip.AddrFrom4([4]byte{127, 0, 0, 1}),
 			expected: `{"type": "string", "format": "ipv4"}`,
+		},
+		{
+			name:     "uuid",
+			input:    uuid.UUID{},
+			expected: `{"type": "string", "format": "uuid"}`,
 		},
 		{
 			name:     "json.RawMessage",

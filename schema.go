@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2/validation"
+	"github.com/google/uuid"
 )
 
 // ErrSchemaInvalid is sent when there is a problem building the schema.
@@ -45,6 +46,7 @@ var (
 	ipAddrType     = reflect.TypeOf(netip.Addr{})
 	urlType        = reflect.TypeOf(url.URL{})
 	rawMessageType = reflect.TypeOf(json.RawMessage{})
+	uuidType       = reflect.TypeOf(uuid.UUID{})
 )
 
 func deref(t reflect.Type) reflect.Type {
@@ -713,7 +715,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 		return custom
 	}
 
-	// Handle special cases for known stdlib types.
+	// Handle special cases for known types.
 	switch t {
 	case timeType:
 		return &Schema{Type: TypeString, Nullable: isPointer, Format: "date-time"}
@@ -723,6 +725,8 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 		return &Schema{Type: TypeString, Nullable: isPointer, Format: "ipv4"}
 	case ipAddrType:
 		return &Schema{Type: TypeString, Nullable: isPointer, Format: "ipv4"}
+	case uuidType:
+		return &Schema{Type: TypeString, Nullable: isPointer, Format: "uuid"}
 	case rawMessageType:
 		return &Schema{}
 	}
