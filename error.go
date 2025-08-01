@@ -286,6 +286,11 @@ func Error401Unauthorized(msg string, errs ...error) StatusError {
 	return NewError(http.StatusUnauthorized, msg, errs...)
 }
 
+// Error402PaymentRequired returns a 402.
+func Error402PaymentRequired(msg string, errs ...error) StatusError {
+	return NewError(http.StatusPaymentRequired, msg, errs...)
+}
+
 // Error403Forbidden returns a 403.
 func Error403Forbidden(msg string, errs ...error) StatusError {
 	return NewError(http.StatusForbidden, msg, errs...)
@@ -306,6 +311,16 @@ func Error406NotAcceptable(msg string, errs ...error) StatusError {
 	return NewError(http.StatusNotAcceptable, msg, errs...)
 }
 
+// Error407ProxyAuthRequired returns a 407.
+func Error407ProxyAuthRequired(msg string, errs ...error) StatusError {
+	return NewError(http.StatusProxyAuthRequired, msg, errs...)
+}
+
+// Error408RequestTimeout returns a 408.
+func Error408RequestTimeout(msg string, errs ...error) StatusError {
+	return NewError(http.StatusRequestTimeout, msg, errs...)
+}
+
 // Error409Conflict returns a 409.
 func Error409Conflict(msg string, errs ...error) StatusError {
 	return NewError(http.StatusConflict, msg, errs...)
@@ -316,9 +331,24 @@ func Error410Gone(msg string, errs ...error) StatusError {
 	return NewError(http.StatusGone, msg, errs...)
 }
 
+// Error411LengthRequired returns a 411.
+func Error411LengthRequired(msg string, errs ...error) StatusError {
+	return NewError(http.StatusLengthRequired, msg, errs...)
+}
+
 // Error412PreconditionFailed returns a 412.
 func Error412PreconditionFailed(msg string, errs ...error) StatusError {
 	return NewError(http.StatusPreconditionFailed, msg, errs...)
+}
+
+// Error413RequestEntityTooLarge returns a 413.
+func Error413RequestEntityTooLarge(msg string, errs ...error) StatusError {
+	return NewError(http.StatusRequestEntityTooLarge, msg, errs...)
+}
+
+// Error414RequestURITooLong returns a 414.
+func Error414RequestURITooLong(msg string, errs ...error) StatusError {
+	return NewError(http.StatusRequestURITooLong, msg, errs...)
 }
 
 // Error415UnsupportedMediaType returns a 415.
@@ -326,14 +356,69 @@ func Error415UnsupportedMediaType(msg string, errs ...error) StatusError {
 	return NewError(http.StatusUnsupportedMediaType, msg, errs...)
 }
 
+// Error416RequestedRangeNotSatisfiable returns a 416.
+func Error416RequestedRangeNotSatisfiable(msg string, errs ...error) StatusError {
+	return NewError(http.StatusRequestedRangeNotSatisfiable, msg, errs...)
+}
+
+// Error417ExpectationFailed returns a 417.
+func Error417ExpectationFailed(msg string, errs ...error) StatusError {
+	return NewError(http.StatusExpectationFailed, msg, errs...)
+}
+
+// Error418Teapot returns a 418.
+func Error418Teapot(msg string, errs ...error) StatusError {
+	return NewError(http.StatusTeapot, msg, errs...)
+}
+
+// Error421MisdirectedRequest returns a 421.
+func Error421MisdirectedRequest(msg string, errs ...error) StatusError {
+	return NewError(http.StatusMisdirectedRequest, msg, errs...)
+}
+
 // Error422UnprocessableEntity returns a 422.
 func Error422UnprocessableEntity(msg string, errs ...error) StatusError {
 	return NewError(http.StatusUnprocessableEntity, msg, errs...)
 }
 
+// Error423Locked returns a 423.
+func Error423Locked(msg string, errs ...error) StatusError {
+	return NewError(http.StatusLocked, msg, errs...)
+}
+
+// Error424FailedDependency returns a 424.
+func Error424FailedDependency(msg string, errs ...error) StatusError {
+	return NewError(http.StatusFailedDependency, msg, errs...)
+}
+
+// Error425TooEarly returns a 425.
+func Error425TooEarly(msg string, errs ...error) StatusError {
+	return NewError(http.StatusTooEarly, msg, errs...)
+}
+
+// Error426UpgradeRequired returns a 426.
+func Error426UpgradeRequired(msg string, errs ...error) StatusError {
+	return NewError(http.StatusUpgradeRequired, msg, errs...)
+}
+
+// Error428PreconditionRequired returns a 428.
+func Error428PreconditionRequired(msg string, errs ...error) StatusError {
+	return NewError(http.StatusPreconditionRequired, msg, errs...)
+}
+
 // Error429TooManyRequests returns a 429.
 func Error429TooManyRequests(msg string, errs ...error) StatusError {
 	return NewError(http.StatusTooManyRequests, msg, errs...)
+}
+
+// Error431RequestHeaderFieldsTooLarge returns a 431.
+func Error431RequestHeaderFieldsTooLarge(msg string, errs ...error) StatusError {
+	return NewError(http.StatusRequestHeaderFieldsTooLarge, msg, errs...)
+}
+
+// Error451UnavailableForLegalReasons returns a 451.
+func Error451UnavailableForLegalReasons(msg string, errs ...error) StatusError {
+	return NewError(http.StatusUnavailableForLegalReasons, msg, errs...)
 }
 
 // Error500InternalServerError returns a 500.
@@ -359,6 +444,36 @@ func Error503ServiceUnavailable(msg string, errs ...error) StatusError {
 // Error504GatewayTimeout returns a 504.
 func Error504GatewayTimeout(msg string, errs ...error) StatusError {
 	return NewError(http.StatusGatewayTimeout, msg, errs...)
+}
+
+// Error505HTTPVersionNotSupported returns a 505.
+func Error505HTTPVersionNotSupported(msg string, errs ...error) StatusError {
+	return NewError(http.StatusHTTPVersionNotSupported, msg, errs...)
+}
+
+// Error506VariantAlsoNegotiates returns a 506.
+func Error506VariantAlsoNegotiates(msg string, errs ...error) StatusError {
+	return NewError(http.StatusVariantAlsoNegotiates, msg, errs...)
+}
+
+// Error507InsufficientStorage returns a 507.
+func Error507InsufficientStorage(msg string, errs ...error) StatusError {
+	return NewError(http.StatusInsufficientStorage, msg, errs...)
+}
+
+// Error508LoopDetected returns a 508.
+func Error508LoopDetected(msg string, errs ...error) StatusError {
+	return NewError(http.StatusLoopDetected, msg, errs...)
+}
+
+// Error510NotExtended returns a 510.
+func Error510NotExtended(msg string, errs ...error) StatusError {
+	return NewError(http.StatusNotExtended, msg, errs...)
+}
+
+// Error511NetworkAuthenticationRequired returns a 511.
+func Error511NetworkAuthenticationRequired(msg string, errs ...error) StatusError {
+	return NewError(http.StatusNetworkAuthenticationRequired, msg, errs...)
 }
 
 // ErrorFormatter is a function that formats an error message
