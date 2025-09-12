@@ -112,7 +112,7 @@ type Schema struct {
 	MinLength            *int                `yaml:"minLength,omitempty"`
 	MaxLength            *int                `yaml:"maxLength,omitempty"`
 	Pattern              string              `yaml:"pattern,omitempty"`
-	PatternDescription   string              `yaml:"patternDescription,omitempty"`
+	PatternDescription   string              `yaml:"-"`
 	MinItems             *int                `yaml:"minItems,omitempty"`
 	MaxItems             *int                `yaml:"maxItems,omitempty"`
 	UniqueItems          bool                `yaml:"uniqueItems,omitempty"`
