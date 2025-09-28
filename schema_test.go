@@ -1544,3 +1544,44 @@ func TestSchemaTransformer(t *testing.T) {
 	updateSchema2 := huma.SchemaFromType(r, reflect.TypeOf(ExampleUpdateStruct{}))
 	validateSchema(updateSchema2)
 }
+
+type customSchemaInt int64
+
+func TestRegisterTypeSchema(t *testing.T) {
+	huma.RegisterTypeSchema(reflect.TypeOf(customSchemaInt(0)), func(r huma.Registry) *huma.Schema {
+		return &huma.Schema{Type: huma.TypeString}
+	})
+
+	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+
+	type input struct {
+		ID       customSchemaInt  `json:"id"`
+		Optional *customSchemaInt `json:"optional,omitempty"`
+		Nested   struct {
+			Value customSchemaInt `json:"value"`
+		} `json:"nested"`
+	}
+
+	schema := huma.SchemaFromType(registry, reflect.TypeOf(input{}))
+	require.NotNil(t, schema)
+	require.Contains(t, schema.Properties, "id")
+	assert.Equal(t, huma.TypeString, schema.Properties["id"].Type)
+
+	require.Contains(t, schema.Properties, "optional")
+	assert.Equal(t, huma.TypeString, schema.Properties["optional"].Type)
+
+	nested := schema.Properties["nested"]
+	require.NotNil(t, nested)
+	nestedSchema := nested
+	if nested.Ref != "" {
+		nestedSchema = registry.SchemaFromRef(nested.Ref)
+		require.NotNil(t, nestedSchema)
+	}
+	assert.Equal(t, huma.TypeObject, nestedSchema.Type)
+	require.Contains(t, nestedSchema.Properties, "value")
+	assert.Equal(t, huma.TypeString, nestedSchema.Properties["value"].Type)
+
+	custom := registry.Schema(reflect.TypeOf(customSchemaInt(0)), true, "Standalone")
+	require.NotNil(t, custom)
+	assert.Equal(t, huma.TypeString, custom.Type)
+}
