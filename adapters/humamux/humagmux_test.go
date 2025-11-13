@@ -3,6 +3,7 @@ package humamux
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var lastModified = time.Now()
@@ -132,4 +134,46 @@ func BenchmarkHumaGorillaMux(b *testing.B) {
 			b.Fatal(w.Body.String())
 		}
 	}
+}
+
+func TestWithValueShouldPropagateContext(t *testing.T) {
+	r := mux.NewRouter()
+	app := New(r, huma.DefaultConfig("Test", "1.0.0"))
+
+	type (
+		testInput  struct{}
+		testOutput struct{}
+		ctxKey     struct{}
+	)
+
+	ctxValue := "sentinelValue"
+
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Path:        "/test",
+		Method:      http.MethodGet,
+		Middlewares: huma.Middlewares{
+			func(ctx huma.Context, next func(huma.Context)) {
+				ctx = huma.WithValue(ctx, ctxKey{}, ctxValue)
+				next(ctx)
+			},
+			middleware(func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					val, _ := r.Context().Value(ctxKey{}).(string)
+					w.Write([]byte(val))
+				})
+			}),
+		},
+	}, func(ctx context.Context, input *testInput) (*testOutput, error) {
+		out := &testOutput{}
+		return out, nil
+	})
+
+	tapi := humatest.Wrap(t, app)
+
+	resp := tapi.Get("/test")
+	assert.Equal(t, http.StatusOK, resp.Code)
+	out, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, ctxValue, string(out))
 }

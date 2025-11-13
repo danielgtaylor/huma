@@ -140,6 +140,15 @@ func (c *bunContext) Version() huma.ProtoVersion {
 	}
 }
 
+func (c *bunContext) WithContext(ctx context.Context) huma.Context {
+	return &bunContext{
+		op:     c.op,
+		r:      c.r.WithContext(ctx),
+		w:      c.w,
+		status: c.status,
+	}
+}
+
 // NewContext creates a new Huma context from an HTTP request and response.
 func NewContext(op *huma.Operation, r bunrouter.Request, w http.ResponseWriter) huma.Context {
 	return &bunContext{op: op, r: r, w: w}
@@ -243,6 +252,15 @@ func (c *bunCompatContext) Version() huma.ProtoVersion {
 	}
 }
 
+func (c *bunCompatContext) WithContext(ctx context.Context) huma.Context {
+	return &bunCompatContext{
+		op:     c.op,
+		r:      c.r.WithContext(ctx),
+		w:      c.w,
+		status: c.status,
+	}
+}
+
 // NewCompatContext creates a new Huma context from an HTTP request and response.
 func NewCompatContext(op *huma.Operation, r *http.Request, w http.ResponseWriter) huma.Context {
 	return &bunCompatContext{op: op, r: r, w: w}
@@ -309,4 +327,16 @@ func NewCompat(r *bunrouter.CompatRouter, config huma.Config) huma.API {
 // New creates a new Huma API using *bunrouter.Router.
 func New(r *bunrouter.Router, config huma.Config) huma.API {
 	return huma.NewAPI(config, NewAdapter(r))
+}
+
+func middleware(mw bunrouter.MiddlewareFunc) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		r, w := Unwrap(ctx)
+		f := mw(func(w http.ResponseWriter, r bunrouter.Request) error {
+			ctx = NewContext(ctx.Operation(), r, w)
+			next(ctx)
+			return nil
+		})
+		f(w, r)
+	}
 }
