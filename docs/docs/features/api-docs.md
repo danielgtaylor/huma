@@ -38,17 +38,13 @@ router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
     <meta name="referrer" content="same-origin" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <title>Docs Example reference</title>
-    <!-- Embed elements Elements via Web Component -->
-    <link href="https://unpkg.com/@stoplight/elements@8.0.0/styles.min.css" rel="stylesheet" />
-    <script src="https://unpkg.com/@stoplight/elements@8.0.0/web-components.min.js"
-            integrity="sha256-yIhuSFMJJ6mp2XTUAb4SiSYneP3Qav8Uu+7NBhGJW5A="
-            crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements@9.0.12/styles.min.css" crossorigin integrity="sha384-iVQBHadsD+eV0M5+ubRCEVXrXEBj+BqcuwjUwPoVJc0Pb1fmrhYSAhL+BFProHdV" />
+    <script src="https://unpkg.com/@stoplight/elements@9.0.12/web-components.min.js" crossorigin integrity="sha384-2AG+Hh93OYHuMcQJPPLM2671WnQzoHvHXh9FwbRfwMpyMLNc3++q/nJBKeVY0JMo"></script>
   </head>
   <body style="height: 100vh;">
     <elements-api
       apiDescriptionUrl="/openapi.yaml"
       router="hash"
-      layout="stacked"
       tryItCredentialsPolicy="same-origin"
     />
   </body>
@@ -84,7 +80,7 @@ router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
     <script
       id="api-reference"
       data-url="/openapi.json"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+    <script src="https://unpkg.com/@scalar/api-reference@1.39.3/dist/browser/standalone.js" crossorigin integrity="sha384-76/gvOpu0/XSY2z9BOX4MhHQJACTk0S2GW1Cwh9gRMhcf3sf7mYqKbmMA1PDl3mL"></script>
   </body>
 </html>`))
 })
@@ -112,11 +108,11 @@ router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="SwaggerUI" />
   <title>SwaggerUI</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css" />
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.30.2/swagger-ui.css" crossorigin integrity="sha384-++DMKo1369T5pxDNqojF1F91bYxYiT1N7b1M15a7oCzEodfljztKlApQoH6eQSKI" />
 </head>
 <body>
 <div id="swagger-ui"></div>
-<script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js" crossorigin></script>
+<script src="https://unpkg.com/swagger-ui-dist@5.30.2/swagger-ui-bundle.js" crossorigin integrity="sha384-bBdB196maIUakX6v2F6J0XcjddQfaENm8kASsYfqTKCZua9xlYNh1AdtL18PGr0D"></script>
 <script>
   window.onload = () => {
     window.ui = SwaggerUIBundle({

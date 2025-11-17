@@ -488,20 +488,15 @@ func NewAPI(config Config, a Adapter) API {
     <meta name="referrer" content="same-origin" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <title>` + title + `</title>
-    <!-- Embed elements Elements via Web Component -->
-    <link href="https://unpkg.com/@stoplight/elements@9.0.0/styles.min.css" rel="stylesheet" />
-    <script src="https://unpkg.com/@stoplight/elements@9.0.0/web-components.min.js" integrity="sha256-Tqvw1qE2abI+G6dPQBc5zbeHqfVwGoamETU3/TSpUw4="
-            crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements@9.0.12/styles.min.css" crossorigin integrity="sha384-iVQBHadsD+eV0M5+ubRCEVXrXEBj+BqcuwjUwPoVJc0Pb1fmrhYSAhL+BFProHdV" />
+    <script src="https://unpkg.com/@stoplight/elements@9.0.12/web-components.min.js" crossorigin integrity="sha384-2AG+Hh93OYHuMcQJPPLM2671WnQzoHvHXh9FwbRfwMpyMLNc3++q/nJBKeVY0JMo"></script>
   </head>
   <body style="height: 100vh;">
-
     <elements-api
       apiDescriptionUrl="` + openAPIPath + `.yaml"
       router="hash"
-      layout="sidebar"
       tryItCredentialsPolicy="same-origin"
     />
-
   </body>
 </html>`))
 		})
