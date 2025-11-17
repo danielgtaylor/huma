@@ -31,6 +31,17 @@ api := humachi.New(router, config)
 
 router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
+	// Very strict CSP so we never expose any data to the outside world
+	w.Header().Set("Content-Security-Policy",
+		"default-src 'none';"+
+			" base-uri 'none';"+
+			" connect-src 'self';"+
+			" form-action 'none';"+
+			" frame-ancestors 'none';"+
+			" sandbox allow-same-origin allow-scripts;"+
+			" script-src https://unpkg.com/;"+
+			" style-src 'unsafe-inline' https://unpkg.com/;"+
+			" trusted-types 'none'")
 	w.Write([]byte(`<!doctype html>
 <html lang="en">
   <head>
@@ -67,6 +78,17 @@ api := humachi.New(router, config)
 
 router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
+	// Very strict CSP so we never expose any data to the outside world
+	w.Header().Set("Content-Security-Policy",
+		"default-src 'none';"+
+			" base-uri 'none';"+
+			" connect-src 'self';"+
+			" form-action 'none';"+
+			" frame-ancestors 'none';"+
+			" sandbox allow-same-origin allow-scripts;"+
+			" script-src 'unsafe-eval' https://unpkg.com/;"+ // TODO: Somehow drop 'unsafe-eval'
+			" style-src 'unsafe-inline' https://unpkg.com/;"+ // TODO: Somehow drop 'unsafe-inline'
+			" trusted-types 'none'")
 	w.Write([]byte(`<!doctype html>
 <html>
   <head>
@@ -101,6 +123,17 @@ api := humachi.New(router, config)
 
 router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
+	// Very strict CSP so we never expose any data to the outside world
+	w.Header().Set("Content-Security-Policy",
+		"default-src 'none';"+
+			" base-uri 'none';"+
+			" connect-src 'self';"+
+			" form-action 'none';"+
+			" frame-ancestors 'none';"+
+			" sandbox allow-same-origin allow-scripts;"+
+			" script-src https://unpkg.com/ 'sha256-SWB2p1nUb0MJzt5MoVlrz+PWYxv53T2z7GdKFxZm9i4=';"+
+			" style-src https://unpkg.com/;"+
+			" trusted-types 'none'")
 	w.Write([]byte(`<!DOCTYPE html>
 <html lang="en">
 <head>
