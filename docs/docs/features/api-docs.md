@@ -32,22 +32,23 @@ api := humachi.New(router, config)
 router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	// Very strict CSP so we never expose any data to the outside world
-	w.Header().Set("Content-Security-Policy",
-		"default-src 'none';"+
-			" base-uri 'none';"+
-			" connect-src 'self';"+
-			" form-action 'none';"+
-			" frame-ancestors 'none';"+
-			" sandbox allow-same-origin allow-scripts;"+
-			" script-src https://unpkg.com/;"+
-			" style-src 'unsafe-inline' https://unpkg.com/;"+
-			" trusted-types 'none'")
-	w.Write([]byte(`<!doctype html>
+	csp := []string{
+		"default-src 'none'",
+		"base-uri 'none'",
+		"connect-src 'self'",
+		"form-action 'none'",
+		"frame-ancestors 'none'",
+		"sandbox allow-same-origin allow-scripts",
+		"script-src https://unpkg.com/",
+		"style-src 'unsafe-inline' https://unpkg.com/",
+	}
+	w.Header().Set("Content-Security-Policy", strings.Join(csp, "; "))
+	w.Write([]byte(`<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="referrer" content="same-origin" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="referrer" content="same-origin" />
     <title>Docs Example reference</title>
     <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements@9.0.12/styles.min.css" crossorigin integrity="sha384-iVQBHadsD+eV0M5+ubRCEVXrXEBj+BqcuwjUwPoVJc0Pb1fmrhYSAhL+BFProHdV" />
     <script src="https://unpkg.com/@stoplight/elements@9.0.12/web-components.min.js" crossorigin integrity="sha384-2AG+Hh93OYHuMcQJPPLM2671WnQzoHvHXh9FwbRfwMpyMLNc3++q/nJBKeVY0JMo"></script>
@@ -79,24 +80,24 @@ api := humachi.New(router, config)
 router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	// Very strict CSP so we never expose any data to the outside world
-	w.Header().Set("Content-Security-Policy",
-		"default-src 'none';"+
-			" base-uri 'none';"+
-			" connect-src 'self';"+
-			" form-action 'none';"+
-			" frame-ancestors 'none';"+
-			" sandbox allow-same-origin allow-scripts;"+
-			" script-src 'unsafe-eval' https://unpkg.com/;"+ // TODO: Somehow drop 'unsafe-eval'
-			" style-src 'unsafe-inline' https://unpkg.com/;"+ // TODO: Somehow drop 'unsafe-inline'
-			" trusted-types 'none'")
-	w.Write([]byte(`<!doctype html>
-<html>
+	csp := []string{
+		"default-src 'none'",
+		"base-uri 'none'",
+		"connect-src 'self'",
+		"form-action 'none'",
+		"frame-ancestors 'none'",
+		"sandbox allow-same-origin allow-scripts",
+		"script-src 'unsafe-eval' https://unpkg.com/", // TODO: Somehow drop 'unsafe-eval'
+		"style-src 'unsafe-inline' https://unpkg.com/", // TODO: Somehow drop 'unsafe-inline'
+	}
+	w.Header().Set("Content-Security-Policy", strings.Join(csp, "; "))
+	w.Write([]byte(`<!DOCTYPE html>
+<html lang="en">
   <head>
-    <title>API Reference</title>
     <meta charset="utf-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="same-origin" />
+    <title>API Reference</title>
   </head>
   <body>
     <script
@@ -124,37 +125,38 @@ api := humachi.New(router, config)
 router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	// Very strict CSP so we never expose any data to the outside world
-	w.Header().Set("Content-Security-Policy",
-		"default-src 'none';"+
-			" base-uri 'none';"+
-			" connect-src 'self';"+
-			" form-action 'none';"+
-			" frame-ancestors 'none';"+
-			" sandbox allow-same-origin allow-scripts;"+
-			" script-src https://unpkg.com/ 'sha256-SWB2p1nUb0MJzt5MoVlrz+PWYxv53T2z7GdKFxZm9i4=';"+
-			" style-src https://unpkg.com/;"+
-			" trusted-types 'none'")
+	csp := []string{
+		"default-src 'none'",
+		"base-uri 'none'",
+		"connect-src 'self'",
+		"form-action 'none'",
+		"frame-ancestors 'none'",
+		"sandbox allow-same-origin allow-scripts",
+		"script-src https://unpkg.com/ 'sha256-pyvxInx2c2C9E/dNMA9dfGa9z3Lhk9YDz1ET62LbfZs='",
+		"style-src https://unpkg.com/",
+	}
+	w.Header().Set("Content-Security-Policy", strings.Join(csp, "; "))
 	w.Write([]byte(`<!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="SwaggerUI" />
-  <title>SwaggerUI</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.30.2/swagger-ui.css" crossorigin integrity="sha384-++DMKo1369T5pxDNqojF1F91bYxYiT1N7b1M15a7oCzEodfljztKlApQoH6eQSKI" />
-</head>
-<body>
-<div id="swagger-ui"></div>
-<script src="https://unpkg.com/swagger-ui-dist@5.30.2/swagger-ui-bundle.js" crossorigin integrity="sha384-bBdB196maIUakX6v2F6J0XcjddQfaENm8kASsYfqTKCZua9xlYNh1AdtL18PGr0D"></script>
-<script>
-  window.onload = () => {
-    window.ui = SwaggerUIBundle({
-      url: '/openapi.json',
-      dom_id: '#swagger-ui',
-    });
-  };
-</script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="same-origin" />
+    <title>SwaggerUI</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.30.2/swagger-ui.css" crossorigin integrity="sha384-++DMKo1369T5pxDNqojF1F91bYxYiT1N7b1M15a7oCzEodfljztKlApQoH6eQSKI" />
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.30.2/swagger-ui-bundle.js" crossorigin integrity="sha384-bBdB196maIUakX6v2F6J0XcjddQfaENm8kASsYfqTKCZua9xlYNh1AdtL18PGr0D"></script>
+    <script>
+      window.onload = () => {
+        window.ui = SwaggerUIBundle({
+          url: '/openapi.json',
+          dom_id: '#swagger-ui',
+        });
+      };
+    </script>
+  </body>
 </html>`))
 })
 ```

@@ -478,21 +478,22 @@ func NewAPI(config Config, a Adapter) API {
 			}
 			ctx.SetHeader("Content-Type", "text/html")
 			// Very strict CSP so we never expose any data to the outside world
-			ctx.SetHeader("Content-Security-Policy",
-				"default-src 'none';"+
-					" base-uri 'none';"+
-					" connect-src 'self';"+
-					" form-action 'none';"+
-					" frame-ancestors 'none';"+
-					" sandbox allow-same-origin allow-scripts;"+
-					" script-src https://unpkg.com/;"+
-					" style-src 'unsafe-inline' https://unpkg.com/;"+
-					" trusted-types 'none'")
+			csp := []string{
+				"default-src 'none'",
+				"base-uri 'none'",
+				"connect-src 'self'",
+				"form-action 'none'",
+				"frame-ancestors 'none'",
+				"sandbox allow-same-origin allow-scripts",
+				"script-src https://unpkg.com/",
+				"style-src 'unsafe-inline' https://unpkg.com/",
+			}
+			ctx.SetHeader("Content-Security-Policy", strings.Join(csp, "; "))
 			title := "Elements in HTML"
 			if config.Info != nil && config.Info.Title != "" {
 				title = config.Info.Title + " Reference"
 			}
-			ctx.BodyWriter().Write([]byte(`<!doctype html>
+			ctx.BodyWriter().Write([]byte(`<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
