@@ -216,6 +216,10 @@ type Config struct {
 	// for example if you need access to the path settings that may be changed
 	// by the user after the defaults have been set.
 	CreateHooks []func(Config) Config
+
+	// RejectUnknownQueryParameters determines whether to reject requests
+	// containing query parameters not defined in the API spec.
+	RejectUnknownQueryParameters bool
 }
 
 // API represents a Huma API wrapping a specific router.
@@ -259,6 +263,9 @@ type API interface {
 	// See also `huma.Operation{}.Middlewares` for adding operation-specific
 	// middleware at operation registration time.
 	Middlewares() Middlewares
+
+	// RejectUnknownQueryParameters indicates whether unknown query parameters should be rejected.
+	RejectUnknownQueryParameters() bool
 }
 
 // Format represents a request / response format. It is used to marshal and
@@ -272,12 +279,13 @@ type Format struct {
 }
 
 type api struct {
-	config       Config
-	adapter      Adapter
-	formats      map[string]Format
-	formatKeys   []string
-	transformers []Transformer
-	middlewares  Middlewares
+	config                       Config
+	adapter                      Adapter
+	formats                      map[string]Format
+	formatKeys                   []string
+	transformers                 []Transformer
+	middlewares                  Middlewares
+	rejectUnknownQueryParameters bool
 }
 
 func (a *api) Adapter() Adapter {
@@ -354,6 +362,10 @@ func (a *api) Middlewares() Middlewares {
 	return a.middlewares
 }
 
+func (a *api) RejectUnknownQueryParameters() bool {
+	return a.rejectUnknownQueryParameters
+}
+
 // getAPIPrefix returns the API prefix from the first server URL in the OpenAPI
 // spec. If no server URL is set, then an empty string is returned.
 func getAPIPrefix(oapi *OpenAPI) string {
@@ -385,10 +397,11 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	newAPI := &api{
-		config:       config,
-		adapter:      a,
-		formats:      map[string]Format{},
-		transformers: config.Transformers,
+		config:                       config,
+		adapter:                      a,
+		formats:                      map[string]Format{},
+		transformers:                 config.Transformers,
+		rejectUnknownQueryParameters: config.RejectUnknownQueryParameters,
 	}
 
 	if config.OpenAPI == nil {
