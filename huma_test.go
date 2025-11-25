@@ -607,6 +607,24 @@ func TestFeatures(t *testing.T) {
 			Method: http.MethodGet,
 		},
 		{
+			Name: "parse-with-param-receiver-time",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Param OptionalParam[time.Time] `query:"param"`
+				}) (*struct{}, error) {
+					expectedTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
+					assert.True(t, i.Param.Value.Equal(expectedTime))
+					assert.True(t, i.Param.IsSet)
+					return nil, nil
+				})
+			},
+			URL:    "/test?param=2023-01-01T12:00:00Z",
+			Method: http.MethodGet,
+		},
+		{
 			Name: "param-deepObject-struct",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
