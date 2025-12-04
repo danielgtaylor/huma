@@ -106,7 +106,7 @@ func (c *fiberWrapper) BodyReader() io.Reader {
 		// Streaming is enabled, so send the reader.
 		return orig.Request().BodyStream()
 	}
-	return bytes.NewReader(orig.BodyRaw())
+	return bytes.NewReader(orig.Body())
 }
 
 func (c *fiberWrapper) GetMultipartForm() (*multipart.Form, error) {
