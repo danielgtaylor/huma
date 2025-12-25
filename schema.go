@@ -433,52 +433,65 @@ func ensureType(r Registry, fieldName string, s *Schema, value string, v any) {
 // convertType panics if the given value does not match or cannot be converted
 // to the field's Go type.
 func convertType(fieldName string, t reflect.Type, v any) any {
-	vv := reflect.ValueOf(v)
-	tv := reflect.TypeOf(v)
-	if v != nil && tv != t {
-		if tv.Kind() == reflect.Slice {
-			// Slices can't be cast due to the different layouts. Instead, we make a
-			// new instance of the destination slice, and convert each value in
-			// the original to the new type.
-			tmp := reflect.MakeSlice(t, 0, vv.Len())
-			for i := 0; i < vv.Len(); i++ {
-				item := vv.Index(i)
-				if item.Kind() == reflect.Interface {
-					// E.g. []any and we want the underlying type.
-					item = item.Elem()
-				}
-				item = reflect.Indirect(item)
-				typ := deref(t.Elem())
-				if !item.Type().ConvertibleTo(typ) {
-					panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", item.Interface(), t.Elem(), fieldName, ErrSchemaInvalid))
-				}
-
-				value := item.Convert(typ)
-				if t.Elem().Kind() == reflect.Ptr {
-					// Special case: if the field is a pointer, we need to get a pointer
-					// to the converted value.
-					ptr := reflect.New(value.Type())
-					ptr.Elem().Set(value)
-					value = ptr
-				}
-
-				tmp = reflect.Append(tmp, value)
-			}
-			v = tmp.Interface()
-		} else if !tv.ConvertibleTo(deref(t)) {
-			panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", tv, t, fieldName, ErrSchemaInvalid))
-		}
-
-		converted := reflect.ValueOf(v).Convert(deref(t))
-		if t.Kind() == reflect.Ptr {
-			// Special case: if the field is a pointer, we need to get a pointer
-			// to the converted value.
-			tmp := reflect.New(t.Elem())
-			tmp.Elem().Set(converted)
-			converted = tmp
-		}
-		v = converted.Interface()
+	if v == nil {
+		return v
 	}
+
+	vv := reflect.ValueOf(v)
+	tv := vv.Type()
+	if tv == t {
+		return v
+	}
+
+	// Directly convert equal underlying types, avoiding traversal,
+	// e.g. json.RawMessage -> []byte
+	if tv.ConvertibleTo(t) {
+		return vv.Convert(t).Interface()
+	}
+
+	if tv.Kind() == reflect.Slice {
+		// Slices can't be cast due to the different layouts. Instead, we make a
+		// new instance of the destination slice, and convert each value in
+		// the original to the new type.
+		tmp := reflect.MakeSlice(t, 0, vv.Len())
+		for i := 0; i < vv.Len(); i++ {
+			item := vv.Index(i)
+			if item.Kind() == reflect.Interface {
+				// E.g. []any and we want the underlying type.
+				item = item.Elem()
+			}
+			item = reflect.Indirect(item)
+			typ := deref(t.Elem())
+			if !item.Type().ConvertibleTo(typ) {
+				panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", item.Interface(), t.Elem(), fieldName, ErrSchemaInvalid))
+			}
+
+			value := item.Convert(typ)
+			if t.Elem().Kind() == reflect.Ptr {
+				// Special case: if the field is a pointer, we need to get a pointer
+				// to the converted value.
+				ptr := reflect.New(value.Type())
+				ptr.Elem().Set(value)
+				value = ptr
+			}
+
+			tmp = reflect.Append(tmp, value)
+		}
+		v = tmp.Interface()
+	} else if !tv.ConvertibleTo(deref(t)) {
+		panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", tv, t, fieldName, ErrSchemaInvalid))
+	}
+
+	converted := reflect.ValueOf(v).Convert(deref(t))
+	if t.Kind() == reflect.Ptr {
+		// Special case: if the field is a pointer, we need to get a pointer
+		// to the converted value.
+		tmp := reflect.New(t.Elem())
+		tmp.Elem().Set(converted)
+		converted = tmp
+	}
+
+	v = converted.Interface()
 	return v
 }
 
