@@ -1406,6 +1406,38 @@ Hello, World!
 			},
 		},
 		{
+			Name: "request-body-multipart-file-decoded-text-value-sent-to-file-field",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						Avatar huma.FormFile `form:"avatar" contentType:"image/jpeg, image/png" required:"true"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="avatar"
+
+test
+--SimpleBoundary--`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				// Should return validation error, not panic
+				var errors huma.ErrorModel
+				err := json.Unmarshal(resp.Body.Bytes(), &errors)
+				require.NoError(t, err)
+				assert.Equal(t, "File required", errors.Errors[0].Message)
+				assert.Equal(t, "avatar", errors.Errors[0].Location)
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+			},
+		},
+		{
 			Name: "request-body-multipart-file-decoded-content-type-default",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
