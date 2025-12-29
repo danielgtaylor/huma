@@ -796,7 +796,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 								}
 
 								// Skip FormFile and []FormFile fields - they are handled separately
-								if p.Type.String() == "huma.FormFile" || p.Type.String() == "[]huma.FormFile" {
+								if p.Type == reflect.TypeOf(FormFile{}) || p.Type == reflect.TypeOf([]FormFile{}) {
 									return
 								}
 

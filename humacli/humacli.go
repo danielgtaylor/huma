@@ -393,7 +393,7 @@ func (c *cli[O]) setupOptions(t reflect.Type, path []int, prefix string) error {
 //	// First, define your input options.
 //	type Options struct {
 //		Debug bool   `doc:"Enable debug logging"`
-//		Host  string `doc:"Hostname to listen on."`
+//		Host  string `doc:"ServerURL to listen on."`
 //		Port  int    `doc:"Port to listen on." short:"p" default:"8888"`
 //	}
 //
