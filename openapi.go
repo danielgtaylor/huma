@@ -1693,18 +1693,18 @@ var (
 // fixWildcardPath converts router-specific wildcard patterns to OpenAPI-compatible path parameters
 func fixWildcardPath(path string) string {
 	// ServeMux: {name...} -> {name}
-	if serveMuxWildcard.MatchString(path) {
-		return serveMuxWildcard.ReplaceAllString(path, "{$1}")
+	if replaced := serveMuxWildcard.ReplaceAllString(path, "{$1}"); replaced != path {
+		return replaced
 	}
 
 	// Gorilla Mux: {name:.*} -> {name}
-	if gorillaMuxWildcard.MatchString(path) {
-		return gorillaMuxWildcard.ReplaceAllString(path, "{$1}")
+	if replaced := gorillaMuxWildcard.ReplaceAllString(path, "{$1}"); replaced != path {
+		return replaced
 	}
 
 	// Gin, HttpRouter, BunRouter: /*name -> /{name}
-	if starNameWildcard.MatchString(path) {
-		return starNameWildcard.ReplaceAllString(path, "/{$1}")
+	if replaced := starNameWildcard.ReplaceAllString(path, "/{$1}"); replaced != path {
+		return replaced
 	}
 
 	// Chi, Echo, Fiber: trailing /* or /+ -> /{path}
