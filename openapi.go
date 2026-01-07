@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2/yaml"
@@ -1541,7 +1543,7 @@ func (o *OpenAPI) MarshalJSON() ([]byte, error) {
 		{"info", o.Info, omitNever},
 		{"jsonSchemaDialect", o.JSONSchemaDialect, omitEmpty},
 		{"servers", o.Servers, omitEmpty},
-		{"paths", o.Paths, omitEmpty},
+		{"paths", FixWildcardPaths(o.Paths), omitEmpty},
 		{"webhooks", o.Webhooks, omitEmpty},
 		{"components", o.Components, omitEmpty},
 		{"security", o.Security, omitNil},
@@ -1676,4 +1678,55 @@ func (o *OpenAPI) DowngradeYAML() ([]byte, error) {
 		err = yaml.Convert(buf, bytes.NewReader(specJSON))
 	}
 	return buf.Bytes(), err
+}
+
+// Patterns for router-specific wildcards
+var (
+	// Matches {name...} (ServeMux)
+	serveMuxWildcard = regexp.MustCompile(`\{([^}]+)\.\.\.}`)
+	// Matches {name:.*} (Gorilla Mux)
+	gorillaMuxWildcard = regexp.MustCompile(`\{([^:}]+):\.\*}`)
+	// Matches *name at end of path (Gin, HttpRouter, BunRouter)
+	starNameWildcard = regexp.MustCompile(`/\*([a-zA-Z_][a-zA-Z0-9_]*)$`)
+)
+
+// fixWildcardPath converts router-specific wildcard patterns to OpenAPI-compatible path parameters
+func fixWildcardPath(path string) string {
+	// ServeMux: {name...} -> {name}
+	if serveMuxWildcard.MatchString(path) {
+		return serveMuxWildcard.ReplaceAllString(path, "{$1}")
+	}
+
+	// Gorilla Mux: {name:.*} -> {name}
+	if gorillaMuxWildcard.MatchString(path) {
+		return gorillaMuxWildcard.ReplaceAllString(path, "{$1}")
+	}
+
+	// Gin, HttpRouter, BunRouter: /*name -> /{name}
+	if starNameWildcard.MatchString(path) {
+		return starNameWildcard.ReplaceAllString(path, "/{$1}")
+	}
+
+	// Chi, Echo, Fiber: trailing /* or /+ -> /{path}
+	if strings.HasSuffix(path, "/*") {
+		return strings.TrimSuffix(path, "/*") + "/{path}"
+	}
+	if strings.HasSuffix(path, "/+") {
+		return strings.TrimSuffix(path, "/+") + "/{path}"
+	}
+
+	// No match, return original
+	return path
+}
+
+// FixWildcardPaths returns a copy of the paths map with wildcard patterns normalized for OpenAPI
+func FixWildcardPaths(paths map[string]*PathItem) map[string]*PathItem {
+	if paths == nil {
+		return nil
+	}
+	fixed := make(map[string]*PathItem, len(paths))
+	for path, item := range paths {
+		fixed[fixWildcardPath(path)] = item
+	}
+	return fixed
 }

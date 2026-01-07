@@ -265,3 +265,58 @@ func TestDowngrade(t *testing.T) {
 	// Check that the downgrade worked as expected.
 	assert.JSONEq(t, expected, string(v30))
 }
+
+func TestFixWildcardPaths(t *testing.T) {
+	input := map[string]*huma.PathItem{
+		// ServeMux
+		"/api/{path...}":       {},
+		"/files/{filepath...}": {},
+		// Gorilla Mux
+		"/mux/{path:.*}":    {},
+		"/mux/v1/{rest:.*}": {},
+		// Gin, HttpRouter, BunRouter
+		"/gin/*filepath":   {},
+		"/router/v1/*rest": {},
+		// Chi, Echo
+		"/chi/*":         {},
+		"/echo/static/*": {},
+		// Fiber
+		"/fiber/+":        {},
+		"/fiber/assets/+": {},
+		// No wildcard (unchanged)
+		"/users/{id}":   {},
+		"/api/v1/items": {},
+	}
+
+	expected := map[string]bool{
+		// ServeMux
+		"/api/{path}":       true,
+		"/files/{filepath}": true,
+		// Gorilla Mux
+		"/mux/{path}":    true,
+		"/mux/v1/{rest}": true,
+		// Gin, HttpRouter, BunRouter
+		"/gin/{filepath}":   true,
+		"/router/v1/{rest}": true,
+		// Chi, Echo
+		"/chi/{path}":         true,
+		"/echo/static/{path}": true,
+		// Fiber
+		"/fiber/{path}":        true,
+		"/fiber/assets/{path}": true,
+		// No wildcard (unchanged)
+		"/users/{id}":   true,
+		"/api/v1/items": true,
+	}
+
+	result := huma.FixWildcardPaths(input)
+
+	require.Len(t, result, len(expected), "result should have same number of paths")
+
+	for path := range result {
+		assert.True(t, expected[path], "unexpected path in result: %q", path)
+	}
+
+	// Test nil input
+	assert.Nil(t, huma.FixWildcardPaths(nil))
+}
