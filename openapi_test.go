@@ -334,4 +334,5 @@ func TestFixWildcardPaths(t *testing.T) {
 
 	// Test nil input
 	assert.Nil(t, huma.FixWildcardPaths(nil))
+	assert.Empty(t, huma.FixWildcardPaths(map[string]*huma.PathItem{}))
 }
