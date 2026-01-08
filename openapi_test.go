@@ -267,54 +267,63 @@ func TestDowngrade(t *testing.T) {
 }
 
 func TestFixWildcardPaths(t *testing.T) {
-	input := map[string]*huma.PathItem{
-		// ServeMux
-		"/api/{path...}":       {},
-		"/files/{filepath...}": {},
-		// Gorilla Mux
-		"/mux/{path:.*}":    {},
-		"/mux/v1/{rest:.*}": {},
-		// Gin, HttpRouter, BunRouter
-		"/gin/*filepath":   {},
-		"/router/v1/*rest": {},
-		// Chi, Echo
-		"/chi/*":         {},
-		"/echo/static/*": {},
-		// Fiber
-		"/fiber/+":        {},
-		"/fiber/assets/+": {},
-		// No wildcard (unchanged)
-		"/users/{id}":   {},
-		"/api/v1/items": {},
+	// Create distinct PathItem pointers so we can verify they are preserved
+	pathItems := make([]*huma.PathItem, 14)
+	for i := range pathItems {
+		pathItems[i] = &huma.PathItem{}
 	}
 
-	expected := map[string]bool{
+	input := map[string]*huma.PathItem{
 		// ServeMux
-		"/api/{path}":       true,
-		"/files/{filepath}": true,
+		"/api/{path...}":       pathItems[0],
+		"/files/{filepath...}": pathItems[1],
 		// Gorilla Mux
-		"/mux/{path}":    true,
-		"/mux/v1/{rest}": true,
+		"/mux/{path:.*}":    pathItems[2],
+		"/mux/v1/{rest:.*}": pathItems[3],
 		// Gin, HttpRouter, BunRouter
-		"/gin/{filepath}":   true,
-		"/router/v1/{rest}": true,
+		"/gin/*filepath":   pathItems[4],
+		"/router/v1/*rest": pathItems[5],
 		// Chi, Echo
-		"/chi/{path}":         true,
-		"/echo/static/{path}": true,
+		"/chi/*":         pathItems[6],
+		"/echo/static/*": pathItems[7],
 		// Fiber
-		"/fiber/{path}":        true,
-		"/fiber/assets/{path}": true,
+		"/fiber/+":        pathItems[8],
+		"/fiber/assets/+": pathItems[9],
 		// No wildcard (unchanged)
-		"/users/{id}":   true,
-		"/api/v1/items": true,
+		"/users/{id}":   pathItems[10],
+		"/api/v1/items": pathItems[11],
+	}
+
+	// Map from expected output path to the expected PathItem pointer
+	expected := map[string]*huma.PathItem{
+		// ServeMux
+		"/api/{path}":       pathItems[0],
+		"/files/{filepath}": pathItems[1],
+		// Gorilla Mux
+		"/mux/{path}":    pathItems[2],
+		"/mux/v1/{rest}": pathItems[3],
+		// Gin, HttpRouter, BunRouter
+		"/gin/{filepath}":   pathItems[4],
+		"/router/v1/{rest}": pathItems[5],
+		// Chi, Echo
+		"/chi/{path}":         pathItems[6],
+		"/echo/static/{path}": pathItems[7],
+		// Fiber
+		"/fiber/{path}":        pathItems[8],
+		"/fiber/assets/{path}": pathItems[9],
+		// No wildcard (unchanged)
+		"/users/{id}":   pathItems[10],
+		"/api/v1/items": pathItems[11],
 	}
 
 	result := huma.FixWildcardPaths(input)
 
 	require.Len(t, result, len(expected), "result should have same number of paths")
 
-	for path := range result {
-		assert.True(t, expected[path], "unexpected path in result: %q", path)
+	for path, expectedItem := range expected {
+		actualItem, exists := result[path]
+		assert.True(t, exists, "expected path not in result: %q", path)
+		assert.Same(t, expectedItem, actualItem, "PathItem for path %q should be preserved", path)
 	}
 
 	// Test nil input
