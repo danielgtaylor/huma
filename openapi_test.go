@@ -268,7 +268,7 @@ func TestDowngrade(t *testing.T) {
 
 func TestFixWildcardPaths(t *testing.T) {
 	// Create distinct PathItem pointers so we can verify they are preserved
-	pathItems := make([]*huma.PathItem, 12)
+	pathItems := make([]*huma.PathItem, 14)
 	for i := range pathItems {
 		pathItems[i] = &huma.PathItem{}
 	}
@@ -292,6 +292,9 @@ func TestFixWildcardPaths(t *testing.T) {
 		// No wildcard (unchanged)
 		"/users/{id}":   pathItems[10],
 		"/api/v1/items": pathItems[11],
+		// Collision with existing path (should never happen in practice)
+		"/collision/{path}":    pathItems[12],
+		"/collision/{path...}": pathItems[13],
 	}
 
 	// Map from expected output path to the expected PathItem pointer
@@ -314,6 +317,9 @@ func TestFixWildcardPaths(t *testing.T) {
 		// No wildcard (unchanged)
 		"/users/{id}":   pathItems[10],
 		"/api/v1/items": pathItems[11],
+		// Collision with existing path (should never happen in practice)
+		"/collision/{path}":    pathItems[12], // original remains
+		"/collision/{path...}": pathItems[13], // unchanged (conflict)
 	}
 
 	result := huma.FixWildcardPaths(input)
