@@ -1744,6 +1744,7 @@ func FixWildcardPaths(paths map[string]*PathItem) map[string]*PathItem {
 		// If normalization causes a collision (multiple original paths mapping
 		// to the same normalized key), fall back to the original path to avoid
 		// silently dropping routes from the OpenAPI spec.
+		// Non-deterministic due to map iteration order, but collisions should be rare in practice.
 		if _, exists := fixed[normalized]; exists && normalized != path {
 			fixed[path] = item
 			continue
