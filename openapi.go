@@ -1719,7 +1719,20 @@ func fixWildcardPath(path string) string {
 	return path
 }
 
-// FixWildcardPaths returns a copy of the paths map with wildcard patterns normalized for OpenAPI
+// FixWildcardPaths returns a copy of the paths map with wildcard patterns normalized for OpenAPI.
+//
+// Different routers use different syntax for wildcard/catch-all path parameters
+// (e.g., {path...}, /*name, /*, /+), but the OpenAPI specification only supports
+// the standard {paramName} format. This function transforms router-specific
+// wildcard patterns into OpenAPI-compatible path parameters.
+//
+// This transformation is applied during JSON marshaling of the OpenAPI spec,
+// so the internal Paths map retains the original router-specific patterns for
+// correct request routing, while the generated OpenAPI document uses standard
+// path parameter syntax for compatibility with OpenAPI tools and clients.
+//
+// The PathItem values are preserved (same pointer references), only the map keys
+// are transformed.
 func FixWildcardPaths(paths map[string]*PathItem) map[string]*PathItem {
 	if paths == nil {
 		return nil
