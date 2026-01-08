@@ -1739,7 +1739,17 @@ func FixWildcardPaths(paths map[string]*PathItem) map[string]*PathItem {
 	}
 	fixed := make(map[string]*PathItem, len(paths))
 	for path, item := range paths {
-		fixed[fixWildcardPath(path)] = item
+		normalized := fixWildcardPath(path)
+
+		// If normalization causes a collision (multiple original paths mapping
+		// to the same normalized key), fall back to the original path to avoid
+		// silently dropping routes from the OpenAPI spec.
+		if _, exists := fixed[normalized]; exists && normalized != path {
+			fixed[path] = item
+			continue
+		}
+
+		fixed[normalized] = item
 	}
 	return fixed
 }
