@@ -268,7 +268,7 @@ func TestDowngrade(t *testing.T) {
 
 func TestFixWildcardPaths(t *testing.T) {
 	// Create distinct PathItem pointers so we can verify they are preserved
-	pathItems := make([]*huma.PathItem, 14)
+	pathItems := make([]*huma.PathItem, 12)
 	for i := range pathItems {
 		pathItems[i] = &huma.PathItem{}
 	}
