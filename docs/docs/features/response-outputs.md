@@ -26,7 +26,7 @@ huma.Register(api, huma.Operation{
 }, func(ctx context.Context, input ThingRequest) (*struct{}, error) {
 	// Do nothing...
 	return nil, nil
-}
+})
 ```
 
 If the response code needs to be **dynamic**, you can use the special `Status` field in your response struct. This is not recommended, but is available if needed.
@@ -41,7 +41,7 @@ huma.Register(api, huma.Operation{
 	Method:       http.MethodGet,
 	Path:         "/things/{thing-id}",
 	Summary:      "Get a thing by ID",
-}, func(ctx context.Context, input ThingRequest) (*struct{}, error) {
+}, func(ctx context.Context, input *ThingRequest) (*ThingResponse, error) {
 	// Create a response and set the dynamic status
 	resp := &ThingResponse{}
 	if input.ID < 500 {
@@ -51,7 +51,7 @@ huma.Register(api, huma.Operation{
 		resp.Status = 250
 	}
 	return resp, nil
-}
+})
 ```
 
 !!! info "Dynamic Status"
@@ -115,7 +115,7 @@ huma.Register(api, huma.Operation{
 		},
 	}
 	return resp, nil
-}
+})
 ```
 
 You can set multiple cookies by using a slice like `[]http.Cookie` instead.
