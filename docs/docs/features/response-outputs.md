@@ -136,13 +136,15 @@ type MyOutput struct {
 }
 ```
 
-Use a type of `[]byte` to bypass [serialization](./response-serialization.md).
+Use a type of `[]byte` to bypass [serialization](./response-serialization.md). This is useful for returning images, HTML, or other binary data.
 
 ```go title="code.go"
 type MyOutput struct {
 	Body []byte
 }
 ```
+
+See the [HTML Response](../how-to/html-response.md) or [Image Response](../how-to/image-response.md) guides for more details.
 
 You can also stream the response body, see [streaming](./response-streaming.md) for more details.
 
