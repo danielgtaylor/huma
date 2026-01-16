@@ -1,6 +1,6 @@
 package validation
 
-// List of built-in validation error messages
+// List of built-in validation error messages.
 var (
 	MsgUnexpectedProperty                 = "unexpected property"
 	MsgExpectedRFC3339DateTime            = "expected string to be RFC 3339 date-time"
@@ -22,6 +22,7 @@ var (
 	MsgExpectedNotMatchSchema             = "expected value to not match schema"
 	MsgExpectedPropertyNameInObject       = "expected propertyName value to be present in object"
 	MsgExpectedBoolean                    = "expected boolean"
+	MsgExpectedDuration                   = "expected duration: %v"
 	MsgExpectedNumber                     = "expected number"
 	MsgExpectedInteger                    = "expected integer"
 	MsgExpectedString                     = "expected string"
