@@ -55,9 +55,9 @@ func deref(t reflect.Type) reflect.Type {
 }
 
 // Discriminator object when request bodies or response payloads may be one of a
-// number of different schemas, can be used to aid in serialization,
+// number of different schemas can be used to aid in serialization,
 // deserialization, and validation. The discriminator is a specific object in a
-// schema which is used to inform the consumer of the document of an alternative
+// schema that is used to inform the consumer of the document of an alternative
 // schema based on the value associated with it.
 type Discriminator struct {
 	// PropertyName in the payload that will hold the discriminator value.
@@ -81,7 +81,7 @@ func (d *Discriminator) MarshalJSON() ([]byte, error) {
 // spec, designed specifically for use with Go structs and to enable fast zero
 // or near-zero allocation happy-path validation for incoming requests.
 //
-// Typically you will use a registry and `huma.SchemaFromType` to generate
+// Typically, you will use a registry and `huma.SchemaFromType` to generate
 // schemas for your types. You can then use `huma.Validate` to validate
 // incoming requests.
 //
@@ -380,7 +380,7 @@ func ensureType(r Registry, fieldName string, s *Schema, value string, v any) {
 	if s.Ref != "" {
 		s = r.SchemaFromRef(s.Ref)
 		if s == nil {
-			// We may not have access to this type, e.g. custom schema provided
+			// We may not have access to this type, e.g., custom schema provided
 			// by the user with remote refs. Skip validation.
 			return
 		}
@@ -438,7 +438,7 @@ func convertType(fieldName string, t reflect.Type, v any) any {
 	if v != nil && tv != t {
 		if tv.Kind() == reflect.Slice {
 			// Slices can't be cast due to the different layouts. Instead, we make a
-			// new instance of the destination slice, and convert each value in
+			// new instance of the destination slice and convert each value in
 			// the original to the new type.
 			tmp := reflect.MakeSlice(t, 0, vv.Len())
 			for i := 0; i < vv.Len(); i++ {
@@ -497,7 +497,7 @@ func jsonTagValue(r Registry, fieldName string, s *Schema, value string) any {
 
 	// Special case: array of strings with comma-separated values and no quotes.
 	if s.Type == TypeArray && s.Items != nil && s.Items.Type == TypeString && value[0] != '[' {
-		values := []string{}
+		var values []string
 		for _, s := range strings.Split(value, ",") {
 			values = append(values, strings.TrimSpace(s))
 		}
@@ -583,7 +583,7 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 	fs.Nullable = boolTag(f, "nullable", fs.Nullable)
 	if fs.Nullable && fs.Ref != "" && registry.SchemaFromRef(fs.Ref).Type == "object" {
 		// Nullability is only supported for scalar types for now. Objects are
-		// much more complicated because the `null` type lives within the object
+		// much more complicated. The `null` type lives within the object
 		// definition (requiring multiple copies of the object) or needs to use
 		// `anyOf` or `not` which is not supported by all code generators, or is
 		// supported poorly & generates hard-to-use code. This is less than ideal
@@ -622,7 +622,7 @@ type fieldInfo struct {
 	Field  reflect.StructField
 }
 
-// getFields performs a breadth-first search for all fields including embedded
+// getFields performs a breadth-first search for all fields, including embedded
 // ones. It may return multiple fields with the same name, the first of which
 // represents the outermost declaration.
 func getFields(typ reflect.Type, visited map[reflect.Type]struct{}) []fieldInfo {
@@ -668,10 +668,9 @@ type SchemaProvider interface {
 	Schema(r Registry) *Schema
 }
 
-// SchemaTransformer is an interface that can be implemented by types
-// to transform the generated schema as needed.
-// This can be used to leverage the default schema generation for a type,
-// and arbitrarily modify parts of it.
+// SchemaTransformer is an interface that types can implement to transform
+// the generated schema as needed. This can be used to leverage the
+// default schema generation for a type and arbitrarily modify parts of it.
 type SchemaTransformer interface {
 	TransformSchema(r Registry, s *Schema) *Schema
 }
@@ -852,7 +851,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 				propNames = append(propNames, name)
 
 				if fs.hidden {
-					// This field is deliberately ignored. It may still exist, but won't
+					// This field is deliberately ignored. It may still exist but won't
 					// be documented as a required field.
 					fieldRequired = false
 				}
@@ -871,7 +870,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 		}
 		s.Type = TypeObject
 
-		// Check if the dependent fields exists. If they don't, panic with the correct message.
+		// Check if the dependent fields exist. If they don't, panic with the correct message.
 		var errs []string
 		depKeys := make([]string, 0, len(dependentRequiredMap))
 		for field := range dependentRequiredMap {

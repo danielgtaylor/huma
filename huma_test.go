@@ -63,7 +63,7 @@ func (UUID) Schema(r huma.Registry) *huma.Schema {
 	return &huma.Schema{Type: huma.TypeString, Format: "uuid"}
 }
 
-// BodyContainer is an embed request body struct to test request body unmarshalling
+// BodyContainer is an embed request body struct to test request body unmarshaling
 type BodyContainer struct {
 	Body struct {
 		Name string `json:"name"`
