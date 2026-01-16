@@ -151,7 +151,7 @@ func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
 
 // Transform is called for every response to add the `$schema` field and/or
 // the Link header pointing to the JSON Schema.
-func (t *SchemaLinkTransformer) Transform(ctx Context, status string, v any) (any, error) {
+func (t *SchemaLinkTransformer) Transform(ctx Context, _ string, v any) (any, error) {
 	vv := reflect.ValueOf(v)
 	if vv.Kind() == reflect.Pointer && vv.IsNil() {
 		return v, nil

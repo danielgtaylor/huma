@@ -259,15 +259,16 @@ func WriteErr(api API, ctx Context, status int, msg string, errs ...error) error
 	var err = NewErrorWithContext(ctx, status, msg, errs...)
 
 	// NewError may have modified the status code, so update it here if needed.
-	// If it was not modified then this is a no-op.
+	// If it was not modified, then this is a no-op.
 	status = err.GetStatus()
 
-	writeErr := writeResponse(api, ctx, status, "", err)
-	if writeErr != nil {
+	writtenErr := writeResponse(api, ctx, status, "", err)
+	if writtenErr != nil {
 		// If we can't write the error, log it so we know what happened.
-		fmt.Fprintf(os.Stderr, "could not write error: %v\n", writeErr)
+		fmt.Fprintf(os.Stderr, "could not write error: %v\n", writtenErr)
 	}
-	return writeErr
+
+	return writtenErr
 }
 
 // Status304NotModified returns a 304. This is not really an error, but

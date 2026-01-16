@@ -107,7 +107,7 @@ func (g *Group) DocumentOperation(op *Operation) {
 // on all operations in the group. Use this to modify the operation before it is
 // registered with the router or OpenAPI document. This behaves similar to
 // middleware in that you should invoke `next` to continue the chain. Skip it
-// to prevent the operation from being registered, and call multiple times for
+// to prevent the operation from being registered and call multiple times for
 // a fan-out effect.
 func (g *Group) UseModifier(modifier func(o *Operation, next func(*Operation))) {
 	g.modifiers = append(g.modifiers, modifier)
@@ -166,7 +166,7 @@ func (g *Group) ModifyOperation(op *Operation, next func(*Operation)) {
 
 // UseMiddleware adds one or more middleware functions to the group that will be
 // run on all operations in the group. Use this to add common functionality to
-// all operations in the group, e.g. authentication/authorization.
+// all operations in the group, e.g., authentication/authorization.
 func (g *Group) UseMiddleware(middlewares ...func(ctx Context, next func(Context))) {
 	g.middlewares = append(g.middlewares, middlewares...)
 }
