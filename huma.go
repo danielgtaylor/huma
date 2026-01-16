@@ -177,7 +177,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 
 		pfi.Name = name
 
-		if f.Type == timeType {
+		if pfi.Type == timeType {
 			timeFormat := time.RFC3339Nano
 			if pfi.Loc == "header" {
 				timeFormat = http.TimeFormat
