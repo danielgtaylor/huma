@@ -206,10 +206,6 @@ func (r *ValidateResult) Reset() {
 
 func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult) {
 	switch s.Format {
-	case "email", "idn-email":
-		if _, err := mail.ParseAddress(str); err != nil {
-			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC5322Email, err))
-		}
 	case "date-time":
 		found := false
 		for _, format := range []string{time.RFC3339, time.RFC3339Nano} {
@@ -243,6 +239,10 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 		}
 		if !found {
 			res.Add(path, str, validation.MsgExpectedRFC3339Time)
+		}
+	case "email", "idn-email":
+		if _, err := mail.ParseAddress(str); err != nil {
+			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC5322Email, err))
 		}
 	case "hostname":
 		if len(str) >= 256 || !rxHostname.MatchString(str) {
