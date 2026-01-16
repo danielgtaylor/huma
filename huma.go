@@ -157,7 +157,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			// call cannot set them as the value is `reflect.Invalid` unless
 			// dynamically allocated, but we don't know when to allocate until
 			// after the `Every` callback has run. Doable, but a bigger change.
-			panic("pointers are not supported for path/query/header parameters")
+			panic("pointers are not supported for form/header/path/query parameters")
 		}
 
 		pfi.Schema = SchemaFromField(registry, f, "")
