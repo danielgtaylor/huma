@@ -410,6 +410,14 @@ var validateTests = []struct {
 		}{}),
 		input: map[string]any{"value": "ëxample.com"},
 	},
+	{
+		name: "expected idn-hostname",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" format:"idn-hostname"`
+		}{}),
+		input: map[string]any{"value": "a]b.com"},
+		errs:  []string{"expected string to be RFC 5890 hostname"},
+	},
 	// {
 	// 	name: "expected idn-hostname",
 	// 	typ: reflect.TypeOf(struct {
