@@ -2135,6 +2135,35 @@ Content-Type: text/plain
 			},
 		},
 		{
+			Name: "response-cookie",
+			Register: func(t *testing.T, api huma.API) {
+				type Resp struct {
+					SetCookie http.Cookie `header:"Set-Cookie"`
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/response-cookie",
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					resp := &Resp{}
+					resp.SetCookie = http.Cookie{
+						Name:  "foo",
+						Value: "bar",
+					}
+					return resp, nil
+				})
+
+				// `http.Cookie` should be treated as a string.
+				assert.Equal(t, "string", api.OpenAPI().Paths["/response-cookie"].Get.Responses["204"].Headers["Set-Cookie"].Schema.Type)
+			},
+			Method: http.MethodGet,
+			URL:    "/response-cookie",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNoContent, resp.Code)
+				assert.Equal(t, "foo=bar", resp.Header().Get("Set-Cookie"))
+			},
+		},
+		{
 			Name: "response-cookies",
 			Register: func(t *testing.T, api huma.API) {
 				type Resp struct {
