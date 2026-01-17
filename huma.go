@@ -143,7 +143,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			name = c
 
 			if f.Type == cookieType {
-				// Special case: this will be parsed from a string input to a
+				// Special case: this will be parsed from a string input to an
 				// `http.Cookie` struct.
 				f.Type = stringType
 			}
@@ -244,15 +244,21 @@ type headerInfo struct {
 
 func findHeaders(t reflect.Type) *findResult[*headerInfo] {
 	return findInType(t, nil, func(sf reflect.StructField, i []int) *headerInfo {
-		// Ignore embedded fields
+		// Ignore embedded fields.
 		if sf.Anonymous {
 			return nil
 		}
 
 		header := sf.Tag.Get("header")
 		if header == "" {
+			// Only use field name as header if this is a top-level field (depth 1).
+			if len(i) > 1 {
+				return nil
+			}
+
 			header = sf.Name
 		}
+
 		timeFormat := ""
 		if sf.Type == timeType {
 			timeFormat = http.TimeFormat
@@ -260,6 +266,7 @@ func findHeaders(t reflect.Type) *findResult[*headerInfo] {
 				timeFormat = f
 			}
 		}
+
 		return &headerInfo{sf, header, timeFormat}
 	}, false, "Status", "Body")
 }
@@ -648,6 +655,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	if outputType.Kind() != reflect.Struct {
 		panic("output must be a struct")
 	}
+
 	outHeaders, outStatusIndex, outBodyIndex, outBodyFunc := processOutputType(outputType, &op, registry)
 
 	if len(op.Errors) > 0 {
@@ -661,10 +669,8 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	if documenter, ok := api.(OperationDocumenter); ok {
 		// Enables customization of OpenAPI documentation behavior for operations.
 		documenter.DocumentOperation(&op)
-	} else {
-		if !op.Hidden {
-			oapi.AddOperation(&op)
-		}
+	} else if !op.Hidden {
+		oapi.AddOperation(&op)
 	}
 
 	resolvers := findResolvers(resolverType, inputType)
@@ -1320,7 +1326,7 @@ func setRequestBodyRequired(rb *RequestBody) {
 	rb.Required = true
 }
 
-// processOutputType validates the output type, extracts possible responses and
+// processOutputType validates the output type, extracts possible responses, and
 // defines them on the operation op.
 func processOutputType(outputType reflect.Type, op *Operation, registry Registry) (*findResult[*headerInfo], int, int, bool) {
 	outStatusIndex := -1
