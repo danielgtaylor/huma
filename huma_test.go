@@ -1894,14 +1894,20 @@ Content-Type: text/plain
 		{
 			Name: "response-headers",
 			Register: func(t *testing.T, api huma.API) {
+				type NestedHeaders struct {
+					ContentType string `header:"Content-Type"`
+					XCustom     string `header:"X-Custom"`
+				}
+
 				type Resp struct {
-					Str   string    `header:"str"`
-					Int   int       `header:"int"`
-					Uint  uint      `header:"uint"`
-					Float float64   `header:"float"`
-					Bool  bool      `header:"bool"`
-					Date  time.Time `header:"date"`
-					Empty string    `header:"empty"`
+					Str     string    `header:"str"`
+					Int     int       `header:"int"`
+					Uint    uint      `header:"uint"`
+					Float   float64   `header:"float"`
+					Bool    bool      `header:"bool"`
+					Date    time.Time `header:"date"`
+					Empty   string    `header:"empty"`
+					Headers NestedHeaders
 				}
 
 				huma.Register(api, huma.Operation{
@@ -1915,8 +1921,25 @@ Content-Type: text/plain
 					resp.Float = 3.45
 					resp.Bool = true
 					resp.Date = time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
+					resp.Headers.ContentType = "application/json"
+					resp.Headers.XCustom = "custom-value"
 					return resp, nil
 				})
+
+				// Assert headers are documented in OpenAPI spec.
+				headers := api.OpenAPI().Paths["/response-headers"].Get.Responses["204"].Headers
+				assert.NotNil(t, headers["str"])
+				assert.NotNil(t, headers["int"])
+				assert.NotNil(t, headers["uint"])
+				assert.NotNil(t, headers["float"])
+				assert.NotNil(t, headers["bool"])
+				assert.NotNil(t, headers["date"])
+				assert.NotNil(t, headers["empty"])
+				assert.NotNil(t, headers["Content-Type"])
+				assert.NotNil(t, headers["X-Custom"])
+
+				// Assert the nested struct itself is not documented as a header.
+				assert.Nil(t, headers["Headers"])
 			},
 			Method: http.MethodGet,
 			URL:    "/response-headers",
@@ -1929,6 +1952,51 @@ Content-Type: text/plain
 				assert.Equal(t, "true", resp.Header().Get("Bool"))
 				assert.Equal(t, "Sun, 01 Jan 2023 12:00:00 GMT", resp.Header().Get("Date"))
 				assert.Empty(t, resp.Header().Values("Empty"))
+				assert.Equal(t, "application/json", resp.Header().Get("Content-Type"))
+				assert.Equal(t, "custom-value", resp.Header().Get("X-Custom"))
+			},
+		},
+		{
+			Name: "response-headers-hidden",
+			Register: func(t *testing.T, api huma.API) {
+				type HiddenHeaders struct {
+					MyHeader    string `header:"X-My-Header"`
+					OtherHeader string `header:"X-Other-Header"`
+				}
+
+				type Resp struct {
+					*HiddenHeaders `hidden:"true"`
+					Body           struct {
+						Message string `json:"message"`
+					}
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/response-headers-hidden",
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					resp := &Resp{
+						HiddenHeaders: &HiddenHeaders{
+							MyHeader:    "my-value",
+							OtherHeader: "other-value",
+						},
+					}
+					resp.Body.Message = "Hello"
+					return resp, nil
+				})
+
+				// The headers should NOT appear in the OpenAPI documentation.
+				headers := api.OpenAPI().Paths["/response-headers-hidden"].Get.Responses["200"].Headers
+				assert.Nil(t, headers["X-My-Header"], "hidden header should not appear in OpenAPI docs")
+				assert.Nil(t, headers["X-Other-Header"], "hidden header should not appear in OpenAPI docs")
+			},
+			Method: http.MethodGet,
+			URL:    "/response-headers-hidden",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				// The headers SHOULD still be sent in the response at runtime.
+				assert.Equal(t, http.StatusOK, resp.Code)
+				assert.Equal(t, "my-value", resp.Header().Get("X-My-Header"))
+				assert.Equal(t, "other-value", resp.Header().Get("X-Other-Header"))
 			},
 		},
 		{
