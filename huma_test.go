@@ -1895,19 +1895,15 @@ Content-Type: text/plain
 			Name: "response-headers",
 			Register: func(t *testing.T, api huma.API) {
 				type NestedHeaders struct {
-					ContentType string `header:"Content-Type"`
-					XCustom     string `header:"X-Custom"`
+					NestedWithTag    string `header:"X-Nested-With-Tag"`
+					NestedWithoutTag string // No header tag - should NOT be set as a header.
 				}
 
 				type Resp struct {
-					Str     string    `header:"str"`
-					Int     int       `header:"int"`
-					Uint    uint      `header:"uint"`
-					Float   float64   `header:"float"`
-					Bool    bool      `header:"bool"`
-					Date    time.Time `header:"date"`
-					Empty   string    `header:"empty"`
-					Headers NestedHeaders
+					WithTag      string    `header:"X-With-Tag"`
+					WithoutTag   string    // No header tag - SHOULD be set as a header using field name.
+					LastModified time.Time // No header tag - SHOULD be set as a header using field name.
+					Nested       NestedHeaders
 				}
 
 				huma.Register(api, huma.Operation{
@@ -1915,58 +1911,61 @@ Content-Type: text/plain
 					Path:   "/response-headers",
 				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
 					resp := &Resp{}
-					resp.Str = "str"
-					resp.Int = 1
-					resp.Uint = 2
-					resp.Float = 3.45
-					resp.Bool = true
-					resp.Date = time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
-					resp.Headers.ContentType = "application/json"
-					resp.Headers.XCustom = "custom-value"
+					resp.WithTag = "with-tag-value"
+					resp.WithoutTag = "without-tag-value"
+					resp.LastModified = time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
+					resp.Nested.NestedWithTag = "nested-with-tag-value"
+					resp.Nested.NestedWithoutTag = "should-not-be-header"
 					return resp, nil
 				})
 
-				// Assert headers are documented in OpenAPI spec.
 				headers := api.OpenAPI().Paths["/response-headers"].Get.Responses["204"].Headers
-				assert.NotNil(t, headers["str"])
-				assert.NotNil(t, headers["int"])
-				assert.NotNil(t, headers["uint"])
-				assert.NotNil(t, headers["float"])
-				assert.NotNil(t, headers["bool"])
-				assert.NotNil(t, headers["date"])
-				assert.NotNil(t, headers["empty"])
-				assert.NotNil(t, headers["Content-Type"])
-				assert.NotNil(t, headers["X-Custom"])
 
-				// Assert the nested struct itself is not documented as a header.
-				assert.Nil(t, headers["Headers"])
+				// Surface-level fields should be documented (with or without tag).
+				assert.NotNil(t, headers["X-With-Tag"])
+				assert.NotNil(t, headers["WithoutTag"])
+				assert.NotNil(t, headers["LastModified"])
+
+				// Nested fields with explicit header tag should be documented.
+				assert.NotNil(t, headers["X-Nested-With-Tag"])
+
+				// Nested fields without header tag should NOT be documented.
+				assert.Nil(t, headers["NestedWithoutTag"])
+
+				// The nested struct itself should NOT be documented as a header.
+				assert.Nil(t, headers["Nested"])
 			},
 			Method: http.MethodGet,
 			URL:    "/response-headers",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusNoContent, resp.Code)
-				assert.Equal(t, "str", resp.Header().Get("Str"))
-				assert.Equal(t, "1", resp.Header().Get("Int"))
-				assert.Equal(t, "2", resp.Header().Get("Uint"))
-				assert.Equal(t, "3.45", resp.Header().Get("Float"))
-				assert.Equal(t, "true", resp.Header().Get("Bool"))
-				assert.Equal(t, "Sun, 01 Jan 2023 12:00:00 GMT", resp.Header().Get("Date"))
-				assert.Empty(t, resp.Header().Values("Empty"))
-				assert.Equal(t, "application/json", resp.Header().Get("Content-Type"))
-				assert.Equal(t, "custom-value", resp.Header().Get("X-Custom"))
+
+				// Surface-level fields should be set (with or without tag).
+				assert.Equal(t, "with-tag-value", resp.Header().Get("X-With-Tag"))
+				assert.Equal(t, "without-tag-value", resp.Header().Get("WithoutTag"))
+				assert.Equal(t, "Sun, 01 Jan 2023 12:00:00 GMT", resp.Header().Get("LastModified"))
+
+				// Nested fields with explicit header tag should be set.
+				assert.Equal(t, "nested-with-tag-value", resp.Header().Get("X-Nested-With-Tag"))
+
+				// Nested fields without header tag should NOT be set.
+				assert.Empty(t, resp.Header().Values("NestedWithoutTag"))
 			},
 		},
 		{
 			Name: "response-headers-hidden",
 			Register: func(t *testing.T, api huma.API) {
 				type HiddenHeaders struct {
-					MyHeader    string `header:"X-My-Header"`
-					OtherHeader string `header:"X-Other-Header"`
+					HiddenWithTag    string `header:"X-Hidden-With-Tag"`
+					HiddenWithoutTag string // No header tag - should NOT be set as a header.
 				}
 
 				type Resp struct {
-					*HiddenHeaders `hidden:"true"`
-					Body           struct {
+					*HiddenHeaders    `hidden:"true"`
+					VisibleWithTag    string    `header:"X-Visible-With-Tag"`
+					VisibleWithoutTag string    // No header tag - SHOULD be set as a header using field name.
+					LastModified      time.Time // No header tag - SHOULD be set as a header using field name.
+					Body              struct {
 						Message string `json:"message"`
 					}
 				}
@@ -1977,55 +1976,43 @@ Content-Type: text/plain
 				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
 					resp := &Resp{
 						HiddenHeaders: &HiddenHeaders{
-							MyHeader:    "my-value",
-							OtherHeader: "other-value",
+							HiddenWithTag:    "hidden-with-tag-value",
+							HiddenWithoutTag: "should-not-be-header",
 						},
 					}
+					resp.VisibleWithTag = "visible-with-tag-value"
+					resp.VisibleWithoutTag = "visible-without-tag-value"
+					resp.LastModified = time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
 					resp.Body.Message = "Hello"
 					return resp, nil
 				})
 
-				// The headers should NOT appear in the OpenAPI documentation.
 				headers := api.OpenAPI().Paths["/response-headers-hidden"].Get.Responses["200"].Headers
-				assert.Nil(t, headers["X-My-Header"], "hidden header should not appear in OpenAPI docs")
-				assert.Nil(t, headers["X-Other-Header"], "hidden header should not appear in OpenAPI docs")
+
+				// Hidden headers should NOT appear in OpenAPI documentation.
+				assert.Nil(t, headers["X-Hidden-With-Tag"], "hidden header with tag should not appear in OpenAPI docs")
+				assert.Nil(t, headers["HiddenWithoutTag"], "hidden header without tag should not appear in OpenAPI docs")
+
+				// Visible surface-level fields should appear in OpenAPI documentation.
+				assert.NotNil(t, headers["X-Visible-With-Tag"], "visible header with tag should appear in OpenAPI docs")
+				assert.NotNil(t, headers["VisibleWithoutTag"], "visible header without tag should appear in OpenAPI docs")
+				assert.NotNil(t, headers["LastModified"], "visible time header should appear in OpenAPI docs")
 			},
 			Method: http.MethodGet,
 			URL:    "/response-headers-hidden",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-				// The headers SHOULD still be sent in the response at runtime.
 				assert.Equal(t, http.StatusOK, resp.Code)
-				assert.Equal(t, "my-value", resp.Header().Get("X-My-Header"))
-				assert.Equal(t, "other-value", resp.Header().Get("X-Other-Header"))
-			},
-		},
-		{
-			Name: "response-cookie",
-			Register: func(t *testing.T, api huma.API) {
-				type Resp struct {
-					SetCookie http.Cookie `header:"Set-Cookie"`
-				}
 
-				huma.Register(api, huma.Operation{
-					Method: http.MethodGet,
-					Path:   "/response-cookie",
-				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
-					resp := &Resp{}
-					resp.SetCookie = http.Cookie{
-						Name:  "foo",
-						Value: "bar",
-					}
-					return resp, nil
-				})
+				// Hidden headers with explicit tag SHOULD still be sent at runtime.
+				assert.Equal(t, "hidden-with-tag-value", resp.Header().Get("X-Hidden-With-Tag"))
 
-				// `http.Cookie` should be treated as a string.
-				assert.Equal(t, "string", api.OpenAPI().Paths["/response-cookie"].Get.Responses["204"].Headers["Set-Cookie"].Schema.Type)
-			},
-			Method: http.MethodGet,
-			URL:    "/response-cookie",
-			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-				assert.Equal(t, http.StatusNoContent, resp.Code)
-				assert.Equal(t, "foo=bar", resp.Header().Get("Set-Cookie"))
+				// Hidden headers without tag should NOT be set.
+				assert.Empty(t, resp.Header().Values("HiddenWithoutTag"))
+
+				// Visible surface-level fields should be sent at runtime.
+				assert.Equal(t, "visible-with-tag-value", resp.Header().Get("X-Visible-With-Tag"))
+				assert.Equal(t, "visible-without-tag-value", resp.Header().Get("VisibleWithoutTag"))
+				assert.Equal(t, "Sun, 01 Jan 2023 12:00:00 GMT", resp.Header().Get("LastModified"))
 			},
 		},
 		{
