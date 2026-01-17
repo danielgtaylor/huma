@@ -1412,28 +1412,50 @@ func processOutputType(outputType reflect.Type, op *Operation, registry Registry
 			Description: http.StatusText(op.DefaultStatus),
 		}
 	}
+
 	outHeaders := findHeaders(outputType)
 	for _, entry := range outHeaders.Paths {
+		v := entry.Value
+
+		// Check if this field or any parent is hidden.
+		hidden := false
+		currentType := outputType
+		for _, idx := range entry.Path {
+			currentType = deref(currentType)
+			field := currentType.Field(idx)
+			if boolTag(field, "hidden", false) {
+				hidden = true
+				break
+			}
+			currentType = field.Type
+		}
+		if hidden {
+			continue
+		}
+
 		// Document the header's name and type.
 		if op.Responses[defaultStatusStr].Headers == nil {
 			op.Responses[defaultStatusStr].Headers = map[string]*Param{}
 		}
-		v := entry.Value
+
 		f := v.Field
 		if f.Type.Kind() == reflect.Slice {
 			f.Type = deref(f.Type.Elem())
 		}
+
 		if reflect.PointerTo(f.Type).Implements(fmtStringerType) {
 			// Special case: this field will be written as a string by calling
 			// `.String()` on the value.
 			f.Type = stringType
 		}
+
 		op.Responses[defaultStatusStr].Headers[v.Name] = &Header{
 			// We need to generate the schema from the field to get validation info
 			// like min/max and enums. Useful to let the client know possible values.
 			Schema: SchemaFromField(registry, f, getHint(outputType, f.Name, op.OperationID+defaultStatusStr+v.Name)),
 		}
 	}
+
 	return outHeaders, outStatusIndex, outBodyIndex, outBodyFunc
 }
 
