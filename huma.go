@@ -143,7 +143,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			name = c
 
 			if f.Type == cookieType {
-				// Special case: this will be parsed from a string input to a
+				// Special case: this will be parsed from a string input to an
 				// `http.Cookie` struct.
 				f.Type = stringType
 			}
@@ -244,7 +244,7 @@ type headerInfo struct {
 
 func findHeaders(t reflect.Type) *findResult[*headerInfo] {
 	return findInType(t, nil, func(sf reflect.StructField, i []int) *headerInfo {
-		// Ignore embedded fields
+		// Ignore embedded fields.
 		if sf.Anonymous {
 			return nil
 		}
@@ -253,6 +253,7 @@ func findHeaders(t reflect.Type) *findResult[*headerInfo] {
 		if header == "" {
 			header = sf.Name
 		}
+
 		timeFormat := ""
 		if sf.Type == timeType {
 			timeFormat = http.TimeFormat
@@ -260,6 +261,7 @@ func findHeaders(t reflect.Type) *findResult[*headerInfo] {
 				timeFormat = f
 			}
 		}
+
 		return &headerInfo{sf, header, timeFormat}
 	}, false, "Status", "Body")
 }
@@ -439,9 +441,9 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 					result.Paths = append(result.Paths, findResultPath[T]{fi, v})
 				}
 			}
-			if f.Anonymous || recurseFields || baseKind(f.Type) != reflect.Struct {
+			if f.Anonymous || recurseFields || baseType(f.Type).Kind() != reflect.Struct {
 				// Always process embedded structs and named fields which are not
-				// structs. If `recurseFields` is true then we also process named
+				// structs. If `recurseFields` is true, then we also process named
 				// struct fields recursively.
 				visited[t] = struct{}{}
 				_findInType(f.Type, fi, result, onType, onField, recurseFields, visited, ignore...)
@@ -661,10 +663,8 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	if documenter, ok := api.(OperationDocumenter); ok {
 		// Enables customization of OpenAPI documentation behavior for operations.
 		documenter.DocumentOperation(&op)
-	} else {
-		if !op.Hidden {
-			oapi.AddOperation(&op)
-		}
+	} else if !op.Hidden {
+		oapi.AddOperation(&op)
 	}
 
 	resolvers := findResolvers(resolverType, inputType)
@@ -1152,7 +1152,7 @@ func initResponses(op *Operation) {
 	}
 }
 
-// processInputType validates the input type, extracts expected requests and
+// processInputType validates the input type, extracts expected requests, and
 // defines them on the operation op.
 func processInputType(inputType reflect.Type, op *Operation, registry Registry) (*findResult[*paramFieldInfo], []int, bool, []int, rawBodyType, *Schema) {
 	inputParams := findParams(registry, op, inputType)
@@ -1398,11 +1398,30 @@ func processOutputType(outputType reflect.Type, op *Operation, registry Registry
 	}
 	outHeaders := findHeaders(outputType)
 	for _, entry := range outHeaders.Paths {
+		v := entry.Value
+
+		// Check if this field or any parent is hidden.
+		hidden := false
+		currentType := outputType
+		for _, idx := range entry.Path {
+			currentType = baseType(currentType)
+
+			field := currentType.Field(idx)
+			if boolTag(field, "hidden", false) {
+				hidden = true
+				break
+			}
+
+			currentType = field.Type
+		}
+		if hidden {
+			continue
+		}
+
 		// Document the header's name and type.
 		if op.Responses[defaultStatusStr].Headers == nil {
 			op.Responses[defaultStatusStr].Headers = map[string]*Param{}
 		}
-		v := entry.Value
 		f := v.Field
 		if f.Type.Kind() == reflect.Slice {
 			f.Type = deref(f.Type.Elem())

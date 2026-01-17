@@ -47,14 +47,14 @@ var (
 	rawMessageType = reflect.TypeOf(json.RawMessage{})
 )
 
-func baseKind(t reflect.Type) reflect.Kind {
+func baseType(t reflect.Type) reflect.Type {
 	t = deref(t)
 	for {
 		switch t.Kind() {
 		case reflect.Slice, reflect.Array, reflect.Map:
 			t = deref(t.Elem())
 		default:
-			return t.Kind()
+			return t
 		}
 	}
 }
