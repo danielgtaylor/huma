@@ -257,11 +257,7 @@ func findHeaders(t reflect.Type) *findResult[*headerInfo] {
 				return nil
 			}
 
-			fieldType := sf.Type
-			if fieldType.Kind() == reflect.Pointer {
-				fieldType = fieldType.Elem()
-			}
-
+			fieldType := baseType(sf.Type)
 			if fieldType.Kind() == reflect.Struct && fieldType != timeType {
 				return nil
 			}
