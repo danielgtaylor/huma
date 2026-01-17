@@ -456,9 +456,9 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 					result.Paths = append(result.Paths, findResultPath[T]{fi, v})
 				}
 			}
-			if f.Anonymous || recurseFields || deref(f.Type).Kind() != reflect.Struct {
+			if f.Anonymous || recurseFields || baseType(f.Type).Kind() != reflect.Struct {
 				// Always process embedded structs and named fields which are not
-				// structs. If `recurseFields` is true then we also process named
+				// structs. If `recurseFields` is true, then we also process named
 				// struct fields recursively.
 				visited[t] = struct{}{}
 				_findInType(f.Type, fi, result, onType, onField, recurseFields, visited, ignore...)
@@ -1168,7 +1168,7 @@ func initResponses(op *Operation) {
 	}
 }
 
-// processInputType validates the input type, extracts expected requests and
+// processInputType validates the input type, extracts expected requests, and
 // defines them on the operation op.
 func processInputType(inputType reflect.Type, op *Operation, registry Registry) (*findResult[*paramFieldInfo], []int, bool, []int, rawBodyType, *Schema) {
 	inputParams := findParams(registry, op, inputType)
@@ -1421,18 +1421,14 @@ func processOutputType(outputType reflect.Type, op *Operation, registry Registry
 		hidden := false
 		currentType := outputType
 		for _, idx := range entry.Path {
-			currentType = deref(currentType)
-
-			// Skip slice and map types to get to the element type.
-			for currentType.Kind() == reflect.Slice || currentType.Kind() == reflect.Map {
-				currentType = deref(currentType.Elem())
-			}
+			currentType = baseType(currentType)
 
 			field := currentType.Field(idx)
 			if boolTag(field, "hidden", false) {
 				hidden = true
 				break
 			}
+
 			currentType = field.Type
 		}
 		if hidden {
