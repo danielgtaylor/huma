@@ -210,7 +210,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		}
 
 		return pfi
-	}, false, "Body")
+	}, true, "Body")
 }
 
 func findResolvers(resolverType, t reflect.Type) *findResult[bool] {
@@ -1422,6 +1422,12 @@ func processOutputType(outputType reflect.Type, op *Operation, registry Registry
 		currentType := outputType
 		for _, idx := range entry.Path {
 			currentType = deref(currentType)
+
+			// Skip slice and map types to get to the element type.
+			for currentType.Kind() == reflect.Slice || currentType.Kind() == reflect.Map {
+				currentType = deref(currentType.Elem())
+			}
+
 			field := currentType.Field(idx)
 			if boolTag(field, "hidden", false) {
 				hidden = true
