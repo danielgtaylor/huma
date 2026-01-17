@@ -1904,6 +1904,18 @@ Content-Type: text/plain
 					NestedPtrWithoutTag string // No header tag - should NOT be set as a header.
 				}
 
+				// NEW: slice element types must use unique header names so they don't
+				// overwrite the non-slice headers at runtime.
+				type NestedHeadersSliceElem struct {
+					NestedWithTag    string `header:"X-Nested-With-Tag-Slice"`
+					NestedWithoutTag string
+				}
+
+				type NestedPtrHeadersSliceElem struct {
+					NestedPtrWithTag    string `header:"X-Nested-Ptr-With-Tag-Slice"`
+					NestedPtrWithoutTag string
+				}
+
 				type Resp struct {
 					Str          string    `header:"str"`
 					Int          int       `header:"int"`
@@ -1917,6 +1929,10 @@ Content-Type: text/plain
 					LastModified time.Time // No header tag - SHOULD be set as a header using field name.
 					Nested       NestedHeaders
 					NestedPtr    *NestedPtrHeaders // Pointer to nested struct.
+
+					// NEW: slice paths to cover slice/map element-type unwrapping.
+					NestedSlice    []NestedHeadersSliceElem
+					NestedPtrSlice []*NestedPtrHeadersSliceElem
 				}
 
 				huma.Register(api, huma.Operation{
@@ -1940,6 +1956,20 @@ Content-Type: text/plain
 						NestedPtr: &NestedPtrHeaders{
 							NestedPtrWithTag:    "nested-ptr-with-tag-value",
 							NestedPtrWithoutTag: "should-not-be-header-ptr",
+						},
+
+						// NEW: one element each for deterministic runtime assertions
+						NestedSlice: []NestedHeadersSliceElem{
+							{
+								NestedWithTag:    "nested-slice-with-tag-value",
+								NestedWithoutTag: "should-not-be-header-slice",
+							},
+						},
+						NestedPtrSlice: []*NestedPtrHeadersSliceElem{
+							{
+								NestedPtrWithTag:    "nested-ptr-slice-with-tag-value",
+								NestedPtrWithoutTag: "should-not-be-header-ptr-slice",
+							},
 						},
 					}, nil
 				})
@@ -1973,6 +2003,14 @@ Content-Type: text/plain
 				// The nested struct itself should NOT be documented as a header.
 				assert.Nil(t, headers["Nested"])
 				assert.Nil(t, headers["NestedPtr"])
+
+				// NEW: Slice element fields with explicit header tags should be documented.
+				assert.NotNil(t, headers["X-Nested-With-Tag-Slice"])
+				assert.NotNil(t, headers["X-Nested-Ptr-With-Tag-Slice"])
+
+				// NEW: Slice element fields without header tags should NOT be documented.
+				assert.Nil(t, headers["NestedWithoutTag"])
+				assert.Nil(t, headers["NestedPtrWithoutTag"])
 			},
 			Method: http.MethodGet,
 			URL:    "/response-headers",
@@ -2002,6 +2040,10 @@ Content-Type: text/plain
 				// Nested fields without header tag should NOT be set.
 				assert.Empty(t, resp.Header().Values("NestedWithoutTag"))
 				assert.Empty(t, resp.Header().Values("NestedPtrWithoutTag"))
+
+				// NEW: slice element fields should be set (unique header names).
+				assert.Equal(t, "nested-slice-with-tag-value", resp.Header().Get("X-Nested-With-Tag-Slice"))
+				assert.Equal(t, "nested-ptr-slice-with-tag-value", resp.Header().Get("X-Nested-Ptr-With-Tag-Slice"))
 			},
 		},
 		{
@@ -2012,8 +2054,18 @@ Content-Type: text/plain
 					HiddenWithoutTag string // No header tag - should NOT be set as a header.
 				}
 
+				// NEW: slice element type w/ unique header name so assertions remain stable.
+				type HiddenHeadersSliceElem struct {
+					HiddenWithTag    string `header:"X-Hidden-With-Tag-Slice"`
+					HiddenWithoutTag string
+				}
+
 				type Resp struct {
-					*HiddenHeaders    `hidden:"true"`
+					*HiddenHeaders `hidden:"true"`
+
+					// NEW: hidden slice field to exercise hidden-walk across slice -> elem.
+					HiddenSlice []HiddenHeadersSliceElem `hidden:"true"`
+
 					VisibleWithTag    string    `header:"X-Visible-With-Tag"`
 					VisibleWithoutTag string    // No header tag - SHOULD be set as a header using field name.
 					LastModified      time.Time // No header tag - SHOULD be set as a header using field name.
@@ -2030,6 +2082,12 @@ Content-Type: text/plain
 						HiddenHeaders: &HiddenHeaders{
 							HiddenWithTag:    "hidden-with-tag-value",
 							HiddenWithoutTag: "should-not-be-header",
+						},
+						HiddenSlice: []HiddenHeadersSliceElem{
+							{
+								HiddenWithTag:    "hidden-slice-with-tag-value",
+								HiddenWithoutTag: "should-not-be-header-slice",
+							},
 						},
 						VisibleWithTag:    "visible-with-tag-value",
 						VisibleWithoutTag: "visible-without-tag-value",
@@ -2048,6 +2106,9 @@ Content-Type: text/plain
 				assert.Nil(t, headers["X-Hidden-With-Tag"], "hidden header with tag should not appear in OpenAPI docs")
 				assert.Nil(t, headers["HiddenWithoutTag"], "hidden header without tag should not appear in OpenAPI docs")
 
+				// NEW: hidden slice element header should NOT appear in OpenAPI docs.
+				assert.Nil(t, headers["X-Hidden-With-Tag-Slice"], "hidden slice header with tag should not appear in OpenAPI docs")
+
 				// Visible surface-level fields should appear in OpenAPI documentation.
 				assert.NotNil(t, headers["X-Visible-With-Tag"], "visible header with tag should appear in OpenAPI docs")
 				assert.NotNil(t, headers["VisibleWithoutTag"], "visible header without tag should appear in OpenAPI docs")
@@ -2063,6 +2124,9 @@ Content-Type: text/plain
 
 				// Hidden headers without tag should NOT be set.
 				assert.Empty(t, resp.Header().Values("HiddenWithoutTag"))
+
+				// NEW: hidden slice element header with explicit tag SHOULD still be sent at runtime.
+				assert.Equal(t, "hidden-slice-with-tag-value", resp.Header().Get("X-Hidden-With-Tag-Slice"))
 
 				// Visible surface-level fields should be sent at runtime.
 				assert.Equal(t, "visible-with-tag-value", resp.Header().Get("X-Visible-With-Tag"))
