@@ -251,8 +251,18 @@ func findHeaders(t reflect.Type) *findResult[*headerInfo] {
 
 		header := sf.Tag.Get("header")
 		if header == "" {
-			// Only use field name as header if this is a top-level field (depth 1).
+			// Only use field name as header if this is a top-level field (depth 1)
+			// and it's not a struct (which we recurse into).
 			if len(i) > 1 {
+				return nil
+			}
+
+			fieldType := sf.Type
+			if fieldType.Kind() == reflect.Pointer {
+				fieldType = fieldType.Elem()
+			}
+
+			if fieldType.Kind() == reflect.Struct && fieldType != timeType {
 				return nil
 			}
 
@@ -268,7 +278,7 @@ func findHeaders(t reflect.Type) *findResult[*headerInfo] {
 		}
 
 		return &headerInfo{sf, header, timeFormat}
-	}, false, "Status", "Body")
+	}, true, "Status", "Body")
 }
 
 type findResultPath[T comparable] struct {
