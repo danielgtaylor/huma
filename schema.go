@@ -47,6 +47,18 @@ var (
 	rawMessageType = reflect.TypeOf(json.RawMessage{})
 )
 
+func baseKind(t reflect.Type) reflect.Kind {
+	t = deref(t)
+	for {
+		switch t.Kind() {
+		case reflect.Slice, reflect.Array, reflect.Map:
+			t = deref(t.Elem())
+		default:
+			return t.Kind()
+		}
+	}
+}
+
 func deref(t reflect.Type) reflect.Type {
 	for t.Kind() == reflect.Ptr {
 		t = t.Elem()
