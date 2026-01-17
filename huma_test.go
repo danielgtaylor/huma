@@ -1899,6 +1899,11 @@ Content-Type: text/plain
 					NestedWithoutTag string // No header tag - should NOT be set as a header.
 				}
 
+				type NestedPtrHeaders struct {
+					NestedPtrWithTag    string `header:"X-Nested-Ptr-With-Tag"`
+					NestedPtrWithoutTag string // No header tag - should NOT be set as a header.
+				}
+
 				type Resp struct {
 					Str          string    `header:"str"`
 					Int          int       `header:"int"`
@@ -1907,27 +1912,36 @@ Content-Type: text/plain
 					Bool         bool      `header:"bool"`
 					Date         time.Time `header:"date"`
 					Empty        string    `header:"empty"`
+					CustomTime   time.Time `header:"custom-time" timeFormat:"2006-01-02"`
 					WithoutTag   string    // No header tag - SHOULD be set as a header using field name.
 					LastModified time.Time // No header tag - SHOULD be set as a header using field name.
 					Nested       NestedHeaders
+					NestedPtr    *NestedPtrHeaders // Pointer to nested struct.
 				}
 
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
 					Path:   "/response-headers",
 				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
-					resp := &Resp{}
-					resp.Str = "str"
-					resp.Int = 1
-					resp.Uint = 2
-					resp.Float = 3.45
-					resp.Bool = true
-					resp.Date = time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
-					resp.WithoutTag = "without-tag-value"
-					resp.LastModified = time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC)
-					resp.Nested.NestedWithTag = "nested-with-tag-value"
-					resp.Nested.NestedWithoutTag = "should-not-be-header"
-					return resp, nil
+					return &Resp{
+						Str:          "str",
+						Int:          1,
+						Uint:         2,
+						Float:        3.45,
+						Bool:         true,
+						Date:         time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
+						CustomTime:   time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC),
+						WithoutTag:   "without-tag-value",
+						LastModified: time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC),
+						Nested: NestedHeaders{
+							NestedWithTag:    "nested-with-tag-value",
+							NestedWithoutTag: "should-not-be-header",
+						},
+						NestedPtr: &NestedPtrHeaders{
+							NestedPtrWithTag:    "nested-ptr-with-tag-value",
+							NestedPtrWithoutTag: "should-not-be-header-ptr",
+						},
+					}, nil
 				})
 
 				headers := api.OpenAPI().Paths["/response-headers"].Get.Responses["204"].Headers
@@ -1940,6 +1954,7 @@ Content-Type: text/plain
 				assert.NotNil(t, headers["bool"])
 				assert.NotNil(t, headers["date"])
 				assert.NotNil(t, headers["empty"])
+				assert.NotNil(t, headers["custom-time"])
 
 				// Surface-level fields without tags should be documented using field name.
 				assert.NotNil(t, headers["WithoutTag"])
@@ -1948,11 +1963,16 @@ Content-Type: text/plain
 				// Nested fields with explicit header tag should be documented.
 				assert.NotNil(t, headers["X-Nested-With-Tag"])
 
+				// Pointer nested fields with explicit header tag should be documented.
+				assert.NotNil(t, headers["X-Nested-Ptr-With-Tag"])
+
 				// Nested fields without header tag should NOT be documented.
 				assert.Nil(t, headers["NestedWithoutTag"])
+				assert.Nil(t, headers["NestedPtrWithoutTag"])
 
 				// The nested struct itself should NOT be documented as a header.
 				assert.Nil(t, headers["Nested"])
+				assert.Nil(t, headers["NestedPtr"])
 			},
 			Method: http.MethodGet,
 			URL:    "/response-headers",
@@ -1967,6 +1987,7 @@ Content-Type: text/plain
 				assert.Equal(t, "true", resp.Header().Get("Bool"))
 				assert.Equal(t, "Sun, 01 Jan 2023 12:00:00 GMT", resp.Header().Get("Date"))
 				assert.Empty(t, resp.Header().Values("Empty"))
+				assert.Equal(t, "2023-06-15", resp.Header().Get("Custom-Time"))
 
 				// Surface-level fields without tags should be set using field name.
 				assert.Equal(t, "without-tag-value", resp.Header().Get("WithoutTag"))
@@ -1975,8 +1996,12 @@ Content-Type: text/plain
 				// Nested fields with explicit header tag should be set.
 				assert.Equal(t, "nested-with-tag-value", resp.Header().Get("X-Nested-With-Tag"))
 
+				// Pointer nested fields with explicit header tag should be set.
+				assert.Equal(t, "nested-ptr-with-tag-value", resp.Header().Get("X-Nested-Ptr-With-Tag"))
+
 				// Nested fields without header tag should NOT be set.
 				assert.Empty(t, resp.Header().Values("NestedWithoutTag"))
+				assert.Empty(t, resp.Header().Values("NestedPtrWithoutTag"))
 			},
 		},
 		{
@@ -2001,17 +2026,20 @@ Content-Type: text/plain
 					Method: http.MethodGet,
 					Path:   "/response-headers-hidden",
 				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
-					resp := &Resp{
+					return &Resp{
 						HiddenHeaders: &HiddenHeaders{
 							HiddenWithTag:    "hidden-with-tag-value",
 							HiddenWithoutTag: "should-not-be-header",
 						},
-					}
-					resp.VisibleWithTag = "visible-with-tag-value"
-					resp.VisibleWithoutTag = "visible-without-tag-value"
-					resp.LastModified = time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC)
-					resp.Body.Message = "Hello"
-					return resp, nil
+						VisibleWithTag:    "visible-with-tag-value",
+						VisibleWithoutTag: "visible-without-tag-value",
+						LastModified:      time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC),
+						Body: struct {
+							Message string `json:"message"`
+						}{
+							Message: "Hello",
+						},
+					}, nil
 				})
 
 				headers := api.OpenAPI().Paths["/response-headers-hidden"].Get.Responses["200"].Headers
