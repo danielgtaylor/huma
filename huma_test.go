@@ -1900,7 +1900,13 @@ Content-Type: text/plain
 				}
 
 				type Resp struct {
-					WithTag      string    `header:"X-With-Tag"`
+					Str          string    `header:"str"`
+					Int          int       `header:"int"`
+					Uint         uint      `header:"uint"`
+					Float        float64   `header:"float"`
+					Bool         bool      `header:"bool"`
+					Date         time.Time `header:"date"`
+					Empty        string    `header:"empty"`
 					WithoutTag   string    // No header tag - SHOULD be set as a header using field name.
 					LastModified time.Time // No header tag - SHOULD be set as a header using field name.
 					Nested       NestedHeaders
@@ -1911,9 +1917,14 @@ Content-Type: text/plain
 					Path:   "/response-headers",
 				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
 					resp := &Resp{}
-					resp.WithTag = "with-tag-value"
+					resp.Str = "str"
+					resp.Int = 1
+					resp.Uint = 2
+					resp.Float = 3.45
+					resp.Bool = true
+					resp.Date = time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
 					resp.WithoutTag = "without-tag-value"
-					resp.LastModified = time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
+					resp.LastModified = time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC)
 					resp.Nested.NestedWithTag = "nested-with-tag-value"
 					resp.Nested.NestedWithoutTag = "should-not-be-header"
 					return resp, nil
@@ -1921,8 +1932,16 @@ Content-Type: text/plain
 
 				headers := api.OpenAPI().Paths["/response-headers"].Get.Responses["204"].Headers
 
-				// Surface-level fields should be documented (with or without tag).
-				assert.NotNil(t, headers["X-With-Tag"])
+				// Surface-level fields with explicit tags should be documented.
+				assert.NotNil(t, headers["str"])
+				assert.NotNil(t, headers["int"])
+				assert.NotNil(t, headers["uint"])
+				assert.NotNil(t, headers["float"])
+				assert.NotNil(t, headers["bool"])
+				assert.NotNil(t, headers["date"])
+				assert.NotNil(t, headers["empty"])
+
+				// Surface-level fields without tags should be documented using field name.
 				assert.NotNil(t, headers["WithoutTag"])
 				assert.NotNil(t, headers["LastModified"])
 
@@ -1940,10 +1959,18 @@ Content-Type: text/plain
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusNoContent, resp.Code)
 
-				// Surface-level fields should be set (with or without tag).
-				assert.Equal(t, "with-tag-value", resp.Header().Get("X-With-Tag"))
+				// Surface-level fields with explicit tags should be set.
+				assert.Equal(t, "str", resp.Header().Get("Str"))
+				assert.Equal(t, "1", resp.Header().Get("Int"))
+				assert.Equal(t, "2", resp.Header().Get("Uint"))
+				assert.Equal(t, "3.45", resp.Header().Get("Float"))
+				assert.Equal(t, "true", resp.Header().Get("Bool"))
+				assert.Equal(t, "Sun, 01 Jan 2023 12:00:00 GMT", resp.Header().Get("Date"))
+				assert.Empty(t, resp.Header().Values("Empty"))
+
+				// Surface-level fields without tags should be set using field name.
 				assert.Equal(t, "without-tag-value", resp.Header().Get("WithoutTag"))
-				assert.Equal(t, "Sun, 01 Jan 2023 12:00:00 GMT", resp.Header().Get("LastModified"))
+				assert.Equal(t, "Thu, 15 Jun 2023 10:30:00 GMT", resp.Header().Get("LastModified"))
 
 				// Nested fields with explicit header tag should be set.
 				assert.Equal(t, "nested-with-tag-value", resp.Header().Get("X-Nested-With-Tag"))
@@ -1982,7 +2009,7 @@ Content-Type: text/plain
 					}
 					resp.VisibleWithTag = "visible-with-tag-value"
 					resp.VisibleWithoutTag = "visible-without-tag-value"
-					resp.LastModified = time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
+					resp.LastModified = time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC)
 					resp.Body.Message = "Hello"
 					return resp, nil
 				})
@@ -2012,7 +2039,7 @@ Content-Type: text/plain
 				// Visible surface-level fields should be sent at runtime.
 				assert.Equal(t, "visible-with-tag-value", resp.Header().Get("X-Visible-With-Tag"))
 				assert.Equal(t, "visible-without-tag-value", resp.Header().Get("VisibleWithoutTag"))
-				assert.Equal(t, "Sun, 01 Jan 2023 12:00:00 GMT", resp.Header().Get("LastModified"))
+				assert.Equal(t, "Thu, 15 Jun 2023 10:30:00 GMT", resp.Header().Get("LastModified"))
 			},
 		},
 		{
