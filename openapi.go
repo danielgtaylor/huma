@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2/yaml"
@@ -1540,7 +1542,7 @@ func (o *OpenAPI) MarshalJSON() ([]byte, error) {
 		{"info", o.Info, omitNever},
 		{"jsonSchemaDialect", o.JSONSchemaDialect, omitEmpty},
 		{"servers", o.Servers, omitEmpty},
-		{"paths", o.Paths, omitEmpty},
+		{"paths", FixWildcardPaths(o.Paths), omitEmpty},
 		{"webhooks", o.Webhooks, omitEmpty},
 		{"components", o.Components, omitEmpty},
 		{"security", o.Security, omitNil},
@@ -1675,4 +1677,79 @@ func (o *OpenAPI) DowngradeYAML() ([]byte, error) {
 		err = yaml.Convert(buf, bytes.NewReader(specJSON))
 	}
 	return buf.Bytes(), err
+}
+
+// Patterns for router-specific wildcards
+var (
+	// Matches {name...} (ServeMux)
+	serveMuxWildcard = regexp.MustCompile(`\{([^}]+)\.\.\.}`)
+	// Matches {name:.*} (Gorilla Mux)
+	gorillaMuxWildcard = regexp.MustCompile(`\{([^:}]+):\.\*}`)
+	// Matches *name at end of path (Gin, HttpRouter, BunRouter)
+	starNameWildcard = regexp.MustCompile(`/\*([a-zA-Z_][a-zA-Z0-9_]*)$`)
+)
+
+// fixWildcardPath converts router-specific wildcard patterns to OpenAPI-compatible path parameters
+func fixWildcardPath(path string) string {
+	// ServeMux: {name...} -> {name}
+	if replaced := serveMuxWildcard.ReplaceAllString(path, "{$1}"); replaced != path {
+		return replaced
+	}
+
+	// Gorilla Mux: {name:.*} -> {name}
+	if replaced := gorillaMuxWildcard.ReplaceAllString(path, "{$1}"); replaced != path {
+		return replaced
+	}
+
+	// Gin, HttpRouter, BunRouter: /*name -> /{name}
+	if replaced := starNameWildcard.ReplaceAllString(path, "/{$1}"); replaced != path {
+		return replaced
+	}
+
+	// Chi, Echo, Fiber: trailing /* or /+ -> /{path}
+	if strings.HasSuffix(path, "/*") {
+		return strings.TrimSuffix(path, "/*") + "/{path}"
+	}
+	if strings.HasSuffix(path, "/+") {
+		return strings.TrimSuffix(path, "/+") + "/{path}"
+	}
+
+	// No match, return original
+	return path
+}
+
+// FixWildcardPaths returns a copy of the paths map with wildcard patterns normalized for OpenAPI.
+//
+// Different routers use different syntax for wildcard/catch-all path parameters
+// (e.g., {path...}, /*name, /*, /+), but the OpenAPI specification only supports
+// the standard {paramName} format. This function transforms router-specific
+// wildcard patterns into OpenAPI-compatible path parameters.
+//
+// This transformation is applied during JSON marshaling of the OpenAPI spec,
+// so the internal Paths map retains the original router-specific patterns for
+// correct request routing, while the generated OpenAPI document uses standard
+// path parameter syntax for compatibility with OpenAPI tools and clients.
+//
+// The PathItem values are preserved (same pointer references), only the map keys
+// are transformed.
+func FixWildcardPaths(paths map[string]*PathItem) map[string]*PathItem {
+	if paths == nil {
+		return nil
+	}
+	fixed := make(map[string]*PathItem, len(paths))
+	for path, item := range paths {
+		normalized := fixWildcardPath(path)
+
+		// If normalization causes a collision (multiple original paths mapping
+		// to the same normalized key), fall back to the original path to avoid
+		// silently dropping routes from the OpenAPI spec.
+		// Non-deterministic due to map iteration order, but collisions should be rare in practice.
+		if _, exists := fixed[normalized]; exists && normalized != path {
+			fixed[path] = item
+			continue
+		}
+
+		fixed[normalized] = item
+	}
+	return fixed
 }
