@@ -15,6 +15,7 @@ import (
 // schemas to exist while being flexible enough to support other use cases
 // like only inline objects (no refs) or always using refs for structs.
 type Registry interface {
+	NameExistsInSchema(t reflect.Type, hint string) bool
 	Schema(t reflect.Type, allowRef bool, hint string) *Schema
 	SchemaFromRef(ref string) *Schema
 	TypeFromRef(ref string) reflect.Type
@@ -158,6 +159,11 @@ func (r *mapRegistry) MarshalYAML() (interface{}, error) {
 // RegisterTypeAlias(t, alias) makes the schema generator use the `alias` type instead of `t`.
 func (r *mapRegistry) RegisterTypeAlias(t reflect.Type, alias reflect.Type) {
 	r.aliases[t] = alias
+}
+
+func (r *mapRegistry) NameExistsInSchema(t reflect.Type, hint string) bool {
+	_, ok := r.schemas[r.namer(t, hint)]
+	return ok
 }
 
 // NewMapRegistry creates a new registry that stores schemas in a map and
