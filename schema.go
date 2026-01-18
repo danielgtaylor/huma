@@ -449,29 +449,31 @@ func convertType(fieldName string, t reflect.Type, v any) any {
 		return v
 	}
 
-	vv := reflect.ValueOf(v)
-	tv := vv.Type()
+	tv := reflect.TypeOf(v)
 	if tv == t {
 		return v
 	}
 
-	// Directly convert equal underlying types, avoiding traversal,
-	// e.g. json.RawMessage -> []byte
+	// Directly convert equal underlying types, avoiding traversal.
+	// e.g., json.RawMessage -> []byte.
 	if tv.ConvertibleTo(t) {
-		return vv.Convert(t).Interface()
+		return reflect.ValueOf(v).Convert(t).Interface()
 	}
+
+	val := reflect.ValueOf(v)
 
 	if tv.Kind() == reflect.Slice {
 		// Slices can't be cast due to the different layouts. Instead, we make a
 		// new instance of the destination slice, and convert each value in
 		// the original to the new type.
-		tmp := reflect.MakeSlice(t, 0, vv.Len())
-		for i := 0; i < vv.Len(); i++ {
-			item := vv.Index(i)
+		tmp := reflect.MakeSlice(t, 0, val.Len())
+		for i := 0; i < val.Len(); i++ {
+			item := val.Index(i)
 			if item.Kind() == reflect.Interface {
 				// E.g. []any and we want the underlying type.
 				item = item.Elem()
 			}
+
 			item = reflect.Indirect(item)
 			typ := deref(t.Elem())
 			if !item.Type().ConvertibleTo(typ) {
@@ -489,12 +491,15 @@ func convertType(fieldName string, t reflect.Type, v any) any {
 
 			tmp = reflect.Append(tmp, value)
 		}
-		v = tmp.Interface()
-	} else if !tv.ConvertibleTo(deref(t)) {
+
+		return tmp.Interface()
+	}
+
+	if !tv.ConvertibleTo(deref(t)) {
 		panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", tv, t, fieldName, ErrSchemaInvalid))
 	}
 
-	converted := reflect.ValueOf(v).Convert(deref(t))
+	converted := val.Convert(deref(t))
 	if t.Kind() == reflect.Ptr {
 		// Special case: if the field is a pointer, we need to get a pointer
 		// to the converted value.
@@ -503,8 +508,7 @@ func convertType(fieldName string, t reflect.Type, v any) any {
 		converted = tmp
 	}
 
-	v = converted.Interface()
-	return v
+	return converted.Interface()
 }
 
 func jsonTagValue(r Registry, fieldName string, s *Schema, value string) any {
