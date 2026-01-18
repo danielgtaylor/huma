@@ -16,6 +16,7 @@ import (
 	"unsafe"
 
 	"github.com/danielgtaylor/huma/v2/validation"
+	"golang.org/x/net/idna"
 )
 
 // ValidateMode describes the direction of validation (server -> client or
@@ -42,6 +43,7 @@ const (
 // disabled by default to match Go's JSON unmarshaling behavior.
 var ValidateStrictCasing = false
 
+var idnaProfile = idna.New(idna.ValidateForRegistration())
 var rxHostname = regexp.MustCompile(`^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$`)
 var rxURITemplate = regexp.MustCompile("^([^{]*({[^}]*})?)*$")
 var rxJSONPointer = regexp.MustCompile("^(?:/(?:[^~/]|~0|~1)*)*$")
@@ -220,16 +222,24 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 			res.Add(path, str, validation.MsgExpectedRFC1123DateTime)
 		}
 	case "date":
-		if _, err := time.Parse("2006-01-02", str); err != nil {
+		if _, err := time.Parse(time.DateOnly, str); err != nil {
 			res.Add(path, str, validation.MsgExpectedRFC3339Date)
 		}
+	case "duration":
+		if _, err := time.ParseDuration(str); err != nil {
+			res.Add(path, str, ErrorFormatter(validation.MsgExpectedDuration, err))
+		}
 	case "time":
-		if _, err := time.Parse("15:04:05", str); err != nil {
-			if _, err := time.Parse("15:04:05Z07:00", str); err != nil {
-				res.Add(path, str, validation.MsgExpectedRFC3339Time)
+		found := false
+		for _, format := range []string{time.TimeOnly, "15:04:05Z07:00"} {
+			if _, err := time.Parse(format, str); err == nil {
+				found = true
+				break
 			}
 		}
-		// TODO: duration
+		if !found {
+			res.Add(path, str, validation.MsgExpectedRFC3339Time)
+		}
 	case "email", "idn-email":
 		if _, err := mail.ParseAddress(str); err != nil {
 			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC5322Email, err))
@@ -238,7 +248,10 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 		if len(str) >= 256 || !rxHostname.MatchString(str) {
 			res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
 		}
-	// TODO: proper idn-hostname support... need to figure out how.
+	case "idn-hostname":
+		if _, err := idnaProfile.ToASCII(str); err != nil {
+			res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
+		}
 	case "ipv4":
 		if ip := net.ParseIP(str); ip == nil || ip.To4() == nil {
 			res.Add(path, str, validation.MsgExpectedRFC2673IPv4)
@@ -252,10 +265,6 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
 		}
 		// TODO: check if it's actually a reference?
-	case "uuid":
-		if err := validateUUID(str); err != nil {
-			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC4122UUID, err))
-		}
 	case "uri-template":
 		u, err := url.Parse(str)
 		if err != nil {
@@ -264,6 +273,10 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 		}
 		if !rxURITemplate.MatchString(u.Path) {
 			res.Add(path, str, validation.MsgExpectedRFC6570URITemplate)
+		}
+	case "uuid":
+		if err := validateUUID(str); err != nil {
+			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC4122UUID, err))
 		}
 	case "json-pointer":
 		if !rxJSONPointer.MatchString(str) {
@@ -493,11 +506,13 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 				res.Add(path, str, s.msgMinLength)
 			}
 		}
+
 		if s.MaxLength != nil {
 			if utf8.RuneCountInString(str) > *s.MaxLength {
 				res.Add(path, str, s.msgMaxLength)
 			}
 		}
+
 		if s.patternRe != nil {
 			if !s.patternRe.MatchString(str) {
 				res.Add(path, v, s.msgPattern)

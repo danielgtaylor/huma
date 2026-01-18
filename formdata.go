@@ -52,7 +52,7 @@ func (v MimeTypeValidator) Validate(fh *multipart.FileHeader, location string) (
 	mimeType := fh.Header.Get("Content-Type")
 	if mimeType == "" {
 		var buffer = make([]byte, 1000)
-		if _, err := file.Read(buffer); err != nil {
+		if _, err = file.Read(buffer); err != nil {
 			return "", &ErrorDetail{Message: "Failed to infer file media type", Location: location}
 		}
 		file.Seek(int64(0), io.SeekStart)
@@ -89,7 +89,7 @@ func (v MimeTypeValidator) Validate(fh *multipart.FileHeader, location string) (
 	}
 }
 
-// Decodes multipart.Form data into *T, returning []*ErrorDetail if any
+// Decode decodes multipart.Form data into *T, returning []*ErrorDetail if any
 // Schema is used to check for validation constraints
 func (m *MultipartFormFiles[T]) Decode(opMediaType *MediaType, formValueParser func(val reflect.Value)) []error {
 	var (
@@ -131,9 +131,8 @@ func readSingleFile(fileHeaders []*multipart.FileHeader, key string, opMediaType
 	if len(fileHeaders) == 0 {
 		if opMediaType.Schema.requiredMap[key] {
 			return FormFile{}, &ErrorDetail{Message: "File required", Location: key}
-		} else {
-			return FormFile{}, nil
 		}
+		return FormFile{}, nil
 	} else if len(fileHeaders) == 1 {
 		validator := NewMimeTypeValidator(opMediaType.Encoding[key])
 		return readFile(fileHeaders[0], key, validator)
@@ -221,7 +220,7 @@ func multiPartFormFileSchema(r Registry, t reflect.Type) *Schema {
 		default:
 			schema.Properties[name] = SchemaFromField(r, f, name)
 
-			// Should we panic if [T] struct defines fields with unsupported types ?
+			// Should we panic if [T] struct defines fields with unsupported types?
 		}
 
 		if _, ok := f.Tag.Lookup("required"); ok && boolTag(f, "required", false) {

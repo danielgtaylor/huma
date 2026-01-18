@@ -10,7 +10,7 @@ import (
 )
 
 // Registry creates and stores schemas and their references, and supports
-// marshalling to JSON/YAML for use as an OpenAPI #/components/schemas object.
+// marshaling to JSON/YAML for use as an OpenAPI #/components/schemas object.
 // Behavior is implementation-dependent, but the design allows for recursive
 // schemas to exist while being flexible enough to support other use cases
 // like only inline objects (no refs) or always using refs for structs.
@@ -94,7 +94,7 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 		getsRef = false
 	}
 	if _, ok := v.(encoding.TextUnmarshaler); ok {
-		// Special case: type can be unmarshalled from text so will be a `string`
+		// Special case: type can be unmarshaled from text so will be a `string`
 		// and doesn't need a ref. This simplifies the schema a little bit.
 		getsRef = false
 	}

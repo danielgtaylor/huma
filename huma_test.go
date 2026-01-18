@@ -63,7 +63,7 @@ func (UUID) Schema(r huma.Registry) *huma.Schema {
 	return &huma.Schema{Type: huma.TypeString, Format: "uuid"}
 }
 
-// BodyContainer is an embed request body struct to test request body unmarshalling
+// BodyContainer is an embed request body struct to test request body unmarshaling
 type BodyContainer struct {
 	Body struct {
 		Name string `json:"name"`
@@ -604,6 +604,24 @@ func TestFeatures(t *testing.T) {
 				})
 			},
 			URL:    "/test?param=42",
+			Method: http.MethodGet,
+		},
+		{
+			Name: "parse-with-param-receiver-time",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Param OptionalParam[time.Time] `query:"param"`
+				}) (*struct{}, error) {
+					expectedTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
+					assert.True(t, i.Param.Value.Equal(expectedTime))
+					assert.True(t, i.Param.IsSet)
+					return nil, nil
+				})
+			},
+			URL:    "/test?param=2023-01-01T12:00:00Z",
 			Method: http.MethodGet,
 		},
 		{
@@ -1877,33 +1895,57 @@ Content-Type: text/plain
 			Name: "response-headers",
 			Register: func(t *testing.T, api huma.API) {
 				type Resp struct {
-					Str   string    `header:"str"`
-					Int   int       `header:"int"`
-					Uint  uint      `header:"uint"`
-					Float float64   `header:"float"`
-					Bool  bool      `header:"bool"`
-					Date  time.Time `header:"date"`
-					Empty string    `header:"empty"`
+					Str          string    `header:"str"`
+					Int          int       `header:"int"`
+					Uint         uint      `header:"uint"`
+					Float        float64   `header:"float"`
+					Bool         bool      `header:"bool"`
+					Date         time.Time `header:"date"`
+					Empty        string    `header:"empty"`
+					CustomTime   time.Time `header:"custom-time" timeFormat:"2006-01-02"`
+					WithoutTag   string    // No header tag - SHOULD be set as a header using field name.
+					LastModified time.Time // No header tag - SHOULD be set as a header using field name.
 				}
 
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
 					Path:   "/response-headers",
 				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
-					resp := &Resp{}
-					resp.Str = "str"
-					resp.Int = 1
-					resp.Uint = 2
-					resp.Float = 3.45
-					resp.Bool = true
-					resp.Date = time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
-					return resp, nil
+					return &Resp{
+						Str:          "str",
+						Int:          1,
+						Uint:         2,
+						Float:        3.45,
+						Bool:         true,
+						Date:         time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
+						CustomTime:   time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC),
+						WithoutTag:   "without-tag-value",
+						LastModified: time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC),
+					}, nil
 				})
+
+				headers := api.OpenAPI().Paths["/response-headers"].Get.Responses["204"].Headers
+
+				// Surface-level fields with explicit tags should be documented.
+				assert.NotNil(t, headers["str"])
+				assert.NotNil(t, headers["int"])
+				assert.NotNil(t, headers["uint"])
+				assert.NotNil(t, headers["float"])
+				assert.NotNil(t, headers["bool"])
+				assert.NotNil(t, headers["date"])
+				assert.NotNil(t, headers["empty"])
+				assert.NotNil(t, headers["custom-time"])
+
+				// Surface-level fields without tags should be documented using field name.
+				assert.NotNil(t, headers["WithoutTag"])
+				assert.NotNil(t, headers["LastModified"])
 			},
 			Method: http.MethodGet,
 			URL:    "/response-headers",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusNoContent, resp.Code)
+
+				// Surface-level fields with explicit tags should be set.
 				assert.Equal(t, "str", resp.Header().Get("Str"))
 				assert.Equal(t, "1", resp.Header().Get("Int"))
 				assert.Equal(t, "2", resp.Header().Get("Uint"))
@@ -1911,6 +1953,78 @@ Content-Type: text/plain
 				assert.Equal(t, "true", resp.Header().Get("Bool"))
 				assert.Equal(t, "Sun, 01 Jan 2023 12:00:00 GMT", resp.Header().Get("Date"))
 				assert.Empty(t, resp.Header().Values("Empty"))
+				assert.Equal(t, "2023-06-15", resp.Header().Get("Custom-Time"))
+
+				// Surface-level fields without tags should be set using field name.
+				assert.Equal(t, "without-tag-value", resp.Header().Get("WithoutTag"))
+				assert.Equal(t, "Thu, 15 Jun 2023 10:30:00 GMT", resp.Header().Get("LastModified"))
+			},
+		},
+		{
+			Name: "response-headers-hidden",
+			Register: func(t *testing.T, api huma.API) {
+				type HiddenHeaders struct {
+					HiddenWithTag    string `header:"X-Hidden-With-Tag"`
+					HiddenWithoutTag string // No header tag - should be set as header using field name.
+				}
+
+				type Resp struct {
+					*HiddenHeaders `hidden:"true"`
+
+					VisibleWithTag    string    `header:"X-Visible-With-Tag"`
+					VisibleWithoutTag string    // No header tag - SHOULD be set as a header using field name.
+					LastModified      time.Time // No header tag - SHOULD be set as a header using field name.
+					Body              struct {
+						Message string `json:"message"`
+					}
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/response-headers-hidden",
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					return &Resp{
+						HiddenHeaders: &HiddenHeaders{
+							HiddenWithTag:    "hidden-with-tag-value",
+							HiddenWithoutTag: "should-be-header",
+						},
+						VisibleWithTag:    "visible-with-tag-value",
+						VisibleWithoutTag: "visible-without-tag-value",
+						LastModified:      time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC),
+						Body: struct {
+							Message string `json:"message"`
+						}{
+							Message: "Hello",
+						},
+					}, nil
+				})
+
+				headers := api.OpenAPI().Paths["/response-headers-hidden"].Get.Responses["200"].Headers
+
+				// Hidden headers should NOT appear in OpenAPI documentation.
+				assert.Nil(t, headers["X-Hidden-With-Tag"], "hidden header with tag should not appear in OpenAPI docs")
+				assert.Nil(t, headers["HiddenWithoutTag"], "hidden header without tag should not appear in OpenAPI docs")
+
+				// Visible surface-level fields should appear in OpenAPI documentation.
+				assert.NotNil(t, headers["X-Visible-With-Tag"], "visible header with tag should appear in OpenAPI docs")
+				assert.NotNil(t, headers["VisibleWithoutTag"], "visible header without tag should appear in OpenAPI docs")
+				assert.NotNil(t, headers["LastModified"], "visible time header should appear in OpenAPI docs")
+			},
+			Method: http.MethodGet,
+			URL:    "/response-headers-hidden",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+
+				// Hidden headers with explicit tag SHOULD still be sent at runtime.
+				assert.Equal(t, "hidden-with-tag-value", resp.Header().Get("X-Hidden-With-Tag"))
+
+				// Hidden headers without tag SHOULD still be sent at runtime using field name.
+				assert.Equal(t, "should-be-header", resp.Header().Get("HiddenWithoutTag"))
+
+				// Visible surface-level fields should be sent at runtime.
+				assert.Equal(t, "visible-with-tag-value", resp.Header().Get("X-Visible-With-Tag"))
+				assert.Equal(t, "visible-without-tag-value", resp.Header().Get("VisibleWithoutTag"))
+				assert.Equal(t, "Thu, 15 Jun 2023 10:30:00 GMT", resp.Header().Get("LastModified"))
 			},
 		},
 		{
