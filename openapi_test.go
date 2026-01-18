@@ -1,6 +1,7 @@
 package huma_test
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -264,4 +265,40 @@ func TestDowngrade(t *testing.T) {
 
 	// Check that the downgrade worked as expected.
 	assert.JSONEq(t, expected, string(v30))
+}
+
+func TestAddOperationNotForceUniqueOperationIDs(t *testing.T) {
+	oapi := &huma.OpenAPI{}
+	oapi.AddOperation(&huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodGet,
+		Path:        "/test",
+	})
+
+	assert.NotPanics(t, func() {
+		oapi.AddOperation(&huma.Operation{
+			OperationID: "test",
+			Method:      http.MethodPost,
+			Path:        "/test",
+		})
+	})
+}
+
+func TestAddOperationForceUniqueOperationIDs(t *testing.T) {
+	oapi := &huma.OpenAPI{
+		ForceUniqueOperationIDs: true,
+	}
+	oapi.AddOperation(&huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodGet,
+		Path:        "/test",
+	})
+
+	assert.PanicsWithValue(t, "duplicate operation ID: test", func() {
+		oapi.AddOperation(&huma.Operation{
+			OperationID: "test",
+			Method:      http.MethodPost,
+			Path:        "/test",
+		})
+	})
 }
