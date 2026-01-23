@@ -1491,10 +1491,6 @@ type OpenAPI struct {
 	// `AddOperation`. You may bypass this by directly writing to the `Paths`
 	// map instead.
 	OnAddOperation []AddOpFunc `yaml:"-"`
-
-	// ForceUniqueOperationIDs forces the check operation IDs to be unique,
-	// per the OpenAPI specification.
-	ForceUniqueOperationIDs bool `yaml:"-"`
 }
 
 // AddOperation adds an operation to the OpenAPI. This is the preferred way to
@@ -1502,7 +1498,8 @@ type OpenAPI struct {
 // properly added to the Paths map and will call any registered OnAddOperation
 // functions.
 func (o *OpenAPI) AddOperation(op *Operation) {
-	if o.ForceUniqueOperationIDs && op.OperationID != "" {
+	// Check this won't create a duplicate operation ID.
+	if op.OperationID != "" {
 		for _, pathItem := range o.Paths {
 			for _, existingOp := range []*Operation{
 				pathItem.Get, pathItem.Post, pathItem.Put, pathItem.Patch,

@@ -267,27 +267,8 @@ func TestDowngrade(t *testing.T) {
 	assert.JSONEq(t, expected, string(v30))
 }
 
-func TestAddOperationNotForceUniqueOperationIDs(t *testing.T) {
-	oapi := &huma.OpenAPI{}
-	oapi.AddOperation(&huma.Operation{
-		OperationID: "test",
-		Method:      http.MethodGet,
-		Path:        "/test",
-	})
-
-	assert.NotPanics(t, func() {
-		oapi.AddOperation(&huma.Operation{
-			OperationID: "test",
-			Method:      http.MethodPost,
-			Path:        "/test",
-		})
-	})
-}
-
 func TestAddOperationForceUniqueOperationIDs(t *testing.T) {
-	oapi := &huma.OpenAPI{
-		ForceUniqueOperationIDs: true,
-	}
+	oapi := &huma.OpenAPI{}
 	oapi.AddOperation(&huma.Operation{
 		OperationID: "test",
 		Method:      http.MethodGet,
