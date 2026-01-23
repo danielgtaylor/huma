@@ -215,6 +215,11 @@ type Config struct {
 	// for example if you need access to the path settings that may be changed
 	// by the user after the defaults have been set.
 	CreateHooks []func(Config) Config
+
+	// FieldsOptionalByDefault controls whether schema fields are treated as
+	// optional by default. When false, fields are marked as required unless
+	// they have the omitempty or omitzero tag.
+	FieldsOptionalByDefault bool
 }
 
 // API represents a Huma API wrapping a specific router.
@@ -409,6 +414,9 @@ func NewAPI(config Config, a Adapter) API {
 
 	if config.Components.Schemas == nil {
 		config.Components.Schemas = NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+	}
+	if mr, ok := config.Components.Schemas.(*mapRegistry); ok {
+		mr.fieldsOptionalByDefault = config.FieldsOptionalByDefault
 	}
 
 	if config.DefaultFormat == "" && !config.NoFormatFallback {
