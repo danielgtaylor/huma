@@ -688,6 +688,60 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		var cookies map[string]*http.Cookie
 
 		v := reflect.ValueOf(&input).Elem()
+
+		// Reject unknown query parameters if config is set.
+		if api.RejectUnknownQueryParameters() && !op.SkipValidateParams {
+			u := ctx.URL()
+			q := u.Query()
+
+			// Gather known parameters + deepObject prefixes.
+			knownParams := make(map[string]struct{})
+			var deepPrefixes []string
+
+			inputParams.Every(v, func(_ reflect.Value, p *paramFieldInfo) {
+				if p == nil || p.Loc != "query" {
+					return
+				}
+
+				if p.Style == styleDeepObject {
+					deepPrefixes = append(deepPrefixes, p.Name+"[")
+					return
+				}
+
+				knownParams[p.Name] = struct{}{}
+			})
+
+			// Validate all keys in the request.
+			for key := range q {
+				if _, ok := knownParams[key]; ok {
+					continue
+				}
+
+				// Check it against deepPrefixes.
+				isDeep := false
+				for _, prefix := range deepPrefixes {
+					if strings.HasPrefix(key, prefix) {
+						isDeep = true
+						break
+					}
+				}
+
+				if isDeep {
+					continue
+				}
+
+				pb.Reset()
+				pb.Push("query")
+				pb.Push(key)
+				res.Add(pb, "", "unknown query parameter")
+			}
+
+			if len(res.Errors) > 0 {
+				writeErr(api, ctx, &contextError{Code: http.StatusUnprocessableEntity, Msg: "validation failed", Errs: res.Errors}, *res)
+				return
+			}
+		}
+
 		inputParams.Every(v, func(f reflect.Value, p *paramFieldInfo) {
 			f = reflect.Indirect(f)
 			if f.Kind() == reflect.Invalid {
