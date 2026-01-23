@@ -47,6 +47,18 @@ var (
 	rawMessageType = reflect.TypeOf(json.RawMessage{})
 )
 
+func baseType(t reflect.Type) reflect.Type {
+	t = deref(t)
+	for {
+		switch t.Kind() {
+		case reflect.Slice, reflect.Array, reflect.Map:
+			t = deref(t.Elem())
+		default:
+			return t
+		}
+	}
+}
+
 func deref(t reflect.Type) reflect.Type {
 	for t.Kind() == reflect.Ptr {
 		t = t.Elem()
@@ -55,9 +67,9 @@ func deref(t reflect.Type) reflect.Type {
 }
 
 // Discriminator object when request bodies or response payloads may be one of a
-// number of different schemas, can be used to aid in serialization,
+// number of different schemas can be used to aid in serialization,
 // deserialization, and validation. The discriminator is a specific object in a
-// schema which is used to inform the consumer of the document of an alternative
+// schema that is used to inform the consumer of the document of an alternative
 // schema based on the value associated with it.
 type Discriminator struct {
 	// PropertyName in the payload that will hold the discriminator value.
@@ -81,7 +93,7 @@ func (d *Discriminator) MarshalJSON() ([]byte, error) {
 // spec, designed specifically for use with Go structs and to enable fast zero
 // or near-zero allocation happy-path validation for incoming requests.
 //
-// Typically you will use a registry and `huma.SchemaFromType` to generate
+// Typically, you will use a registry and `huma.SchemaFromType` to generate
 // schemas for your types. You can then use `huma.Validate` to validate
 // incoming requests.
 //
@@ -380,7 +392,7 @@ func ensureType(r Registry, fieldName string, s *Schema, value string, v any) {
 	if s.Ref != "" {
 		s = r.SchemaFromRef(s.Ref)
 		if s == nil {
-			// We may not have access to this type, e.g. custom schema provided
+			// We may not have access to this type, e.g., custom schema provided
 			// by the user with remote refs. Skip validation.
 			return
 		}
@@ -433,53 +445,70 @@ func ensureType(r Registry, fieldName string, s *Schema, value string, v any) {
 // convertType panics if the given value does not match or cannot be converted
 // to the field's Go type.
 func convertType(fieldName string, t reflect.Type, v any) any {
-	vv := reflect.ValueOf(v)
-	tv := reflect.TypeOf(v)
-	if v != nil && tv != t {
-		if tv.Kind() == reflect.Slice {
-			// Slices can't be cast due to the different layouts. Instead, we make a
-			// new instance of the destination slice, and convert each value in
-			// the original to the new type.
-			tmp := reflect.MakeSlice(t, 0, vv.Len())
-			for i := 0; i < vv.Len(); i++ {
-				item := vv.Index(i)
-				if item.Kind() == reflect.Interface {
-					// E.g. []any and we want the underlying type.
-					item = item.Elem()
-				}
-				item = reflect.Indirect(item)
-				typ := deref(t.Elem())
-				if !item.Type().ConvertibleTo(typ) {
-					panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", item.Interface(), t.Elem(), fieldName, ErrSchemaInvalid))
-				}
-
-				value := item.Convert(typ)
-				if t.Elem().Kind() == reflect.Ptr {
-					// Special case: if the field is a pointer, we need to get a pointer
-					// to the converted value.
-					ptr := reflect.New(value.Type())
-					ptr.Elem().Set(value)
-					value = ptr
-				}
-
-				tmp = reflect.Append(tmp, value)
-			}
-			v = tmp.Interface()
-		} else if !tv.ConvertibleTo(deref(t)) {
-			panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", tv, t, fieldName, ErrSchemaInvalid))
-		}
-
-		converted := reflect.ValueOf(v).Convert(deref(t))
-		if t.Kind() == reflect.Ptr {
-			// Special case: if the field is a pointer, we need to get a pointer
-			// to the converted value.
-			tmp := reflect.New(t.Elem())
-			tmp.Elem().Set(converted)
-			converted = tmp
-		}
-		v = converted.Interface()
+	if v == nil {
+		return v
 	}
-	return v
+
+	tv := reflect.TypeOf(v)
+	if tv == t {
+		return v
+	}
+
+	// Directly convert equal underlying types, avoiding traversal.
+	// e.g., json.RawMessage -> []byte.
+	if tv.ConvertibleTo(t) {
+		return reflect.ValueOf(v).Convert(t).Interface()
+	}
+
+	val := reflect.ValueOf(v)
+
+	if tv.Kind() == reflect.Slice {
+		// Slices can't be cast due to the different layouts. Instead, we make a
+		// new instance of the destination slice, and convert each value in
+		// the original to the new type.
+		tmp := reflect.MakeSlice(t, 0, val.Len())
+		for i := 0; i < val.Len(); i++ {
+			item := val.Index(i)
+			if item.Kind() == reflect.Interface {
+				// E.g. []any and we want the underlying type.
+				item = item.Elem()
+			}
+
+			item = reflect.Indirect(item)
+			typ := deref(t.Elem())
+			if !item.Type().ConvertibleTo(typ) {
+				panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", item.Interface(), t.Elem(), fieldName, ErrSchemaInvalid))
+			}
+
+			value := item.Convert(typ)
+			if t.Elem().Kind() == reflect.Ptr {
+				// Special case: if the field is a pointer, we need to get a pointer
+				// to the converted value.
+				ptr := reflect.New(value.Type())
+				ptr.Elem().Set(value)
+				value = ptr
+			}
+
+			tmp = reflect.Append(tmp, value)
+		}
+
+		return tmp.Interface()
+	}
+
+	if !tv.ConvertibleTo(deref(t)) {
+		panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", tv, t, fieldName, ErrSchemaInvalid))
+	}
+
+	converted := val.Convert(deref(t))
+	if t.Kind() == reflect.Ptr {
+		// Special case: if the field is a pointer, we need to get a pointer
+		// to the converted value.
+		tmp := reflect.New(t.Elem())
+		tmp.Elem().Set(converted)
+		converted = tmp
+	}
+
+	return converted.Interface()
 }
 
 func jsonTagValue(r Registry, fieldName string, s *Schema, value string) any {
@@ -497,7 +526,7 @@ func jsonTagValue(r Registry, fieldName string, s *Schema, value string) any {
 
 	// Special case: array of strings with comma-separated values and no quotes.
 	if s.Type == TypeArray && s.Items != nil && s.Items.Type == TypeString && value[0] != '[' {
-		values := []string{}
+		var values []string
 		for _, s := range strings.Split(value, ",") {
 			values = append(values, strings.TrimSpace(s))
 		}
@@ -583,7 +612,7 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 	fs.Nullable = boolTag(f, "nullable", fs.Nullable)
 	if fs.Nullable && fs.Ref != "" && registry.SchemaFromRef(fs.Ref).Type == "object" {
 		// Nullability is only supported for scalar types for now. Objects are
-		// much more complicated because the `null` type lives within the object
+		// much more complicated. The `null` type lives within the object
 		// definition (requiring multiple copies of the object) or needs to use
 		// `anyOf` or `not` which is not supported by all code generators, or is
 		// supported poorly & generates hard-to-use code. This is less than ideal
@@ -622,7 +651,7 @@ type fieldInfo struct {
 	Field  reflect.StructField
 }
 
-// getFields performs a breadth-first search for all fields including embedded
+// getFields performs a breadth-first search for all fields, including embedded
 // ones. It may return multiple fields with the same name, the first of which
 // represents the outermost declaration.
 func getFields(typ reflect.Type, visited map[reflect.Type]struct{}) []fieldInfo {
@@ -668,10 +697,9 @@ type SchemaProvider interface {
 	Schema(r Registry) *Schema
 }
 
-// SchemaTransformer is an interface that can be implemented by types
-// to transform the generated schema as needed.
-// This can be used to leverage the default schema generation for a type,
-// and arbitrarily modify parts of it.
+// SchemaTransformer is an interface that types can implement to transform
+// the generated schema as needed. This can be used to leverage the
+// default schema generation for a type and arbitrarily modify parts of it.
 type SchemaTransformer interface {
 	TransformSchema(r Registry, s *Schema) *Schema
 }
@@ -816,10 +844,10 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 			fieldSet[f.Name] = struct{}{}
 
 			// Controls whether the field is required or not. All fields start as
-			// required, then can be made optional with the `omitempty` JSON tag,
-			// `omitzero` JSON tag, or it can be overridden manually via the
-			// `required` tag.
-			fieldRequired := true
+			// required (unless the registry says otherwise), then can be made
+			// optional with the `omitempty` JSON tag, `omitzero` JSON tag, or it
+			// can be overridden manually via the `required` tag.
+			fieldRequired := !r.FieldsOptionalByDefault()
 
 			name := f.Name
 			if j := f.Tag.Get("json"); j != "" {
@@ -852,7 +880,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 				propNames = append(propNames, name)
 
 				if fs.hidden {
-					// This field is deliberately ignored. It may still exist, but won't
+					// This field is deliberately ignored. It may still exist but won't
 					// be documented as a required field.
 					fieldRequired = false
 				}
@@ -871,7 +899,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 		}
 		s.Type = TypeObject
 
-		// Check if the dependent fields exists. If they don't, panic with the correct message.
+		// Check if the dependent fields exist. If they don't, panic with the correct message.
 		var errs []string
 		depKeys := make([]string, 0, len(dependentRequiredMap))
 		for field := range dependentRequiredMap {

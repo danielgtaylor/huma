@@ -1,7 +1,7 @@
 package huma
 
 // AutoConfigVar represents a variable given by the user when prompted during
-// auto-configuration setup of an API.
+// autoconfiguration setup of an API.
 type AutoConfigVar struct {
 	Description string        `json:"description,omitempty"`
 	Example     string        `json:"example,omitempty"`

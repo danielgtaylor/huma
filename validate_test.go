@@ -359,6 +359,21 @@ var validateTests = []struct {
 		errs:  []string{"expected string to be RFC 3339 time"},
 	},
 	{
+		name: "duration success",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" format:"duration"`
+		}{}),
+		input: map[string]any{"value": "1h30m20s"},
+	},
+	{
+		name: "expected duration",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" format:"duration"`
+		}{}),
+		input: map[string]any{"value": "bad"},
+		errs:  []string{"expected duration: time: invalid duration \"bad\""},
+	},
+	{
 		name: "email success",
 		typ: reflect.TypeOf(struct {
 			Value string `json:"value" format:"email"`
@@ -394,6 +409,14 @@ var validateTests = []struct {
 			Value string `json:"value" format:"idn-hostname"`
 		}{}),
 		input: map[string]any{"value": "ëxample.com"},
+	},
+	{
+		name: "expected idn-hostname",
+		typ: reflect.TypeOf(struct {
+			Value string `json:"value" format:"idn-hostname"`
+		}{}),
+		input: map[string]any{"value": "a]b.com"},
+		errs:  []string{"expected string to be RFC 5890 hostname"},
 	},
 	// {
 	// 	name: "expected idn-hostname",
@@ -1419,13 +1442,13 @@ func TestValidate(t *testing.T) {
 					registry.Schema(test.typ, true, "TestInput")
 				})
 				return
+			}
+
+			if test.s != nil {
+				s = test.s
+				s.PrecomputeMessages()
 			} else {
-				if test.s != nil {
-					s = test.s
-					s.PrecomputeMessages()
-				} else {
-					s = registry.Schema(test.typ, true, "TestInput")
-				}
+				s = registry.Schema(test.typ, true, "TestInput")
 			}
 
 			pb.Reset()

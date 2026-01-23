@@ -99,7 +99,7 @@ Nullable types will generate a type array like `"type": ["string", "null"]` whic
 The following additional tags are supported on model fields:
 
 | Tag                  | Description                                | Example                         |
-| -------------------- | ------------------------------------------ | ------------------------------- |
+|----------------------|--------------------------------------------|---------------------------------|
 | `doc`                | Describe the field                         | `doc:"Who to greet"`            |
 | `format`             | Format hint for the field                  | `format:"date-time"`            |
 | `enum`               | A comma-separated list of possible values  | `enum:"one,two,three"`          |
@@ -128,13 +128,14 @@ The following additional tags are supported on model fields:
 Built-in string formats include:
 
 | Format                            | Description                     | Example                                |
-| --------------------------------- | ------------------------------- | -------------------------------------- |
+|-----------------------------------|---------------------------------|----------------------------------------|
 | `date-time`                       | Date and time in RFC3339 format | `2021-12-31T23:59:59Z`                 |
 | `date-time-http`                  | Date and time in HTTP format    | `Fri, 31 Dec 2021 23:59:59 GMT`        |
 | `date`                            | Date in RFC3339 format          | `2021-12-31`                           |
 | `time`                            | Time in RFC3339 format          | `23:59:59`                             |
+| `duration`                        | Duration                        | `1h30m`                                |
 | `email` / `idn-email`             | Email address                   | `kari@example.com`                     |
-| `hostname`                        | Hostname                        | `example.com`                          |
+| `hostname` / `idn-hostname`       | Hostname                        | `example.com`                          |
 | `ipv4`                            | IPv4 address                    | `127.0.0.1`                            |
 | `ipv6`                            | IPv6 address                    | `::1`                                  |
 | `uri` / `iri`                     | URI                             | `https://example.com`                  |

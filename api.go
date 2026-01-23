@@ -126,20 +126,19 @@ type Context interface {
 	BodyWriter() io.Writer
 }
 
-// Represent http protocol version
+// ProtoVersion represents the http protocol version.
 type ProtoVersion struct {
 	Proto      string
 	ProtoMajor int
 	ProtoMinor int
 }
 
-type (
-	humaContext Context
-	subContext  struct {
-		humaContext
-		override context.Context
-	}
-)
+type humaContext Context
+
+type subContext struct {
+	humaContext
+	override context.Context
+}
 
 func (c subContext) Context() context.Context {
 	return c.override
@@ -183,7 +182,7 @@ type Config struct {
 	// `/openapi.yaml`, for example.
 	OpenAPIPath string
 
-	// DocsPath is the path to the API documentation. If set to `/docs` it will
+	// DocsPath is the path to the API documentation. If set to `/docs `, it will
 	// allow clients to get `/docs` to view the documentation in a browser. If
 	// you wish to provide your own documentation renderer, you can leave this
 	// blank and attach it directly to the router or adapter.
@@ -220,6 +219,11 @@ type Config struct {
 	// RejectUnknownQueryParameters determines whether to reject requests
 	// containing query parameters not defined in the API spec.
 	RejectUnknownQueryParameters bool
+
+	// FieldsOptionalByDefault controls whether schema fields are treated as
+	// optional by default. When false, fields are marked as required unless
+	// they have the omitempty or omitzero tag.
+	FieldsOptionalByDefault bool
 }
 
 // API represents a Huma API wrapping a specific router.
@@ -303,15 +307,18 @@ func (a *api) Unmarshal(contentType string, data []byte, v any) error {
 	if end == -1 {
 		end = len(contentType)
 	}
+
 	ct := contentType[start:end]
 	if ct == "" {
 		// Default to assume JSON since this is an API.
 		ct = "application/json"
 	}
+
 	f, ok := a.formats[ct]
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrUnknownContentType, contentType)
 	}
+
 	return f.Unmarshal(data, v)
 }
 
@@ -333,12 +340,14 @@ func (a *api) Negotiate(accept string) (string, error) {
 
 func (a *api) Transform(ctx Context, status string, v any) (any, error) {
 	var err error
+
 	for _, t := range a.transformers {
 		v, err = t(ctx, status, v)
 		if err != nil {
 			return nil, err
 		}
 	}
+
 	return v, nil
 }
 
@@ -419,15 +428,20 @@ func NewAPI(config Config, a Adapter) API {
 	if config.Components.Schemas == nil {
 		config.Components.Schemas = NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
 	}
+	if mr, ok := config.Components.Schemas.(*mapRegistry); ok {
+		mr.fieldsOptionalByDefault = config.FieldsOptionalByDefault
+	}
 
 	if config.DefaultFormat == "" && !config.NoFormatFallback {
 		if config.Formats["application/json"].Marshal != nil {
 			config.DefaultFormat = "application/json"
 		}
 	}
+
 	if config.DefaultFormat != "" {
 		newAPI.formatKeys = append(newAPI.formatKeys, config.DefaultFormat)
 	}
+
 	for k, v := range config.Formats {
 		newAPI.formats[k] = v
 		newAPI.formatKeys = append(newAPI.formatKeys, k)
@@ -445,6 +459,7 @@ func NewAPI(config Config, a Adapter) API {
 			}
 			ctx.BodyWriter().Write(specJSON)
 		})
+
 		var specJSON30 []byte
 		a.Handle(&Operation{
 			Method: http.MethodGet,
@@ -456,6 +471,7 @@ func NewAPI(config Config, a Adapter) API {
 			}
 			ctx.BodyWriter().Write(specJSON30)
 		})
+
 		var specYAML []byte
 		a.Handle(&Operation{
 			Method: http.MethodGet,
@@ -467,6 +483,7 @@ func NewAPI(config Config, a Adapter) API {
 			}
 			ctx.BodyWriter().Write(specYAML)
 		})
+
 		var specYAML30 []byte
 		a.Handle(&Operation{
 			Method: http.MethodGet,

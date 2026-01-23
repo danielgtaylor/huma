@@ -10,7 +10,7 @@ import (
 )
 
 // Registry creates and stores schemas and their references, and supports
-// marshalling to JSON/YAML for use as an OpenAPI #/components/schemas object.
+// marshaling to JSON/YAML for use as an OpenAPI #/components/schemas object.
 // Behavior is implementation-dependent, but the design allows for recursive
 // schemas to exist while being flexible enough to support other use cases
 // like only inline objects (no refs) or always using refs for structs.
@@ -20,6 +20,7 @@ type Registry interface {
 	TypeFromRef(ref string) reflect.Type
 	Map() map[string]*Schema
 	RegisterTypeAlias(t reflect.Type, alias reflect.Type)
+	FieldsOptionalByDefault() bool
 }
 
 // DefaultSchemaNamer provides schema names for types. It uses the type name
@@ -60,12 +61,17 @@ func DefaultSchemaNamer(t reflect.Type, hint string) string {
 }
 
 type mapRegistry struct {
-	prefix  string
-	schemas map[string]*Schema
-	types   map[string]reflect.Type
-	seen    map[reflect.Type]bool
-	namer   func(reflect.Type, string) string
-	aliases map[reflect.Type]reflect.Type
+	prefix                  string
+	schemas                 map[string]*Schema
+	types                   map[string]reflect.Type
+	seen                    map[reflect.Type]bool
+	namer                   func(reflect.Type, string) string
+	aliases                 map[reflect.Type]reflect.Type
+	fieldsOptionalByDefault bool
+}
+
+func (r *mapRegistry) FieldsOptionalByDefault() bool {
+	return r.fieldsOptionalByDefault
 }
 
 func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema {
@@ -94,7 +100,7 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 		getsRef = false
 	}
 	if _, ok := v.(encoding.TextUnmarshaler); ok {
-		// Special case: type can be unmarshalled from text so will be a `string`
+		// Special case: type can be unmarshaled from text so will be a `string`
 		// and doesn't need a ref. This simplifies the schema a little bit.
 		getsRef = false
 	}
@@ -164,11 +170,12 @@ func (r *mapRegistry) RegisterTypeAlias(t reflect.Type, alias reflect.Type) {
 // returns references to them using the given prefix.
 func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) string) Registry {
 	return &mapRegistry{
-		prefix:  prefix,
-		schemas: map[string]*Schema{},
-		types:   map[string]reflect.Type{},
-		seen:    map[reflect.Type]bool{},
-		aliases: map[reflect.Type]reflect.Type{},
-		namer:   namer,
+		prefix:                  prefix,
+		schemas:                 map[string]*Schema{},
+		types:                   map[string]reflect.Type{},
+		seen:                    map[reflect.Type]bool{},
+		aliases:                 map[reflect.Type]reflect.Type{},
+		namer:                   namer,
+		fieldsOptionalByDefault: false,
 	}
 }

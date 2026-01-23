@@ -111,7 +111,7 @@ type Contact struct {
 	Email string `yaml:"email,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -140,7 +140,7 @@ type License struct {
 	URL string `yaml:"url,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -188,7 +188,7 @@ type Info struct {
 	Version string `yaml:"version"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -215,7 +215,7 @@ type ServerVariable struct {
 	Description string `yaml:"description,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -247,7 +247,7 @@ type Server struct {
 	Variables map[string]*ServerVariable `yaml:"variables,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -287,18 +287,18 @@ type Example struct {
 
 	// Value is an embedded literal example. The `value` field and `externalValue`
 	// field are mutually exclusive. To represent examples of media types that
-	// cannot naturally represented in JSON or YAML, use a string value to contain
-	// the example, escaping where necessary.
+	// cannot be naturally represented in JSON or YAML, use a string value to
+	// contain the example, escaping where necessary.
 	Value any `yaml:"value,omitempty"`
 
 	// ExternalValue is a URI that points to the literal example. This provides
-	// the capability to reference examples that cannot easily be included in JSON
+	// the ability to reference examples that cannot easily be included in JSON
 	// or YAML documents. The `value` field and `externalValue` field are mutually
 	// exclusive. See the rules for resolving Relative References.
 	ExternalValue string `yaml:"externalValue,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -347,16 +347,16 @@ func (e *Example) MarshalJSON() ([]byte, error) {
 //	              schema:
 //	                type: integer
 type Encoding struct {
-	// ContentType for encoding a specific property. Default value depends on the
-	// property type: for object - application/json; for array – the default is
-	// defined based on the inner type; for all other cases the default is
-	// application/octet-stream. The value can be a specific media type (e.g.
-	// application/json), a wildcard media type (e.g. image/*), or a
+	// ContentType for encoding a specific property. The default value depends on
+	// the property type: for object - application/json; for an array – the default
+	// is defined based on the inner type; for all other cases the default is
+	// application/octet-stream. The value can be a specific media type (e.g.,
+	// application/json), a wildcard media type (e.g., image/*), or a
 	// comma-separated list of the two types.
 	ContentType string `yaml:"contentType,omitempty"`
 
 	// Headers is a map allowing additional information to be provided as headers,
-	// for example Content-Disposition. Content-Type is described separately and
+	// for example, Content-Disposition. Content-Type is described separately and
 	// SHALL be ignored in this section. This property SHALL be ignored if the
 	// request body media type is not a multipart.
 	Headers map[string]*Header `yaml:"headers,omitempty"`
@@ -373,7 +373,7 @@ type Encoding struct {
 	// Explode, when true, property values of type array or object generate
 	// separate parameters for each value of the array, or key-value-pair of the
 	// map. For other types of properties this property has no effect. When style
-	// is form, the default value is true. For all other styles, the default value
+	// is "form", the default value is true. For all other styles, the default value
 	// is false. This property SHALL be ignored if the request body media type is
 	// not application/x-www-form-urlencoded or multipart/form-data. If a value is
 	// explicitly defined, then the value of contentType (implicit or explicit)
@@ -390,7 +390,7 @@ type Encoding struct {
 	AllowReserved bool `yaml:"allowReserved,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -444,7 +444,7 @@ type MediaType struct {
 	Encoding map[string]*Encoding `yaml:"encoding,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -472,8 +472,7 @@ type Param struct {
 	// with the other fields.
 	Ref string `yaml:"$ref,omitempty"`
 
-	// Name is REQUIRED. The name of the parameter. Parameter names are case
-	// sensitive.
+	// Name is REQUIRED. The name of the parameter. Parameter names are case-sensitive.
 	//
 	//   - If in is "path", the name field MUST correspond to a template expression
 	//     occurring within the path field in the Paths Object. See Path Templating
@@ -500,12 +499,12 @@ type Param struct {
 	Required bool `yaml:"required,omitempty"`
 
 	// Deprecated specifies that a parameter is deprecated and SHOULD be
-	// transitioned out of usage. Default value is false.
+	// transitioned out of usage. The default value is false.
 	Deprecated bool `yaml:"deprecated,omitempty"`
 
 	// AllowEmptyValue sets the ability to pass empty-valued parameters. This is
 	// valid only for query parameters and allows sending a parameter with an
-	// empty value. Default value is false. If style is used, and if behavior is
+	// empty value. The default value is false. If style is used, and if behavior is
 	// n/a (cannot be serialized), the value of allowEmptyValue SHALL be ignored.
 	// Use of this property is NOT RECOMMENDED, as it is likely to be removed in a
 	// later revision.
@@ -519,14 +518,14 @@ type Param struct {
 	// Explode, when true, makes parameter values of type array or object generate
 	// separate parameters for each value of the array or key-value pair of the
 	// map. For other types of parameters this property has no effect. When style
-	// is form, the default value is true. For all other styles, the default value
+	// is "form", the default value is true. For all other styles, the default value
 	// is false.
 	Explode *bool `yaml:"explode,omitempty"`
 
 	// AllowReserved determines whether the parameter value SHOULD allow reserved
 	// characters, as defined by [RFC3986] :/?#[]@!$&'()*+,;= to be included
 	// without percent-encoding. This property only applies to parameters with an
-	// in value of query. The default value is false.
+	// in value of "query". The default value is false.
 	AllowReserved bool `yaml:"allowReserved,omitempty"`
 
 	// Schema defining the type used for the parameter.
@@ -549,7 +548,7 @@ type Param struct {
 	Examples map[string]*Example `yaml:"examples,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -609,8 +608,8 @@ type RequestBody struct {
 	Description string `yaml:"description,omitempty"`
 
 	// Content is REQUIRED. The content of the request body. The key is a media
-	// type or media type range and the value describes it. For requests that
-	// match multiple keys, only the most specific key is applicable. e.g.
+	// type or media type range, and the value describes it. For requests that
+	// match multiple keys, only the most specific key is applicable. e.g.,
 	// text/plain overrides text/*
 	Content map[string]*MediaType `yaml:"content"`
 
@@ -619,7 +618,7 @@ type RequestBody struct {
 	Required bool `yaml:"required,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -637,10 +636,10 @@ func (r *RequestBody) MarshalJSON() ([]byte, error) {
 // invoke it, rather it provides a known relationship and traversal mechanism
 // between responses and other operations.
 //
-// Unlike dynamic links (i.e. links provided in the response payload), the OAS
+// Unlike dynamic links (i.e., links provided in the response payload), the OAS
 // linking mechanism does not require link information in the runtime response.
 //
-// For computing links, and providing instructions to execute them, a runtime
+// For computing links and providing instructions to execute them, a runtime
 // expression is used for accessing values in an operation and using them as
 // parameters while invoking the linked operation.
 //
@@ -710,7 +709,7 @@ type Link struct {
 	// expression to be evaluated and passed to the linked operation. The
 	// parameter name can be qualified using the parameter location [{in}.]{name}
 	// for operations that use the same parameter name in different locations
-	// (e.g. path.id).
+	// (e.g., path.id).
 	Parameters map[string]any `yaml:"parameters,omitempty"`
 
 	// RequestBody is a literal value or {expression} to use as a request body
@@ -724,7 +723,7 @@ type Link struct {
 	Server *Server `yaml:"server,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -760,7 +759,7 @@ type Response struct {
 	Description string `yaml:"description,omitempty"`
 
 	// Headers maps a header name to its definition. [RFC7230] states header names
-	// are case insensitive. If a response header is defined with the name
+	// are case-insensitive. If a response header is defined with the name
 	// "Content-Type", it SHALL be ignored.
 	Headers map[string]*Param `yaml:"headers,omitempty"`
 
@@ -776,7 +775,7 @@ type Response struct {
 	Links map[string]*Link `yaml:"links,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -927,7 +926,7 @@ type Operation struct {
 	// RequestBody applicable for this operation. The requestBody is fully
 	// supported in HTTP methods where the HTTP 1.1 specification [RFC7231] has
 	// explicitly defined semantics for request bodies. In other cases where the
-	// HTTP spec is vague (such as GET, HEAD and DELETE), requestBody is permitted
+	// HTTP spec is vague (such as GET, HEAD, and DELETE), requestBody is permitted
 	// but does not have well-defined semantics and SHOULD be avoided if possible.
 	RequestBody *RequestBody `yaml:"requestBody,omitempty"`
 
@@ -935,7 +934,7 @@ type Operation struct {
 	// executing this operation.
 	Responses map[string]*Response `yaml:"responses,omitempty"`
 
-	// Callbacks is a map of possible out-of band callbacks related to the parent
+	// Callbacks is a map of possible out-of-band callbacks related to the parent
 	// operation. The key is a unique identifier for the Callback Object. Each
 	// value in the map is a Callback Object that describes a request that may be
 	// initiated by the API provider and the expected responses. The Callback
@@ -958,12 +957,12 @@ type Operation struct {
 	Callbacks map[string]map[string]*PathItem `yaml:"callbacks,omitempty"`
 
 	// Deprecated declares this operation to be deprecated. Consumers SHOULD
-	// refrain from usage of the declared operation. Default value is false.
+	// refrain from usage of the declared operation. The default value is false.
 	Deprecated bool `yaml:"deprecated,omitempty"`
 
 	// Security is a declaration of which security mechanisms can be used for this
 	// operation. The list of values includes alternative security requirement
-	// objects that can be used. Only one of the security requirement objects need
+	// objects that can be used. Only one of the security requirement objects needs
 	// to be satisfied to authorize a request. To make security optional, an empty
 	// security requirement ({}) can be included in the array. This definition
 	// overrides any declared top-level security. To remove a top-level security
@@ -976,7 +975,7 @@ type Operation struct {
 	Servers []*Server `yaml:"servers,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -1082,7 +1081,7 @@ type PathItem struct {
 	Parameters []*Param `yaml:"parameters,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -1139,7 +1138,7 @@ type OAuthFlow struct {
 	Scopes map[string]string `yaml:"scopes"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -1169,7 +1168,7 @@ type OAuthFlows struct {
 	AuthorizationCode *OAuthFlow `yaml:"authorizationCode,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -1233,7 +1232,7 @@ type SecurityScheme struct {
 	OpenIDConnectURL string `yaml:"openIdConnectUrl,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -1354,7 +1353,7 @@ type Components struct {
 	PathItems map[string]*PathItem `yaml:"pathItems,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -1388,7 +1387,7 @@ type ExternalDocs struct {
 	URL string `yaml:"url"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -1414,7 +1413,7 @@ type Tag struct {
 	ExternalDocs *ExternalDocs `yaml:"externalDocs,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 }
 
@@ -1485,7 +1484,7 @@ type OpenAPI struct {
 	ExternalDocs *ExternalDocs `yaml:"externalDocs,omitempty"`
 
 	// Extensions (user-defined properties), if any. Values in this map will
-	// be marshalled as siblings of the other properties above.
+	// be marshaled as siblings of the other properties above.
 	Extensions map[string]any `yaml:",inline"`
 
 	// OnAddOperation is called when an operation is added to the OpenAPI via
@@ -1496,9 +1495,23 @@ type OpenAPI struct {
 
 // AddOperation adds an operation to the OpenAPI. This is the preferred way to
 // add operations to the OpenAPI, as it will ensure that the operation is
-// properly added to the Paths map, and will call any registered OnAddOperation
+// properly added to the Paths map and will call any registered OnAddOperation
 // functions.
 func (o *OpenAPI) AddOperation(op *Operation) {
+	// Check this won't create a duplicate operation ID.
+	if op.OperationID != "" {
+		for _, pathItem := range o.Paths {
+			for _, existingOp := range []*Operation{
+				pathItem.Get, pathItem.Post, pathItem.Put, pathItem.Patch,
+				pathItem.Delete, pathItem.Head, pathItem.Options, pathItem.Trace,
+			} {
+				if existingOp != nil && existingOp.OperationID == op.OperationID {
+					panic("duplicate operation ID: " + op.OperationID)
+				}
+			}
+		}
+	}
+
 	if o.Paths == nil {
 		o.Paths = map[string]*PathItem{}
 	}
