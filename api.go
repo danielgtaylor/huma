@@ -494,31 +494,38 @@ func NewAPI(config Config, a Adapter) API {
 				openAPIPath = path.Join(prefix, openAPIPath)
 			}
 			ctx.SetHeader("Content-Type", "text/html")
+			// Very strict CSP so we never expose any data to the outside world
+			csp := []string{
+				"default-src 'none'",
+				"base-uri 'none'",
+				"connect-src 'self'",
+				"form-action 'none'",
+				"frame-ancestors 'none'",
+				"sandbox allow-same-origin allow-scripts",
+				"script-src https://unpkg.com/",
+				"style-src 'unsafe-inline' https://unpkg.com/",
+			}
+			ctx.SetHeader("Content-Security-Policy", strings.Join(csp, "; "))
 			title := "Elements in HTML"
 			if config.Info != nil && config.Info.Title != "" {
 				title = config.Info.Title + " Reference"
 			}
-			ctx.BodyWriter().Write([]byte(`<!doctype html>
+			ctx.BodyWriter().Write([]byte(`<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="referrer" content="same-origin" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <title>` + title + `</title>
-    <!-- Embed elements Elements via Web Component -->
-    <link href="https://unpkg.com/@stoplight/elements@9.0.0/styles.min.css" rel="stylesheet" />
-    <script src="https://unpkg.com/@stoplight/elements@9.0.0/web-components.min.js" integrity="sha256-Tqvw1qE2abI+G6dPQBc5zbeHqfVwGoamETU3/TSpUw4="
-            crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements@9.0.12/styles.min.css" crossorigin integrity="sha384-iVQBHadsD+eV0M5+ubRCEVXrXEBj+BqcuwjUwPoVJc0Pb1fmrhYSAhL+BFProHdV" />
+    <script src="https://unpkg.com/@stoplight/elements@9.0.12/web-components.min.js" crossorigin integrity="sha384-2AG+Hh93OYHuMcQJPPLM2671WnQzoHvHXh9FwbRfwMpyMLNc3++q/nJBKeVY0JMo"></script>
   </head>
   <body style="height: 100vh;">
-
     <elements-api
       apiDescriptionUrl="` + openAPIPath + `.yaml"
       router="hash"
-      layout="sidebar"
       tryItCredentialsPolicy="same-origin"
     />
-
   </body>
 </html>`))
 		})
