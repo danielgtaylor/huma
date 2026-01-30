@@ -157,6 +157,16 @@ func TestResponseContentTypeWithExtensions(t *testing.T) {
 		assert.Equal(t, "bar", v.Foo)
 	})
 
+	tRunUnmarshalError := func(name, ct string) {
+		t.Run(name, func(t *testing.T) {
+			var v struct{}
+			err := api.Unmarshal(ct, []byte(`{}`), &v)
+			require.Error(t, err)
+		})
+	}
+
+	tRunUnmarshalError("UnmarshalErrorMalformed", "application/json; charset=utf-8+wrong")
+
 	huma.Get(api, "/malformed", func(ctx context.Context, input *struct{}) (*output, error) {
 		return &output{
 			ContentType: "application/json; charset=utf-8+wrong",
