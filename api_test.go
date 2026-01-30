@@ -8,6 +8,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBlankConfig(t *testing.T) {
@@ -86,4 +87,98 @@ func TestContextValue(t *testing.T) {
 
 	resp := api.Get("/test")
 	assert.Equal(t, http.StatusNoContent, resp.Code)
+}
+
+func TestResponseContentTypeWithExtensions(t *testing.T) {
+	_, api := humatest.New(t)
+
+	type output struct {
+		ContentType string `header:"Content-Type"`
+		Body        struct {
+			Foo string `json:"foo"`
+		}
+	}
+
+	huma.Get(api, "/charset", func(ctx context.Context, input *struct{}) (*output, error) {
+		return &output{
+			ContentType: "application/json; charset=utf-8",
+			Body: struct {
+				Foo string `json:"foo"`
+			}{Foo: "bar"},
+		}, nil
+	})
+
+	huma.Get(api, "/suffix", func(ctx context.Context, input *struct{}) (*output, error) {
+		return &output{
+			ContentType: "application/problem+json",
+			Body: struct {
+				Foo string `json:"foo"`
+			}{Foo: "bar"},
+		}, nil
+	})
+
+	huma.Get(api, "/both", func(ctx context.Context, input *struct{}) (*output, error) {
+		return &output{
+			ContentType: "application/problem+json; charset=utf-8",
+			Body: struct {
+				Foo string `json:"foo"`
+			}{Foo: "bar"},
+		}, nil
+	})
+
+	assert.NotPanics(t, func() {
+		resp := api.Get("/charset")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Equal(t, "application/json; charset=utf-8", resp.Header().Get("Content-Type"))
+		assert.JSONEq(t, `{"foo": "bar"}`, resp.Body.String())
+	})
+
+	assert.NotPanics(t, func() {
+		resp := api.Get("/suffix")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Equal(t, "application/problem+json", resp.Header().Get("Content-Type"))
+		assert.JSONEq(t, `{"foo": "bar"}`, resp.Body.String())
+	})
+
+	assert.NotPanics(t, func() {
+		resp := api.Get("/both")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Equal(t, "application/problem+json; charset=utf-8", resp.Header().Get("Content-Type"))
+		assert.JSONEq(t, `{"foo": "bar"}`, resp.Body.String())
+	})
+
+	t.Run("UnmarshalSuffix", func(t *testing.T) {
+		type input struct {
+			Foo string `json:"foo"`
+		}
+		var v input
+		err := api.Unmarshal("application/problem+json; charset=utf-8", []byte(`{"foo": "bar"}`), &v)
+		require.NoError(t, err)
+		assert.Equal(t, "bar", v.Foo)
+	})
+
+	tRunUnmarshalError := func(name, ct string) {
+		t.Run(name, func(t *testing.T) {
+			var v struct{}
+			err := api.Unmarshal(ct, []byte(`{}`), &v)
+			require.Error(t, err)
+		})
+	}
+
+	tRunUnmarshalError("UnmarshalErrorMalformed", "application/json; charset=utf-8+wrong")
+
+	huma.Get(api, "/malformed", func(ctx context.Context, input *struct{}) (*output, error) {
+		return &output{
+			ContentType: "application/json; charset=utf-8+wrong",
+			Body: struct {
+				Foo string `json:"foo"`
+			}{Foo: "bar"},
+		}, nil
+	})
+
+	t.Run("PanicOnMalformed", func(t *testing.T) {
+		assert.Panics(t, func() {
+			api.Get("/malformed")
+		})
+	})
 }
