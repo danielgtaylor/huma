@@ -8,6 +8,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBlankConfig(t *testing.T) {
@@ -152,7 +153,7 @@ func TestResponseContentTypeWithExtensions(t *testing.T) {
 		}
 		var v input
 		err := api.Unmarshal("application/problem+json; charset=utf-8", []byte(`{"foo": "bar"}`), &v)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "bar", v.Foo)
 	})
 
