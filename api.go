@@ -293,11 +293,9 @@ func (a *api) OpenAPI() *OpenAPI {
 }
 
 func (a *api) Unmarshal(contentType string, data []byte, v any) error {
-	// Handle e.g. `application/json; charset=utf-8` or `my/format+json`
-	start := strings.IndexRune(contentType, '+') + 1
-	end := strings.IndexRune(contentType, ';')
-	if end == -1 {
-		end = len(contentType)
+	start, end, err := parseContentType(contentType)
+	if err != nil {
+		return err
 	}
 
 	ct := contentType[start:end]
@@ -346,8 +344,12 @@ func (a *api) Transform(ctx Context, status string, v any) (any, error) {
 func (a *api) Marshal(w io.Writer, ct string, v any) error {
 	f, ok := a.formats[ct]
 	if !ok {
-		start := strings.IndexRune(ct, '+') + 1
-		f, ok = a.formats[ct[start:]]
+		start, end, err := parseContentType(ct)
+		if err != nil {
+			return err
+		}
+
+		f, ok = a.formats[ct[start:end]]
 	}
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrUnknownContentType, ct)
@@ -372,6 +374,23 @@ func getAPIPrefix(oapi *OpenAPI) string {
 		}
 	}
 	return ""
+}
+
+func parseContentType(contentType string) (int, int, error) {
+	// Handle e.g. `application/json; charset=utf-8` or `my/format+json`
+	start := strings.IndexRune(contentType, '+') + 1
+	end := strings.IndexRune(contentType, ';')
+	if end == -1 {
+		end = len(contentType)
+	}
+
+	if end < start {
+		// This can happen if the `+` is after the `;`, which is not expected,
+		// but we should handle it gracefully.
+		return 0, 0, fmt.Errorf("%w: %s", ErrUnknownContentType, contentType)
+	}
+
+	return start, end, nil
 }
 
 // NewAPI creates a new API with the given configuration and router adapter.
