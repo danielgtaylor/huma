@@ -13,7 +13,10 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var lastModified = time.Now()
@@ -239,4 +242,48 @@ func BenchmarkRawEchoFast(b *testing.B) {
 		w.Body.Reset()
 		r.ServeHTTP(w, req)
 	}
+}
+
+// See https://github.com/danielgtaylor/huma/issues/859
+func TestWithValueShouldPropagateContext(t *testing.T) {
+	r := echo.New()
+	app := New(r, huma.DefaultConfig("Test", "1.0.0"))
+
+	type (
+		testInput  struct{}
+		testOutput struct{}
+		ctxKey     struct{}
+	)
+
+	ctxValue := "sentinelValue"
+
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Path:        "/test",
+		Method:      http.MethodGet,
+		Middlewares: huma.Middlewares{
+			func(ctx huma.Context, next func(huma.Context)) {
+				ctx = huma.WithValue(ctx, ctxKey{}, ctxValue)
+				next(ctx)
+			},
+			middleware(func(next echo.HandlerFunc) echo.HandlerFunc {
+				return func(c echo.Context) error {
+					val, _ := c.Request().Context().Value(ctxKey{}).(string)
+					_, err := io.WriteString(c.Response().Writer, val)
+					return err
+				}
+			}),
+		},
+	}, func(ctx context.Context, input *testInput) (*testOutput, error) {
+		out := &testOutput{}
+		return out, nil
+	})
+
+	tapi := humatest.Wrap(t, app)
+
+	resp := tapi.Get("/test")
+	assert.Equal(t, http.StatusOK, resp.Code)
+	out, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, ctxValue, string(out))
 }
