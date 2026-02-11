@@ -1,8 +1,6 @@
 module github.com/danielgtaylor/huma/v2
 
-go 1.23.0
-
-toolchain go1.24.1
+go 1.25.0
 
 require (
 	github.com/danielgtaylor/shorthand/v2 v2.2.0
@@ -15,11 +13,12 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/labstack/echo/v4 v4.13.3
+	github.com/labstack/echo/v5 v5.0.3
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/uptrace/bunrouter v1.0.23
-	golang.org/x/net v0.40.0
+	golang.org/x/net v0.49.0
 )
 
 require (
@@ -58,9 +57,9 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/arch v0.17.0 // indirect
-	golang.org/x/crypto v0.38.0 // indirect
-	golang.org/x/sys v0.33.0 // indirect
-	golang.org/x/text v0.25.0 // indirect
+	golang.org/x/crypto v0.47.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
+	golang.org/x/text v0.33.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

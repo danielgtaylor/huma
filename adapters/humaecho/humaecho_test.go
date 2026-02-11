@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 var lastModified = time.Now()
@@ -100,7 +100,7 @@ func BenchmarkRawEcho(b *testing.B) {
 
 	r := echo.New()
 
-	r.POST("/foo/:id", func(c echo.Context) error {
+	r.POST("/foo/:id", func(c *echo.Context) error {
 		r := c.Request()
 		w := c.Response()
 
@@ -191,7 +191,7 @@ func BenchmarkRawEchoFast(b *testing.B) {
 
 	r := echo.New()
 
-	r.POST("/foo/:id", func(c echo.Context) error {
+	r.POST("/foo/:id", func(c *echo.Context) error {
 		r := c.Request()
 		w := c.Response()
 
