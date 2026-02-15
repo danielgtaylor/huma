@@ -162,14 +162,6 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 
 		pfi.Schema = SchemaFromField(registry, f, "")
 
-		var example any
-		if value, ok := f.Tag.Lookup("example"); ok {
-			example = jsonTagValue(registry, f.Type.Name(), pfi.Schema, value)
-		}
-		if example == nil && len(pfi.Schema.Examples) > 0 {
-			example = pfi.Schema.Examples[0]
-		}
-
 		// While discouraged, make it possible to make query/header params required.
 		if r := f.Tag.Get("required"); r == "true" {
 			pfi.Required = true
