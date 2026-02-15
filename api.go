@@ -172,6 +172,7 @@ type Transformer func(ctx Context, status string, v any) (any, error)
 
 const DocsRendererScalar = "scalar"
 const DocsRendererStoplightElements = "stoplight"
+const DocsRendererSwaggerUI = "swagger-ui"
 
 // Config represents a configuration for a new API. See `huma.DefaultConfig()`
 // as a starting point.
@@ -602,6 +603,32 @@ func (a *api) registerDocsRoute() {
       layout="sidebar"
       tryItCredentialsPolicy="same-origin"
     />
+  </body>
+</html>`)
+	case DocsRendererSwaggerUI:
+		if title == "" {
+			title = "SwaggerUI in HTML"
+		}
+
+		body = []byte(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>` + title + `</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.31.0/swagger-ui.css" />
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.31.0/swagger-ui-bundle.js" crossorigin></script>
+    <script>
+      window.onload = () => {
+        window.ui = SwaggerUIBundle({
+          url: '` + openAPIPath + `.json',
+          dom_id: '#swagger-ui',
+        });
+      };
+    </script>
   </body>
 </html>`)
 	default:

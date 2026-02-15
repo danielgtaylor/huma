@@ -89,6 +89,7 @@ The special struct field `Body` will be treated as the input request body and ca
 | Tag           | Description               | Example                                  |
 | ------------- | ------------------------- | ---------------------------------------- |
 | `contentType` | Override the content type | `contentType:"application/my-type+json"` |
+| `nameHint`    | Hint for the schema name  | `nameHint:"MyRequestBody"`                |
 | `required`    | Mark the body as required | `required:"true"`                        |
 
 `RawBody []byte` can also be used alongside `Body` to provide access to the `[]byte` used to validate & parse `Body`.
