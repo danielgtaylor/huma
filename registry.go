@@ -20,7 +20,11 @@ type Registry interface {
 	TypeFromRef(ref string) reflect.Type
 	Map() map[string]*Schema
 	RegisterTypeAlias(t reflect.Type, alias reflect.Type)
-	FieldsOptionalByDefault() bool
+	Config() RegistryConfig
+}
+
+type RegistryConfig struct {
+	FieldsOptionalByDefault bool
 }
 
 // DefaultSchemaNamer provides schema names for types. It uses the type name
@@ -61,24 +65,20 @@ func DefaultSchemaNamer(t reflect.Type, hint string) string {
 }
 
 type mapRegistry struct {
-	prefix                  string
-	schemas                 map[string]*Schema
-	types                   map[string]reflect.Type
-	seen                    map[reflect.Type]bool
-	namer                   func(reflect.Type, string) string
-	aliases                 map[reflect.Type]reflect.Type
-	fieldsOptionalByDefault bool
-}
-
-func (r *mapRegistry) FieldsOptionalByDefault() bool {
-	return r.fieldsOptionalByDefault
+	prefix  string
+	schemas map[string]*Schema
+	types   map[string]reflect.Type
+	seen    map[reflect.Type]bool
+	namer   func(reflect.Type, string) string
+	aliases map[reflect.Type]reflect.Type
+	config  RegistryConfig
 }
 
 func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema {
 	origType := t
 	t = deref(t)
 
-	// Pointer to array should decay to array
+	// Pointer to array should decay to array.
 	if t.Kind() == reflect.Array || t.Kind() == reflect.Slice {
 		origType = t
 	}
@@ -96,7 +96,7 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 
 	v := reflect.New(t).Interface()
 	if _, ok := v.(SchemaProvider); ok {
-		// Special case: type provides its own schema
+		// Special case: type provides its own schema.
 		getsRef = false
 	}
 	if _, ok := v.(encoding.TextUnmarshaler); ok {
@@ -109,14 +109,16 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 
 	if getsRef {
 		if s, ok := r.schemas[name]; ok {
-			if _, ok := r.seen[t]; !ok {
-				// Name matches but type is different, so we have a dupe.
+			if _, ok = r.seen[t]; !ok {
+				// The name matches but the type is different, so we have a dupe.
 
 				panic(fmt.Errorf("duplicate name: %s, new type: %s, existing type: %s", name, t, r.types[name]))
 			}
+
 			if allowRef {
 				return &Schema{Ref: r.prefix + name}
 			}
+
 			return s
 		}
 	}
@@ -127,6 +129,7 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 		r.types[name] = t
 		r.seen[t] = true
 	}
+
 	s := SchemaFromType(r, origType)
 	if getsRef {
 		r.schemas[name] = s
@@ -161,21 +164,27 @@ func (r *mapRegistry) MarshalYAML() (interface{}, error) {
 	return r.schemas, nil
 }
 
-// RegisterTypeAlias(t, alias) makes the schema generator use the `alias` type instead of `t`.
+// RegisterTypeAlias makes the schema generator use the `alias` type instead of `t`.
 func (r *mapRegistry) RegisterTypeAlias(t reflect.Type, alias reflect.Type) {
 	r.aliases[t] = alias
+}
+
+func (r *mapRegistry) Config() RegistryConfig {
+	return r.config
 }
 
 // NewMapRegistry creates a new registry that stores schemas in a map and
 // returns references to them using the given prefix.
 func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) string) Registry {
 	return &mapRegistry{
-		prefix:                  prefix,
-		schemas:                 map[string]*Schema{},
-		types:                   map[string]reflect.Type{},
-		seen:                    map[reflect.Type]bool{},
-		aliases:                 map[reflect.Type]reflect.Type{},
-		namer:                   namer,
-		fieldsOptionalByDefault: false,
+		prefix:  prefix,
+		schemas: map[string]*Schema{},
+		types:   map[string]reflect.Type{},
+		seen:    map[reflect.Type]bool{},
+		aliases: map[reflect.Type]reflect.Type{},
+		namer:   namer,
+		config: RegistryConfig{
+			FieldsOptionalByDefault: false,
+		},
 	}
 }

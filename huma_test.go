@@ -3460,3 +3460,59 @@ func TestFieldsOptionalByDefault(t *testing.T) {
 		assert.Contains(t, resp.Body.String(), "required property age")
 	}
 }
+
+func TestSchemaLinkDuplicateTypes(t *testing.T) {
+	config := huma.DefaultConfig("Test API", "1.0.0")
+	_, api := humatest.New(t, config)
+
+	// Both operations use an identical anonymous struct type for the body.
+	// In Go, identical anonymous structs are the same type.
+	huma.Get(api, "/test1", func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			Message string `json:"message"`
+		}
+	}, error) {
+		return &struct {
+			Body struct {
+				Message string `json:"message"`
+			}
+		}{
+			Body: struct {
+				Message string `json:"message"`
+			}{Message: "hello from test1"},
+		}, nil
+	})
+
+	huma.Get(api, "/test2", func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			Message string `json:"message"`
+		}
+	}, error) {
+		return &struct {
+			Body struct {
+				Message string `json:"message"`
+			}
+		}{
+			Body: struct {
+				Message string `json:"message"`
+			}{Message: "hello from test2"},
+		}, nil
+	})
+
+	// Verify test1
+	resp1 := api.Get("/test1")
+	assert.Equal(t, http.StatusOK, resp1.Code)
+	// The schema name is derived from OperationID + Response -> Get-test1Response
+	assert.Contains(t, resp1.Body.String(), "Get-test1Response.json")
+	assert.Contains(t, resp1.Header().Get("Link"), "Get-test1Response.json")
+
+	// Verify test2
+	resp2 := api.Get("/test2")
+	assert.Equal(t, http.StatusOK, resp2.Code)
+	// The schema name is derived from OperationID + Response -> Get-test2Response
+	assert.Contains(t, resp2.Body.String(), "Get-test2Response.json")
+	assert.Contains(t, resp2.Header().Get("Link"), "Get-test2Response.json")
+
+	// Crucially, they should NOT be the same
+	assert.NotEqual(t, resp1.Header().Get("Link"), resp2.Header().Get("Link"))
+}
