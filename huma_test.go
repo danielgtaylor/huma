@@ -3151,8 +3151,29 @@ func TestSchemaWithExample(t *testing.T) {
 		return nil, nil
 	})
 
-	example := app.OpenAPI().Paths["/test"].Get.Parameters[0].Example
+	example := app.OpenAPI().Paths["/test"].Get.Parameters[0].Schema.Examples[0]
 	assert.Equal(t, 1, example)
+}
+
+func TestParameterExampleRedundancy(t *testing.T) {
+	_, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	type Input struct {
+		Name string `query:"name" example:"world"`
+	}
+
+	huma.Get(app, "/test", func(ctx context.Context, input *Input) (*struct{}, error) {
+		return nil, nil
+	})
+
+	param := app.OpenAPI().Paths["/test"].Get.Parameters[0]
+	assert.Equal(t, "name", param.Name)
+
+	// The example should be in the schema, not at the parameter level.
+	// OpenAPI 3.1+ prefers examples in the schema.
+	assert.Nil(t, param.Example)
+	require.NotNil(t, param.Schema)
+	assert.Equal(t, []any{"world"}, param.Schema.Examples)
 }
 
 func TestCustomSchemaErrors(t *testing.T) {

@@ -204,7 +204,6 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 				Explode:     explode,
 				Required:    pfi.Required,
 				Schema:      pfi.Schema,
-				Example:     example,
 				Style:       pfi.Style,
 			})
 		}
