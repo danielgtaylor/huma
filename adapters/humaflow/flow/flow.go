@@ -134,7 +134,7 @@ func (m *Mux) Handle(pattern string, handler http.Handler, methods ...string) {
 
 	// Compile any regular expression patterns and add them to the
 	// compiledRXPatterns map.
-	for _, segment := range strings.Split(pattern, "/") {
+	for segment := range strings.SplitSeq(pattern, "/") {
 		if strings.HasPrefix(segment, ":") {
 			_, rxPattern, containsRx := strings.Cut(segment, "|")
 			if containsRx {
@@ -225,8 +225,8 @@ func (r *route) match(ctx context.Context, urlSegments []string) (context.Contex
 			return ctx, true
 		}
 
-		if strings.HasPrefix(routeSegment, ":") {
-			key, rxPattern, containsRx := strings.Cut(strings.TrimPrefix(routeSegment, ":"), "|")
+		if after, ok := strings.CutPrefix(routeSegment, ":"); ok {
+			key, rxPattern, containsRx := strings.Cut(after, "|")
 
 			value, err := url.QueryUnescape(urlSegments[i])
 			if err != nil {

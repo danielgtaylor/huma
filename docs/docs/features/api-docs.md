@@ -8,11 +8,17 @@ description: Customizing the generated API documentation using third-party tools
 
 Huma uses the OpenAPI spec to generate interactive API documentation using third-party tools. By default, [Stoplight Elements](https://stoplight.io/open-source/elements) is used to render the documentation at the API's `config.DocsPath` which defaults to `/docs`.
 
+You can switch to other documentation renderers using `config.DocsRenderer`. The following renderers are supported out of the box:
+
+- `huma.DocsRendererStoplightElements` (default)
+- `huma.DocsRendererScalar`
+- `huma.DocsRendererSwaggerUI`
+
 ![Stoplight Elements](./elements.png)
 
 !!! info "Disabling the Docs"
 
-    You can disable the built-in documentation by setting `config.DocsPath` to an empty string.
+    You can disable the built-in documentation by setting `config.DocsPath` to an empty string. This allows you to provide your own documentation renderer if you wish.
 
 ## Customizing Documentation
 
