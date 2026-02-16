@@ -3594,20 +3594,51 @@ func TestSchemaLinkDuplicateTypes(t *testing.T) {
 		}, nil
 	})
 
-	// Verify test1
+	// Verify test1.
 	resp1 := api.Get("/test1")
 	assert.Equal(t, http.StatusOK, resp1.Code)
-	// The schema name is derived from OperationID + Response -> Get-test1Response
+	// The schema name is derived from OperationID + Response -> Get-test1Response.
 	assert.Contains(t, resp1.Body.String(), "Get-test1Response.json")
 	assert.Contains(t, resp1.Header().Get("Link"), "Get-test1Response.json")
 
-	// Verify test2
+	// Verify test2.
 	resp2 := api.Get("/test2")
 	assert.Equal(t, http.StatusOK, resp2.Code)
-	// The schema name is derived from OperationID + Response -> Get-test2Response
+	// The schema name is derived from OperationID + Response -> Get-test2Response.
 	assert.Contains(t, resp2.Body.String(), "Get-test2Response.json")
 	assert.Contains(t, resp2.Header().Get("Link"), "Get-test2Response.json")
 
-	// Crucially, they should NOT be the same
+	// Crucially, they should NOT be the same.
 	assert.NotEqual(t, resp1.Header().Get("Link"), resp2.Header().Get("Link"))
+}
+
+func TestBodyFallbackContentType(t *testing.T) {
+	mux := http.NewServeMux()
+	config := huma.DefaultConfig("Test", "1.0.0")
+	config.Formats = map[string]huma.Format{
+		"test-ct-custom": huma.DefaultJSONFormat,
+	}
+	config.DefaultFormat = "test-ct-custom"
+	api := humago.New(mux, config)
+
+	type HelloInput struct {
+		Body struct {
+			Name string `json:"name"`
+		} `contentType:"test-ct-custom"`
+	}
+
+	huma.Register(api, huma.Operation{
+		Method: http.MethodPost,
+		Path:   "/hello",
+	}, func(ctx context.Context, input *HelloInput) (*struct{}, error) {
+		assert.Equal(t, "world", input.Body.Name)
+		return nil, nil
+	})
+
+	// Request without "Content-Type" header.
+	req := httptest.NewRequest(http.MethodPost, "/hello", strings.NewReader(`{"name":"world"}`))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
 }
