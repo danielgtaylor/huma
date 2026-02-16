@@ -29,7 +29,7 @@
 本プロジェクトの主な目的は以下の通りです：
 
 - 既存サービスを持つチーム向けの段階的な導入
-  - 好きなルーター（Go 1.22+対応含む）、ミドルウェア、ロギング/メトリクスを利用可能
+  - 好きなルーター（Go 1.24+対応含む）、ミドルウェア、ロギング/メトリクスを利用可能
   - 既存ルートをドキュメント化できる拡張性の高いOpenAPI & JSON Schemaレイヤ
 - Go開発者のためのモダンなREST/HTTP RPC APIバックエンドフレームワーク
   - [OpenAPI 3.1](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md) & [JSON Schema](https://json-schema.org/)によるAPI記述
@@ -129,7 +129,7 @@
 
 ## インストール方法
 
-`go get`でインストールできます。Go 1.21以降が必要です。
+`go get`でインストールできます。Go 1.24以降が必要です。
 
 ```sh
 # 事前に: go mod init ...
@@ -193,7 +193,7 @@ func main() {
 ```
 
 > **TIP:**
-> Go 1.22以降の標準ライブラリルーターを使う場合は、`chi.NewMux()` → `http.NewServeMux()`、`humachi.New` → `humago.New`に変更してください。`go.mod`の`go`バージョンも1.22以上にする必要があります。それ以外は同じです。
+> Go 1.24以降の標準ライブラリルーターを使う場合は、`chi.NewMux()` → `http.NewServeMux()`、`humachi.New` → `humago.New`に変更してください。`go.mod`の`go`バージョンも1.22以上にする必要があります。それ以外は同じです。
 
 サーバー起動例:
 `go run greet.go`（ポート指定は`--port`でも可）

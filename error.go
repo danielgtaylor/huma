@@ -230,7 +230,7 @@ func ErrorWithHeaders(err error, headers http.Header) error {
 //	}
 var NewError = func(status int, msg string, errs ...error) StatusError {
 	details := make([]*ErrorDetail, len(errs))
-	for i := 0; i < len(errs); i++ {
+	for i := range errs {
 		if converted, ok := errs[i].(ErrorDetailer); ok {
 			details[i] = converted.ErrorDetail()
 		} else {

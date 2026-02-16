@@ -95,8 +95,9 @@ func (c *fiberWrapper) Header(name string) string {
 }
 
 func (c *fiberWrapper) EachHeader(cb func(name, value string)) {
-	c.orig.Request().Header.VisitAll(func(k, v []byte) {
+	c.orig.Request().Header.All()(func(k, v []byte) bool {
 		cb(string(k), string(v))
+		return true // Keep iterating.
 	})
 }
 

@@ -19,7 +19,7 @@
 一个现代、简单、快速且灵活的微框架，用于在 OpenAPI 3 和 JSON Schema 支持的 Go 中构建 HTTP REST/RPC API。国际音标发音：[/'hjuːmɑ/](https://en.wiktionary.org/wiki/Wiktionary:International_Phonetic_Alphabet)。该项目的目标是提供：
 
 - 拥有现有服务的团队逐步采用
-  - 带上您自己的路由器（包括 Go 1.22+）、中间件和日志记录/指标
+  - 带上您自己的路由器（包括 Go 1.24+）、中间件和日志记录/指标
   - 可扩展的 OpenAPI 和 JSON Schema 层来记录现有路由
 - 适合 Go 开发人员的现代 REST 或 HTTP RPC API 后端框架
   - [由OpenAPI 3.1](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md)和[JSON Schema](https://json-schema.org/)描述
@@ -83,7 +83,7 @@
 
 # 安装
 
-通过安装`go get`。请注意，需要 Go 1.21 或更高版本。
+通过安装`go get`。请注意，需要 Go 1.24 或更高版本。
 
 ```sh
 # After: go mod init ...
@@ -150,7 +150,7 @@ func main() {
 ```
 
 > [!TIP]
-> 替换`chi.NewMux()`→`http.NewServeMux()`和`humachi.New`→`humago.New`以使用 Go 1.22+ 中的标准库路由器。只需确保其中列出了您的或更新的`go.mod`版本即可。`go 1.22`其他一切都保持不变！当你准备好时就切换。
+> 替换`chi.NewMux()`→`http.NewServeMux()`和`humachi.New`→`humago.New`以使用 Go 1.24+ 中的标准库路由器。只需确保其中列出了您的或更新的`go.mod`版本即可。`go 1.22`其他一切都保持不变！当你准备好时就切换。
 
 你可以用 `go run greet.go` 测试它（可选地传递 '--port' 来更改默认值），并使用 [Restish](https://rest.sh/)（或 `curl`） 发出示例请求：
 

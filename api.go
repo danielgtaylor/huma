@@ -41,8 +41,8 @@ type ResolverWithPath interface {
 }
 
 var (
-	resolverType         = reflect.TypeOf((*Resolver)(nil)).Elem()
-	resolverWithPathType = reflect.TypeOf((*ResolverWithPath)(nil)).Elem()
+	resolverType         = reflect.TypeFor[Resolver]()
+	resolverWithPathType = reflect.TypeFor[ResolverWithPath]()
 )
 
 // Adapter is an interface that allows the API to be used with different HTTP
@@ -170,6 +170,10 @@ func WithValue(ctx Context, key, value any) Context {
 // serialized or an error.
 type Transformer func(ctx Context, status string, v any) (any, error)
 
+const DocsRendererScalar = "scalar"
+const DocsRendererStoplightElements = "stoplight"
+const DocsRendererSwaggerUI = "swagger-ui"
+
 // Config represents a configuration for a new API. See `huma.DefaultConfig()`
 // as a starting point.
 type Config struct {
@@ -187,6 +191,11 @@ type Config struct {
 	// you wish to provide your own documentation renderer, you can leave this
 	// blank and attach it directly to the router or adapter.
 	DocsPath string
+
+	// DocsRenderer lets you switch the default renderer from Stoplight Elements.
+	// Alternatively, you can set DocsPath to empty to disable the built-in docs
+	// route altogether.
+	DocsRenderer string
 
 	// SchemasPath is the path to the API schemas. If set to `/schemas` it will
 	// allow clients to get `/schemas/{schema}` to view the schema in a browser
@@ -207,19 +216,19 @@ type Config struct {
 	// negotiated, then a 406 Not Acceptable response will be returned.
 	NoFormatFallback bool
 
+	// FieldsOptionalByDefault controls whether schema fields are treated as
+	// optional by default. When false, fields are marked as required unless
+	// they have the omitempty or omitzero tag.
+	FieldsOptionalByDefault bool
+
 	// Transformers are a way to modify a response body before it is serialized.
 	Transformers []Transformer
 
 	// CreateHooks is a list of functions that will be called before the API is
 	// created. This allows you to modify the configuration at creation time,
-	// for example if you need access to the path settings that may be changed
+	// for example, if you need access to the path settings that may be changed
 	// by the user after the defaults have been set.
 	CreateHooks []func(Config) Config
-
-	// FieldsOptionalByDefault controls whether schema fields are treated as
-	// optional by default. When false, fields are marked as required unless
-	// they have the omitempty or omitzero tag.
-	FieldsOptionalByDefault bool
 }
 
 // API represents a Huma API wrapping a specific router.
@@ -273,6 +282,13 @@ type Format struct {
 
 	// Unmarshal a value into `v` from the given bytes (e.g. request body).
 	Unmarshal func(data []byte, v any) error
+}
+
+type SchemaOptions struct {
+	// FieldsOptionalByDefault controls whether schema fields are treated as
+	// optional by default. When false, fields are marked as required unless
+	// they have the omitempty or omitzero tag.
+	FieldsOptionalByDefault bool
 }
 
 type api struct {
@@ -434,8 +450,9 @@ func NewAPI(config Config, a Adapter) API {
 	if config.Components.Schemas == nil {
 		config.Components.Schemas = NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
 	}
+
 	if mr, ok := config.Components.Schemas.(*mapRegistry); ok {
-		mr.fieldsOptionalByDefault = config.FieldsOptionalByDefault
+		mr.config.FieldsOptionalByDefault = config.FieldsOptionalByDefault
 	}
 
 	if config.DefaultFormat == "" && !config.NoFormatFallback {
@@ -504,43 +521,7 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	if config.DocsPath != "" {
-		a.Handle(&Operation{
-			Method: http.MethodGet,
-			Path:   config.DocsPath,
-		}, func(ctx Context) {
-			openAPIPath := config.OpenAPIPath
-			if prefix := getAPIPrefix(newAPI.OpenAPI()); prefix != "" {
-				openAPIPath = path.Join(prefix, openAPIPath)
-			}
-			ctx.SetHeader("Content-Type", "text/html")
-			title := "Elements in HTML"
-			if config.Info != nil && config.Info.Title != "" {
-				title = config.Info.Title + " Reference"
-			}
-			ctx.BodyWriter().Write([]byte(`<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="referrer" content="same-origin" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <title>` + title + `</title>
-    <!-- Embed elements Elements via Web Component -->
-    <link href="https://unpkg.com/@stoplight/elements@9.0.0/styles.min.css" rel="stylesheet" />
-    <script src="https://unpkg.com/@stoplight/elements@9.0.0/web-components.min.js" integrity="sha256-Tqvw1qE2abI+G6dPQBc5zbeHqfVwGoamETU3/TSpUw4="
-            crossorigin="anonymous"></script>
-  </head>
-  <body style="height: 100vh;">
-
-    <elements-api
-      apiDescriptionUrl="` + openAPIPath + `.yaml"
-      router="hash"
-      layout="sidebar"
-      tryItCredentialsPolicy="same-origin"
-    />
-
-  </body>
-</html>`))
-		})
+		newAPI.registerDocsRoute()
 	}
 
 	if config.SchemasPath != "" {
@@ -558,4 +539,107 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	return newAPI
+}
+
+func (a *api) registerDocsRoute() {
+	openAPIPath := a.config.OpenAPIPath
+	if prefix := getAPIPrefix(a.OpenAPI()); prefix != "" {
+		openAPIPath = path.Join(prefix, openAPIPath)
+	}
+
+	var body []byte
+	var title string
+
+	if a.config.Info != nil && a.config.Info.Title != "" {
+		title = a.config.Info.Title + " Reference"
+	}
+
+	if a.config.DocsRenderer == "" {
+		a.config.DocsRenderer = DocsRendererStoplightElements
+	}
+
+	switch a.config.DocsRenderer {
+	case DocsRendererScalar:
+		if title == "" {
+			title = "Scalar" + "in HTML"
+		}
+
+		body = []byte(`<!doctype html>
+<html lang="en">
+  <head>
+    <title>` + title + `</title>
+    <meta charset="utf-8">
+    <meta content="width=device-width,initial-scale=1" name="viewport">
+  </head>
+  <body>
+    <script data-url="` + openAPIPath + `.yaml" id="api-reference"></script>
+    <script>
+      let apiReference = document.getElementById("api-reference")
+    </script>
+    <script src="https://unpkg.com/@scalar/api-reference@1.44.18/dist/browser/standalone.js"></script>
+  </body>
+</html>`)
+	case DocsRendererStoplightElements:
+		if title == "" {
+			title = "Elements in HTML"
+		}
+
+		body = []byte(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="referrer" content="same-origin" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <title>` + title + `</title>
+    <!-- Embed elements Elements via Web Component -->
+    <link href="https://unpkg.com/@stoplight/elements@9.0.0/styles.min.css" rel="stylesheet" />
+    <script src="https://unpkg.com/@stoplight/elements@9.0.0/web-components.min.js" integrity="sha256-Tqvw1qE2abI+G6dPQBc5zbeHqfVwGoamETU3/TSpUw4="
+            crossorigin="anonymous"></script>
+  </head>
+  <body style="height: 100vh;">
+    <elements-api
+      apiDescriptionUrl="` + openAPIPath + `.yaml"
+      router="hash"
+      layout="sidebar"
+      tryItCredentialsPolicy="same-origin"
+    />
+  </body>
+</html>`)
+	case DocsRendererSwaggerUI:
+		if title == "" {
+			title = "SwaggerUI in HTML"
+		}
+
+		body = []byte(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>` + title + `</title>
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.31.0/swagger-ui.css" />
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@5.31.0/swagger-ui-bundle.js" crossorigin></script>
+    <script>
+      window.onload = () => {
+        window.ui = SwaggerUIBundle({
+          url: '` + openAPIPath + `.json',
+          dom_id: '#swagger-ui',
+        });
+      };
+    </script>
+  </body>
+</html>`)
+	default:
+		panic("unknown docs renderer: " + a.config.DocsRenderer)
+	}
+
+	a.adapter.Handle(&Operation{
+		Method: http.MethodGet,
+		Path:   a.config.DocsPath,
+	}, func(ctx Context) {
+		ctx.SetHeader("Content-Type", "text/html")
+		ctx.BodyWriter().Write(body)
+	})
 }

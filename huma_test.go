@@ -934,8 +934,8 @@ func TestFeatures(t *testing.T) {
 						// Test defaults for fields in the same linked struct. Even though
 						// we have seen the struct before we still need to set the default
 						// since it's a new/different field.
-						S1 StructWithDefaultField `json:"s1,omitempty"`
-						S2 StructWithDefaultField `json:"s2,omitempty"`
+						S1 StructWithDefaultField `json:"s1,omitzero"`
+						S2 StructWithDefaultField `json:"s2,omitzero"`
 					}
 				}) (*struct{}, error) {
 					assert.Equal(t, "Huma", input.Body.Name)
@@ -3151,8 +3151,29 @@ func TestSchemaWithExample(t *testing.T) {
 		return nil, nil
 	})
 
-	example := app.OpenAPI().Paths["/test"].Get.Parameters[0].Example
+	example := app.OpenAPI().Paths["/test"].Get.Parameters[0].Schema.Examples[0]
 	assert.Equal(t, 1, example)
+}
+
+func TestParameterExampleRedundancy(t *testing.T) {
+	_, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	type Input struct {
+		Name string `query:"name" example:"world"`
+	}
+
+	huma.Get(app, "/test", func(ctx context.Context, input *Input) (*struct{}, error) {
+		return nil, nil
+	})
+
+	param := app.OpenAPI().Paths["/test"].Get.Parameters[0]
+	assert.Equal(t, "name", param.Name)
+
+	// The example should be in the schema, not at the parameter level.
+	// OpenAPI 3.1+ prefers examples in the schema.
+	assert.Nil(t, param.Example)
+	require.NotNil(t, param.Schema)
+	assert.Equal(t, []any{"world"}, param.Schema.Examples)
 }
 
 func TestCustomSchemaErrors(t *testing.T) {
@@ -3208,7 +3229,7 @@ func TestBodyRace(t *testing.T) {
 		return nil, nil
 	})
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		t.Run(fmt.Sprintf("test-%d", i), func(tt *testing.T) {
 			tt.Parallel()
 			resp := api.Post("/ping", map[string]any{"value": "hello"})
@@ -3459,4 +3480,60 @@ func TestFieldsOptionalByDefault(t *testing.T) {
 		assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
 		assert.Contains(t, resp.Body.String(), "required property age")
 	}
+}
+
+func TestSchemaLinkDuplicateTypes(t *testing.T) {
+	config := huma.DefaultConfig("Test API", "1.0.0")
+	_, api := humatest.New(t, config)
+
+	// Both operations use an identical anonymous struct type for the body.
+	// In Go, identical anonymous structs are the same type.
+	huma.Get(api, "/test1", func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			Message string `json:"message"`
+		}
+	}, error) {
+		return &struct {
+			Body struct {
+				Message string `json:"message"`
+			}
+		}{
+			Body: struct {
+				Message string `json:"message"`
+			}{Message: "hello from test1"},
+		}, nil
+	})
+
+	huma.Get(api, "/test2", func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			Message string `json:"message"`
+		}
+	}, error) {
+		return &struct {
+			Body struct {
+				Message string `json:"message"`
+			}
+		}{
+			Body: struct {
+				Message string `json:"message"`
+			}{Message: "hello from test2"},
+		}, nil
+	})
+
+	// Verify test1
+	resp1 := api.Get("/test1")
+	assert.Equal(t, http.StatusOK, resp1.Code)
+	// The schema name is derived from OperationID + Response -> Get-test1Response
+	assert.Contains(t, resp1.Body.String(), "Get-test1Response.json")
+	assert.Contains(t, resp1.Header().Get("Link"), "Get-test1Response.json")
+
+	// Verify test2
+	resp2 := api.Get("/test2")
+	assert.Equal(t, http.StatusOK, resp2.Code)
+	// The schema name is derived from OperationID + Response -> Get-test2Response
+	assert.Contains(t, resp2.Body.String(), "Get-test2Response.json")
+	assert.Contains(t, resp2.Header().Get("Link"), "Get-test2Response.json")
+
+	// Crucially, they should NOT be the same
+	assert.NotEqual(t, resp1.Header().Get("Link"), resp2.Header().Get("Link"))
 }

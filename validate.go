@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -574,13 +575,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 	}
 
 	if len(s.Enum) > 0 {
-		found := false
-		for _, e := range s.Enum {
-			if e == v {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(s.Enum, v)
 		if !found {
 			res.Add(path, v, s.msgEnum)
 		}
