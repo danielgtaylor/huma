@@ -92,10 +92,10 @@ func BenchmarkRawGo(b *testing.B) {
 		func(t reflect.Type, hint string) string {
 			return t.Name()
 		})
-	schema := registry.Schema(reflect.TypeOf(GreetingInput{}), false, "")
+	schema := registry.Schema(reflect.TypeFor[GreetingInput](), false, "")
 
-	strSchema := registry.Schema(reflect.TypeOf(""), false, "")
-	numSchema := registry.Schema(reflect.TypeOf(0), false, "")
+	strSchema := registry.Schema(reflect.TypeFor[string](), false, "")
+	numSchema := registry.Schema(reflect.TypeFor[int](), false, "")
 
 	r := http.NewServeMux()
 

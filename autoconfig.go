@@ -3,10 +3,10 @@ package huma
 // AutoConfigVar represents a variable given by the user when prompted during
 // autoconfiguration setup of an API.
 type AutoConfigVar struct {
-	Description string        `json:"description,omitempty"`
-	Example     string        `json:"example,omitempty"`
-	Default     interface{}   `json:"default,omitempty"`
-	Enum        []interface{} `json:"enum,omitempty"`
+	Description string `json:"description,omitempty"`
+	Example     string `json:"example,omitempty"`
+	Default     any    `json:"default,omitempty"`
+	Enum        []any  `json:"enum,omitempty"`
 
 	// Exclude the value from being sent to the server. This essentially makes
 	// it a value which is only used in param templates.

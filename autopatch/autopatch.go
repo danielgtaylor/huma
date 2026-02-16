@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -108,13 +109,13 @@ func restoreNulls(data []byte, settings MergePatchNullabilitySettings) ([]byte, 
 // jsonPatchOp describes an RFC 6902 JSON Patch operation. See also:
 // https://www.rfc-editor.org/rfc/rfc6902
 type jsonPatchOp struct {
-	Op    string      `json:"op" enum:"add,remove,replace,move,copy,test" doc:"Operation name"`
-	From  string      `json:"from,omitempty" doc:"JSON Pointer for the source of a move or copy"`
-	Path  string      `json:"path" doc:"JSON Pointer to the field being operated on, or the destination of a move/copy operation"`
-	Value interface{} `json:"value,omitempty" doc:"The value to set"`
+	Op    string `json:"op" enum:"add,remove,replace,move,copy,test" doc:"Operation name"`
+	From  string `json:"from,omitempty" doc:"JSON Pointer for the source of a move or copy"`
+	Path  string `json:"path" doc:"JSON Pointer to the field being operated on, or the destination of a move/copy operation"`
+	Value any    `json:"value,omitempty" doc:"The value to set"`
 }
 
-var jsonPatchType = reflect.TypeOf([]jsonPatchOp{})
+var jsonPatchType = reflect.TypeFor[[]jsonPatchOp]()
 
 // AutoPatch generates HTTP PATCH operations for any resource which has a GET &
 // PUT but no pre-existing PATCH operation. Generated PATCH operations will call
@@ -181,9 +182,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 
 	// Augment the response list with ones we may return from the PATCH.
 	responses := make(map[string]*huma.Response, len(put.Responses))
-	for k, v := range put.Responses {
-		responses[k] = v
-	}
+	maps.Copy(responses, put.Responses)
 	statuses := append([]int{}, put.Errors...)
 	if responses["default"] == nil {
 		for _, code := range []int{

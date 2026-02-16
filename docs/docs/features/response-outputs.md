@@ -136,6 +136,14 @@ type MyOutput struct {
 }
 ```
 
+The `nameHint` tag can be used on the `Body` field to hint at the schema name in the generated OpenAPI spec.
+
+```go title="code.go"
+type MyOutput struct {
+	Body MyBody `nameHint:"CustomResponseName"`
+}
+```
+
 Use a type of `[]byte` to bypass [serialization](./response-serialization.md). This is useful for returning images, HTML, or other binary data.
 
 ```go title="code.go"

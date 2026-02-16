@@ -40,11 +40,11 @@ const (
 
 // Special JSON Schema formats.
 var (
-	timeType       = reflect.TypeOf(time.Time{})
-	ipType         = reflect.TypeOf(net.IP{})
-	ipAddrType     = reflect.TypeOf(netip.Addr{})
-	urlType        = reflect.TypeOf(url.URL{})
-	rawMessageType = reflect.TypeOf(json.RawMessage{})
+	timeType       = reflect.TypeFor[time.Time]()
+	ipType         = reflect.TypeFor[net.IP]()
+	ipAddrType     = reflect.TypeFor[netip.Addr]()
+	urlType        = reflect.TypeFor[url.URL]()
+	rawMessageType = reflect.TypeFor[json.RawMessage]()
 )
 
 func baseType(t reflect.Type) reflect.Type {
@@ -60,7 +60,7 @@ func baseType(t reflect.Type) reflect.Type {
 }
 
 func deref(t reflect.Type) reflect.Type {
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	return t
@@ -481,7 +481,7 @@ func convertType(fieldName string, t reflect.Type, v any) any {
 			}
 
 			value := item.Convert(typ)
-			if t.Elem().Kind() == reflect.Ptr {
+			if t.Elem().Kind() == reflect.Pointer {
 				// Special case: if the field is a pointer, we need to get a pointer
 				// to the converted value.
 				ptr := reflect.New(value.Type())
@@ -500,7 +500,7 @@ func convertType(fieldName string, t reflect.Type, v any) any {
 	}
 
 	converted := val.Convert(deref(t))
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		// Special case: if the field is a pointer, we need to get a pointer
 		// to the converted value.
 		tmp := reflect.New(t.Elem())
@@ -527,7 +527,7 @@ func jsonTagValue(r Registry, fieldName string, s *Schema, value string) any {
 	// Special case: array of strings with comma-separated values and no quotes.
 	if s.Type == TypeArray && s.Items != nil && s.Items.Type == TypeString && value[0] != '[' {
 		var values []string
-		for _, s := range strings.Split(value, ",") {
+		for s := range strings.SplitSeq(value, ",") {
 			values = append(values, strings.TrimSpace(s))
 		}
 		return values
@@ -599,7 +599,7 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 			s = s.Items
 		}
 		enumValues := []any{}
-		for _, e := range strings.Split(enum, ",") {
+		for e := range strings.SplitSeq(enum, ",") {
 			enumValues = append(enumValues, jsonTagValue(registry, f.Name, s, e))
 		}
 		if fs.Type == TypeArray {
@@ -679,7 +679,7 @@ func getFields(typ reflect.Type, visited map[reflect.Type]struct{}) []fieldInfo 
 
 	for _, f := range embedded {
 		newTyp := f.Type
-		for newTyp.Kind() == reflect.Ptr {
+		for newTyp.Kind() == reflect.Pointer {
 			newTyp = newTyp.Elem()
 		}
 		if newTyp.Kind() == reflect.Struct {
@@ -847,7 +847,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 			// required (unless the registry says otherwise), then can be made
 			// optional with the `omitempty` JSON tag, `omitzero` JSON tag, or it
 			// can be overridden manually via the `required` tag.
-			fieldRequired := !r.FieldsOptionalByDefault()
+			fieldRequired := !r.Config().FieldsOptionalByDefault
 
 			name := f.Name
 			if j := f.Tag.Get("json"); j != "" {
@@ -892,7 +892,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 
 				// Special case: pointer with omitempty and not manually set to
 				// nullable, which will never get `null` sent over the wire.
-				if f.Type.Kind() == reflect.Ptr && strings.Contains(f.Tag.Get("json"), "omitempty") && f.Tag.Get("nullable") != "true" {
+				if f.Type.Kind() == reflect.Pointer && strings.Contains(f.Tag.Get("json"), "omitempty") && f.Tag.Get("nullable") != "true" {
 					fs.Nullable = false
 				}
 			}
