@@ -96,11 +96,12 @@ type paramFieldInfo struct {
 	Schema     *Schema
 }
 
-func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*paramFieldInfo] {
+func findParams(registry Registry, op *Operation, t reflect.Type, fieldsOptionalByDefault bool) *findResult[*paramFieldInfo] {
 	return findInType(t, nil, func(f reflect.StructField, path []int) *paramFieldInfo {
 		if f.Anonymous {
 			return nil
 		}
+
 		pfi := &paramFieldInfo{
 			Type: f.Type,
 		}
@@ -138,6 +139,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		} else if fo := f.Tag.Get("form"); fo != "" {
 			pfi.Loc = "form"
 			name = fo
+			pfi.Required = !fieldsOptionalByDefault
 		} else if c := f.Tag.Get("cookie"); c != "" {
 			pfi.Loc = "cookie"
 			name = c
@@ -163,8 +165,8 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		pfi.Schema = SchemaFromField(registry, f, "")
 
 		// While discouraged, make it possible to make query/header params required.
-		if r := f.Tag.Get("required"); r == "true" {
-			pfi.Required = true
+		if _, ok := f.Tag.Lookup("required"); ok {
+			pfi.Required = boolTag(f, "required", false)
 		}
 
 		pfi.Name = name
@@ -437,14 +439,14 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 				// structs. If `recurseFields` is true, then we also process named
 				// struct fields recursively.
 				visited[t] = struct{}{}
-				_findInType(f.Type, fi, result, onType, onField, recurseFields, visited, ignore...)
+				_findInType[T](f.Type, fi, result, onType, onField, recurseFields, visited, ignore...)
 				delete(visited, t)
 			}
 		}
 	case reflect.Slice:
-		_findInType(t.Elem(), path, result, onType, onField, recurseFields, visited, ignore...)
+		_findInType[T](t.Elem(), path, result, onType, onField, recurseFields, visited, ignore...)
 	case reflect.Map:
-		_findInType(t.Elem(), path, result, onType, onField, recurseFields, visited, ignore...)
+		_findInType[T](t.Elem(), path, result, onType, onField, recurseFields, visited, ignore...)
 	}
 }
 
@@ -778,7 +780,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						rawBodyDataF := rawBodyF.FieldByName("data")
 						rawBodyDataT := rawBodyDataF.Type()
 
-						rawBodyInputParams := findParams(oapi.Components.Schemas, &op, rawBodyDataT)
+						rawBodyInputParams := findParams(oapi.Components.Schemas, &op, rawBodyDataT, oapi.Components.Schemas.Config().FieldsOptionalByDefault)
 						formValueParser = func(val reflect.Value) {
 							rawBodyInputParams.Every(val, func(f reflect.Value, p *paramFieldInfo) {
 								f = reflect.Indirect(f)
@@ -1146,7 +1148,7 @@ func initResponses(op *Operation) {
 // processInputType validates the input type, extracts expected requests, and
 // defines them on the operation op.
 func processInputType(inputType reflect.Type, op *Operation, registry Registry) (*findResult[*paramFieldInfo], []int, bool, []int, rawBodyType, *Schema) {
-	inputParams := findParams(registry, op, inputType)
+	inputParams := findParams(registry, op, inputType, true)
 	inputBodyIndex := []int{}
 	hasInputBody := false
 	if f, ok := inputType.FieldByName("Body"); ok {

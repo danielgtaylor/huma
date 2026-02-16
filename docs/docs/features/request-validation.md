@@ -23,11 +23,13 @@ The standard `json` tag is supported and can be used to rename a field. Any fiel
 
 Fields being optional/required is determined automatically but can be overridden as needed using the logic below:
 
-1. Start with all fields required.
+1. Start with all fields required, **except for cookie, header, and query parameters which are optional by default**.
 2. If a field has `omitempty`, it is optional.
 3. If a field has `omitzero`, it is optional.
 4. If a field has `required:"false"`, it is optional.
 5. If a field has `required:"true"`, it is required.
+
+Path parameters are always required. Cookie, header, and query parameters are optional unless explicitly marked with `required:"true"`. All other fields (like those in a request body or multipart form) follow the default required status.
 
 Pointers have no effect on optional/required. The same rules apply regardless of whether the struct is being used for request input or response output. Some examples:
 
