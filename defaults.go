@@ -77,7 +77,7 @@ func DefaultConfig(title, version string) Config {
 		DefaultFormat:           "application/json",
 		NoFormatFallback:        false,
 		FieldsOptionalByDefault: false,
-		RejectUnknownProperties: false,
+		RejectUnknownParameters: false,
 		Transformers:            nil,
 		CreateHooks: []func(Config) Config{
 			func(c Config) Config {

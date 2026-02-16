@@ -221,9 +221,9 @@ type Config struct {
 	// they have the omitempty or omitzero tag.
 	FieldsOptionalByDefault bool
 
-	// RejectUnknownProperties indicates whether unknown properties should be
+	// RejectUnknownParameters indicates whether unknown properties should be
 	// rejected during validation.
-	RejectUnknownProperties bool
+	RejectUnknownParameters bool
 
 	// Transformers are a way to modify a response body before it is serialized.
 	Transformers []Transformer
@@ -450,7 +450,7 @@ func NewAPI(config Config, a Adapter) API {
 
 	if mr, ok := config.Components.Schemas.(*mapRegistry); ok {
 		mr.config.FieldsOptionalByDefault = config.FieldsOptionalByDefault
-		mr.config.RejectUnknownProperties = config.RejectUnknownProperties
+		mr.config.RejectUnknownParameters = config.RejectUnknownParameters
 	}
 
 	if config.DefaultFormat == "" && !config.NoFormatFallback {

@@ -28,9 +28,9 @@ type RegistryConfig struct {
 	// treated as optional by default during validation.
 	FieldsOptionalByDefault bool
 
-	// RejectUnknownProperties indicates whether unknown properties should be
+	// RejectUnknownParameters indicates whether unknown properties should be
 	// rejected during validation.
-	RejectUnknownProperties bool
+	RejectUnknownParameters bool
 }
 
 // DefaultSchemaNamer provides schema names for types. It uses the type name
@@ -193,7 +193,7 @@ func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) strin
 		namer:   namer,
 		config: RegistryConfig{
 			FieldsOptionalByDefault: false,
-			RejectUnknownProperties: false,
+			RejectUnknownParameters: false,
 		},
 	}
 }
