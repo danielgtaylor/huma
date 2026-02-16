@@ -15,7 +15,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-// Unwrap extracts the underlying Fiber v3 context from a Huma context. If passed a
+// Unwrap extracts the underlying Fiber context from a Huma context. If passed a
 // context from a different adapter it will panic. Keep in mind the limitations
 // of the underlying Fiber/fasthttp libraries and how that impacts
 // memory-safety: https://docs.gofiber.io/#zero-allocation. Do not keep
@@ -235,13 +235,12 @@ func (a *fiberAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.Copy(w, resp.Body)
 }
 
-// New creates a new Huma API using the latest Fiber v3.x adapter.
+// New creates a new Huma API using the Fiber adapter.
 func New(r *fiber.App, config huma.Config) huma.API {
 	return huma.NewAPI(config, &fiberAdapter{tester: r, router: r})
 }
 
-// NewWithGroup creates a new Huma API using the Fiber v3.x adapter with a
-// route group.
+// NewWithGroup creates a new Huma API using the Fiber adapter with a route group.
 func NewWithGroup(r *fiber.App, g fiber.Router, config huma.Config) huma.API {
 	return huma.NewAPI(config, &fiberAdapter{tester: r, router: g})
 }
