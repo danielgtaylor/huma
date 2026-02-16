@@ -96,11 +96,12 @@ type paramFieldInfo struct {
 	Schema     *Schema
 }
 
-func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*paramFieldInfo] {
+func findParams(registry Registry, op *Operation, t reflect.Type, fieldsOptionalByDefault bool) *findResult[*paramFieldInfo] {
 	return findInType(t, nil, func(f reflect.StructField, path []int) *paramFieldInfo {
 		if f.Anonymous {
 			return nil
 		}
+
 		pfi := &paramFieldInfo{
 			Type: f.Type,
 		}
@@ -138,6 +139,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		} else if fo := f.Tag.Get("form"); fo != "" {
 			pfi.Loc = "form"
 			name = fo
+			pfi.Required = !fieldsOptionalByDefault
 		} else if c := f.Tag.Get("cookie"); c != "" {
 			pfi.Loc = "cookie"
 			name = c
@@ -163,8 +165,8 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		pfi.Schema = SchemaFromField(registry, f, "")
 
 		// While discouraged, make it possible to make query/header params required.
-		if r := f.Tag.Get("required"); r == "true" {
-			pfi.Required = true
+		if _, ok := f.Tag.Lookup("required"); ok {
+			pfi.Required = boolTag(f, "required", false)
 		}
 
 		pfi.Name = name
@@ -437,14 +439,14 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 				// structs. If `recurseFields` is true, then we also process named
 				// struct fields recursively.
 				visited[t] = struct{}{}
-				_findInType(f.Type, fi, result, onType, onField, recurseFields, visited, ignore...)
+				_findInType[T](f.Type, fi, result, onType, onField, recurseFields, visited, ignore...)
 				delete(visited, t)
 			}
 		}
 	case reflect.Slice:
-		_findInType(t.Elem(), path, result, onType, onField, recurseFields, visited, ignore...)
+		_findInType[T](t.Elem(), path, result, onType, onField, recurseFields, visited, ignore...)
 	case reflect.Map:
-		_findInType(t.Elem(), path, result, onType, onField, recurseFields, visited, ignore...)
+		_findInType[T](t.Elem(), path, result, onType, onField, recurseFields, visited, ignore...)
 	}
 }
 
@@ -778,7 +780,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						rawBodyDataF := rawBodyF.FieldByName("data")
 						rawBodyDataT := rawBodyDataF.Type()
 
-						rawBodyInputParams := findParams(oapi.Components.Schemas, &op, rawBodyDataT)
+						rawBodyInputParams := findParams(oapi.Components.Schemas, &op, rawBodyDataT, oapi.Components.Schemas.Config().FieldsOptionalByDefault)
 						formValueParser = func(val reflect.Value) {
 							rawBodyInputParams.Every(val, func(f reflect.Value, p *paramFieldInfo) {
 								f = reflect.Indirect(f)
@@ -842,8 +844,22 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					f.SetBytes(body)
 				}
 
-				// Process body
-				unmarshaler := func(data []byte, v any) error { return api.Unmarshal(ctx.Header("Content-Type"), data, v) }
+				// Process body.
+				contentType := ctx.Header("Content-Type")
+				if contentType == "" {
+					// Fallback to the first available content type from the operation.
+					// If application/json is available, prefer that.
+					if _, ok := op.RequestBody.Content["application/json"]; ok {
+						contentType = "application/json"
+					} else {
+						for ct := range op.RequestBody.Content {
+							contentType = ct
+							break
+						}
+					}
+				}
+
+				unmarshaler := func(data []byte, v any) error { return api.Unmarshal(contentType, data, v) }
 				validator := func(data any, res *ValidateResult) {
 					pb.Reset()
 					pb.Push("body")
@@ -1146,7 +1162,7 @@ func initResponses(op *Operation) {
 // processInputType validates the input type, extracts expected requests, and
 // defines them on the operation op.
 func processInputType(inputType reflect.Type, op *Operation, registry Registry) (*findResult[*paramFieldInfo], []int, bool, []int, rawBodyType, *Schema) {
-	inputParams := findParams(registry, op, inputType)
+	inputParams := findParams(registry, op, inputType, true)
 	inputBodyIndex := []int{}
 	hasInputBody := false
 	if f, ok := inputType.FieldByName("Body"); ok {
@@ -1176,9 +1192,22 @@ func processInputType(inputType reflect.Type, op *Operation, registry Registry) 
 	}
 
 	var inSchema *Schema
-	if op.RequestBody != nil && op.RequestBody.Content != nil && op.RequestBody.Content["application/json"] != nil && op.RequestBody.Content["application/json"].Schema != nil {
-		hasInputBody = true
-		inSchema = op.RequestBody.Content["application/json"].Schema
+	if op.RequestBody != nil && op.RequestBody.Content != nil {
+		// Try to get schema from any available content type.
+		// Prefer application/json for backwards compatibility, then try others.
+		if op.RequestBody.Content["application/json"] != nil && op.RequestBody.Content["application/json"].Schema != nil {
+			hasInputBody = true
+			inSchema = op.RequestBody.Content["application/json"].Schema
+		} else {
+			// Fall back to first available content type with a schema.
+			for _, mediaType := range op.RequestBody.Content {
+				if mediaType.Schema != nil && mediaType.Schema.Type != "string" && mediaType.Schema.Format != "binary" {
+					hasInputBody = true
+					inSchema = mediaType.Schema
+					break
+				}
+			}
+		}
 	}
 	return inputParams, inputBodyIndex, hasInputBody, rawBodyIndex, rbt, inSchema
 }

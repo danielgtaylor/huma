@@ -29,7 +29,7 @@
 本プロジェクトの主な目的は以下の通りです：
 
 - 既存サービスを持つチーム向けの段階的な導入
-  - 好きなルーター（Go 1.24+対応含む）、ミドルウェア、ロギング/メトリクスを利用可能
+  - 好きなルーター（Go 1.22+対応含む）、ミドルウェア、ロギング/メトリクスを利用可能
   - 既存ルートをドキュメント化できる拡張性の高いOpenAPI & JSON Schemaレイヤ
 - Go開発者のためのモダンなREST/HTTP RPC APIバックエンドフレームワーク
   - [OpenAPI 3.1](https://github.com/OAI/OpenAPI-Specification/blob/master/versions/3.1.0.md) & [JSON Schema](https://json-schema.org/)によるAPI記述
