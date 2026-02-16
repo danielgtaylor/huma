@@ -683,7 +683,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		v := reflect.ValueOf(&input).Elem()
 
 		// Reject unknown query parameters if config is set.
-		if api.RejectUnknownQueryParameters() && !op.SkipValidateParams {
+		if api.Config().RejectUnknownQueryParameters && !op.SkipValidateParams {
 			u := ctx.URL()
 			q := u.Query()
 
