@@ -221,9 +221,9 @@ type Config struct {
 	// they have the omitempty or omitzero tag.
 	FieldsOptionalByDefault bool
 
-	// RejectUnknownQueryParameters determines whether to reject requests
-	// containing query parameters not defined in the API spec.
-	RejectUnknownQueryParameters bool
+	// RejectUnknownProperties indicates whether unknown properties should be
+	// rejected during validation.
+	RejectUnknownProperties bool
 
 	// Transformers are a way to modify a response body before it is serialized.
 	Transformers []Transformer
@@ -237,9 +237,6 @@ type Config struct {
 
 // API represents a Huma API wrapping a specific router.
 type API interface {
-	// Config returns the configuration for this API.
-	Config() Config
-
 	// Adapter returns the router adapter for this API, providing a generic
 	// interface to get request information and write responses.
 	Adapter() Adapter
@@ -298,10 +295,6 @@ type api struct {
 	formatKeys   []string
 	transformers []Transformer
 	middlewares  Middlewares
-}
-
-func (a *api) Config() Config {
-	return a.config
 }
 
 func (a *api) Adapter() Adapter {
@@ -457,6 +450,7 @@ func NewAPI(config Config, a Adapter) API {
 
 	if mr, ok := config.Components.Schemas.(*mapRegistry); ok {
 		mr.config.FieldsOptionalByDefault = config.FieldsOptionalByDefault
+		mr.config.RejectUnknownProperties = config.RejectUnknownProperties
 	}
 
 	if config.DefaultFormat == "" && !config.NoFormatFallback {

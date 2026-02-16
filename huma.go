@@ -683,7 +683,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		v := reflect.ValueOf(&input).Elem()
 
 		// Reject unknown query parameters if config is set.
-		if api.Config().RejectUnknownQueryParameters && !op.SkipValidateParams {
+		if registry.Config().RejectUnknownProperties && !op.SkipValidateParams {
 			u := ctx.URL()
 			q := u.Query()
 
@@ -834,7 +834,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						rawBodyDataF := rawBodyF.FieldByName("data")
 						rawBodyDataT := rawBodyDataF.Type()
 
-						rawBodyInputParams := findParams(oapi.Components.Schemas, &op, rawBodyDataT, oapi.Components.Schemas.Config().FieldsOptionalByDefault)
+						rawBodyInputParams := findParams(oapi.Components.Schemas, &op, rawBodyDataT, registry.Config().FieldsOptionalByDefault)
 						formValueParser = func(val reflect.Value) {
 							rawBodyInputParams.Every(val, func(f reflect.Value, p *paramFieldInfo) {
 								f = reflect.Indirect(f)
