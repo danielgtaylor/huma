@@ -1,6 +1,7 @@
 package huma
 
 import (
+	"maps"
 	"strings"
 )
 
@@ -107,7 +108,7 @@ func (g *Group) DocumentOperation(op *Operation) {
 // on all operations in the group. Use this to modify the operation before it is
 // registered with the router or OpenAPI document. This behaves similar to
 // middleware in that you should invoke `next` to continue the chain. Skip it
-// to prevent the operation from being registered, and call multiple times for
+// to prevent the operation from being registered and call multiple times for
 // a fan-out effect.
 func (g *Group) UseModifier(modifier func(o *Operation, next func(*Operation))) {
 	g.modifiers = append(g.modifiers, modifier)
@@ -134,9 +135,7 @@ func (g *Group) ModifyOperation(op *Operation, next func(*Operation)) {
 		if op.Metadata != nil {
 			// Copy so we don't modify the original map.
 			meta := make(map[string]any, len(op.Metadata))
-			for k, v := range op.Metadata {
-				meta[k] = v
-			}
+			maps.Copy(meta, op.Metadata)
 			op.Metadata = meta
 
 			// If the conveniences are set, we need to regenerate the operation ID and
@@ -166,7 +165,7 @@ func (g *Group) ModifyOperation(op *Operation, next func(*Operation)) {
 
 // UseMiddleware adds one or more middleware functions to the group that will be
 // run on all operations in the group. Use this to add common functionality to
-// all operations in the group, e.g. authentication/authorization.
+// all operations in the group, e.g., authentication/authorization.
 func (g *Group) UseMiddleware(middlewares ...func(ctx Context, next func(Context))) {
 	g.middlewares = append(g.middlewares, middlewares...)
 }

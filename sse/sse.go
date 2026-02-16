@@ -21,7 +21,7 @@ var WriteTimeout = 5 * time.Second
 
 // deref follows pointers until it finds a non-pointer type.
 func deref(t reflect.Type) reflect.Type {
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	return t
@@ -91,7 +91,7 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 				"event": {
 					Type:        huma.TypeString,
 					Description: "The event name.",
-					Extensions: map[string]interface{}{
+					Extensions: map[string]any{
 						"const": k,
 					},
 				},
@@ -116,7 +116,7 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 		Description: "Each oneOf object in the array represents one possible Server Sent Events (SSE) message, serialized as UTF-8 text according to the SSE specification.",
 		Type:        huma.TypeArray,
 		Items: &huma.Schema{
-			Extensions: map[string]interface{}{
+			Extensions: map[string]any{
 				"oneOf": dataSchemas,
 			},
 		},

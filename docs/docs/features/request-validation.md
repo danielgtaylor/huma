@@ -23,11 +23,13 @@ The standard `json` tag is supported and can be used to rename a field. Any fiel
 
 Fields being optional/required is determined automatically but can be overridden as needed using the logic below:
 
-1. Start with all fields required.
+1. Start with all fields required, **except for cookie, header, and query parameters which are optional by default**.
 2. If a field has `omitempty`, it is optional.
 3. If a field has `omitzero`, it is optional.
 4. If a field has `required:"false"`, it is optional.
 5. If a field has `required:"true"`, it is required.
+
+Path parameters are always required. Cookie, header, and query parameters are optional unless explicitly marked with `required:"true"`. All other fields (like those in a request body or multipart form) follow the default required status.
 
 Pointers have no effect on optional/required. The same rules apply regardless of whether the struct is being used for request input or response output. Some examples:
 
@@ -99,7 +101,7 @@ Nullable types will generate a type array like `"type": ["string", "null"]` whic
 The following additional tags are supported on model fields:
 
 | Tag                  | Description                                | Example                         |
-| -------------------- | ------------------------------------------ | ------------------------------- |
+|----------------------|--------------------------------------------|---------------------------------|
 | `doc`                | Describe the field                         | `doc:"Who to greet"`            |
 | `format`             | Format hint for the field                  | `format:"date-time"`            |
 | `enum`               | A comma-separated list of possible values  | `enum:"one,two,three"`          |
@@ -128,13 +130,14 @@ The following additional tags are supported on model fields:
 Built-in string formats include:
 
 | Format                            | Description                     | Example                                |
-| --------------------------------- | ------------------------------- | -------------------------------------- |
+|-----------------------------------|---------------------------------|----------------------------------------|
 | `date-time`                       | Date and time in RFC3339 format | `2021-12-31T23:59:59Z`                 |
 | `date-time-http`                  | Date and time in HTTP format    | `Fri, 31 Dec 2021 23:59:59 GMT`        |
 | `date`                            | Date in RFC3339 format          | `2021-12-31`                           |
 | `time`                            | Time in RFC3339 format          | `23:59:59`                             |
+| `duration`                        | Duration                        | `1h30m`                                |
 | `email` / `idn-email`             | Email address                   | `kari@example.com`                     |
-| `hostname`                        | Hostname                        | `example.com`                          |
+| `hostname` / `idn-hostname`       | Hostname                        | `example.com`                          |
 | `ipv4`                            | IPv4 address                    | `127.0.0.1`                            |
 | `ipv6`                            | IPv6 address                    | `::1`                                  |
 | `uri` / `iri`                     | URI                             | `https://example.com`                  |

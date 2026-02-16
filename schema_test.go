@@ -566,7 +566,7 @@ func TestSchema(t *testing.T) {
 		{
 			name: "field-enum-custom",
 			input: struct {
-				Value OmittableNullable[string] `json:"value,omitempty" enum:"foo,bar"`
+				Value OmittableNullable[string] `json:"value,omitzero" enum:"foo,bar"`
 			}{},
 			expected: `{
 				"type": "object",
@@ -1204,14 +1204,14 @@ type RecursiveInput struct {
 func TestSchemaOld(t *testing.T) {
 	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 
-	s := r.Schema(reflect.TypeOf(GreetingInput{}), false, "")
+	s := r.Schema(reflect.TypeFor[GreetingInput](), false, "")
 	assert.Equal(t, "object", s.Type)
 	assert.Len(t, s.Properties, 1)
 	assert.Equal(t, "string", s.Properties["ID"].Type)
 
-	r.Schema(reflect.TypeOf(RecursiveInput{}), false, "")
+	r.Schema(reflect.TypeFor[RecursiveInput](), false, "")
 
-	s2 := r.Schema(reflect.TypeOf(TestInput{}), false, "")
+	s2 := r.Schema(reflect.TypeFor[TestInput](), false, "")
 	pb := huma.NewPathBuffer(make([]byte, 0, 128), 0)
 	res := huma.ValidateResult{}
 	huma.Validate(r, s2, pb, huma.ModeReadFromServer, map[string]any{
@@ -1229,7 +1229,7 @@ func TestSchemaGenericNaming(t *testing.T) {
 	}
 
 	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
-	s := r.Schema(reflect.TypeOf(SchemaGeneric[int]{}), true, "")
+	s := r.Schema(reflect.TypeFor[SchemaGeneric[int]](), true, "")
 
 	b, _ := json.Marshal(s)
 	assert.JSONEq(t, `{
@@ -1243,7 +1243,7 @@ func TestSchemaGenericNamingFromModule(t *testing.T) {
 	}
 
 	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
-	s := r.Schema(reflect.TypeOf(SchemaGeneric[time.Time]{}), true, "")
+	s := r.Schema(reflect.TypeFor[SchemaGeneric[time.Time]](), true, "")
 
 	b, _ := json.Marshal(s)
 	assert.JSONEq(t, `{
@@ -1275,7 +1275,7 @@ func TestCustomDateType(t *testing.T) {
 	assert.Equal(t, MyDate(time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)), o.Date)
 
 	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
-	s := r.Schema(reflect.TypeOf(o), false, "")
+	s := r.Schema(reflect.TypeFor[O](), false, "")
 	assert.Equal(t, "string", s.Properties["date"].Type)
 }
 
@@ -1312,7 +1312,7 @@ func TestCustomUnmarshalType(t *testing.T) {
 
 	// Confirm the schema is generated properly, including field constraints.
 	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
-	s := r.Schema(reflect.TypeOf(o), false, "")
+	s := r.Schema(reflect.TypeFor[O](), false, "")
 	assert.Equal(t, "integer", s.Properties["field"].Type, s)
 	assert.Equal(t, Ptr(float64(10)), s.Properties["field"].Maximum, s)
 	assert.InDelta(t, float64(5), s.Properties["field"].Examples[0], 0, s.Properties["field"])
@@ -1400,7 +1400,7 @@ func TestSchemaArrayNotNullable(t *testing.T) {
 	}
 
 	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
-	s := r.Schema(reflect.TypeOf(Value{}), false, "")
+	s := r.Schema(reflect.TypeFor[Value](), false, "")
 
 	assert.Equal(t, "array", s.Properties["field"].Type)
 }
@@ -1423,12 +1423,12 @@ type BenchStruct struct {
 func BenchmarkSchema(b *testing.B) {
 	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 
-	s2 := r.Schema(reflect.TypeOf(BenchStruct{}), false, "")
+	s2 := r.Schema(reflect.TypeFor[BenchStruct](), false, "")
 
 	// data, _ := json.MarshalIndent(r.Map(), "", "  ")
 	// fmt.Println(string(data))
 
-	input := map[string]interface{}{
+	input := map[string]any{
 		"name":   "foo",
 		"code":   "bar-123",
 		"count":  8,
@@ -1460,7 +1460,7 @@ func BenchmarkSchema(b *testing.B) {
 func BenchmarkSchemaErrors(b *testing.B) {
 	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 
-	s2 := r.Schema(reflect.TypeOf(BenchStruct{}), false, "")
+	s2 := r.Schema(reflect.TypeFor[BenchStruct](), false, "")
 
 	input := map[string]any{
 		"name":   true,
@@ -1510,7 +1510,7 @@ type ExampleUpdateStruct struct {
 }
 
 func (u *ExampleUpdateStruct) TransformSchema(r huma.Registry, s *huma.Schema) *huma.Schema {
-	inputSchema := r.Schema(reflect.TypeOf((*ExampleInputStruct)(nil)), false, "")
+	inputSchema := r.Schema(reflect.TypeFor[*ExampleInputStruct](), false, "")
 	for propName, schema := range s.Properties {
 		propSchema := inputSchema.Properties[propName]
 		if schema.Description != "" {
@@ -1525,7 +1525,7 @@ func (u *ExampleUpdateStruct) TransformSchema(r huma.Registry, s *huma.Schema) *
 
 func TestSchemaTransformer(t *testing.T) {
 	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
-	inputSchema := r.Schema(reflect.TypeOf((*ExampleInputStruct)(nil)), false, "")
+	inputSchema := r.Schema(reflect.TypeFor[*ExampleInputStruct](), false, "")
 	validateSchema := func(s *huma.Schema) {
 		if s.Ref != "" {
 			s = r.SchemaFromRef(s.Ref)
@@ -1539,8 +1539,8 @@ func TestSchemaTransformer(t *testing.T) {
 		assert.True(t, s.Properties["comment"].Nullable)
 		assert.Equal(t, inputSchema.Properties["pattern"].Pattern, s.Properties["pattern"].Pattern)
 	}
-	updateSchema1 := r.Schema(reflect.TypeOf(ExampleUpdateStruct{}), false, "")
+	updateSchema1 := r.Schema(reflect.TypeFor[ExampleUpdateStruct](), false, "")
 	validateSchema(updateSchema1)
-	updateSchema2 := huma.SchemaFromType(r, reflect.TypeOf(ExampleUpdateStruct{}))
+	updateSchema2 := huma.SchemaFromType(r, reflect.TypeFor[ExampleUpdateStruct]())
 	validateSchema(updateSchema2)
 }

@@ -206,8 +206,8 @@ func Split(value string) []string {
 	return results
 }
 
-// Join will combine split parts back together with the given separator and
-// optional transform functions.
+// Join will combine split parts with the given separator and optional
+// transform functions.
 func Join(parts []string, sep string, transform ...TransformFunc) string {
 	for i := 0; i < len(parts); i++ {
 		for _, t := range transform {
@@ -257,7 +257,7 @@ func MergeNumbers(parts []string, suffixes ...string) []string {
 
 			if !prevNum {
 				if i == 0 {
-					// First item must always append.
+					// The first item must always append.
 					results = append(results, part)
 				} else {
 					// Concatenate the number to the previous non-number piece.
@@ -269,7 +269,7 @@ func MergeNumbers(parts []string, suffixes ...string) []string {
 
 			prevNum = true
 		} else {
-			// Special case: first part is a number, second part is not.
+			// Special case: the first part is a number, the second part is not.
 			if i == 1 && prevNum {
 				results[0] += part
 				prevNum = false

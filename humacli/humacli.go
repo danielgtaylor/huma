@@ -18,7 +18,7 @@ import (
 )
 
 func deref(t reflect.Type) reflect.Type {
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	return t
@@ -59,7 +59,7 @@ type contextKey string
 
 var optionsKey contextKey = "huma/cli/options"
 
-var durationType = reflect.TypeOf((*time.Duration)(nil)).Elem()
+var durationType = reflect.TypeFor[time.Duration]()
 
 // WithOptions is a helper for custom commands that need to access the options.
 //
@@ -203,7 +203,7 @@ func getValueFromFlagOrEnv(flags *pflag.FlagSet, opt option, fieldType reflect.T
 
 	// Create and return proper value
 	fv := reflect.ValueOf(value)
-	if fieldType.Kind() == reflect.Ptr {
+	if fieldType.Kind() == reflect.Pointer {
 		ptr := reflect.New(fv.Type())
 		ptr.Elem().Set(fv)
 		fv = ptr
@@ -224,7 +224,7 @@ func (c *cli[Options]) Run() {
 			f := v
 			for _, i := range opt.path {
 				// Check if f is a pointer and dereference it before calling Field
-				if f.Kind() == reflect.Ptr {
+				if f.Kind() == reflect.Pointer {
 					// Initialize nil pointers
 					if f.IsNil() {
 						f.Set(reflect.New(f.Type().Elem()))
@@ -368,7 +368,7 @@ func (c *cli[O]) setupOptions(t reflect.Type, path []int, prefix string) error {
 			if err := c.setupOptions(fieldType, currentPath, name); err != nil {
 				return fmt.Errorf("failed to setup options for field %q: %w", field.Name, err)
 			}
-		case reflect.Ptr:
+		case reflect.Pointer:
 			// If it's a pointer to a struct, handle it like a struct after dereferencing
 			if fieldType.Kind() == reflect.Struct {
 				if err := c.setupOptions(fieldType, currentPath, name); err != nil {
