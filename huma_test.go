@@ -1,6 +1,7 @@
 package huma_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
+	_ "github.com/danielgtaylor/huma/v2/formats/cbor"
 	"github.com/danielgtaylor/huma/v2/humatest"
 )
 
@@ -3462,6 +3464,45 @@ func TestGenerateFuncsPanicWithDescriptiveMessage(t *testing.T) {
 		huma.GenerateSummary("GET", "/foo", resp)
 	})
 
+}
+
+func TestNonJSONValidation(t *testing.T) {
+	// Test that validation works when only non-JSON content type is specified.
+	// This tests the fix for supporting validation schemas from non-JSON content types.
+	type CBORInput struct {
+		Body struct {
+			Name string `json:"name" minLength:"2" doc:"User name"`
+		} `contentType:"application/cbor"`
+	}
+
+	// Use default config which includes CBOR via the import above.
+	_, api := humatest.New(t, huma.DefaultConfig("Test", "1.0.0"))
+
+	huma.Post(api, "/cbor-test", func(ctx context.Context, input *CBORInput) (*struct{}, error) {
+		return &struct{}{}, nil
+	})
+
+	// Check that CBOR is in the OpenAPI spec (not JSON).
+	op := api.OpenAPI().Paths["/cbor-test"].Post
+	assert.NotNil(t, op.RequestBody)
+	assert.Contains(t, op.RequestBody.Content, "application/cbor")
+	assert.NotContains(t, op.RequestBody.Content, "application/json")
+
+	// Marshal valid data as CBOR.
+	var validBuf bytes.Buffer
+	huma.DefaultFormats["application/cbor"].Marshal(&validBuf, map[string]any{"name": "John"})
+
+	// Valid CBOR request should work (name >= 2 chars).
+	w := api.Post("/cbor-test", "Content-Type: application/cbor", &validBuf)
+	assert.Equal(t, 204, w.Code)
+
+	// Marshal invalid data as CBOR (name < 2 chars).
+	var invalidBuf bytes.Buffer
+	huma.DefaultFormats["application/cbor"].Marshal(&invalidBuf, map[string]any{"name": "J"})
+
+	// Invalid CBOR request should fail validation.
+	w = api.Post("/cbor-test", "Content-Type: application/cbor", &invalidBuf)
+	assert.Equal(t, 422, w.Code)
 }
 
 func TestFieldsOptionalByDefault(t *testing.T) {

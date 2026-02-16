@@ -1178,9 +1178,22 @@ func processInputType(inputType reflect.Type, op *Operation, registry Registry) 
 	}
 
 	var inSchema *Schema
-	if op.RequestBody != nil && op.RequestBody.Content != nil && op.RequestBody.Content["application/json"] != nil && op.RequestBody.Content["application/json"].Schema != nil {
-		hasInputBody = true
-		inSchema = op.RequestBody.Content["application/json"].Schema
+	if op.RequestBody != nil && op.RequestBody.Content != nil {
+		// Try to get schema from any available content type.
+		// Prefer application/json for backwards compatibility, then try others.
+		if op.RequestBody.Content["application/json"] != nil && op.RequestBody.Content["application/json"].Schema != nil {
+			hasInputBody = true
+			inSchema = op.RequestBody.Content["application/json"].Schema
+		} else {
+			// Fall back to first available content type with a schema.
+			for _, mediaType := range op.RequestBody.Content {
+				if mediaType.Schema != nil && mediaType.Schema.Type != "string" && mediaType.Schema.Format != "binary" {
+					hasInputBody = true
+					inSchema = mediaType.Schema
+					break
+				}
+			}
+		}
 	}
 	return inputParams, inputBodyIndex, hasInputBody, rawBodyIndex, rbt, inSchema
 }
