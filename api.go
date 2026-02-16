@@ -181,6 +181,10 @@ type Config struct {
 	// `Info.Version` fields.
 	*OpenAPI
 
+	// RegistryConfig contains a few minor configuration options for the
+	// internal registry.
+	RegistryConfig
+
 	// OpenAPIPath is the path to the OpenAPI spec without extension. If set
 	// to `/openapi` it will allow clients to get `/openapi.json` or
 	// `/openapi.yaml`, for example.
@@ -215,15 +219,6 @@ type Config struct {
 	// when the client requests an unknown content type. If set and no format is
 	// negotiated, then a 406 Not Acceptable response will be returned.
 	NoFormatFallback bool
-
-	// FieldsOptionalByDefault controls whether schema fields are treated as
-	// optional by default. When false, fields are marked as required unless
-	// they have the omitempty or omitzero tag.
-	FieldsOptionalByDefault bool
-
-	// RejectUnknownParameters indicates whether unknown properties should be
-	// rejected during validation.
-	RejectUnknownParameters bool
 
 	// Transformers are a way to modify a response body before it is serialized.
 	Transformers []Transformer
@@ -449,8 +444,7 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	if mr, ok := config.Components.Schemas.(*mapRegistry); ok {
-		mr.config.FieldsOptionalByDefault = config.FieldsOptionalByDefault
-		mr.config.RejectUnknownParameters = config.RejectUnknownParameters
+		mr.config = config.RegistryConfig
 	}
 
 	if config.DefaultFormat == "" && !config.NoFormatFallback {

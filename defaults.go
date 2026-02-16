@@ -52,7 +52,7 @@ var DefaultFormats = map[string]Format{
 // automatically enabled by importing the CBOR package:
 //
 //	import _ "github.com/danielgtaylor/huma/v2/formats/cbor"
-func DefaultConfig(title, version string) Config {
+func DefaultConfig(title string, version string) Config {
 	schemaPrefix := "#/components/schemas/"
 	schemasPath := "/schemas"
 
@@ -69,16 +69,15 @@ func DefaultConfig(title, version string) Config {
 				Schemas: registry,
 			},
 		},
-		OpenAPIPath:             "/openapi",
-		DocsPath:                "/docs",
-		DocsRenderer:            DocsRendererStoplightElements,
-		SchemasPath:             schemasPath,
-		Formats:                 DefaultFormats,
-		DefaultFormat:           "application/json",
-		NoFormatFallback:        false,
-		FieldsOptionalByDefault: false,
-		RejectUnknownParameters: false,
-		Transformers:            nil,
+		OpenAPIPath:      "/openapi",
+		RegistryConfig:   registry.Config(),
+		DocsPath:         "/docs",
+		DocsRenderer:     DocsRendererStoplightElements,
+		SchemasPath:      schemasPath,
+		Formats:          DefaultFormats,
+		DefaultFormat:    "application/json",
+		NoFormatFallback: false,
+		Transformers:     nil,
 		CreateHooks: []func(Config) Config{
 			func(c Config) Config {
 				// Add a link transformer to the API. This adds `Link` headers and
