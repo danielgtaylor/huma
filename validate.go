@@ -261,10 +261,11 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 			if err != nil || !addr.Is6() || addr.Is4In6() {
 				res.Add(path, str, validation.MsgExpectedRFC2373IPv6)
 			}
-		default: // "ip"
+		default: // case "ip".
 			if err != nil {
 				res.Add(path, str, validation.MsgExpectedRFCIPAddr)
 			}
+		}
 	case "idn-hostname":
 		if _, err := idnaProfile.ToASCII(str); err != nil {
 			res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
