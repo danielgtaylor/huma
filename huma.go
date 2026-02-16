@@ -96,7 +96,7 @@ type paramFieldInfo struct {
 	Schema     *Schema
 }
 
-func findParams(registry Registry, op *Operation, t reflect.Type, fieldsOptionalByDefault bool) *findResult[*paramFieldInfo] {
+func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*paramFieldInfo] {
 	return findInType(t, nil, func(f reflect.StructField, path []int) *paramFieldInfo {
 		if f.Anonymous {
 			return nil
@@ -139,7 +139,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type, fieldsOptional
 		} else if fo := f.Tag.Get("form"); fo != "" {
 			pfi.Loc = "form"
 			name = fo
-			pfi.Required = !fieldsOptionalByDefault
+			pfi.Required = !registry.Config().FieldsOptionalByDefault
 		} else if c := f.Tag.Get("cookie"); c != "" {
 			pfi.Loc = "cookie"
 			name = c
@@ -705,7 +705,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		v := reflect.ValueOf(&input).Elem()
 
 		// Reject unknown query parameters if config is set.
-		if registry.Config().RejectUnknownParameters && !op.SkipValidateParams {
+		if (api.Config().RejectUnknownQueryParameters || op.RejectUnknownQueryParameters) && !op.SkipValidateParams {
 			u := ctx.URL()
 			q := u.Query()
 
@@ -856,7 +856,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						rawBodyDataF := rawBodyF.FieldByName("data")
 						rawBodyDataT := rawBodyDataF.Type()
 
-						rawBodyInputParams := findParams(oapi.Components.Schemas, &op, rawBodyDataT, registry.Config().FieldsOptionalByDefault)
+						rawBodyInputParams := findParams(oapi.Components.Schemas, &op, rawBodyDataT)
 						formValueParser = func(val reflect.Value) {
 							rawBodyInputParams.Every(val, func(f reflect.Value, p *paramFieldInfo) {
 								f = reflect.Indirect(f)
@@ -1238,7 +1238,7 @@ func initResponses(op *Operation) {
 // processInputType validates the input type, extracts expected requests, and
 // defines them on the operation op.
 func processInputType(inputType reflect.Type, op *Operation, registry Registry) (*findResult[*paramFieldInfo], []int, bool, []int, rawBodyType, *Schema) {
-	inputParams := findParams(registry, op, inputType, true)
+	inputParams := findParams(registry, op, inputType)
 	inputBodyIndex := []int{}
 	hasInputBody := false
 	if f, ok := inputType.FieldByName("Body"); ok {
@@ -2044,7 +2044,8 @@ func readBody(buf io.Writer, ctx Context, maxBytes int64) *contextError {
 		}
 	}
 	if err != nil {
-		if e, ok := err.(net.Error); ok && e.Timeout() {
+		var nErr net.Error
+		if errors.As(err, &nErr) && nErr.Timeout() {
 			return &contextError{Code: http.StatusRequestTimeout, Msg: "request body read timeout"}
 		}
 

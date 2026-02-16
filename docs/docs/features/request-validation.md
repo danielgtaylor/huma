@@ -180,7 +180,14 @@ Write-only fields, if stored in a datastore, can be combined with `omitempty` an
 
 By default, Huma is strict about which fields are allowed in an object, making use of the `additionalProperties: false` JSON Schema setting. This means if a client sends a field that is not defined in the schema, the request will be rejected with an error. This can help to prevent typos and other issues and is recommended for most APIs.
 
-If you need to allow additional fields, for example when using a third-party service which will call your system and you only care about a few fields, you can use the `additionalProperties:"true"` field tag on the struct by assigning it to a dummy `_` field.
+The default behavior can be changed globally by setting `AllowAdditionalPropertiesByDefault` in the `huma.Config`'s `RegistryConfig`:
+
+```go
+config := huma.DefaultConfig("My API", "1.0.0")
+config.AllowAdditionalPropertiesByDefault = true
+```
+
+If you need to allow additional fields on a per-struct basis, for example when using a third-party service which will call your system and you only care about a few fields, you can use the `additionalProperties:"true"` field tag on the struct by assigning it to a dummy `_` field.
 
 ```go title="code.go"
 type PartialInput struct {

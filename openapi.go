@@ -875,6 +875,10 @@ type Operation struct {
 	// caution!
 	SkipValidateBody bool `yaml:"-"`
 
+	// RejectUnknownQueryParameters indicates whether unknown query parameters
+	// should be rejected during validation.
+	RejectUnknownQueryParameters bool `yaml:"-"`
+
 	// Hidden will skip documenting this operation in the OpenAPI. This is
 	// useful for operations that are not intended to be used by clients but
 	// you'd still like the benefits of using Huma. Generally not recommended.

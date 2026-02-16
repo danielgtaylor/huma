@@ -24,13 +24,13 @@ type Registry interface {
 }
 
 type RegistryConfig struct {
+	// AllowAdditionalPropertiesByDefault indicates whether schemas should allow
+	// additional properties by default.
+	AllowAdditionalPropertiesByDefault bool
+
 	// FieldsOptionalByDefault indicates whether fields in schemas should be
 	// treated as optional by default during validation.
 	FieldsOptionalByDefault bool
-
-	// RejectUnknownParameters indicates whether unknown properties should be
-	// rejected during validation.
-	RejectUnknownParameters bool
 }
 
 // DefaultSchemaNamer provides schema names for types. It uses the type name
@@ -192,8 +192,8 @@ func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) strin
 		aliases: map[reflect.Type]reflect.Type{},
 		namer:   namer,
 		config: RegistryConfig{
-			FieldsOptionalByDefault: false,
-			RejectUnknownParameters: false,
+			AllowAdditionalPropertiesByDefault: false,
+			FieldsOptionalByDefault:            false,
 		},
 	}
 }

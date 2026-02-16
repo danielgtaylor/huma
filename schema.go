@@ -919,19 +919,19 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 			panic(errors.New(strings.Join(errs, "; ")))
 		}
 
-		additionalProps := false
+		additionalProps := r.Config().AllowAdditionalPropertiesByDefault
 		if f, ok := t.FieldByName("_"); ok {
 			if _, ok = f.Tag.Lookup("additionalProperties"); ok {
 				additionalProps = boolTag(f, "additionalProperties", false)
 			}
 
-			if _, ok := f.Tag.Lookup("nullable"); ok {
+			if _, ok = f.Tag.Lookup("nullable"); ok {
 				// Allow overriding nullability per struct.
 				s.Nullable = boolTag(f, "nullable", false)
 			}
 		}
-		s.AdditionalProperties = additionalProps
 
+		s.AdditionalProperties = additionalProps
 		s.Properties = props
 		s.propertyNames = propNames
 		s.Required = required

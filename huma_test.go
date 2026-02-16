@@ -2589,7 +2589,7 @@ Content-Type: text/plain
 			Name: "reject-unknown-query-params",
 			Config: func() huma.Config {
 				cfg := huma.DefaultConfig("Test API", "1.0.0")
-				cfg.RejectUnknownParameters = true
+				cfg.RejectUnknownQueryParameters = true
 				return cfg
 			}(),
 			Register: func(t *testing.T, api huma.API) {
@@ -2623,7 +2623,7 @@ Content-Type: text/plain
 			Name: "reject-unknown-query-params-deepobject-allowed",
 			Config: func() huma.Config {
 				cfg := huma.DefaultConfig("Test API", "1.0.0")
-				cfg.RejectUnknownParameters = true
+				cfg.RejectUnknownQueryParameters = true
 				return cfg
 			}(),
 			Register: func(t *testing.T, api huma.API) {
@@ -2648,7 +2648,7 @@ Content-Type: text/plain
 			Name: "reject-unknown-query-params-deepobject-unknown",
 			Config: func() huma.Config {
 				cfg := huma.DefaultConfig("Test API", "1.0.0")
-				cfg.RejectUnknownParameters = true
+				cfg.RejectUnknownQueryParameters = true
 				return cfg
 			}(),
 			Register: func(t *testing.T, api huma.API) {

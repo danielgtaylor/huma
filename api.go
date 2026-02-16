@@ -220,6 +220,10 @@ type Config struct {
 	// negotiated, then a 406 Not Acceptable response will be returned.
 	NoFormatFallback bool
 
+	// RejectUnknownQueryParameters indicates whether unknown query parameters
+	// should be rejected during validation.
+	RejectUnknownQueryParameters bool
+
 	// Transformers are a way to modify a response body before it is serialized.
 	Transformers []Transformer
 
@@ -235,6 +239,9 @@ type API interface {
 	// Adapter returns the router adapter for this API, providing a generic
 	// interface to get request information and write responses.
 	Adapter() Adapter
+
+	// Config returns the configuration for this API.
+	Config() Config
 
 	// OpenAPI returns the OpenAPI spec for this API. You may edit this spec
 	// until the server starts.
@@ -284,8 +291,8 @@ type Format struct {
 }
 
 type api struct {
-	config       Config
 	adapter      Adapter
+	config       Config
 	formats      map[string]Format
 	formatKeys   []string
 	transformers []Transformer
@@ -294,6 +301,10 @@ type api struct {
 
 func (a *api) Adapter() Adapter {
 	return a.adapter
+}
+
+func (a *api) Config() Config {
+	return a.config
 }
 
 func (a *api) OpenAPI() *OpenAPI {
@@ -421,8 +432,8 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	newAPI := &api{
-		config:       config,
 		adapter:      a,
+		config:       config,
 		formats:      map[string]Format{},
 		transformers: config.Transformers,
 	}
