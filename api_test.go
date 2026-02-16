@@ -8,6 +8,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBlankConfig(t *testing.T) {
@@ -86,4 +87,220 @@ func TestContextValue(t *testing.T) {
 
 	resp := api.Get("/test")
 	assert.Equal(t, http.StatusNoContent, resp.Code)
+}
+
+func TestResponseContentTypeWithExtensions(t *testing.T) {
+	_, api := humatest.New(t)
+
+	type output struct {
+		ContentType string `header:"Content-Type"`
+		Body        struct {
+			Foo string `json:"foo"`
+		}
+	}
+
+	huma.Get(api, "/charset", func(ctx context.Context, input *struct{}) (*output, error) {
+		return &output{
+			ContentType: "application/json; charset=utf-8",
+			Body: struct {
+				Foo string `json:"foo"`
+			}{Foo: "bar"},
+		}, nil
+	})
+
+	huma.Get(api, "/suffix", func(ctx context.Context, input *struct{}) (*output, error) {
+		return &output{
+			ContentType: "application/problem+json",
+			Body: struct {
+				Foo string `json:"foo"`
+			}{Foo: "bar"},
+		}, nil
+	})
+
+	huma.Get(api, "/both", func(ctx context.Context, input *struct{}) (*output, error) {
+		return &output{
+			ContentType: "application/problem+json; charset=utf-8",
+			Body: struct {
+				Foo string `json:"foo"`
+			}{Foo: "bar"},
+		}, nil
+	})
+
+	assert.NotPanics(t, func() {
+		resp := api.Get("/charset")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Equal(t, "application/json; charset=utf-8", resp.Header().Get("Content-Type"))
+		assert.JSONEq(t, `{"foo": "bar"}`, resp.Body.String())
+	})
+
+	assert.NotPanics(t, func() {
+		resp := api.Get("/suffix")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Equal(t, "application/problem+json", resp.Header().Get("Content-Type"))
+		assert.JSONEq(t, `{"foo": "bar"}`, resp.Body.String())
+	})
+
+	assert.NotPanics(t, func() {
+		resp := api.Get("/both")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Equal(t, "application/problem+json; charset=utf-8", resp.Header().Get("Content-Type"))
+		assert.JSONEq(t, `{"foo": "bar"}`, resp.Body.String())
+	})
+
+	t.Run("UnmarshalSuffix", func(t *testing.T) {
+		type input struct {
+			Foo string `json:"foo"`
+		}
+		var v input
+		err := api.Unmarshal("application/problem+json; charset=utf-8", []byte(`{"foo": "bar"}`), &v)
+		require.NoError(t, err)
+		assert.Equal(t, "bar", v.Foo)
+	})
+
+	tRunUnmarshalError := func(name, ct string) {
+		t.Run(name, func(t *testing.T) {
+			var v struct{}
+			err := api.Unmarshal(ct, []byte(`{}`), &v)
+			require.Error(t, err)
+		})
+	}
+
+	tRunUnmarshalError("UnmarshalErrorMalformed", "application/json; charset=utf-8+wrong")
+
+	huma.Get(api, "/malformed", func(ctx context.Context, input *struct{}) (*output, error) {
+		return &output{
+			ContentType: "application/json; charset=utf-8+wrong",
+			Body: struct {
+				Foo string `json:"foo"`
+			}{Foo: "bar"},
+		}, nil
+	})
+
+	t.Run("PanicOnMalformed", func(t *testing.T) {
+		assert.Panics(t, func() {
+			api.Get("/malformed")
+		})
+	})
+}
+
+func TestDocsRenderers(t *testing.T) {
+	t.Run("DefaultRenderer", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+			},
+			DocsPath:    "/docs",
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Equal(t, "text/html", resp.Header().Get("Content-Type"))
+		assert.Contains(t, resp.Body.String(), "@stoplight/elements")
+	})
+
+	t.Run("ScalarRenderer", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+			},
+			DocsPath:     "/docs",
+			DocsRenderer: huma.DocsRendererScalar,
+			OpenAPIPath:  "/openapi",
+			Formats:      huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), "@scalar/api-reference")
+	})
+
+	t.Run("SwaggerUIRenderer", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+			},
+			DocsPath:     "/docs",
+			DocsRenderer: huma.DocsRendererSwaggerUI,
+			OpenAPIPath:  "/openapi",
+			Formats:      huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), "swagger-ui-dist")
+	})
+
+	t.Run("APIPrefix", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+				Servers: []*huma.Server{
+					{URL: "https://example.com/api/v1"},
+				},
+			},
+			DocsPath:    "/docs",
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		// Elements uses apiDescriptionUrl=".../api/v1/openapi.yaml"
+		assert.Contains(t, resp.Body.String(), `apiDescriptionUrl="/api/v1/openapi.yaml"`)
+	})
+
+	t.Run("ScalarNoTitle", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				// No Info or Title
+			},
+			DocsPath:     "/docs",
+			DocsRenderer: huma.DocsRendererScalar,
+			OpenAPIPath:  "/openapi",
+			Formats:      huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), "<title>Scalarin HTML</title>")
+	})
+	t.Run("ElementsNoTitle", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI:     &huma.OpenAPI{},
+			DocsPath:    "/docs",
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), "<title>Elements in HTML</title>")
+	})
+
+	t.Run("SwaggerUINoTitle", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI:      &huma.OpenAPI{},
+			DocsPath:     "/docs",
+			DocsRenderer: huma.DocsRendererSwaggerUI,
+			OpenAPIPath:  "/openapi",
+			Formats:      huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), "<title>SwaggerUI in HTML</title>")
+	})
+	t.Run("UnknownRenderer", func(t *testing.T) {
+		assert.Panics(t, func() {
+			humatest.New(t, huma.Config{
+				OpenAPI:      &huma.OpenAPI{},
+				DocsPath:     "/docs",
+				DocsRenderer: "unknown",
+				OpenAPIPath:  "/openapi",
+				Formats:      huma.DefaultFormats,
+			})
+		})
+	})
 }

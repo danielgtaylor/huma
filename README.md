@@ -11,9 +11,6 @@
 [**🌎中文文档**](./README_CN.md)
 [**🇯🇵日本語ドキュメント**](./README_JA.md)
 
-> [!IMPORTANT]
-> Enjoying Huma? Please consider hiring me! I'm looking for new opportunities. Here's my [resume](https://registry.jsonresume.org/danielgtaylor).
-
 - [What is huma?](#intro)
 - [Install](#install)
 - [Example](#example)
@@ -112,7 +109,7 @@ A big thank you to our current & former sponsors!
 
 # Install
 
-Install via `go get`. Note that Go 1.23 or newer is required.
+Install via `go get`. Note that Go 1.24 or newer is required.
 
 ```sh
 # After: go mod init ...

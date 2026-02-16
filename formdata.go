@@ -52,7 +52,7 @@ func (v MimeTypeValidator) Validate(fh *multipart.FileHeader, location string) (
 	mimeType := fh.Header.Get("Content-Type")
 	if mimeType == "" {
 		var buffer = make([]byte, 1000)
-		if _, err := file.Read(buffer); err != nil {
+		if _, err = file.Read(buffer); err != nil {
 			return "", &ErrorDetail{Message: "Failed to infer file media type", Location: location}
 		}
 		file.Seek(int64(0), io.SeekStart)
@@ -89,11 +89,11 @@ func (v MimeTypeValidator) Validate(fh *multipart.FileHeader, location string) (
 	}
 }
 
-// Decodes multipart.Form data into *T, returning []*ErrorDetail if any
+// Decode decodes multipart.Form data into *T, returning []*ErrorDetail if any
 // Schema is used to check for validation constraints
 func (m *MultipartFormFiles[T]) Decode(opMediaType *MediaType, formValueParser func(val reflect.Value)) []error {
 	var (
-		dataType = reflect.TypeOf(m.data).Elem()
+		dataType = reflect.TypeFor[T]()
 		value    = reflect.New(dataType)
 		errors   []error
 	)
@@ -106,14 +106,14 @@ func (m *MultipartFormFiles[T]) Decode(opMediaType *MediaType, formValueParser f
 		}
 		fileHeaders := m.Form.File[key]
 		switch {
-		case field.Type() == reflect.TypeOf(FormFile{}):
+		case field.Type() == reflect.TypeFor[FormFile]():
 			file, err := readSingleFile(fileHeaders, key, opMediaType)
 			if err != nil {
 				errors = append(errors, err)
 				continue
 			}
 			field.Set(reflect.ValueOf(file))
-		case field.Type() == reflect.TypeOf([]FormFile{}):
+		case field.Type() == reflect.TypeFor[[]FormFile]():
 			files, errs := readMultipleFiles(fileHeaders, key, opMediaType)
 			if errs != nil {
 				errors = append(errors, errs...)
@@ -131,9 +131,8 @@ func readSingleFile(fileHeaders []*multipart.FileHeader, key string, opMediaType
 	if len(fileHeaders) == 0 {
 		if opMediaType.Schema.requiredMap[key] {
 			return FormFile{}, &ErrorDetail{Message: "File required", Location: key}
-		} else {
-			return FormFile{}, nil
 		}
+		return FormFile{}, nil
 	} else if len(fileHeaders) == 1 {
 		validator := NewMimeTypeValidator(opMediaType.Encoding[key])
 		return readFile(fileHeaders[0], key, validator)
@@ -206,14 +205,14 @@ func multiPartFormFileSchema(r Registry, t reflect.Type) *Schema {
 		requiredMap: make(map[string]bool, nFields),
 	}
 	requiredFields := make([]string, 0, nFields)
-	for i := 0; i < nFields; i++ {
+	for i := range nFields {
 		f := t.Field(i)
 		name := formDataFieldName(f)
 
 		switch {
-		case f.Type == reflect.TypeOf(FormFile{}):
+		case f.Type == reflect.TypeFor[FormFile]():
 			schema.Properties[name] = multiPartFileSchema(f)
-		case f.Type == reflect.TypeOf([]FormFile{}):
+		case f.Type == reflect.TypeFor[[]FormFile]():
 			schema.Properties[name] = &Schema{
 				Type:  "array",
 				Items: multiPartFileSchema(f),
@@ -221,10 +220,15 @@ func multiPartFormFileSchema(r Registry, t reflect.Type) *Schema {
 		default:
 			schema.Properties[name] = SchemaFromField(r, f, name)
 
-			// Should we panic if [T] struct defines fields with unsupported types ?
+			// Should we panic if [T] struct defines fields with unsupported types?
 		}
 
-		if _, ok := f.Tag.Lookup("required"); ok && boolTag(f, "required", false) {
+		fieldRequired := !r.Config().FieldsOptionalByDefault
+		if _, ok := f.Tag.Lookup("required"); ok {
+			fieldRequired = boolTag(f, "required", false)
+		}
+
+		if fieldRequired {
 			requiredFields = append(requiredFields, name)
 			schema.requiredMap[name] = true
 		}
@@ -245,12 +249,12 @@ func multiPartFileSchema(f reflect.StructField) *Schema {
 func multiPartContentEncoding(t reflect.Type) map[string]*Encoding {
 	nFields := t.NumField()
 	encoding := make(map[string]*Encoding, nFields)
-	for i := 0; i < nFields; i++ {
+	for i := range nFields {
 		f := t.Field(i)
 		name := formDataFieldName(f)
 
 		contentType := "text/plain"
-		if f.Type == reflect.TypeOf(FormFile{}) || f.Type == reflect.TypeOf([]FormFile{}) {
+		if f.Type == reflect.TypeFor[FormFile]() || f.Type == reflect.TypeFor[[]FormFile]() {
 			contentType = f.Tag.Get("contentType")
 			if contentType == "" {
 				contentType = "application/octet-stream"

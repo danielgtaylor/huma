@@ -1,6 +1,7 @@
 package huma_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -24,6 +25,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
+	_ "github.com/danielgtaylor/huma/v2/formats/cbor"
 	"github.com/danielgtaylor/huma/v2/humatest"
 )
 
@@ -63,7 +65,7 @@ func (UUID) Schema(r huma.Registry) *huma.Schema {
 	return &huma.Schema{Type: huma.TypeString, Format: "uuid"}
 }
 
-// BodyContainer is an embed request body struct to test request body unmarshalling
+// BodyContainer is an embed request body struct to test request body unmarshaling
 type BodyContainer struct {
 	Body struct {
 		Name string `json:"name"`
@@ -607,6 +609,24 @@ func TestFeatures(t *testing.T) {
 			Method: http.MethodGet,
 		},
 		{
+			Name: "parse-with-param-receiver-time",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Param OptionalParam[time.Time] `query:"param"`
+				}) (*struct{}, error) {
+					expectedTime := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
+					assert.True(t, i.Param.Value.Equal(expectedTime))
+					assert.True(t, i.Param.IsSet)
+					return nil, nil
+				})
+			},
+			URL:    "/test?param=2023-01-01T12:00:00Z",
+			Method: http.MethodGet,
+		},
+		{
 			Name: "param-deepObject-struct",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
@@ -916,8 +936,8 @@ func TestFeatures(t *testing.T) {
 						// Test defaults for fields in the same linked struct. Even though
 						// we have seen the struct before we still need to set the default
 						// since it's a new/different field.
-						S1 StructWithDefaultField `json:"s1,omitempty"`
-						S2 StructWithDefaultField `json:"s2,omitempty"`
+						S1 StructWithDefaultField `json:"s1,omitzero"`
+						S2 StructWithDefaultField `json:"s2,omitzero"`
 					}
 				}) (*struct{}, error) {
 					assert.Equal(t, "Huma", input.Body.Name)
@@ -1322,7 +1342,7 @@ Hello, World!
 					Path:   "/upload",
 				}, func(ctx context.Context, input *struct {
 					RawBody huma.MultipartFormFiles[struct {
-						HelloWorld huma.FormFile `form:"file" contentType:"text/plain"`
+						HelloWorld huma.FormFile `form:"file" contentType:"text/plain" required:"false"`
 					}]
 				}) (*struct{}, error) {
 					assert.False(t, input.RawBody.Data().HelloWorld.IsSet)
@@ -1877,33 +1897,57 @@ Content-Type: text/plain
 			Name: "response-headers",
 			Register: func(t *testing.T, api huma.API) {
 				type Resp struct {
-					Str   string    `header:"str"`
-					Int   int       `header:"int"`
-					Uint  uint      `header:"uint"`
-					Float float64   `header:"float"`
-					Bool  bool      `header:"bool"`
-					Date  time.Time `header:"date"`
-					Empty string    `header:"empty"`
+					Str          string    `header:"str"`
+					Int          int       `header:"int"`
+					Uint         uint      `header:"uint"`
+					Float        float64   `header:"float"`
+					Bool         bool      `header:"bool"`
+					Date         time.Time `header:"date"`
+					Empty        string    `header:"empty"`
+					CustomTime   time.Time `header:"custom-time" timeFormat:"2006-01-02"`
+					WithoutTag   string    // No header tag - SHOULD be set as a header using field name.
+					LastModified time.Time // No header tag - SHOULD be set as a header using field name.
 				}
 
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
 					Path:   "/response-headers",
 				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
-					resp := &Resp{}
-					resp.Str = "str"
-					resp.Int = 1
-					resp.Uint = 2
-					resp.Float = 3.45
-					resp.Bool = true
-					resp.Date = time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
-					return resp, nil
+					return &Resp{
+						Str:          "str",
+						Int:          1,
+						Uint:         2,
+						Float:        3.45,
+						Bool:         true,
+						Date:         time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
+						CustomTime:   time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC),
+						WithoutTag:   "without-tag-value",
+						LastModified: time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC),
+					}, nil
 				})
+
+				headers := api.OpenAPI().Paths["/response-headers"].Get.Responses["204"].Headers
+
+				// Surface-level fields with explicit tags should be documented.
+				assert.NotNil(t, headers["str"])
+				assert.NotNil(t, headers["int"])
+				assert.NotNil(t, headers["uint"])
+				assert.NotNil(t, headers["float"])
+				assert.NotNil(t, headers["bool"])
+				assert.NotNil(t, headers["date"])
+				assert.NotNil(t, headers["empty"])
+				assert.NotNil(t, headers["custom-time"])
+
+				// Surface-level fields without tags should be documented using field name.
+				assert.NotNil(t, headers["WithoutTag"])
+				assert.NotNil(t, headers["LastModified"])
 			},
 			Method: http.MethodGet,
 			URL:    "/response-headers",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusNoContent, resp.Code)
+
+				// Surface-level fields with explicit tags should be set.
 				assert.Equal(t, "str", resp.Header().Get("Str"))
 				assert.Equal(t, "1", resp.Header().Get("Int"))
 				assert.Equal(t, "2", resp.Header().Get("Uint"))
@@ -1911,6 +1955,78 @@ Content-Type: text/plain
 				assert.Equal(t, "true", resp.Header().Get("Bool"))
 				assert.Equal(t, "Sun, 01 Jan 2023 12:00:00 GMT", resp.Header().Get("Date"))
 				assert.Empty(t, resp.Header().Values("Empty"))
+				assert.Equal(t, "2023-06-15", resp.Header().Get("Custom-Time"))
+
+				// Surface-level fields without tags should be set using field name.
+				assert.Equal(t, "without-tag-value", resp.Header().Get("WithoutTag"))
+				assert.Equal(t, "Thu, 15 Jun 2023 10:30:00 GMT", resp.Header().Get("LastModified"))
+			},
+		},
+		{
+			Name: "response-headers-hidden",
+			Register: func(t *testing.T, api huma.API) {
+				type HiddenHeaders struct {
+					HiddenWithTag    string `header:"X-Hidden-With-Tag"`
+					HiddenWithoutTag string // No header tag - should be set as header using field name.
+				}
+
+				type Resp struct {
+					*HiddenHeaders `hidden:"true"`
+
+					VisibleWithTag    string    `header:"X-Visible-With-Tag"`
+					VisibleWithoutTag string    // No header tag - SHOULD be set as a header using field name.
+					LastModified      time.Time // No header tag - SHOULD be set as a header using field name.
+					Body              struct {
+						Message string `json:"message"`
+					}
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/response-headers-hidden",
+				}, func(ctx context.Context, input *struct{}) (*Resp, error) {
+					return &Resp{
+						HiddenHeaders: &HiddenHeaders{
+							HiddenWithTag:    "hidden-with-tag-value",
+							HiddenWithoutTag: "should-be-header",
+						},
+						VisibleWithTag:    "visible-with-tag-value",
+						VisibleWithoutTag: "visible-without-tag-value",
+						LastModified:      time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC),
+						Body: struct {
+							Message string `json:"message"`
+						}{
+							Message: "Hello",
+						},
+					}, nil
+				})
+
+				headers := api.OpenAPI().Paths["/response-headers-hidden"].Get.Responses["200"].Headers
+
+				// Hidden headers should NOT appear in OpenAPI documentation.
+				assert.Nil(t, headers["X-Hidden-With-Tag"], "hidden header with tag should not appear in OpenAPI docs")
+				assert.Nil(t, headers["HiddenWithoutTag"], "hidden header without tag should not appear in OpenAPI docs")
+
+				// Visible surface-level fields should appear in OpenAPI documentation.
+				assert.NotNil(t, headers["X-Visible-With-Tag"], "visible header with tag should appear in OpenAPI docs")
+				assert.NotNil(t, headers["VisibleWithoutTag"], "visible header without tag should appear in OpenAPI docs")
+				assert.NotNil(t, headers["LastModified"], "visible time header should appear in OpenAPI docs")
+			},
+			Method: http.MethodGet,
+			URL:    "/response-headers-hidden",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+
+				// Hidden headers with explicit tag SHOULD still be sent at runtime.
+				assert.Equal(t, "hidden-with-tag-value", resp.Header().Get("X-Hidden-With-Tag"))
+
+				// Hidden headers without tag SHOULD still be sent at runtime using field name.
+				assert.Equal(t, "should-be-header", resp.Header().Get("HiddenWithoutTag"))
+
+				// Visible surface-level fields should be sent at runtime.
+				assert.Equal(t, "visible-with-tag-value", resp.Header().Get("X-Visible-With-Tag"))
+				assert.Equal(t, "visible-without-tag-value", resp.Header().Get("VisibleWithoutTag"))
+				assert.Equal(t, "Thu, 15 Jun 2023 10:30:00 GMT", resp.Header().Get("LastModified"))
 			},
 		},
 		{
@@ -3037,8 +3153,29 @@ func TestSchemaWithExample(t *testing.T) {
 		return nil, nil
 	})
 
-	example := app.OpenAPI().Paths["/test"].Get.Parameters[0].Example
+	example := app.OpenAPI().Paths["/test"].Get.Parameters[0].Schema.Examples[0]
 	assert.Equal(t, 1, example)
+}
+
+func TestParameterExampleRedundancy(t *testing.T) {
+	_, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	type Input struct {
+		Name string `query:"name" example:"world"`
+	}
+
+	huma.Get(app, "/test", func(ctx context.Context, input *Input) (*struct{}, error) {
+		return nil, nil
+	})
+
+	param := app.OpenAPI().Paths["/test"].Get.Parameters[0]
+	assert.Equal(t, "name", param.Name)
+
+	// The example should be in the schema, not at the parameter level.
+	// OpenAPI 3.1+ prefers examples in the schema.
+	assert.Nil(t, param.Example)
+	require.NotNil(t, param.Schema)
+	assert.Equal(t, []any{"world"}, param.Schema.Examples)
 }
 
 func TestCustomSchemaErrors(t *testing.T) {
@@ -3094,7 +3231,7 @@ func TestBodyRace(t *testing.T) {
 		return nil, nil
 	})
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		t.Run(fmt.Sprintf("test-%d", i), func(tt *testing.T) {
 			tt.Parallel()
 			resp := api.Post("/ping", map[string]any{"value": "hello"})
@@ -3148,6 +3285,39 @@ func TestCustomValidationErrorStatus(t *testing.T) {
 	resp := api.Post("/test", map[string]any{"value": "foo"})
 	assert.Equal(t, http.StatusBadRequest, resp.Result().StatusCode)
 	assert.Contains(t, resp.Body.String(), "Bad Request")
+}
+
+func TestMinItemsValidation(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	huma.Get(api, "/test", func(ctx context.Context, input *struct {
+		Names []string `query:"names" minItems:"2" required:"true"`
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	// 1. Missing query parameter should fail because it is required
+	resp := api.Get("/test")
+	assert.Equal(t, http.StatusUnprocessableEntity, resp.Result().StatusCode)
+	assert.Contains(t, resp.Body.String(), "required query parameter is missing")
+
+	// 2. Query parameter with 1 item should fail minItems
+	resp = api.Get("/test?names=foo")
+	assert.Equal(t, http.StatusUnprocessableEntity, resp.Result().StatusCode)
+	assert.Contains(t, resp.Body.String(), "expected array length >= 2")
+
+	huma.Get(api, "/optional", func(ctx context.Context, input *struct {
+		Names []string `query:"names" minItems:"2"`
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	// Query Optional (should pass when missing)
+	resp = api.Get("/optional")
+	assert.Contains(t, []int{200, 204}, resp.Code)
+
+	// But still fail if provided with too few items
+	assert.Equal(t, 422, api.Get("/optional?names=foo").Code)
 }
 
 // func BenchmarkSecondDecode(b *testing.B) {
@@ -3240,7 +3410,7 @@ func TestCustomValidationErrorStatus(t *testing.T) {
 // 	})
 // }
 
-func globalHandler(ctx context.Context, input *struct {
+func globalHandler(_ context.Context, input *struct {
 	Count int `query:"count"`
 }) (*struct{ Body int }, error) {
 	return &struct{ Body int }{Body: input.Count * 3 / 2}, nil
@@ -3294,4 +3464,181 @@ func TestGenerateFuncsPanicWithDescriptiveMessage(t *testing.T) {
 		huma.GenerateSummary("GET", "/foo", resp)
 	})
 
+}
+
+func TestNonJSONValidation(t *testing.T) {
+	// Test that validation works when only non-JSON content type is specified.
+	// This tests the fix for supporting validation schemas from non-JSON content types.
+	type CBORInput struct {
+		Body struct {
+			Name string `json:"name" minLength:"2" doc:"User name"`
+		} `contentType:"application/cbor"`
+	}
+
+	// Use default config which includes CBOR via the import above.
+	_, api := humatest.New(t, huma.DefaultConfig("Test", "1.0.0"))
+
+	huma.Post(api, "/cbor-test", func(ctx context.Context, input *CBORInput) (*struct{}, error) {
+		return &struct{}{}, nil
+	})
+
+	// Check that CBOR is in the OpenAPI spec (not JSON).
+	op := api.OpenAPI().Paths["/cbor-test"].Post
+	assert.NotNil(t, op.RequestBody)
+	assert.Contains(t, op.RequestBody.Content, "application/cbor")
+	assert.NotContains(t, op.RequestBody.Content, "application/json")
+
+	// Marshal valid data as CBOR.
+	var validBuf bytes.Buffer
+	huma.DefaultFormats["application/cbor"].Marshal(&validBuf, map[string]any{"name": "John"})
+
+	// Valid CBOR request should work (name >= 2 chars).
+	w := api.Post("/cbor-test", "Content-Type: application/cbor", &validBuf)
+	assert.Equal(t, 204, w.Code)
+
+	// Marshal invalid data as CBOR (name < 2 chars).
+	var invalidBuf bytes.Buffer
+	huma.DefaultFormats["application/cbor"].Marshal(&invalidBuf, map[string]any{"name": "J"})
+
+	// Invalid CBOR request should fail validation.
+	w = api.Post("/cbor-test", "Content-Type: application/cbor", &invalidBuf)
+	assert.Equal(t, 422, w.Code)
+}
+
+func TestFieldsOptionalByDefault(t *testing.T) {
+	type MyInput struct {
+		Body struct {
+			Name string `json:"name"`
+			Age  int    `json:"age" required:"true"`
+		}
+	}
+
+	// Default behavior.
+	{
+		config := huma.DefaultConfig("Test", "1.0.0")
+		config.FieldsOptionalByDefault = false
+		_, api := humatest.New(t, config)
+
+		huma.Post(api, "/test", func(ctx context.Context, input *MyInput) (*struct{}, error) {
+			return nil, nil
+		})
+
+		// Missing name should fail because it's required by default.
+		resp := api.Post("/test", map[string]any{
+			"age": 25,
+		})
+		assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+		assert.Contains(t, resp.Body.String(), "required property name")
+	}
+
+	// Mark fields optional by default.
+	{
+		config := huma.DefaultConfig("Test", "1.0.0")
+		config.FieldsOptionalByDefault = true
+		_, api := humatest.New(t, config)
+
+		huma.Post(api, "/test", func(ctx context.Context, input *MyInput) (*struct{}, error) {
+			return nil, nil
+		})
+
+		// Missing name should pass because it's optional by default.
+		resp := api.Post("/test", map[string]any{
+			"age": 25,
+		})
+		assert.Equal(t, http.StatusNoContent, resp.Code)
+
+		// Missing age should still fail because it's explicitly marked as required.
+		resp = api.Post("/test", map[string]any{
+			"name": "John",
+		})
+		assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+		assert.Contains(t, resp.Body.String(), "required property age")
+	}
+}
+
+func TestSchemaLinkDuplicateTypes(t *testing.T) {
+	config := huma.DefaultConfig("Test API", "1.0.0")
+	_, api := humatest.New(t, config)
+
+	// Both operations use an identical anonymous struct type for the body.
+	// In Go, identical anonymous structs are the same type.
+	huma.Get(api, "/test1", func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			Message string `json:"message"`
+		}
+	}, error) {
+		return &struct {
+			Body struct {
+				Message string `json:"message"`
+			}
+		}{
+			Body: struct {
+				Message string `json:"message"`
+			}{Message: "hello from test1"},
+		}, nil
+	})
+
+	huma.Get(api, "/test2", func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			Message string `json:"message"`
+		}
+	}, error) {
+		return &struct {
+			Body struct {
+				Message string `json:"message"`
+			}
+		}{
+			Body: struct {
+				Message string `json:"message"`
+			}{Message: "hello from test2"},
+		}, nil
+	})
+
+	// Verify test1.
+	resp1 := api.Get("/test1")
+	assert.Equal(t, http.StatusOK, resp1.Code)
+	// The schema name is derived from OperationID + Response -> Get-test1Response.
+	assert.Contains(t, resp1.Body.String(), "Get-test1Response.json")
+	assert.Contains(t, resp1.Header().Get("Link"), "Get-test1Response.json")
+
+	// Verify test2.
+	resp2 := api.Get("/test2")
+	assert.Equal(t, http.StatusOK, resp2.Code)
+	// The schema name is derived from OperationID + Response -> Get-test2Response.
+	assert.Contains(t, resp2.Body.String(), "Get-test2Response.json")
+	assert.Contains(t, resp2.Header().Get("Link"), "Get-test2Response.json")
+
+	// Crucially, they should NOT be the same.
+	assert.NotEqual(t, resp1.Header().Get("Link"), resp2.Header().Get("Link"))
+}
+
+func TestBodyFallbackContentType(t *testing.T) {
+	mux := http.NewServeMux()
+	config := huma.DefaultConfig("Test", "1.0.0")
+	config.Formats = map[string]huma.Format{
+		"test-ct-custom": huma.DefaultJSONFormat,
+	}
+	config.DefaultFormat = "test-ct-custom"
+	api := humago.New(mux, config)
+
+	type HelloInput struct {
+		Body struct {
+			Name string `json:"name"`
+		} `contentType:"test-ct-custom"`
+	}
+
+	huma.Register(api, huma.Operation{
+		Method: http.MethodPost,
+		Path:   "/hello",
+	}, func(ctx context.Context, input *HelloInput) (*struct{}, error) {
+		assert.Equal(t, "world", input.Body.Name)
+		return nil, nil
+	})
+
+	// Request without "Content-Type" header.
+	req := httptest.NewRequest(http.MethodPost, "/hello", strings.NewReader(`{"name":"world"}`))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
 }

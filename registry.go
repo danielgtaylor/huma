@@ -10,7 +10,7 @@ import (
 )
 
 // Registry creates and stores schemas and their references, and supports
-// marshalling to JSON/YAML for use as an OpenAPI #/components/schemas object.
+// marshaling to JSON/YAML for use as an OpenAPI #/components/schemas object.
 // Behavior is implementation-dependent, but the design allows for recursive
 // schemas to exist while being flexible enough to support other use cases
 // like only inline objects (no refs) or always using refs for structs.
@@ -20,6 +20,11 @@ type Registry interface {
 	TypeFromRef(ref string) reflect.Type
 	Map() map[string]*Schema
 	RegisterTypeAlias(t reflect.Type, alias reflect.Type)
+	Config() RegistryConfig
+}
+
+type RegistryConfig struct {
+	FieldsOptionalByDefault bool
 }
 
 // DefaultSchemaNamer provides schema names for types. It uses the type name
@@ -40,6 +45,7 @@ func DefaultSchemaNamer(t reflect.Type, hint string) string {
 	name = strings.ReplaceAll(name, "[]", "List[")
 
 	result := ""
+	var resultSb48 strings.Builder
 	for _, part := range strings.FieldsFunc(name, func(r rune) bool {
 		// Split on special characters. Note that `,` is used when there are
 		// multiple inputs to a generic type.
@@ -52,8 +58,9 @@ func DefaultSchemaNamer(t reflect.Type, hint string) string {
 		// Add to result, and uppercase for better scalar support (`int` -> `Int`).
 		// Use unicode-aware uppercase to support non-ASCII characters.
 		r, size := utf8.DecodeRuneInString(base)
-		result += strings.ToUpper(string(r)) + base[size:]
+		resultSb48.WriteString(strings.ToUpper(string(r)) + base[size:])
 	}
+	result += resultSb48.String()
 	name = result
 
 	return name
@@ -66,13 +73,14 @@ type mapRegistry struct {
 	seen    map[reflect.Type]bool
 	namer   func(reflect.Type, string) string
 	aliases map[reflect.Type]reflect.Type
+	config  RegistryConfig
 }
 
 func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema {
 	origType := t
 	t = deref(t)
 
-	// Pointer to array should decay to array
+	// Pointer to array should decay to array.
 	if t.Kind() == reflect.Array || t.Kind() == reflect.Slice {
 		origType = t
 	}
@@ -90,11 +98,11 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 
 	v := reflect.New(t).Interface()
 	if _, ok := v.(SchemaProvider); ok {
-		// Special case: type provides its own schema
+		// Special case: type provides its own schema.
 		getsRef = false
 	}
 	if _, ok := v.(encoding.TextUnmarshaler); ok {
-		// Special case: type can be unmarshalled from text so will be a `string`
+		// Special case: type can be unmarshaled from text so will be a `string`
 		// and doesn't need a ref. This simplifies the schema a little bit.
 		getsRef = false
 	}
@@ -103,14 +111,16 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 
 	if getsRef {
 		if s, ok := r.schemas[name]; ok {
-			if _, ok := r.seen[t]; !ok {
-				// Name matches but type is different, so we have a dupe.
+			if _, ok = r.seen[t]; !ok {
+				// The name matches but the type is different, so we have a dupe.
 
 				panic(fmt.Errorf("duplicate name: %s, new type: %s, existing type: %s", name, t, r.types[name]))
 			}
+
 			if allowRef {
 				return &Schema{Ref: r.prefix + name}
 			}
+
 			return s
 		}
 	}
@@ -121,6 +131,7 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 		r.types[name] = t
 		r.seen[t] = true
 	}
+
 	s := SchemaFromType(r, origType)
 	if getsRef {
 		r.schemas[name] = s
@@ -151,13 +162,17 @@ func (r *mapRegistry) MarshalJSON() ([]byte, error) {
 	return json.Marshal(r.schemas)
 }
 
-func (r *mapRegistry) MarshalYAML() (interface{}, error) {
+func (r *mapRegistry) MarshalYAML() (any, error) {
 	return r.schemas, nil
 }
 
-// RegisterTypeAlias(t, alias) makes the schema generator use the `alias` type instead of `t`.
+// RegisterTypeAlias makes the schema generator use the `alias` type instead of `t`.
 func (r *mapRegistry) RegisterTypeAlias(t reflect.Type, alias reflect.Type) {
 	r.aliases[t] = alias
+}
+
+func (r *mapRegistry) Config() RegistryConfig {
+	return r.config
 }
 
 // NewMapRegistry creates a new registry that stores schemas in a map and
@@ -170,5 +185,8 @@ func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) strin
 		seen:    map[reflect.Type]bool{},
 		aliases: map[reflect.Type]reflect.Type{},
 		namer:   namer,
+		config: RegistryConfig{
+			FieldsOptionalByDefault: false,
+		},
 	}
 }
