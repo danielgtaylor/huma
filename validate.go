@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net"
 	"net/mail"
 	"net/netip"
 	"net/url"
@@ -240,17 +239,22 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 			res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
 		}
 	// TODO: proper idn-hostname support... need to figure out how.
-	case "ipv4":
-		if ip := net.ParseIP(str); ip == nil || ip.To4() == nil {
-			res.Add(path, str, validation.MsgExpectedRFC2673IPv4)
-		}
-	case "ipv6":
-		if ip := net.ParseIP(str); ip == nil || ip.To16() == nil {
-			res.Add(path, str, validation.MsgExpectedRFC2373IPv6)
-		}
-	case "ip":
-		if _, err := netip.ParseAddr(str); err != nil {
-			res.Add(path, str, validation.MsgExpectedRFCIPAddr)
+	case "ipv4", "ipv6", "ip":
+		addr, err := netip.ParseAddr(str)
+
+		switch s.Format {
+		case "ipv4":
+			if err != nil || !addr.Is4() {
+				res.Add(path, str, validation.MsgExpectedRFC2673IPv4)
+			}
+		case "ipv6":
+			if err != nil || !addr.Is6() || addr.Is4In6() {
+				res.Add(path, str, validation.MsgExpectedRFC2373IPv6)
+			}
+		default: // "ip"
+			if err != nil {
+				res.Add(path, str, validation.MsgExpectedRFCIPAddr)
+			}
 		}
 	case "uri", "uri-reference", "iri", "iri-reference":
 		if _, err := url.Parse(str); err != nil {
