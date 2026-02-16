@@ -21,7 +21,7 @@ func ExampleCLI() {
 	// First, define your input options.
 	type Options struct {
 		Debug bool   `doc:"Enable debug logging"`
-		Host  string `doc:"ServerURL to listen on."`
+		Host  string `doc:"Hostname to listen on."`
 		Port  int    `doc:"Port to listen on." short:"p" default:"8888"`
 	}
 
@@ -120,7 +120,7 @@ func TestCLIAdvanced(t *testing.T) {
 	type Options struct {
 		// Example of option composition via embedded type.
 		DebugOption
-		Host    string        `doc:"ServerURL to listen on."`
+		Host    string        `doc:"Hostname to listen on."`
 		Port    *int          `doc:"Port to listen on." short:"p" default:"8000"`
 		Timeout time.Duration `doc:"Request timeout." default:"5s"`
 	}

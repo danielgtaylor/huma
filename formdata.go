@@ -131,9 +131,8 @@ func readSingleFile(fileHeaders []*multipart.FileHeader, key string, opMediaType
 	if len(fileHeaders) == 0 {
 		if opMediaType.Schema.requiredMap[key] {
 			return FormFile{}, &ErrorDetail{Message: "File required", Location: key}
-		} else {
-			return FormFile{}, nil
 		}
+		return FormFile{}, nil
 	} else if len(fileHeaders) == 1 {
 		validator := NewMimeTypeValidator(opMediaType.Encoding[key])
 		return readFile(fileHeaders[0], key, validator)
