@@ -1413,7 +1413,7 @@ Hello, World!
 					Path:   "/upload",
 				}, func(ctx context.Context, input *struct {
 					RawBody huma.MultipartFormFiles[struct {
-						Avatar huma.FormFile `form:"avatar" contentType:"image/jpeg, image/png" required:"true"`
+						Avatar huma.FormFile `form:"avatar" contentType:"image/jpeg, image/png"`
 					}]
 				}) (*struct{}, error) {
 					return nil, nil
@@ -1445,7 +1445,7 @@ test
 					Path:   "/upload",
 				}, func(ctx context.Context, input *struct {
 					RawBody huma.MultipartFormFiles[struct {
-						Avatar huma.FormFile `form:"avatar" contentType:"image/jpeg, image/png"`
+						Avatar huma.FormFile `form:"avatar" contentType:"image/jpeg, image/png" required:"false"`
 					}]
 				}) (*struct{}, error) {
 					// Field should be empty, not panic
