@@ -469,7 +469,7 @@ func NewAPI(config Config, a Adapter) API {
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + ".json",
 		}, func(ctx Context) {
-			ctx.SetHeader("Content-Type", "application/vnd.oai.openapi+json")
+			ctx.SetHeader("Content-Type", "application/openapi+json")
 			if specJSON == nil {
 				specJSON, _ = json.Marshal(newAPI.OpenAPI())
 			}
@@ -481,7 +481,7 @@ func NewAPI(config Config, a Adapter) API {
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + "-3.0.json",
 		}, func(ctx Context) {
-			ctx.SetHeader("Content-Type", "application/vnd.oai.openapi+json")
+			ctx.SetHeader("Content-Type", "application/openapi+json")
 			if specJSON30 == nil {
 				specJSON30, _ = newAPI.OpenAPI().Downgrade()
 			}
@@ -493,7 +493,7 @@ func NewAPI(config Config, a Adapter) API {
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + ".yaml",
 		}, func(ctx Context) {
-			ctx.SetHeader("Content-Type", "application/vnd.oai.openapi+yaml")
+			ctx.SetHeader("Content-Type", "application/openapi+yaml")
 			if specYAML == nil {
 				specYAML, _ = newAPI.OpenAPI().YAML()
 			}
@@ -505,7 +505,7 @@ func NewAPI(config Config, a Adapter) API {
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + "-3.0.yaml",
 		}, func(ctx Context) {
-			ctx.SetHeader("Content-Type", "application/vnd.oai.openapi+yaml")
+			ctx.SetHeader("Content-Type", "application/openapi+yaml")
 			if specYAML30 == nil {
 				specYAML30, _ = newAPI.OpenAPI().DowngradeYAML()
 			}
