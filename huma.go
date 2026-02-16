@@ -848,9 +848,14 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				contentType := ctx.Header("Content-Type")
 				if contentType == "" {
 					// Fallback to the first available content type from the operation.
-					for ct := range op.RequestBody.Content {
-						contentType = ct
-						break
+					// If application/json is available, prefer that.
+					if _, ok := op.RequestBody.Content["application/json"]; ok {
+						contentType = "application/json"
+					} else {
+						for ct := range op.RequestBody.Content {
+							contentType = ct
+							break
+						}
 					}
 				}
 
