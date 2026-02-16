@@ -844,8 +844,22 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					f.SetBytes(body)
 				}
 
-				// Process body
-				unmarshaler := func(data []byte, v any) error { return api.Unmarshal(ctx.Header("Content-Type"), data, v) }
+				// Process body.
+				contentType := ctx.Header("Content-Type")
+				if contentType == "" {
+					// Fallback to the first available content type from the operation.
+					// If application/json is available, prefer that.
+					if _, ok := op.RequestBody.Content["application/json"]; ok {
+						contentType = "application/json"
+					} else {
+						for ct := range op.RequestBody.Content {
+							contentType = ct
+							break
+						}
+					}
+				}
+
+				unmarshaler := func(data []byte, v any) error { return api.Unmarshal(contentType, data, v) }
 				validator := func(data any, res *ValidateResult) {
 					pb.Reset()
 					pb.Push("body")
