@@ -284,13 +284,6 @@ type Format struct {
 	Unmarshal func(data []byte, v any) error
 }
 
-type SchemaOptions struct {
-	// FieldsOptionalByDefault controls whether schema fields are treated as
-	// optional by default. When false, fields are marked as required unless
-	// they have the omitempty or omitzero tag.
-	FieldsOptionalByDefault bool
-}
-
 type api struct {
 	config       Config
 	adapter      Adapter

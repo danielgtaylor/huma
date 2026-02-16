@@ -1340,7 +1340,7 @@ Hello, World!
 					Path:   "/upload",
 				}, func(ctx context.Context, input *struct {
 					RawBody huma.MultipartFormFiles[struct {
-						HelloWorld huma.FormFile `form:"file" contentType:"text/plain"`
+						HelloWorld huma.FormFile `form:"file" contentType:"text/plain" required:"false"`
 					}]
 				}) (*struct{}, error) {
 					assert.False(t, input.RawBody.Data().HelloWorld.IsSet)
@@ -3283,6 +3283,39 @@ func TestCustomValidationErrorStatus(t *testing.T) {
 	resp := api.Post("/test", map[string]any{"value": "foo"})
 	assert.Equal(t, http.StatusBadRequest, resp.Result().StatusCode)
 	assert.Contains(t, resp.Body.String(), "Bad Request")
+}
+
+func TestMinItemsValidation(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	huma.Get(api, "/test", func(ctx context.Context, input *struct {
+		Names []string `query:"names" minItems:"2" required:"true"`
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	// 1. Missing query parameter should fail because it is required
+	resp := api.Get("/test")
+	assert.Equal(t, http.StatusUnprocessableEntity, resp.Result().StatusCode)
+	assert.Contains(t, resp.Body.String(), "required query parameter is missing")
+
+	// 2. Query parameter with 1 item should fail minItems
+	resp = api.Get("/test?names=foo")
+	assert.Equal(t, http.StatusUnprocessableEntity, resp.Result().StatusCode)
+	assert.Contains(t, resp.Body.String(), "expected array length >= 2")
+
+	huma.Get(api, "/optional", func(ctx context.Context, input *struct {
+		Names []string `query:"names" minItems:"2"`
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	// Query Optional (should pass when missing)
+	resp = api.Get("/optional")
+	assert.Contains(t, []int{200, 204}, resp.Code)
+
+	// But still fail if provided with too few items
+	assert.Equal(t, 422, api.Get("/optional?names=foo").Code)
 }
 
 // func BenchmarkSecondDecode(b *testing.B) {
