@@ -1,6 +1,7 @@
 package huma
 
 import (
+	"maps"
 	"strings"
 )
 
@@ -134,9 +135,7 @@ func (g *Group) ModifyOperation(op *Operation, next func(*Operation)) {
 		if op.Metadata != nil {
 			// Copy so we don't modify the original map.
 			meta := make(map[string]any, len(op.Metadata))
-			for k, v := range op.Metadata {
-				meta[k] = v
-			}
+			maps.Copy(meta, op.Metadata)
 			op.Metadata = meta
 
 			// If the conveniences are set, we need to regenerate the operation ID and

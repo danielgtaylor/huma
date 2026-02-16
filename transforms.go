@@ -113,7 +113,7 @@ func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
 
 			fieldIndexes := []int{}
 			fields := []reflect.StructField{
-				reflect.TypeOf(extra).Field(0),
+				reflect.TypeFor[schemaField]().Field(0),
 			}
 			for i := 0; i < typ.NumField(); i++ {
 				f := typ.Field(i)

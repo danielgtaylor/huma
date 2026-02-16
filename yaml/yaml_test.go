@@ -226,7 +226,7 @@ bar:
 			want: (func() string {
 				var sb strings.Builder
 				spaces := strings.Repeat("  ", 100)
-				for i := 0; i < 100; i++ {
+				for i := range 100 {
 					if i > 0 {
 						sb.WriteByte('\n')
 					}
@@ -403,11 +403,11 @@ func diff(xs, ys string) (string, string) {
 	}
 	for {
 		i := strings.IndexByte(xs, '\n')
-		j := strings.IndexByte(ys, '\n')
-		if i < 0 || j < 0 || xs[:i] != ys[:j] {
+		before, after, ok := strings.Cut(ys, "\n")
+		if i < 0 || !ok || xs[:i] != before {
 			break
 		}
-		xs, ys = xs[i+1:], ys[j+1:]
+		xs, ys = xs[i+1:], after
 	}
 	for {
 		i := strings.LastIndexByte(xs, '\n')

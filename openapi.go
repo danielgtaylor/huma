@@ -3,6 +3,7 @@ package huma
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"reflect"
 	"time"
@@ -63,7 +64,7 @@ func isNilValue(v any) bool {
 	// https://go.dev/doc/faq#nil_error
 	vv := reflect.ValueOf(v)
 	switch vv.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
 		return vv.IsNil()
 	}
 
@@ -88,9 +89,7 @@ func marshalJSON(fields []jsonFieldInfo, extensions map[string]any) ([]byte, err
 		value[v.name] = v.value
 	}
 
-	for k, v := range extensions {
-		value[k] = v
-	}
+	maps.Copy(value, extensions)
 
 	return json.Marshal(value)
 }

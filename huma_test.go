@@ -934,8 +934,8 @@ func TestFeatures(t *testing.T) {
 						// Test defaults for fields in the same linked struct. Even though
 						// we have seen the struct before we still need to set the default
 						// since it's a new/different field.
-						S1 StructWithDefaultField `json:"s1,omitempty"`
-						S2 StructWithDefaultField `json:"s2,omitempty"`
+						S1 StructWithDefaultField `json:"s1,omitzero"`
+						S2 StructWithDefaultField `json:"s2,omitzero"`
 					}
 				}) (*struct{}, error) {
 					assert.Equal(t, "Huma", input.Body.Name)
@@ -3229,7 +3229,7 @@ func TestBodyRace(t *testing.T) {
 		return nil, nil
 	})
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		t.Run(fmt.Sprintf("test-%d", i), func(tt *testing.T) {
 			tt.Parallel()
 			resp := api.Post("/ping", map[string]any{"value": "hello"})

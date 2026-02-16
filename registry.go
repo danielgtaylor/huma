@@ -162,7 +162,7 @@ func (r *mapRegistry) MarshalJSON() ([]byte, error) {
 	return json.Marshal(r.schemas)
 }
 
-func (r *mapRegistry) MarshalYAML() (interface{}, error) {
+func (r *mapRegistry) MarshalYAML() (any, error) {
 	return r.schemas, nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -92,11 +93,8 @@ func TestPatch(t *testing.T) {
 		if len(input.IfMatch) > 0 {
 			found := false
 			if existing := db[input.ThingID]; existing != nil {
-				for _, possible := range input.IfMatch {
-					if possible == existing.ETag() {
-						found = true
-						break
-					}
+				if slices.Contains(input.IfMatch, existing.ETag()) {
+					found = true
 				}
 			}
 			if !found {

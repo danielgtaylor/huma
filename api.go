@@ -41,8 +41,8 @@ type ResolverWithPath interface {
 }
 
 var (
-	resolverType         = reflect.TypeOf((*Resolver)(nil)).Elem()
-	resolverWithPathType = reflect.TypeOf((*ResolverWithPath)(nil)).Elem()
+	resolverType         = reflect.TypeFor[Resolver]()
+	resolverWithPathType = reflect.TypeFor[ResolverWithPath]()
 )
 
 // Adapter is an interface that allows the API to be used with different HTTP
