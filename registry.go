@@ -20,11 +20,6 @@ type Registry interface {
 	TypeFromRef(ref string) reflect.Type
 	Map() map[string]*Schema
 	RegisterTypeAlias(t reflect.Type, alias reflect.Type)
-	Config() RegistryConfig
-}
-
-type RegistryConfig struct {
-	FieldsOptionalByDefault bool
 }
 
 // DefaultSchemaNamer provides schema names for types. It uses the type name
@@ -73,7 +68,6 @@ type mapRegistry struct {
 	seen    map[reflect.Type]bool
 	namer   func(reflect.Type, string) string
 	aliases map[reflect.Type]reflect.Type
-	config  RegistryConfig
 }
 
 func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema {
@@ -171,10 +165,6 @@ func (r *mapRegistry) RegisterTypeAlias(t reflect.Type, alias reflect.Type) {
 	r.aliases[t] = alias
 }
 
-func (r *mapRegistry) Config() RegistryConfig {
-	return r.config
-}
-
 // NewMapRegistry creates a new registry that stores schemas in a map and
 // returns references to them using the given prefix.
 func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) string) Registry {
@@ -185,8 +175,5 @@ func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) strin
 		seen:    map[reflect.Type]bool{},
 		aliases: map[reflect.Type]reflect.Type{},
 		namer:   namer,
-		config: RegistryConfig{
-			FieldsOptionalByDefault: false,
-		},
 	}
 }
