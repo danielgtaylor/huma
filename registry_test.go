@@ -73,3 +73,48 @@ func TestSchemaAlias(t *testing.T) {
 	schemaWithString := registry.Schema(reflect.TypeFor[StructWithString](), false, "")
 	assert.Equal(t, schemaWithString, schemaWithContainer)
 }
+
+func TestReusePrimitiveType(t *testing.T) {
+	type (
+		CustomHeader string
+
+		firstRequest struct {
+			Header CustomHeader `json:"header" description:"A custom header"`
+		}
+
+		secondRequest struct {
+			AnotherHeader CustomHeader `json:"another_header" description:"Another custom header"`
+		}
+	)
+
+	// Default settings
+	registry := NewMapRegistry("#/components/schemas", DefaultSchemaNamer)
+
+	first := SchemaFromType(registry, reflect.TypeOf(firstRequest{}))
+	second := SchemaFromType(registry, reflect.TypeOf(secondRequest{}))
+
+	if first.Properties["header"].Ref != "" {
+		t.Errorf("Expected header to be defined inline, but got a ref: %s", first.Properties["header"].Ref)
+	}
+	if second.Properties["another_header"].Ref != "" {
+		t.Errorf("Expected another_header to be defined inline, but got a ref: %s", second.Properties["another_header"].Ref)
+	}
+
+	// Reusing primitive types enabled
+	registry = NewMapRegistry("#/components/schemas", DefaultSchemaNamer, WithPrimitiveTypeReuse())
+
+	first = SchemaFromType(registry, reflect.TypeOf(firstRequest{}))
+	second = SchemaFromType(registry, reflect.TypeOf(secondRequest{}))
+
+	if first.Properties["header"].Ref == "" {
+		t.Errorf("Expected header to use a ref, but it's defined inline")
+	}
+	if second.Properties["another_header"].Ref == "" {
+		t.Errorf("Expected another_header to use a ref, but it's defined inline")
+	}
+
+	if first.Properties["header"].Ref != second.Properties["another_header"].Ref {
+		t.Errorf("Expected both properties to use the same ref, but got %s and %s",
+			first.Properties["header"].Ref, second.Properties["another_header"].Ref)
+	}
+}

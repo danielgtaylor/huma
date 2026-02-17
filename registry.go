@@ -61,13 +61,23 @@ func DefaultSchemaNamer(t reflect.Type, hint string) string {
 	return name
 }
 
+type mapRegistryOption func(*mapRegistry)
+
+// WithPrimitiveTypeReuse allows primitive types to be reused.
+func WithPrimitiveTypeReuse() mapRegistryOption {
+	return func(r *mapRegistry) {
+		r.reusePrimitive = true
+	}
+}
+
 type mapRegistry struct {
-	prefix  string
-	schemas map[string]*Schema
-	types   map[string]reflect.Type
-	seen    map[reflect.Type]bool
-	namer   func(reflect.Type, string) string
-	aliases map[reflect.Type]reflect.Type
+	prefix         string
+	schemas        map[string]*Schema
+	types          map[string]reflect.Type
+	seen           map[reflect.Type]bool
+	namer          func(reflect.Type, string) string
+	aliases        map[reflect.Type]reflect.Type
+	reusePrimitive bool
 }
 
 func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema {
@@ -85,6 +95,13 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 	}
 
 	getsRef := t.Kind() == reflect.Struct
+
+	isNamedPrimitive := t.PkgPath() != "" && t.Name() != "" && t.Kind() != reflect.Struct
+	if isNamedPrimitive && r.reusePrimitive {
+		// Special case: named primitive-based types are reused.
+		getsRef = true
+	}
+
 	if t == timeType {
 		// Special case: time.Time is always a string.
 		getsRef = false
@@ -167,13 +184,19 @@ func (r *mapRegistry) RegisterTypeAlias(t reflect.Type, alias reflect.Type) {
 
 // NewMapRegistry creates a new registry that stores schemas in a map and
 // returns references to them using the given prefix.
-func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) string) Registry {
-	return &mapRegistry{
+func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) string, opts ...mapRegistryOption) Registry {
+	r := mapRegistry{
 		prefix:  prefix,
-		schemas: map[string]*Schema{},
-		types:   map[string]reflect.Type{},
-		seen:    map[reflect.Type]bool{},
-		aliases: map[reflect.Type]reflect.Type{},
+		schemas: make(map[string]*Schema),
+		types:   make(map[string]reflect.Type),
+		seen:    make(map[reflect.Type]bool),
 		namer:   namer,
+		aliases: make(map[reflect.Type]reflect.Type),
 	}
+
+	for _, opt := range opts {
+		opt(&r)
+	}
+
+	return &r
 }
