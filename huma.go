@@ -864,6 +864,11 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 									return
 								}
 
+								// Skip FormFile and []FormFile fields as they are handled separately.
+								if p.Type == reflect.TypeFor[FormFile]() || p.Type == reflect.TypeFor[[]FormFile]() {
+									return
+								}
+
 								pb.Reset()
 								pb.Push(p.Loc)
 								pb.Push(p.Name)

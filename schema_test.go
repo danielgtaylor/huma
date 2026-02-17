@@ -190,7 +190,7 @@ func TestSchema(t *testing.T) {
 		{
 			name:     "ipAddr",
 			input:    netip.AddrFrom4([4]byte{127, 0, 0, 1}),
-			expected: `{"type": "string", "format": "ipv4"}`,
+			expected: `{"type": "string", "format": "ip"}`,
 		},
 		{
 			name:     "json.RawMessage",
@@ -294,6 +294,65 @@ func TestSchema(t *testing.T) {
 					}
 				},
 				"required": ["value"],
+				"additionalProperties": false
+			}`,
+		},
+		{
+			name: "field-array-items-constraints",
+			input: struct {
+				IDs []string `json:"ids" format:"uuid" minLength:"36" maxLength:"36" pattern:"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"ids": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "string",
+							"format": "uuid",
+							"minLength": 36,
+							"maxLength": 36,
+							"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+						}
+					}
+				},
+				"required": ["ids"],
+				"additionalProperties": false
+			}`,
+		},
+		{
+			name: "field-time-format-time",
+			input: struct {
+				Value time.Time `json:"value" timeFormat:"15:04:05"`
+			}{},
+			expected: `{"type":"object","additionalProperties":false,"properties":{"value":{"type":"string","format":"time"}},"required":["value"]}`,
+		},
+		{
+			name: "field-time-format-custom",
+			input: struct {
+				Value time.Time `json:"value" timeFormat:"2006-01-02T15:04"`
+			}{},
+			expected: `{"type":"object","additionalProperties":false,"properties":{"value":{"type":"string","format":"2006-01-02T15:04"}},"required":["value"]}`,
+		},
+		{
+			name: "field-array-numeric-constraints",
+			input: struct {
+				Values []int `json:"values" minimum:"1" maximum:"10"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"values": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "integer",
+							"format": "int64",
+							"minimum": 1,
+							"maximum": 10
+						}
+					}
+				},
+				"required": ["values"],
 				"additionalProperties": false
 			}`,
 		},

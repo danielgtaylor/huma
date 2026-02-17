@@ -79,7 +79,6 @@ type mapRegistry struct {
 	seen    map[reflect.Type]bool
 	namer   func(reflect.Type, string) string
 	aliases map[reflect.Type]reflect.Type
-	config  RegistryConfig
 }
 
 func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema {
@@ -175,10 +174,6 @@ func (r *mapRegistry) MarshalYAML() (any, error) {
 // RegisterTypeAlias makes the schema generator use the `alias` type instead of `t`.
 func (r *mapRegistry) RegisterTypeAlias(t reflect.Type, alias reflect.Type) {
 	r.aliases[t] = alias
-}
-
-func (r *mapRegistry) Config() RegistryConfig {
-	return r.config
 }
 
 // NewMapRegistry creates a new registry that stores schemas in a map and
