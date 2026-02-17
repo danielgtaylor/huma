@@ -216,11 +216,6 @@ type Config struct {
 	// negotiated, then a 406 Not Acceptable response will be returned.
 	NoFormatFallback bool
 
-	// FieldsOptionalByDefault controls whether schema fields are treated as
-	// optional by default. When false, fields are marked as required unless
-	// they have the omitempty or omitzero tag.
-	FieldsOptionalByDefault bool
-
 	// Transformers are a way to modify a response body before it is serialized.
 	Transformers []Transformer
 
@@ -442,10 +437,6 @@ func NewAPI(config Config, a Adapter) API {
 
 	if config.Components.Schemas == nil {
 		config.Components.Schemas = NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
-	}
-
-	if mr, ok := config.Components.Schemas.(*mapRegistry); ok {
-		mr.config.FieldsOptionalByDefault = config.FieldsOptionalByDefault
 	}
 
 	if config.DefaultFormat == "" && !config.NoFormatFallback {
