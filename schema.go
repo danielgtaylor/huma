@@ -878,7 +878,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 			// required (unless the registry says otherwise), then can be made
 			// optional with the `omitempty` JSON tag, `omitzero` JSON tag, or it
 			// can be overridden manually via the `required` tag.
-			fieldRequired := true
+			fieldRequired := !r.Config().FieldsOptionalByDefault
 
 			name := f.Name
 			if j := f.Tag.Get("json"); j != "" {

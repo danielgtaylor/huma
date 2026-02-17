@@ -3887,6 +3887,57 @@ func TestNonJSONValidation(t *testing.T) {
 	assert.Equal(t, 422, w.Code)
 }
 
+func TestFieldsOptionalByDefault(t *testing.T) {
+	type MyInput struct {
+		Body struct {
+			Name string `json:"name"`
+			Age  int    `json:"age" required:"true"`
+		}
+	}
+
+	// Default behavior.
+	{
+		config := huma.DefaultConfig("Test", "1.0.0")
+		config.FieldsOptionalByDefault = false
+		_, api := humatest.New(t, config)
+
+		huma.Post(api, "/test", func(ctx context.Context, input *MyInput) (*struct{}, error) {
+			return nil, nil
+		})
+
+		// Missing name should fail because it's required by default.
+		resp := api.Post("/test", map[string]any{
+			"age": 25,
+		})
+		assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+		assert.Contains(t, resp.Body.String(), "required property name")
+	}
+
+	// Mark fields optional by default.
+	{
+		config := huma.DefaultConfig("Test", "1.0.0")
+		config.FieldsOptionalByDefault = true
+		_, api := humatest.New(t, config)
+
+		huma.Post(api, "/test", func(ctx context.Context, input *MyInput) (*struct{}, error) {
+			return nil, nil
+		})
+
+		// Missing name should pass because it's optional by default.
+		resp := api.Post("/test", map[string]any{
+			"age": 25,
+		})
+		assert.Equal(t, http.StatusNoContent, resp.Code)
+
+		// Missing age should still fail because it's explicitly marked as required.
+		resp = api.Post("/test", map[string]any{
+			"name": "John",
+		})
+		assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+		assert.Contains(t, resp.Body.String(), "required property age")
+	}
+}
+
 func TestSchemaLinkDuplicateTypes(t *testing.T) {
 	config := huma.DefaultConfig("Test API", "1.0.0")
 	_, api := humatest.New(t, config)
