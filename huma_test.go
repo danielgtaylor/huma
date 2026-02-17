@@ -2291,7 +2291,7 @@ Content-Type: text/plain
 			URL:    "/response",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusOK, resp.Code)
-				assert.JSONEq(t, `{"$schema": "https:///schemas/RespBody.json", "greeting":"Hello, world!"}`, resp.Body.String())
+				assert.JSONEq(t, `{"$schema": "http://localhost/schemas/RespBody.json", "greeting":"Hello, world!"}`, resp.Body.String())
 			},
 		},
 		{
@@ -2420,6 +2420,231 @@ Content-Type: text/plain
 			URL:    "/transform",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusOK, resp.Code)
+			},
+		},
+		{
+			Name: "schema-url-from-x-forwarded-host",
+			Transformers: []huma.Transformer{
+				huma.NewSchemaLinkTransformer("/", "/").Transform,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Headers: map[string]string{
+				"X-Forwarded-Host": "api.example.com",
+			},
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "https://api.example.com/schemas/Get-testResponse.json", body["$schema"])
+			},
+		},
+		{
+			Name: "schema-url-from-forwarded-header",
+			Transformers: []huma.Transformer{
+				huma.NewSchemaLinkTransformer("/", "/").Transform,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Headers: map[string]string{
+				"Forwarded": "for=192.0.2.1;host=api.example.com;proto=https",
+			},
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "https://api.example.com/schemas/Get-testResponse.json", body["$schema"])
+			},
+		},
+		{
+			Name: "schema-url-x-forwarded-host-takes-precedence",
+			Transformers: []huma.Transformer{
+				huma.NewSchemaLinkTransformer("/", "/").Transform,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Headers: map[string]string{
+				"X-Forwarded-Host": "preferred.example.com",
+				"Forwarded":        "host=fallback.example.com",
+			},
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "https://preferred.example.com/schemas/Get-testResponse.json", body["$schema"])
+			},
+		},
+		{
+			Name: "schema-url-localhost-fallback",
+			Transformers: []huma.Transformer{
+				huma.NewSchemaLinkTransformer("/", "/").Transform,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "http://localhost/schemas/Get-testResponse.json", body["$schema"])
+			},
+		},
+		{
+			Name: "schema-url-openapi-server-fallback",
+			Transformers: []huma.Transformer{
+				huma.NewSchemaLinkTransformer("/", "/").Transform,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				api.OpenAPI().Servers = []*huma.Server{
+					{URL: "https://api.production.com"},
+				}
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "https://api.production.com/schemas/Get-testResponse.json", body["$schema"])
+			},
+		},
+		{
+			Name: "schema-url-openapi-server-without-scheme",
+			Transformers: []huma.Transformer{
+				huma.NewSchemaLinkTransformer("/", "/").Transform,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				api.OpenAPI().Servers = []*huma.Server{
+					{URL: "api.production.com"},
+				}
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "https://api.production.com/schemas/Get-testResponse.json", body["$schema"])
+			},
+		},
+		{
+			Name: "schema-url-forwarded-host-overrides-openapi-server",
+			Transformers: []huma.Transformer{
+				huma.NewSchemaLinkTransformer("/", "/").Transform,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				api.OpenAPI().Servers = []*huma.Server{
+					{URL: "https://api.production.com"},
+				}
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Headers: map[string]string{
+				"X-Forwarded-Host": "custom.example.com",
+			},
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "https://custom.example.com/schemas/Get-testResponse.json", body["$schema"])
 			},
 		},
 		{
@@ -2838,7 +3063,7 @@ func TestExhaustiveErrors(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
 	assert.JSONEq(t, `{
-		"$schema": "https:///schemas/ErrorModel.json",
+				"$schema": "http://localhost/schemas/ErrorModel.json",
 		"title": "Unprocessable Entity",
 		"status": 422,
 		"detail": "validation failed",
