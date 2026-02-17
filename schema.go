@@ -358,7 +358,7 @@ func boolTag(f reflect.StructField, tag string, def bool) bool {
 	return def
 }
 
-func intTag(f reflect.StructField, tag string, def *int) *int {
+func intTag(f reflect.StructField, tag string) *int {
 	if v := f.Tag.Get(tag); v != "" {
 		if i, err := strconv.Atoi(v); err == nil {
 			return &i
@@ -366,10 +366,10 @@ func intTag(f reflect.StructField, tag string, def *int) *int {
 			panic(fmt.Errorf("invalid int tag '%s' for field '%s': %v (%w)", tag, f.Name, v, err))
 		}
 	}
-	return def
+	return nil
 }
 
-func floatTag(f reflect.StructField, tag string, def *float64) *float64 {
+func floatTag(f reflect.StructField, tag string) *float64 {
 	if v := f.Tag.Get(tag); v != "" {
 		if i, err := strconv.ParseFloat(v, 64); err == nil {
 			return &i
@@ -377,7 +377,7 @@ func floatTag(f reflect.StructField, tag string, def *float64) *float64 {
 			panic(fmt.Errorf("invalid float tag '%s' for field '%s': %v (%w)", tag, f.Name, v, err))
 		}
 	}
-	return def
+	return nil
 }
 
 func stringTag(f reflect.StructField, tag string, def string) string {
@@ -616,38 +616,46 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 		panic(fmt.Errorf("nullable is not supported for field '%s' which is type '%s'", f.Name, fs.Ref))
 	}
 
-	if v := f.Tag.Get("minimum"); v != "" {
-		targetSchema(fs).Minimum = floatTag(f, "minimum", nil)
+	if v := floatTag(f, "minimum"); v != nil {
+		targetSchema(fs).Minimum = v
 	}
-	if v := f.Tag.Get("exclusiveMinimum"); v != "" {
-		targetSchema(fs).ExclusiveMinimum = floatTag(f, "exclusiveMinimum", nil)
+	if v := floatTag(f, "exclusiveMinimum"); v != nil {
+		targetSchema(fs).ExclusiveMinimum = v
 	}
-	if v := f.Tag.Get("maximum"); v != "" {
-		targetSchema(fs).Maximum = floatTag(f, "maximum", nil)
+	if v := floatTag(f, "maximum"); v != nil {
+		targetSchema(fs).Maximum = v
 	}
-	if v := f.Tag.Get("exclusiveMaximum"); v != "" {
-		targetSchema(fs).ExclusiveMaximum = floatTag(f, "exclusiveMaximum", nil)
+	if v := floatTag(f, "exclusiveMaximum"); v != nil {
+		targetSchema(fs).ExclusiveMaximum = v
 	}
-	if v := f.Tag.Get("multipleOf"); v != "" {
-		targetSchema(fs).MultipleOf = floatTag(f, "multipleOf", nil)
+	if v := floatTag(f, "multipleOf"); v != nil {
+		targetSchema(fs).MultipleOf = v
 	}
-	if v := f.Tag.Get("minLength"); v != "" {
-		targetSchema(fs).MinLength = intTag(f, "minLength", nil)
+	if v := intTag(f, "minLength"); v != nil {
+		targetSchema(fs).MinLength = v
 	}
-	if v := f.Tag.Get("maxLength"); v != "" {
-		targetSchema(fs).MaxLength = intTag(f, "maxLength", nil)
+	if v := intTag(f, "maxLength"); v != nil {
+		targetSchema(fs).MaxLength = v
 	}
 	if v := f.Tag.Get("pattern"); v != "" {
-		targetSchema(fs).Pattern = stringTag(f, "pattern", "")
+		targetSchema(fs).Pattern = v
 	}
 	if v := f.Tag.Get("patternDescription"); v != "" {
-		targetSchema(fs).PatternDescription = stringTag(f, "patternDescription", "")
+		targetSchema(fs).PatternDescription = v
 	}
-	fs.MinItems = intTag(f, "minItems", fs.MinItems)
-	fs.MaxItems = intTag(f, "maxItems", fs.MaxItems)
+	if v := intTag(f, "minItems"); v != nil {
+		fs.MinItems = v
+	}
+	if v := intTag(f, "maxItems"); v != nil {
+		fs.MaxItems = v
+	}
+	if v := intTag(f, "minProperties"); v != nil {
+		fs.MinProperties = v
+	}
+	if v := intTag(f, "maxProperties"); v != nil {
+		fs.MaxProperties = v
+	}
 	fs.UniqueItems = boolTag(f, "uniqueItems", fs.UniqueItems)
-	fs.MinProperties = intTag(f, "minProperties", fs.MinProperties)
-	fs.MaxProperties = intTag(f, "maxProperties", fs.MaxProperties)
 	fs.ReadOnly = boolTag(f, "readOnly", fs.ReadOnly)
 	fs.WriteOnly = boolTag(f, "writeOnly", fs.WriteOnly)
 	fs.Deprecated = boolTag(f, "deprecated", fs.Deprecated)
