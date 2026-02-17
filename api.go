@@ -563,8 +563,9 @@ func (a *api) registerDocsRoute() {
 		openAPIPath = path.Join(prefix, openAPIPath)
 	}
 
-	var body []byte
 	var title string
+	var csp []string
+	var body []byte
 
 	if a.config.Info != nil && a.config.Info.Title != "" {
 		title = a.config.Info.Title + " Reference"
@@ -578,6 +579,17 @@ func (a *api) registerDocsRoute() {
 	case DocsRendererScalar:
 		if title == "" {
 			title = "Scalar in HTML"
+		}
+
+		csp = []string{
+			"default-src 'none'",
+			"base-uri 'none'",
+			"connect-src 'self'",
+			"form-action 'none'",
+			"frame-ancestors 'none'",
+			"sandbox allow-same-origin allow-scripts",
+			"script-src 'unsafe-eval' https://unpkg.com/@scalar/api-reference@1.44.20/dist/browser/standalone.js", // TODO: Somehow drop 'unsafe-eval'
+			"style-src 'unsafe-inline'", // TODO: Somehow drop 'unsafe-inline'
 		}
 
 		body = []byte(`<!doctype html>
@@ -595,6 +607,17 @@ func (a *api) registerDocsRoute() {
 	case DocsRendererStoplightElements:
 		if title == "" {
 			title = "Elements in HTML"
+		}
+
+		csp = []string{
+			"default-src 'none'",
+			"base-uri 'none'",
+			"connect-src 'self'",
+			"form-action 'none'",
+			"frame-ancestors 'none'",
+			"sandbox allow-same-origin allow-scripts",
+			"script-src https://unpkg.com/@stoplight/elements@9.0.15/web-components.min.js",
+			"style-src 'unsafe-inline' https://unpkg.com/@stoplight/elements@9.0.15/styles.min.css",
 		}
 
 		body = []byte(`<!doctype html>
@@ -621,6 +644,17 @@ func (a *api) registerDocsRoute() {
 			title = "SwaggerUI in HTML"
 		}
 
+		csp = []string{
+			"default-src 'none'",
+			"base-uri 'none'",
+			"connect-src 'self'",
+			"form-action 'none'",
+			"frame-ancestors 'none'",
+			"sandbox allow-same-origin allow-scripts",
+			"script-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js 'sha256-pyvxInx2c2C9E/dNMA9dfGa9z3Lhk9YDz1ET62LbfZs='",
+			"style-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui.css",
+		}
+
 		body = []byte(`<!doctype html>
 <html lang="en">
   <head>
@@ -632,10 +666,11 @@ func (a *api) registerDocsRoute() {
   <body>
     <div id="swagger-ui"></div>
     <script src="https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js" crossorigin integrity="sha384-o9idN8HE6/V6SAewgnr6/5nz7+Npt5J0Cb4tNyXK8pycsVmgl1ZNbRS7tlEGxd+J"></script>
-    <script>
+    <script data-url="` + openAPIPath + `.json">
+      const url = document.currentScript.dataset.url;
       window.onload = () => {
         window.ui = SwaggerUIBundle({
-          url: '` + openAPIPath + `.json',
+          url: url,
           dom_id: '#swagger-ui',
         });
       };
@@ -646,10 +681,15 @@ func (a *api) registerDocsRoute() {
 		panic("unknown docs renderer: " + a.config.DocsRenderer)
 	}
 
+	if len(csp) == 0 {
+		panic("missing CSP for docs renderer: " + a.config.DocsRenderer)
+	}
+
 	a.adapter.Handle(&Operation{
 		Method: http.MethodGet,
 		Path:   a.config.DocsPath,
 	}, func(ctx Context) {
+		ctx.SetHeader("Content-Security-Policy", strings.Join(csp, "; "))
 		ctx.SetHeader("Content-Type", "text/html")
 		ctx.BodyWriter().Write(body)
 	})

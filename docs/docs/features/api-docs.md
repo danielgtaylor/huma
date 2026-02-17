@@ -24,43 +24,6 @@ You can switch to other documentation renderers using `config.DocsRenderer`. The
 
 You can customize the generated documentation by providing your own renderer function to the API adapter or by using the underlying router directly.
 
-### Stoplight Elements
-
-You can customize the default docs by providing your own HTML so you can set the layout, styles, colors, etc as needed.
-
-```go title="code.go"
-router := chi.NewRouter()
-config := huma.DefaultConfig("Docs Example", "1.0.0")
-config.DocsPath = ""
-
-api := humachi.New(router, config)
-
-router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte(`<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="referrer" content="same-origin">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Docs Example reference</title>
-    <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements@9.0.15/styles.min.css" crossorigin integrity="sha384-iVQBHadsD+eV0M5+ubRCEVXrXEBj+BqcuwjUwPoVJc0Pb1fmrhYSAhL+BFProHdV">
-    <script src="https://unpkg.com/@stoplight/elements@9.0.15/web-components.min.js" crossorigin integrity="sha384-xjOcq9PZ/k+pGtPS/xcsCRXGjKKfTlIa4H1IYEnC+97jNa6sAMWTNrV6hY08W3GL"></script>
-  </head>
-  <body style="height: 100vh;">
-    <elements-api
-      apiDescriptionUrl="/openapi.yaml"
-      router="hash"
-      layout="sidebar"
-      tryItCredentialsPolicy="same-origin"
-    ></elements-api>
-  </body>
-</html>`))
-})
-```
-
-![Stoplight Elements Stacked](./elements-stacked.png)
-
 ### Scalar Docs
 
 [Scalar Docs](https://github.com/scalar/scalar?tab=readme-ov-file#readme) provide a featureful and customizable API documentation experience that feels similar to Postman in your browser.
@@ -73,13 +36,26 @@ config.DocsPath = ""
 api := humachi.New(router, config)
 
 router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
+	// Please also refer to the "DocsRendererScalar" renderer code inside api.go on what to return here
+	csp := []string{
+		"default-src 'none'",
+		"base-uri 'none'",
+		"connect-src 'self'",
+		"form-action 'none'",
+		"frame-ancestors 'none'",
+		"sandbox allow-same-origin allow-scripts",
+		"script-src 'unsafe-eval' https://unpkg.com/@scalar/api-reference@1.44.20/dist/browser/standalone.js", // TODO: Somehow drop 'unsafe-eval'
+		"style-src 'unsafe-inline'", // TODO: Somehow drop 'unsafe-inline'
+	}
+	w.Header().Set("Content-Security-Policy", strings.Join(csp, "; "))
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(`<!doctype html>
 <html lang="en">
   <head>
-    <title>API Reference</title>
     <meta charset="utf-8">
+    <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>API Reference</title>
   </head>
   <body>
     <script id="api-reference" data-url="/openapi.json"></script>
@@ -90,6 +66,24 @@ router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
 ```
 
 ![Scalar Docs](./scalar.png)
+
+### Stoplight Elements
+
+You can customize the default docs by providing your own HTML so you can set the layout, styles, colors, etc as needed.
+
+```go title="code.go"
+router := chi.NewRouter()
+config := huma.DefaultConfig("Docs Example", "1.0.0")
+config.DocsPath = ""
+
+api := humachi.New(router, config)
+
+router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
+	// Please refer to the "DocsRendererStoplightElements" renderer code inside api.go on what to return here
+})
+```
+
+![Stoplight Elements Stacked](./elements-stacked.png)
 
 ### SwaggerUI
 
@@ -103,28 +97,7 @@ config.DocsPath = ""
 api := humachi.New(router, config)
 
 router.Get("/docs", func(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte(`<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>SwaggerUI</title>
-    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui.css" crossorigin integrity="sha384-KX9Rx9vM1AmUNAn07bPAiZhFD4C8jdNgG6f5MRNvR+EfAxs2PmMFtUUazui7ryZQ">
-  </head>
-  <body>
-    <div id="swagger-ui"></div>
-    <script src="https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js" crossorigin integrity="sha384-o9idN8HE6/V6SAewgnr6/5nz7+Npt5J0Cb4tNyXK8pycsVmgl1ZNbRS7tlEGxd+J"></script>
-    <script>
-      window.onload = () => {
-        window.ui = SwaggerUIBundle({
-          url: '/openapi.json',
-          dom_id: '#swagger-ui',
-        });
-      };
-    </script>
-  </body>
-</html>`))
+	// Please refer to the "DocsRendererSwaggerUI" renderer code inside api.go on what to return here
 })
 ```
 
