@@ -733,16 +733,11 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				}
 
 				// Check it against deepPrefixes.
-				isDeep := false
 				for _, prefix := range deepPrefixes {
 					if strings.HasPrefix(key, prefix) {
-						isDeep = true
-						break
+						// Is deep
+						continue outer
 					}
-				}
-
-				if isDeep {
-					continue
 				}
 
 				pb.Reset()
