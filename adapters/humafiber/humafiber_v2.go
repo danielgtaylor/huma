@@ -95,9 +95,11 @@ func (c *fiberV2Wrapper) Header(name string) string {
 }
 
 func (c *fiberV2Wrapper) EachHeader(cb func(name, value string)) {
-	c.orig.Request().Header.VisitAll(func(k, v []byte) {
-		cb(string(k), string(v))
-	})
+	for name, values := range c.orig.Request().Header.All() {
+		for _, value := range values {
+			cb(string(name), string(value))
+		}
+	}
 }
 
 func (c *fiberV2Wrapper) BodyReader() io.Reader {
