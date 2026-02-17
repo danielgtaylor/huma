@@ -577,7 +577,7 @@ func (a *api) registerDocsRoute() {
 	switch a.config.DocsRenderer {
 	case DocsRendererScalar:
 		if title == "" {
-			title = "Scalar" + "in HTML"
+			title = "Scalar in HTML"
 		}
 
 		body = []byte(`<!doctype html>
@@ -585,14 +585,11 @@ func (a *api) registerDocsRoute() {
   <head>
     <title>` + title + `</title>
     <meta charset="utf-8">
-    <meta content="width=device-width,initial-scale=1" name="viewport">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
   </head>
   <body>
-    <script data-url="` + openAPIPath + `.yaml" id="api-reference"></script>
-    <script>
-      let apiReference = document.getElementById("api-reference")
-    </script>
-    <script src="https://unpkg.com/@scalar/api-reference@1.44.18/dist/browser/standalone.js"></script>
+    <script id="api-reference" data-url="` + openAPIPath + `.json"></script>
+    <script src="https://unpkg.com/@scalar/api-reference@1.44.20/dist/browser/standalone.js" crossorigin integrity="sha384-tMz7GAo6dMy55x9tLFtH+sHtogji6Scmb+feBR31TAHmvSPRUTboK9H3M5NFaP4R"></script>
   </body>
 </html>`)
 	case DocsRendererStoplightElements:
@@ -603,14 +600,12 @@ func (a *api) registerDocsRoute() {
 		body = []byte(`<!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="referrer" content="same-origin" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta charset="utf-8">
+    <meta name="referrer" content="same-origin">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>` + title + `</title>
-    <!-- Embed elements Elements via Web Component -->
-    <link href="https://unpkg.com/@stoplight/elements@9.0.0/styles.min.css" rel="stylesheet" />
-    <script src="https://unpkg.com/@stoplight/elements@9.0.0/web-components.min.js" integrity="sha256-Tqvw1qE2abI+G6dPQBc5zbeHqfVwGoamETU3/TSpUw4="
-            crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements@9.0.15/styles.min.css" crossorigin integrity="sha384-iVQBHadsD+eV0M5+ubRCEVXrXEBj+BqcuwjUwPoVJc0Pb1fmrhYSAhL+BFProHdV">
+    <script src="https://unpkg.com/@stoplight/elements@9.0.15/web-components.min.js" crossorigin integrity="sha384-xjOcq9PZ/k+pGtPS/xcsCRXGjKKfTlIa4H1IYEnC+97jNa6sAMWTNrV6hY08W3GL"></script>
   </head>
   <body style="height: 100vh;">
     <elements-api
@@ -618,7 +613,7 @@ func (a *api) registerDocsRoute() {
       router="hash"
       layout="sidebar"
       tryItCredentialsPolicy="same-origin"
-    />
+    ></elements-api>
   </body>
 </html>`)
 	case DocsRendererSwaggerUI:
@@ -629,14 +624,14 @@ func (a *api) registerDocsRoute() {
 		body = []byte(`<!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>` + title + `</title>
-    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.31.0/swagger-ui.css" />
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui.css" crossorigin integrity="sha384-KX9Rx9vM1AmUNAn07bPAiZhFD4C8jdNgG6f5MRNvR+EfAxs2PmMFtUUazui7ryZQ">
   </head>
   <body>
     <div id="swagger-ui"></div>
-    <script src="https://unpkg.com/swagger-ui-dist@5.31.0/swagger-ui-bundle.js" crossorigin></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js" crossorigin integrity="sha384-o9idN8HE6/V6SAewgnr6/5nz7+Npt5J0Cb4tNyXK8pycsVmgl1ZNbRS7tlEGxd+J"></script>
     <script>
       window.onload = () => {
         window.ui = SwaggerUIBundle({
