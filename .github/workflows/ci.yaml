@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: [1.24, 1.25, 1.26]
+        go: [1.25, 1.26]
     name: Build & Test
     steps:
       - uses: actions/checkout@v4
