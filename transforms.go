@@ -61,7 +61,7 @@ func (t *SchemaLinkTransformer) addSchemaField(oapi *OpenAPI, content *MediaType
 	// they are reading the documentation.
 	server := "https://example.com"
 	for _, s := range oapi.Servers {
-		if s.URL != "" {
+		if s.URL != "" && strings.Contains(s.URL, "://") {
 			server = s.URL
 			break
 		}
@@ -185,17 +185,28 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, _ string, v any) (any, er
 	}
 
 	ctx.AppendHeader("Link", info.header)
-	host := ctx.Host()
 	tmp := reflect.New(info.t).Elem()
 
 	// Set the `$schema` field.
-	buf := bufPool.Get().(*bytes.Buffer)
-	if ctx.TLS() == nil && len(host) >= 9 && (host[:9] == "localhost" || host[:9] == "127.0.0.1") {
-		buf.WriteString("http://")
-	} else {
-		buf.WriteString("https://")
+	schemaURL := getSchemaHost(ctx)
+
+	if schemaURL == "" || strings.HasPrefix(schemaURL, "localhost") {
+		if len(ctx.Operation().Servers) > 0 && ctx.Operation().Servers[0].URL != "" {
+			schemaURL = ctx.Operation().Servers[0].URL
+		} else if schemaURL == "" {
+			schemaURL = "localhost"
+		}
 	}
-	buf.WriteString(host)
+
+	buf := bufPool.Get().(*bytes.Buffer)
+	if !strings.Contains(schemaURL, "://") {
+		if ctx.TLS() == nil && (strings.HasPrefix(schemaURL, "localhost") || strings.HasPrefix(schemaURL, "127.0.0.1")) {
+			buf.WriteString("http://")
+		} else {
+			buf.WriteString("https://")
+		}
+	}
+	buf.WriteString(schemaURL)
 	buf.WriteString(info.ref)
 	tmp.Field(0).SetString(buf.String())
 	buf.Reset()
@@ -213,4 +224,23 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, _ string, v any) (any, er
 	}
 
 	return tmp.Addr().Interface(), nil
+}
+
+func getSchemaHost(ctx Context) string {
+	if host := ctx.Header("X-Forwarded-Host"); host != "" {
+		return host
+	}
+
+	if fwd := ctx.Header("Forwarded"); fwd != "" {
+		for _, part := range strings.Split(fwd, ",") {
+			for _, directive := range strings.Split(part, ";") {
+				directive = strings.TrimSpace(directive)
+				if strings.HasPrefix(strings.ToLower(directive), "host=") {
+					return strings.Trim(directive[5:], "\"")
+				}
+			}
+		}
+	}
+
+	return ctx.Host()
 }

@@ -2291,7 +2291,7 @@ Content-Type: text/plain
 			URL:    "/response",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusOK, resp.Code)
-				assert.JSONEq(t, `{"$schema": "https:///schemas/RespBody.json", "greeting":"Hello, world!"}`, resp.Body.String())
+				assert.JSONEq(t, `{"$schema": "http://localhost/schemas/RespBody.json", "greeting":"Hello, world!"}`, resp.Body.String())
 			},
 		},
 		{
@@ -2838,7 +2838,7 @@ func TestExhaustiveErrors(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
 	assert.JSONEq(t, `{
-		"$schema": "https:///schemas/ErrorModel.json",
+				"$schema": "http://localhost/schemas/ErrorModel.json",
 		"title": "Unprocessable Entity",
 		"status": 422,
 		"detail": "validation failed",
