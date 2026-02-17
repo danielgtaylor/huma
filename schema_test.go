@@ -298,6 +298,51 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-array-items-constraints",
+			input: struct {
+				IDs []string `json:"ids" format:"uuid" minLength:"36" maxLength:"36" pattern:"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"ids": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "string",
+							"format": "uuid",
+							"minLength": 36,
+							"maxLength": 36,
+							"pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+						}
+					}
+				},
+				"required": ["ids"],
+				"additionalProperties": false
+			}`,
+		},
+		{
+			name: "field-array-numeric-constraints",
+			input: struct {
+				Values []int `json:"values" minimum:"1" maximum:"10"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"values": {
+						"type": ["array", "null"],
+						"items": {
+							"type": "integer",
+							"format": "int64",
+							"minimum": 1,
+							"maximum": 10
+						}
+					}
+				},
+				"required": ["values"],
+				"additionalProperties": false
+			}`,
+		},
+		{
 			name: "field-map",
 			input: struct {
 				Value map[string]string `json:"value" minProperties:"2" maxProperties:"5"`

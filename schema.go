@@ -571,15 +571,18 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 		// tags later.
 		fs.Format = "date-time-http"
 	}
-	fs.Format = stringTag(f, "format", fs.Format)
+	if format := f.Tag.Get("format"); format != "" {
+		targetSchema(fs).Format = format
+	}
 	if timeFmt := f.Tag.Get("timeFormat"); timeFmt != "" {
+		s := targetSchema(fs)
 		switch timeFmt {
 		case "2006-01-02":
-			fs.Format = "date"
+			s.Format = "date"
 		case "15:04:05":
-			fs.Format = "time"
+			s.Format = "time"
 		default:
-			fs.Format = timeFmt
+			s.Format = timeFmt
 		}
 	}
 	fs.ContentEncoding = stringTag(f, "encoding", fs.ContentEncoding)
@@ -594,19 +597,12 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 	}
 
 	if enum := f.Tag.Get("enum"); enum != "" {
-		s := fs
-		if s.Type == TypeArray {
-			s = s.Items
-		}
-		enumValues := []any{}
+		s := targetSchema(fs)
+		var enumValues []any
 		for e := range strings.SplitSeq(enum, ",") {
 			enumValues = append(enumValues, jsonTagValue(registry, f.Name, s, e))
 		}
-		if fs.Type == TypeArray {
-			fs.Items.Enum = enumValues
-		} else {
-			fs.Enum = enumValues
-		}
+		s.Enum = enumValues
 	}
 
 	fs.Nullable = boolTag(f, "nullable", fs.Nullable)
@@ -620,15 +616,33 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 		panic(fmt.Errorf("nullable is not supported for field '%s' which is type '%s'", f.Name, fs.Ref))
 	}
 
-	fs.Minimum = floatTag(f, "minimum", fs.Minimum)
-	fs.ExclusiveMinimum = floatTag(f, "exclusiveMinimum", fs.ExclusiveMinimum)
-	fs.Maximum = floatTag(f, "maximum", fs.Maximum)
-	fs.ExclusiveMaximum = floatTag(f, "exclusiveMaximum", fs.ExclusiveMaximum)
-	fs.MultipleOf = floatTag(f, "multipleOf", fs.MultipleOf)
-	fs.MinLength = intTag(f, "minLength", fs.MinLength)
-	fs.MaxLength = intTag(f, "maxLength", fs.MaxLength)
-	fs.Pattern = stringTag(f, "pattern", fs.Pattern)
-	fs.PatternDescription = stringTag(f, "patternDescription", fs.PatternDescription)
+	if v := f.Tag.Get("minimum"); v != "" {
+		targetSchema(fs).Minimum = floatTag(f, "minimum", nil)
+	}
+	if v := f.Tag.Get("exclusiveMinimum"); v != "" {
+		targetSchema(fs).ExclusiveMinimum = floatTag(f, "exclusiveMinimum", nil)
+	}
+	if v := f.Tag.Get("maximum"); v != "" {
+		targetSchema(fs).Maximum = floatTag(f, "maximum", nil)
+	}
+	if v := f.Tag.Get("exclusiveMaximum"); v != "" {
+		targetSchema(fs).ExclusiveMaximum = floatTag(f, "exclusiveMaximum", nil)
+	}
+	if v := f.Tag.Get("multipleOf"); v != "" {
+		targetSchema(fs).MultipleOf = floatTag(f, "multipleOf", nil)
+	}
+	if v := f.Tag.Get("minLength"); v != "" {
+		targetSchema(fs).MinLength = intTag(f, "minLength", nil)
+	}
+	if v := f.Tag.Get("maxLength"); v != "" {
+		targetSchema(fs).MaxLength = intTag(f, "maxLength", nil)
+	}
+	if v := f.Tag.Get("pattern"); v != "" {
+		targetSchema(fs).Pattern = stringTag(f, "pattern", "")
+	}
+	if v := f.Tag.Get("patternDescription"); v != "" {
+		targetSchema(fs).PatternDescription = stringTag(f, "patternDescription", "")
+	}
 	fs.MinItems = intTag(f, "minItems", fs.MinItems)
 	fs.MaxItems = intTag(f, "maxItems", fs.MaxItems)
 	fs.UniqueItems = boolTag(f, "uniqueItems", fs.UniqueItems)
@@ -641,6 +655,15 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 
 	fs.hidden = boolTag(f, "hidden", fs.hidden)
 
+	return fs
+}
+
+// targetSchema returns the schema to apply scalar constraints to
+// (the items schema for arrays, otherwise the schema itself).
+func targetSchema(fs *Schema) *Schema {
+	if fs.Type == TypeArray {
+		return fs.Items
+	}
 	return fs
 }
 
