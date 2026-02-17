@@ -20,6 +20,7 @@ type schemaField struct {
 // as-you-type validation & completion of HTTP resources in editors like
 // VSCode.
 type SchemaLinkTransformer struct {
+	oapi        *OpenAPI
 	prefix      string
 	schemasPath string
 	types       map[any][]schemaLinkType
@@ -82,6 +83,8 @@ func (t *SchemaLinkTransformer) addSchemaField(oapi *OpenAPI, content *MediaType
 // enabling this transformer to precompute & cache information about the
 // response and schema.
 func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
+	t.oapi = oapi
+
 	// Update registry to be able to get the type from a schema ref.
 	// Register the type in t.types with the generated ref
 	if op.RequestBody != nil && op.RequestBody.Content != nil {
@@ -191,8 +194,8 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, _ string, v any) (any, er
 	schemaURL := getSchemaHost(ctx)
 
 	if schemaURL == "" || strings.HasPrefix(schemaURL, "localhost") {
-		if len(ctx.Operation().Servers) > 0 && ctx.Operation().Servers[0].URL != "" {
-			schemaURL = ctx.Operation().Servers[0].URL
+		if t.oapi != nil && len(t.oapi.Servers) > 0 && t.oapi.Servers[0].URL != "" {
+			schemaURL = t.oapi.Servers[0].URL
 		} else if schemaURL == "" {
 			schemaURL = "localhost"
 		}
