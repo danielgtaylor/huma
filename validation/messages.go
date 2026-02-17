@@ -11,6 +11,7 @@ var (
 	MsgExpectedRFC5890Hostname            = "expected string to be RFC 5890 hostname"
 	MsgExpectedRFC2673IPv4                = "expected string to be RFC 2673 ipv4"
 	MsgExpectedRFC2373IPv6                = "expected string to be RFC 2373 ipv6"
+	MsgExpectedRFCIPAddr                  = "expected string to be either RFC 2673 ipv4 or RFC 2373 ipv6"
 	MsgExpectedRFC3986URI                 = "expected string to be RFC 3986 uri: %v"
 	MsgExpectedRFC4122UUID                = "expected string to be RFC 4122 uuid: %v"
 	MsgExpectedRFC6570URITemplate         = "expected string to be RFC 6570 uri-template"
