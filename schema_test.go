@@ -321,6 +321,20 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-time-format-time",
+			input: struct {
+				Value time.Time `json:"value" timeFormat:"15:04:05"`
+			}{},
+			expected: `{"type":"object","additionalProperties":false,"properties":{"value":{"type":"string","format":"time"}},"required":["value"]}`,
+		},
+		{
+			name: "field-time-format-custom",
+			input: struct {
+				Value time.Time `json:"value" timeFormat:"2006-01-02T15:04"`
+			}{},
+			expected: `{"type":"object","additionalProperties":false,"properties":{"value":{"type":"string","format":"2006-01-02T15:04"}},"required":["value"]}`,
+		},
+		{
 			name: "field-array-numeric-constraints",
 			input: struct {
 				Values []int `json:"values" minimum:"1" maximum:"10"`
