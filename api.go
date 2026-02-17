@@ -595,9 +595,10 @@ func (a *api) registerDocsRoute() {
 		body = []byte(`<!doctype html>
 <html lang="en">
   <head>
-    <title>` + title + `</title>
     <meta charset="utf-8">
+    <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>` + title + `</title>
   </head>
   <body>
     <script id="api-reference" data-url="` + openAPIPath + `.json"></script>
@@ -624,8 +625,8 @@ func (a *api) registerDocsRoute() {
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="referrer" content="same-origin">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="referrer" content="no-referrer">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>` + title + `</title>
     <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements@9.0.15/styles.min.css" crossorigin integrity="sha384-iVQBHadsD+eV0M5+ubRCEVXrXEBj+BqcuwjUwPoVJc0Pb1fmrhYSAhL+BFProHdV">
     <script src="https://unpkg.com/@stoplight/elements@9.0.15/web-components.min.js" crossorigin integrity="sha384-xjOcq9PZ/k+pGtPS/xcsCRXGjKKfTlIa4H1IYEnC+97jNa6sAMWTNrV6hY08W3GL"></script>
@@ -659,6 +660,7 @@ func (a *api) registerDocsRoute() {
 <html lang="en">
   <head>
     <meta charset="utf-8">
+    <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>` + title + `</title>
     <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui.css" crossorigin integrity="sha384-KX9Rx9vM1AmUNAn07bPAiZhFD4C8jdNgG6f5MRNvR+EfAxs2PmMFtUUazui7ryZQ">
