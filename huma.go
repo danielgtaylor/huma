@@ -727,6 +727,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			})
 
 			// Validate all keys in the request.
+		outer:
 			for key := range q {
 				if _, ok := knownParams[key]; ok {
 					continue
@@ -735,7 +736,6 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				// Check it against deepPrefixes.
 				for _, prefix := range deepPrefixes {
 					if strings.HasPrefix(key, prefix) {
-						// Is deep
 						continue outer
 					}
 				}
