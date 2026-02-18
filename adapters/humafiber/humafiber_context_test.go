@@ -301,7 +301,7 @@ func TestHumaFiber(t *testing.T) {
 				_ = response.Body.Close()
 			}()
 		}
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		HelloResponseValidate(t, expected, response)
 	})
 	select {
@@ -331,7 +331,7 @@ func TestHumaFiber(t *testing.T) {
 				_ = response.Body.Close()
 			}()
 		}
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		HelloResponseValidate(t, expected, response)
 	})
 
@@ -341,7 +341,7 @@ func TestHumaFiber(t *testing.T) {
 		defer close(doneShutdown)
 		time.Sleep(timeout) // delay before shutdown to start request processing
 		err := app.ShutdownWithContext(ctx)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		time.Sleep(timeout) // delay after shutdown to catch request processing
 	})
 
