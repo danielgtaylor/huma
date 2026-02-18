@@ -40,11 +40,14 @@ const (
 
 // Special JSON Schema formats.
 var (
-	timeType       = reflect.TypeFor[time.Time]()
-	ipType         = reflect.TypeFor[net.IP]()
-	ipAddrType     = reflect.TypeFor[netip.Addr]()
-	urlType        = reflect.TypeFor[url.URL]()
-	rawMessageType = reflect.TypeFor[json.RawMessage]()
+	ipType                = reflect.TypeFor[net.IP]()
+	ipAddrType            = reflect.TypeFor[netip.Addr]()
+	rawMessageType        = reflect.TypeFor[json.RawMessage]()
+	schemaProviderType    = reflect.TypeFor[SchemaProvider]()
+	schemaTransformerType = reflect.TypeFor[SchemaTransformer]()
+	textUnmarshalerType   = reflect.TypeFor[encoding.TextUnmarshaler]()
+	timeType              = reflect.TypeFor[time.Time]()
+	urlType               = reflect.TypeFor[url.URL]()
 )
 
 func baseType(t reflect.Type) reflect.Type {
@@ -748,9 +751,9 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 	t = deref(t)
 
 	// Transform generated schema if type implements SchemaTransformer
-	v := reflect.New(t).Interface()
-	if st, ok := v.(SchemaTransformer); ok {
-		s = st.TransformSchema(r, s)
+	ptrT := reflect.PointerTo(t)
+	if t.Implements(schemaTransformerType) || ptrT.Implements(schemaTransformerType) {
+		s = reflect.New(t).Interface().(SchemaTransformer).TransformSchema(r, s)
 
 		// The schema may have been modified, so recompute the error messages.
 		s.PrecomputeMessages()
@@ -764,10 +767,10 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 	s := Schema{}
 	t = deref(t)
 
-	v := reflect.New(t).Interface()
-	if sp, ok := v.(SchemaProvider); ok {
+	ptrT := reflect.PointerTo(t)
+	if t.Implements(schemaProviderType) || ptrT.Implements(schemaProviderType) {
 		// Special case: type provides its own schema. Do not try to generate.
-		custom := sp.Schema(r)
+		custom := reflect.New(t).Interface().(SchemaProvider).Schema(r)
 		custom.PrecomputeMessages()
 		return custom
 	}
@@ -786,7 +789,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 		return &Schema{}
 	}
 
-	if _, ok := v.(encoding.TextUnmarshaler); ok {
+	if t.Implements(textUnmarshalerType) || ptrT.Implements(textUnmarshalerType) {
 		// Special case: types that implement encoding.TextUnmarshaler are able to
 		// be loaded from plain text, and so should be treated as strings.
 		// This behavior can be overridden by implementing `huma.SchemaProvider`

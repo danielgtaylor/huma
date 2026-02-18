@@ -129,7 +129,7 @@
 
 ## インストール方法
 
-`go get`でインストールできます。Go 1.24以降が必要です。
+`go get`でインストールできます。Go 1.25以降が必要です。
 
 ```sh
 # 事前に: go mod init ...
@@ -193,7 +193,7 @@ func main() {
 ```
 
 > **TIP:**
-> Go 1.24以降の標準ライブラリルーターを使う場合は、`chi.NewMux()` → `http.NewServeMux()`、`humachi.New` → `humago.New`に変更してください。`go.mod`の`go`バージョンも1.22以上にする必要があります。それ以外は同じです。
+> Go 1.22 以降の標準ライブラリルーターを使う場合は、`chi.NewMux()` → `http.NewServeMux()`、`humachi.New` → `humago.New`に変更してください。`go.mod`の`go`バージョンも1.22以上にする必要があります。それ以外は同じです。
 
 サーバー起動例:
 `go run greet.go`（ポート指定は`--port`でも可）

@@ -458,23 +458,23 @@ var validateTests = []struct {
 	},
 	{
 		name: "ipv4 success",
-		typ: reflect.TypeOf(struct {
-			Value string `json:"value" format:"ip"`
-		}{}),
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"ip\""
+		}](),
 		input: map[string]any{"value": "127.0.0.1"},
 	},
 	{
 		name: "ipv6 success",
-		typ: reflect.TypeOf(struct {
-			Value string `json:"value" format:"ip"`
-		}{}),
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"ip\""
+		}](),
 		input: map[string]any{"value": "2001:0db8:85a3:0000:0000:8a2e:0370:7334"},
 	},
 	{
 		name: "expected ipv4 or ipv6",
-		typ: reflect.TypeOf(struct {
-			Value string `json:"value" format:"ip"`
-		}{}),
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"ip\""
+		}](),
 		input: map[string]any{"value": "1234"},
 		errs:  []string{"expected string to be either RFC 2673 ipv4 or RFC 2373 ipv6"},
 	},
@@ -1578,7 +1578,7 @@ func BenchmarkValidate(b *testing.B) {
 	BenchValidateRes = res
 
 	for _, test := range validateTests {
-		if test.panic != "" || len(test.errs) > 0 {
+		if test.panic != "" || len(test.errs) > 0 || test.typ == nil {
 			continue
 		}
 

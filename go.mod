@@ -1,6 +1,6 @@
 module github.com/danielgtaylor/huma/v2
 
-go 1.24.1
+go 1.25.0
 
 require (
 	github.com/danielgtaylor/shorthand/v2 v2.2.0

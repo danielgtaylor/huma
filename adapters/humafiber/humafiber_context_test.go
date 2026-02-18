@@ -118,9 +118,7 @@ func SimulateAccessToContextOutsideHandler(
 	retries int,
 ) func(ctx context.Context) {
 	return func(ctx context.Context) {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			global, cancel := context.WithTimeout(global, timeout*time.Duration(retries))
 			defer cancel()
 			for {
@@ -136,7 +134,7 @@ func SimulateAccessToContextOutsideHandler(
 				case <-time.After(timeout / 10):
 				}
 			}
-		}()
+		})
 	}
 }
 
@@ -250,12 +248,10 @@ func TestHumaFiber(t *testing.T) {
 	api.UseMiddleware(HumaMiddleware)
 	huma.Register(api, HelloOperation(), HelloHandler(simulator))
 
-	wait.Add(1)
-	go func() {
-		defer wait.Done()
+	wait.Go(func() {
 		err := app.Listener(ln)
 		assert.NoError(t, err)
-	}()
+	})
 	defer wait.Wait()
 
 	err = WaitPing(ctx, server, timeout)
@@ -297,9 +293,7 @@ func TestHumaFiber(t *testing.T) {
 
 	// check that delay works
 	doneFirst := make(chan bool)
-	wait.Add(1)
-	go func() {
-		defer wait.Done()
+	wait.Go(func() {
 		defer close(doneFirst)
 		response, err := http.DefaultClient.Do(request)
 		if response != nil && response.Body != nil {
@@ -309,7 +303,7 @@ func TestHumaFiber(t *testing.T) {
 		}
 		assert.NoError(t, err)
 		HelloResponseValidate(t, expected, response)
-	}()
+	})
 	select {
 	case <-ctx.Done():
 		return
@@ -329,9 +323,7 @@ func TestHumaFiber(t *testing.T) {
 
 	// check graceful shutdown
 	doneSecond := make(chan bool)
-	wait.Add(1)
-	go func() {
-		defer wait.Done()
+	wait.Go(func() {
 		defer close(doneSecond)
 		response, err := http.DefaultClient.Do(request)
 		if response != nil && response.Body != nil {
@@ -341,19 +333,17 @@ func TestHumaFiber(t *testing.T) {
 		}
 		assert.NoError(t, err)
 		HelloResponseValidate(t, expected, response)
-	}()
+	})
 
 	// perform shutdown
 	doneShutdown := make(chan bool)
-	wait.Add(1)
-	go func() {
-		defer wait.Done()
+	wait.Go(func() {
 		defer close(doneShutdown)
 		time.Sleep(timeout) // delay before shutdown to start request processing
 		err := app.ShutdownWithContext(ctx)
 		assert.NoError(t, err)
 		time.Sleep(timeout) // delay after shutdown to catch request processing
-	}()
+	})
 
 	// request should be handled
 	select {

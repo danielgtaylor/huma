@@ -109,7 +109,7 @@ A big thank you to our current & former sponsors!
 
 # Install
 
-Install via `go get`. Note that Go 1.24 or newer is required.
+Install via `go get`. Note that Go 1.25 or newer is required.
 
 ```sh
 # After: go mod init ...
