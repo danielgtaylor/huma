@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2/validation"
@@ -735,6 +736,29 @@ type SchemaTransformer interface {
 	TransformSchema(r Registry, s *Schema) *Schema
 }
 
+type SchemaFactory func(Registry) *Schema
+
+var (
+	schemaFactoryMu sync.RWMutex
+	schemaFactories = map[reflect.Type]SchemaFactory{}
+)
+
+// RegisterTypeSchema associates a schema factory with the given type.
+// The provided factory runs whenever SchemaFromType handles that type.
+// Later calls replace any previously registered factory.
+func RegisterTypeSchema(t reflect.Type, factory SchemaFactory) {
+	if t == nil {
+		panic("huma: RegisterTypeSchema called with nil type")
+	}
+	if factory == nil {
+		panic("huma: RegisterTypeSchema called with nil factory")
+	}
+
+	schemaFactoryMu.Lock()
+	schemaFactories[t] = factory
+	schemaFactoryMu.Unlock()
+}
+
 // SchemaFromType returns a schema for a given type, using the registry to
 // possibly create references for nested structs. The schema that is returned
 // can then be passed to `huma.Validate` to efficiently validate incoming
@@ -758,11 +782,45 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 	return s
 }
 
+func lookupTypeSchemaFactory(t reflect.Type) SchemaFactory {
+	if t == nil {
+		return nil
+	}
+
+	schemaFactoryMu.RLock()
+	factory := schemaFactories[t]
+	schemaFactoryMu.RUnlock()
+	return factory
+}
+
+func schemaFromRegisteredFactory(r Registry, t reflect.Type) *Schema {
+	factory := lookupTypeSchemaFactory(t)
+	if factory == nil {
+		return nil
+	}
+
+	s := factory(r)
+	if s == nil {
+		return nil
+	}
+
+	s.PrecomputeMessages()
+	return s
+}
+
 func schemaFromType(r Registry, t reflect.Type) *Schema {
+	if custom := schemaFromRegisteredFactory(r, t); custom != nil {
+		return custom
+	}
+
 	isPointer := t.Kind() == reflect.Pointer
 
 	s := Schema{}
 	t = deref(t)
+
+	if custom := schemaFromRegisteredFactory(r, t); custom != nil {
+		return custom
+	}
 
 	v := reflect.New(t).Interface()
 	if sp, ok := v.(SchemaProvider); ok {
