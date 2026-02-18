@@ -139,7 +139,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		} else if fo := f.Tag.Get("form"); fo != "" {
 			pfi.Loc = "form"
 			name = fo
-			pfi.Required = !registry.Config().FieldsOptionalByDefault
+			pfi.Required = !GetConfig[RegistryConfig](registry).FieldsOptionalByDefault
 		} else if c := f.Tag.Get("cookie"); c != "" {
 			pfi.Loc = "cookie"
 			name = c
@@ -705,7 +705,8 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		v := reflect.ValueOf(&input).Elem()
 
 		// Reject unknown query parameters if config is set.
-		if !op.SkipValidateParams && (api.Config().RejectUnknownQueryParameters || op.RejectUnknownQueryParameters) {
+		cfg := GetConfig[Config](api)
+		if !op.SkipValidateParams && (cfg.RejectUnknownQueryParameters || op.RejectUnknownQueryParameters) {
 			u := ctx.URL()
 			q := u.Query()
 

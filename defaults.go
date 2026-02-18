@@ -70,7 +70,7 @@ func DefaultConfig(title string, version string) Config {
 			},
 		},
 		OpenAPIPath:                  "/openapi",
-		RegistryConfig:               registry.Config(),
+		RegistryConfig:               GetConfig[RegistryConfig](registry),
 		DocsPath:                     "/docs",
 		DocsRenderer:                 DocsRendererStoplightElements,
 		SchemasPath:                  schemasPath,
