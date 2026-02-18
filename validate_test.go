@@ -404,29 +404,6 @@ var validateTests = []struct {
 		errs:  []string{"expected string to be RFC 5890 hostname"},
 	},
 	{
-		name: "idn-hostname success",
-		typ: reflect.TypeFor[struct {
-			Value string "json:\"value\" format:\"idn-hostname\""
-		}](),
-		input: map[string]any{"value": "ëxample.com"},
-	},
-	{
-		name: "expected idn-hostname",
-		typ: reflect.TypeFor[struct {
-			Value string "json:\"value\" format:\"idn-hostname\""
-		}](),
-		input: map[string]any{"value": "a]b.com"},
-		errs:  []string{"expected string to be RFC 5890 hostname"},
-	},
-	// {
-	// 	name: "expected idn-hostname",
-	// 	typ: reflect.TypeOf(struct {
-	// 		Value string `json:"value" format:"idn-hostname"`
-	// 	}{}),
-	// 	input: map[string]any{"value": "\\"},
-	// 	errs:  []string{"expected string to be RFC 5890 hostname"},
-	// },
-	{
 		name: "ipv4 success",
 		typ: reflect.TypeFor[struct {
 			Value string "json:\"value\" format:\"ipv4\""

@@ -17,7 +17,6 @@ import (
 	"unsafe"
 
 	"github.com/danielgtaylor/huma/v2/validation"
-	"golang.org/x/net/idna"
 )
 
 // ValidateMode describes the direction of validation (server -> client or
@@ -44,7 +43,6 @@ const (
 // disabled by default to match Go's JSON unmarshaling behavior.
 var ValidateStrictCasing = false
 
-var idnaProfile = idna.New(idna.ValidateForRegistration())
 var rxHostname = regexp.MustCompile(`^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$`)
 var rxURITemplate = regexp.MustCompile("^([^{]*({[^}]*})?)*$")
 var rxJSONPointer = regexp.MustCompile("^(?:/(?:[^~/]|~0|~1)*)*$")
@@ -243,7 +241,7 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 		if _, err := mail.ParseAddress(str); err != nil {
 			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC5322Email, err))
 		}
-	case "hostname":
+	case "idn-hostname", "hostname":
 		if len(str) >= 256 || !rxHostname.MatchString(str) {
 			res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
 		}
@@ -264,10 +262,11 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 				res.Add(path, str, validation.MsgExpectedRFCIPAddr)
 			}
 		}
-	case "idn-hostname":
-		if _, err := idnaProfile.ToASCII(str); err != nil {
-			res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
-		}
+	// TODO: investigate supporting idn-hostname without external library.
+	// case "idn-hostname":
+	// 	if _, err := idnaProfile.ToASCII(str); err != nil {
+	// 		res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
+	// 	}
 	case "uri", "uri-reference", "iri", "iri-reference":
 		if _, err := url.Parse(str); err != nil {
 			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
