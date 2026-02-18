@@ -40,7 +40,7 @@ func DefaultSchemaNamer(t reflect.Type, hint string) string {
 	name = strings.ReplaceAll(name, "[]", "List[")
 
 	result := ""
-	var resultSb48 strings.Builder
+	var resultSb strings.Builder
 	for _, part := range strings.FieldsFunc(name, func(r rune) bool {
 		// Split on special characters. Note that `,` is used when there are
 		// multiple inputs to a generic type.
@@ -53,9 +53,9 @@ func DefaultSchemaNamer(t reflect.Type, hint string) string {
 		// Add to result, and uppercase for better scalar support (`int` -> `Int`).
 		// Use unicode-aware uppercase to support non-ASCII characters.
 		r, size := utf8.DecodeRuneInString(base)
-		resultSb48.WriteString(strings.ToUpper(string(r)) + base[size:])
+		resultSb.WriteString(strings.ToUpper(string(r)) + base[size:])
 	}
-	result += resultSb48.String()
+	result += resultSb.String()
 	name = result
 
 	return name
