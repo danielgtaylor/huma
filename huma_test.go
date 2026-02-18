@@ -106,6 +106,16 @@ func (o *OptionalParam[T]) OnParamSet(isSet bool, parsed any) {
 	o.IsSet = isSet
 }
 
+// CountingInner is used to verify resolver traversal skips nil optional fields.
+type CountingInner struct{}
+
+var resolverCalls int
+
+func (b *CountingInner) Resolve(_ huma.Context, _ *huma.PathBuffer) []error {
+	resolverCalls++
+	return nil
+}
+
 func TestFeatures(t *testing.T) {
 	for _, feature := range []struct {
 		Name         string
@@ -2929,6 +2939,50 @@ Content-Type: text/plain
 			Method: http.MethodGet,
 			URL:    "/test?test[int]=1&test[string]=foo",
 			// No Assert: default check ensures status < 300.
+		},
+		{
+			Name: "reject-unknown-query-params-skip-non-query",
+			Config: func() huma.Config {
+				cfg := huma.DefaultConfig("Test API", "1.0.0")
+				cfg.RejectUnknownQueryParameters = true
+				return cfg
+			}(),
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/hdr",
+				}, func(ctx context.Context, input *struct {
+					Header string `header:"X-Test"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodGet,
+			URL:     "/hdr",
+			Headers: map[string]string{"X-Test": "ok"},
+		},
+		{
+			Name: "resolver-skip-nil-optional",
+			Register: func(t *testing.T, api huma.API) {
+				resolverCalls = 0
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/opt",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Optional *CountingInner `json:"optional,omitempty"`
+					}
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodPost,
+			URL:    "/opt",
+			Body:   `{}`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNoContent, resp.Code)
+				assert.Equal(t, 0, resolverCalls)
+			},
 		},
 		{
 			Name: "reject-unknown-query-params-deepobject-unknown",

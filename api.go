@@ -246,15 +246,6 @@ func getConfig[T any](v any) T {
 		return cp.Config()
 	}
 
-	// Some types may wrap the API and not implement configProvider[T] directly
-	// because they are structs and not interfaces. We can check if they have
-	// a Config() method that returns the right type.
-	if m, ok := reflect.TypeOf(v).MethodByName("Config"); ok {
-		if m.Type.NumIn() == 1 && m.Type.NumOut() == 1 && m.Type.Out(0) == reflect.TypeFor[T]() {
-			return m.Func.Call([]reflect.Value{reflect.ValueOf(v)})[0].Interface().(T)
-		}
-	}
-
 	var zero T
 	return zero
 }
