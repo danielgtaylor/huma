@@ -3,14 +3,14 @@ permissions:
   contents: read
 on:
   push:
-    branches: [main]
-  pull_request: {}
+    branches: [ main ]
+  pull_request: { }
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: [1.25, 1.26]
+        go: [ 1.25, 1.26 ]
     name: Build & Test
     steps:
       - uses: actions/checkout@v4
@@ -26,3 +26,33 @@ jobs:
       - uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  benchmark:
+    name: Performance regression check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - name: Run benchmark
+        run: go test -bench=. -count=5 -benchmem ./... | tee output.txt
+      - name: Download previous benchmark data
+        uses: actions/cache@v4
+        with:
+          path: ./cache
+          key: ${{ runner.os }}-benchmark-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-benchmark
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'go'
+          output-file-path: output.txt
+          external-data-json-path: ./cache/benchmark-data.json
+          fail-on-alert: true
+          comment-on-alert: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          alert-threshold: '130%'
+          comment-always: false
