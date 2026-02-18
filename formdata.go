@@ -223,7 +223,7 @@ func multiPartFormFileSchema(r Registry, t reflect.Type) *Schema {
 			// Should we panic if [T] struct defines fields with unsupported types?
 		}
 
-		fieldRequired := !GetConfig[RegistryConfig](r).FieldsOptionalByDefault
+		fieldRequired := !getConfig[registryConfig](r).FieldsOptionalByDefault
 
 		if _, ok := f.Tag.Lookup("required"); ok {
 			fieldRequired = boolTag(f, "required", false)

@@ -22,7 +22,7 @@ type Registry interface {
 	RegisterTypeAlias(t reflect.Type, alias reflect.Type)
 }
 
-type RegistryConfig struct {
+type registryConfig struct {
 	// AllowAdditionalPropertiesByDefault indicates whether schemas should allow
 	// additional properties by default.
 	AllowAdditionalPropertiesByDefault bool
@@ -78,7 +78,7 @@ type mapRegistry struct {
 	seen    map[reflect.Type]bool
 	namer   func(reflect.Type, string) string
 	aliases map[reflect.Type]reflect.Type
-	config  RegistryConfig
+	config  registryConfig
 }
 
 func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema {
@@ -176,7 +176,7 @@ func (r *mapRegistry) RegisterTypeAlias(t reflect.Type, alias reflect.Type) {
 	r.aliases[t] = alias
 }
 
-func (r *mapRegistry) Config() RegistryConfig {
+func (r *mapRegistry) Config() registryConfig {
 	return r.config
 }
 
@@ -190,7 +190,7 @@ func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) strin
 		seen:    map[reflect.Type]bool{},
 		aliases: map[reflect.Type]reflect.Type{},
 		namer:   namer,
-		config: RegistryConfig{
+		config: registryConfig{
 			AllowAdditionalPropertiesByDefault: false,
 			FieldsOptionalByDefault:            false,
 		},

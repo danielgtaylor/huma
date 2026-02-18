@@ -181,9 +181,9 @@ type Config struct {
 	// `Info.Version` fields.
 	*OpenAPI
 
-	// RegistryConfig contains a few minor configuration options for the
+	// registryConfig contains a few minor configuration options for the
 	// internal registry.
-	RegistryConfig
+	registryConfig
 
 	// OpenAPIPath is the path to the OpenAPI spec without extension. If set
 	// to `/openapi` it will allow clients to get `/openapi.json` or
@@ -234,19 +234,19 @@ type Config struct {
 	CreateHooks []func(Config) Config
 }
 
-// ConfigProvider is an internal interface to get the configuration from an
-// implementation of the API or Registry. This is used by the `huma` package
-// to access settings without exposing them on the public interfaces.
-type ConfigProvider[T any] interface {
+// configProvider is an internal interface to get the configuration from an
+// implementation of the API or Registry. This is used to access settings
+// without exposing them through public interfaces.
+type configProvider[T any] interface {
 	Config() T
 }
 
-func GetConfig[T any](v any) T {
-	if cp, ok := v.(ConfigProvider[T]); ok {
+func getConfig[T any](v any) T {
+	if cp, ok := v.(configProvider[T]); ok {
 		return cp.Config()
 	}
 
-	// Some types may wrap the API and not implement ConfigProvider[T] directly
+	// Some types may wrap the API and not implement configProvider[T] directly
 	// because they are structs and not interfaces. We can check if they have
 	// a Config() method that returns the right type.
 	if m, ok := reflect.TypeOf(v).MethodByName("Config"); ok {
@@ -477,7 +477,7 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	if mr, ok := config.Components.Schemas.(*mapRegistry); ok {
-		mr.config = config.RegistryConfig
+		mr.config = config.registryConfig
 	}
 
 	if config.DefaultFormat == "" && !config.NoFormatFallback {

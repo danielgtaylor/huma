@@ -195,7 +195,10 @@ type testAPI struct {
 }
 
 func (a *testAPI) Config() huma.Config {
-	return huma.GetConfig[huma.Config](a.API)
+	if cp, ok := a.API.(interface{ Config() huma.Config }); ok {
+		return cp.Config()
+	}
+	return huma.Config{}
 }
 
 func (a *testAPI) Do(method, path string, args ...any) *httptest.ResponseRecorder {

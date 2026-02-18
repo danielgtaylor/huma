@@ -83,7 +83,7 @@ func TestAllowAdditionalPropertiesByDefault(t *testing.T) {
 		r := NewMapRegistry("/schemas", DefaultSchemaNamer)
 
 		// Confirm default is false.
-		assert.False(t, GetConfig[RegistryConfig](r).AllowAdditionalPropertiesByDefault)
+		assert.False(t, getConfig[registryConfig](r).AllowAdditionalPropertiesByDefault)
 
 		s := r.Schema(reflect.TypeFor[MyStruct](), false, "")
 		assert.Equal(t, false, s.AdditionalProperties)
@@ -101,9 +101,9 @@ func TestAllowAdditionalPropertiesByDefault(t *testing.T) {
 func TestRegistryConfigValue(t *testing.T) {
 	r := NewMapRegistry("/schemas", DefaultSchemaNamer)
 
-	cfg := GetConfig[RegistryConfig](r)
+	cfg := getConfig[registryConfig](r)
 	cfg.AllowAdditionalPropertiesByDefault = true
 
 	// Config() returns a copy, so modifying it shouldn't affect the registry.
-	assert.False(t, GetConfig[RegistryConfig](r).AllowAdditionalPropertiesByDefault)
+	assert.False(t, getConfig[registryConfig](r).AllowAdditionalPropertiesByDefault)
 }
