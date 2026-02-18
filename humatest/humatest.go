@@ -194,6 +194,10 @@ type testAPI struct {
 	tb TB
 }
 
+func (a *testAPI) Config() huma.Config {
+	return huma.GetConfig[huma.Config](a.API)
+}
+
 func (a *testAPI) Do(method, path string, args ...any) *httptest.ResponseRecorder {
 	return a.DoCtx(context.Background(), method, path, args...)
 }

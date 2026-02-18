@@ -234,14 +234,36 @@ type Config struct {
 	CreateHooks []func(Config) Config
 }
 
+// ConfigProvider is an internal interface to get the configuration from an
+// implementation of the API or Registry. This is used by the `huma` package
+// to access settings without exposing them on the public interfaces.
+type ConfigProvider[T any] interface {
+	Config() T
+}
+
+func GetConfig[T any](v any) T {
+	if cp, ok := v.(ConfigProvider[T]); ok {
+		return cp.Config()
+	}
+
+	// Some types may wrap the API and not implement ConfigProvider[T] directly
+	// because they are structs and not interfaces. We can check if they have
+	// a Config() method that returns the right type.
+	if m, ok := reflect.TypeOf(v).MethodByName("Config"); ok {
+		if m.Type.NumIn() == 1 && m.Type.NumOut() == 1 && m.Type.Out(0) == reflect.TypeFor[T]() {
+			return m.Func.Call([]reflect.Value{reflect.ValueOf(v)})[0].Interface().(T)
+		}
+	}
+
+	var zero T
+	return zero
+}
+
 // API represents a Huma API wrapping a specific router.
 type API interface {
 	// Adapter returns the router adapter for this API, providing a generic
 	// interface to get request information and write responses.
 	Adapter() Adapter
-
-	// Config returns the configuration for this API.
-	Config() Config
 
 	// OpenAPI returns the OpenAPI spec for this API. You may edit this spec
 	// until the server starts.

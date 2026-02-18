@@ -20,7 +20,6 @@ type Registry interface {
 	TypeFromRef(ref string) reflect.Type
 	Map() map[string]*Schema
 	RegisterTypeAlias(t reflect.Type, alias reflect.Type)
-	Config() RegistryConfig
 }
 
 type RegistryConfig struct {
