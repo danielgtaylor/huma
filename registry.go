@@ -22,6 +22,16 @@ type Registry interface {
 	RegisterTypeAlias(t reflect.Type, alias reflect.Type)
 }
 
+type registryConfig struct {
+	// AllowAdditionalPropertiesByDefault indicates whether schemas should allow
+	// additional properties by default.
+	AllowAdditionalPropertiesByDefault bool
+
+	// FieldsOptionalByDefault indicates whether fields in schemas should be
+	// treated as optional by default during validation.
+	FieldsOptionalByDefault bool
+}
+
 // DefaultSchemaNamer provides schema names for types. It uses the type name
 // when possible, ignoring the package name. If the type is generic, e.g.
 // `MyType[SubType]`, then the brackets are removed like `MyTypeSubType`.
@@ -68,6 +78,7 @@ type mapRegistry struct {
 	seen    map[reflect.Type]bool
 	namer   func(reflect.Type, string) string
 	aliases map[reflect.Type]reflect.Type
+	config  registryConfig
 }
 
 func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema {
@@ -165,6 +176,10 @@ func (r *mapRegistry) RegisterTypeAlias(t reflect.Type, alias reflect.Type) {
 	r.aliases[t] = alias
 }
 
+func (r *mapRegistry) Config() registryConfig {
+	return r.config
+}
+
 // NewMapRegistry creates a new registry that stores schemas in a map and
 // returns references to them using the given prefix.
 func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) string) Registry {
@@ -175,5 +190,9 @@ func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) strin
 		seen:    map[reflect.Type]bool{},
 		aliases: map[reflect.Type]reflect.Type{},
 		namer:   namer,
+		config: registryConfig{
+			AllowAdditionalPropertiesByDefault: false,
+			FieldsOptionalByDefault:            false,
+		},
 	}
 }

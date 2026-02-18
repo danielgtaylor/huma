@@ -106,6 +106,16 @@ func (o *OptionalParam[T]) OnParamSet(isSet bool, parsed any) {
 	o.IsSet = isSet
 }
 
+// CountingInner is used to verify resolver traversal skips nil optional fields.
+type CountingInner struct{}
+
+var resolverCalls int
+
+func (b *CountingInner) Resolve(_ huma.Context, _ *huma.PathBuffer) []error {
+	resolverCalls++
+	return nil
+}
+
 func TestFeatures(t *testing.T) {
 	for _, feature := range []struct {
 		Name         string
@@ -2872,6 +2882,146 @@ Content-Type: text/plain
 			Body:   `[{"foo": "first"}, {"foo": "second"}]`,
 		},
 		{
+			Name: "reject-unknown-query-params",
+			Config: func() huma.Config {
+				cfg := huma.DefaultConfig("Test API", "1.0.0")
+				cfg.RejectUnknownQueryParameters = true
+				return cfg
+			}(),
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, input *struct {
+					Known string `query:"known"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?known=ok&unknown=bad",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				var body huma.ErrorModel
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "validation failed", body.Detail)
+				found := false
+				for _, e := range body.Errors {
+					if e.Message == "unknown query parameter" && e.Location == "query.unknown" {
+						found = true
+						break
+					}
+				}
+				require.True(t, found, "expected unknown query parameter error for query.unknown; got: %v", body.Errors)
+			},
+		},
+		{
+			Name: "reject-unknown-query-params-deepobject-allowed",
+			Config: func() huma.Config {
+				cfg := huma.DefaultConfig("Test API", "1.0.0")
+				cfg.RejectUnknownQueryParameters = true
+				return cfg
+			}(),
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, input *struct {
+					Test struct {
+						Int    int    `json:"int"`
+						String string `json:"string"`
+					} `query:"test,deepObject"`
+				}) (*struct{}, error) {
+					// Should parse and succeed, no validation error.
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?test[int]=1&test[string]=foo",
+			// No Assert: default check ensures status < 300.
+		},
+		{
+			Name: "reject-unknown-query-params-skip-non-query",
+			Config: func() huma.Config {
+				cfg := huma.DefaultConfig("Test API", "1.0.0")
+				cfg.RejectUnknownQueryParameters = true
+				return cfg
+			}(),
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/hdr",
+				}, func(ctx context.Context, input *struct {
+					Header string `header:"X-Test"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodGet,
+			URL:     "/hdr",
+			Headers: map[string]string{"X-Test": "ok"},
+		},
+		{
+			Name: "resolver-skip-nil-optional",
+			Register: func(t *testing.T, api huma.API) {
+				resolverCalls = 0
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/opt",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Optional *CountingInner `json:"optional,omitempty"`
+					}
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodPost,
+			URL:    "/opt",
+			Body:   `{}`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNoContent, resp.Code)
+				assert.Equal(t, 0, resolverCalls)
+			},
+		},
+		{
+			Name: "reject-unknown-query-params-deepobject-unknown",
+			Config: func() huma.Config {
+				cfg := huma.DefaultConfig("Test API", "1.0.0")
+				cfg.RejectUnknownQueryParameters = true
+				return cfg
+			}(),
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, input *struct {
+					Test struct {
+						Int    int    `json:"int"`
+						String string `json:"string"`
+					} `query:"test,deepObject"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?test[int]=1&test[string]=foo&test2[foo]=a",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				var body huma.ErrorModel
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "validation failed", body.Detail)
+				found := false
+				for _, e := range body.Errors {
+					if e.Message == "unknown query parameter" && e.Location == "query.test2[foo]" {
+						found = true
+						break
+					}
+				}
+				require.True(t, found, "expected unknown query parameter error for query.test2[foo]; got: %v", body.Errors)
+			},
+		},
+		{
 			Name: "security-override-public",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
@@ -3789,6 +3939,57 @@ func TestNonJSONValidation(t *testing.T) {
 	// Invalid CBOR request should fail validation.
 	w = api.Post("/cbor-test", "Content-Type: application/cbor", &invalidBuf)
 	assert.Equal(t, 422, w.Code)
+}
+
+func TestFieldsOptionalByDefault(t *testing.T) {
+	type MyInput struct {
+		Body struct {
+			Name string `json:"name"`
+			Age  int    `json:"age" required:"true"`
+		}
+	}
+
+	// Default behavior.
+	{
+		config := huma.DefaultConfig("Test", "1.0.0")
+		config.FieldsOptionalByDefault = false
+		_, api := humatest.New(t, config)
+
+		huma.Post(api, "/test", func(ctx context.Context, input *MyInput) (*struct{}, error) {
+			return nil, nil
+		})
+
+		// Missing name should fail because it's required by default.
+		resp := api.Post("/test", map[string]any{
+			"age": 25,
+		})
+		assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+		assert.Contains(t, resp.Body.String(), "required property name")
+	}
+
+	// Mark fields optional by default.
+	{
+		config := huma.DefaultConfig("Test", "1.0.0")
+		config.FieldsOptionalByDefault = true
+		_, api := humatest.New(t, config)
+
+		huma.Post(api, "/test", func(ctx context.Context, input *MyInput) (*struct{}, error) {
+			return nil, nil
+		})
+
+		// Missing name should pass because it's optional by default.
+		resp := api.Post("/test", map[string]any{
+			"age": 25,
+		})
+		assert.Equal(t, http.StatusNoContent, resp.Code)
+
+		// Missing age should still fail because it's explicitly marked as required.
+		resp = api.Post("/test", map[string]any{
+			"name": "John",
+		})
+		assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+		assert.Contains(t, resp.Body.String(), "required property age")
+	}
 }
 
 func TestSchemaLinkDuplicateTypes(t *testing.T) {

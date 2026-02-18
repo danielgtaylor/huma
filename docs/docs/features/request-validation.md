@@ -24,6 +24,7 @@ The standard `json` tag is supported and can be used to rename a field. Any fiel
 Fields being optional/required is determined automatically but can be overridden as needed using the logic below:
 
 1. Start with all fields required, **except for cookie, header, and query parameters which are optional by default**.
+    - If `huma.Config.FieldsOptionalByDefault` is set to `true`, then all fields are optional by default.
 2. If a field has `omitempty`, it is optional.
 3. If a field has `omitzero`, it is optional.
 4. If a field has `required:"false"`, it is optional.
@@ -35,7 +36,7 @@ Pointers have no effect on optional/required. The same rules apply regardless of
 
 ```go
 type MyStruct struct {
-    // The following are all required.
+    // The following are all required by default.
     Required1 string  `json:"required1"`
     Required2 *string `json:"required2"`
     Required3 string  `json:"required3,omitempty" required:"true"`
@@ -48,6 +49,15 @@ type MyStruct struct {
     Optional5 string  `json:"optional5" required:"false"`
 }
 ```
+
+If you prefer all fields to be optional by default, you can set `FieldsOptionalByDefault` in the `huma.Config`:
+
+```go
+config := huma.DefaultConfig("My API", "1.0.0")
+config.FieldsOptionalByDefault = true
+```
+
+With this setting, `Required1` and `Required2` in the example above would become optional. `Required3` would remain required.
 
 !!! info "Note"
 
@@ -181,7 +191,14 @@ Write-only fields, if stored in a datastore, can be combined with `omitempty` an
 
 By default, Huma is strict about which fields are allowed in an object, making use of the `additionalProperties: false` JSON Schema setting. This means if a client sends a field that is not defined in the schema, the request will be rejected with an error. This can help to prevent typos and other issues and is recommended for most APIs.
 
-If you need to allow additional fields, for example when using a third-party service which will call your system and you only care about a few fields, you can use the `additionalProperties:"true"` field tag on the struct by assigning it to a dummy `_` field.
+The default behavior can be changed globally by setting `AllowAdditionalPropertiesByDefault` in the `huma.Config`'s `RegistryConfig`:
+
+```go
+config := huma.DefaultConfig("My API", "1.0.0")
+config.AllowAdditionalPropertiesByDefault = true
+```
+
+If you need to allow additional fields on a per-struct basis, for example when using a third-party service which will call your system and you only care about a few fields, you can use the `additionalProperties:"true"` field tag on the struct by assigning it to a dummy `_` field.
 
 ```go title="code.go"
 type PartialInput struct {
@@ -194,6 +211,29 @@ type PartialInput struct {
 !!! info "Note"
 
     The use of `struct{}` is optional but efficient. It is used to avoid allocating memory for the dummy field as an empty object requires no space.
+
+## Unknown Query Parameters
+
+By default, unknown query parameters are ignored. You can set `RejectUnknownQueryParameters` to `true` in your `huma.Config` or for a specific `huma.Operation` to change this.
+
+```go title="config.go"
+config := huma.DefaultConfig("My API", "1.0.0")
+config.RejectUnknownQueryParameters = true
+```
+
+Or for a specific operation:
+
+```go title="operation.go"
+huma.Register(api, huma.Operation{
+    Method: http.MethodGet,
+    Path: "/test",
+    RejectUnknownQueryParameters: true,
+}, func(ctx context.Context, input *struct{}) (*struct{}, error) {
+    // ...
+})
+```
+
+When enabled, any query parameter sent by the client that is not defined in the input struct will result in a `422 Unprocessable Entity` error. This behavior is skipped if `SkipValidateParams` is set to `true` on the operation.
 
 ## Advanced Validation
 

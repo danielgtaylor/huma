@@ -181,6 +181,10 @@ type Config struct {
 	// `Info.Version` fields.
 	*OpenAPI
 
+	// registryConfig contains a few minor configuration options for the
+	// internal registry.
+	registryConfig
+
 	// OpenAPIPath is the path to the OpenAPI spec without extension. If set
 	// to `/openapi` it will allow clients to get `/openapi.json` or
 	// `/openapi.yaml`, for example.
@@ -216,6 +220,10 @@ type Config struct {
 	// negotiated, then a 406 Not Acceptable response will be returned.
 	NoFormatFallback bool
 
+	// RejectUnknownQueryParameters indicates whether unknown query parameters
+	// should be rejected during validation.
+	RejectUnknownQueryParameters bool
+
 	// Transformers are a way to modify a response body before it is serialized.
 	Transformers []Transformer
 
@@ -224,6 +232,22 @@ type Config struct {
 	// for example, if you need access to the path settings that may be changed
 	// by the user after the defaults have been set.
 	CreateHooks []func(Config) Config
+}
+
+// configProvider is an internal interface to get the configuration from an
+// implementation of the API or Registry. This is used to access settings
+// without exposing them through public interfaces.
+type configProvider[T any] interface {
+	Config() T
+}
+
+func getConfig[T any](v any) T {
+	if cp, ok := v.(configProvider[T]); ok {
+		return cp.Config()
+	}
+
+	var zero T
+	return zero
 }
 
 // API represents a Huma API wrapping a specific router.
@@ -280,8 +304,8 @@ type Format struct {
 }
 
 type api struct {
-	config       Config
 	adapter      Adapter
+	config       Config
 	formats      map[string]Format
 	formatKeys   []string
 	transformers []Transformer
@@ -290,6 +314,10 @@ type api struct {
 
 func (a *api) Adapter() Adapter {
 	return a.adapter
+}
+
+func (a *api) Config() Config {
+	return a.config
 }
 
 func (a *api) OpenAPI() *OpenAPI {
@@ -417,8 +445,8 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	newAPI := &api{
-		config:       config,
 		adapter:      a,
+		config:       config,
 		formats:      map[string]Format{},
 		transformers: config.Transformers,
 	}
@@ -437,6 +465,10 @@ func NewAPI(config Config, a Adapter) API {
 
 	if config.Components.Schemas == nil {
 		config.Components.Schemas = NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+	}
+
+	if mr, ok := config.Components.Schemas.(*mapRegistry); ok {
+		mr.config = config.registryConfig
 	}
 
 	if config.DefaultFormat == "" && !config.NoFormatFallback {
