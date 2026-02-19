@@ -210,6 +210,10 @@ Official Go package documentation can always be found at https://pkg.go.dev/gith
 - [Bump.sh Deploying Docs from Huma](https://docs.bump.sh/guides/bump-sh-tutorials/huma/)
 - Mentioned in [Composable HTTP Handlers Using Generics](https://www.willem.dev/articles/generic-http-handlers/)
 
+# Who is using Huma?
+
+Huma is used by many companies and open-source projects. See the [Who is using Huma?](https://huma.rocks/why/#who-is-using-huma) page for a list!
+
 Be sure to star the project if you find it useful!
 
 <a href="https://star-history.com/#danielgtaylor/huma&Date">
