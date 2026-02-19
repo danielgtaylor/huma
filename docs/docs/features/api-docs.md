@@ -20,6 +20,10 @@ You can switch to other documentation renderers using `config.DocsRenderer`. The
 
     You can disable the built-in documentation by setting `config.DocsPath` to an empty string. This allows you to provide your own documentation renderer if you wish.
 
+!!! warning "Middleware Conflicts"
+
+    Some middleware can interfere with the documentation renderer's ability to fetch the OpenAPI spec. For example, [go-chi/chi](https://github.com/go-chi/chi)'s `middleware.URLFormat` will rewrite URLs that end in `.json` or `.yaml` (e.g. `/openapi.json` -> `/openapi`), which can lead to 404 errors for the spec. If you encounter this, consider disabling that middleware or configuring it to skip the OpenAPI and documentation paths.
+
 ## Customizing Documentation
 
 You can customize the generated documentation by providing your own renderer function to the API adapter or by using the underlying router directly.

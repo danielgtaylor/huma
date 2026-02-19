@@ -235,6 +235,12 @@ HTTP/1.1 200 OK
 
 ---
 
+## Humaを使用しているプロジェクト
+
+Humaは多くの企業やオープンソースプロジェクトで使用されています。リストについては、[Humaを使用しているプロジェクト](https://huma.rocks/why/#who-is-using-huma)のページをご覧ください！
+
+---
+
 プロジェクトが役に立った場合はぜひスターをお願いします！
 
 <a href="https://star-history.com/#danielgtaylor/huma&Date">

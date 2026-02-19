@@ -184,6 +184,10 @@ HTTP/1.1 200 OK
 - [Bump.sh 从 Huma 部署文档](https://docs.bump.sh/guides/bump-sh-tutorials/huma/)
 - [使用泛型的可组合 HTTP 处理程序](https://www.willem.dev/articles/generic-http-handlers/)中提到
 
+# 谁在使用 Huma？
+
+Huma 被许多公司和开源项目所使用。请参阅 [谁在使用 Huma？](https://huma.rocks/why/#who-is-using-huma) 页面查看列表！
+
 如果您觉得该项目有用，请务必为该项目加注星标！
 
 <a href="https://star-history.com/#danielgtaylor/huma&Date">
