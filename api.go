@@ -187,7 +187,8 @@ type Config struct {
 
 	// OpenAPIPath is the path to the OpenAPI spec without extension. If set
 	// to `/openapi` it will allow clients to get `/openapi.json` or
-	// `/openapi.yaml`, for example.
+	// `/openapi.yaml`, for example. Note that some middleware like chi's
+	// `URLFormat` can interfere with these paths by stripping the extension.
 	OpenAPIPath string
 
 	// DocsPath is the path to the API documentation. If set to `/docs `, it will
