@@ -14,6 +14,7 @@ import (
 // schemas to exist while being flexible enough to support other use cases
 // like only inline objects (no refs) or always using refs for structs.
 type Registry interface {
+	NameExistsInSchema(t reflect.Type, hint string) bool
 	Schema(t reflect.Type, allowRef bool, hint string) *Schema
 	SchemaFromRef(ref string) *Schema
 	TypeFromRef(ref string) reflect.Type
