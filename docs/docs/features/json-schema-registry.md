@@ -23,6 +23,19 @@ Object resources (i.e. not arrays or simple scalars) can also optionally return 
 
 Operations which accept objects as input will ignore the `$schema` property, so it is safe to submit back to the API, aka "round-trip" the data.
 
+### Disabling `$schema`
+
+If you want to disable the `$schema` property and the `Link` header in responses, you can set the `CreateHooks` to `nil` in your configuration before creating the API. This prevents the default `SchemaLinkTransformer` from being registered.
+
+```go
+config := huma.DefaultConfig("My API", "1.0.0")
+config.CreateHooks = nil
+
+// Create the API using the config...
+```
+
+Alternatively, you can manually manage your `Transformers` and `OnAddOperation` hooks in a custom configuration if you only want to disable one of them.
+
 !!! info "Editing"
 
     The `$schema` field is incredibly powerful when paired with Restish's [edit](https://rest.sh/#/guide?id=editing-resources) command, giving you a quick and easy way to edit strongly-typed resources in your favorite editor.

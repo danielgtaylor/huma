@@ -1,7 +1,6 @@
 package huma
 
 import (
-	"encoding"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -21,10 +20,15 @@ type Registry interface {
 	TypeFromRef(ref string) reflect.Type
 	Map() map[string]*Schema
 	RegisterTypeAlias(t reflect.Type, alias reflect.Type)
-	Config() RegistryConfig
 }
 
-type RegistryConfig struct {
+type registryConfig struct {
+	// AllowAdditionalPropertiesByDefault indicates whether schemas should allow
+	// additional properties by default.
+	AllowAdditionalPropertiesByDefault bool
+
+	// FieldsOptionalByDefault indicates whether fields in schemas should be
+	// treated as optional by default during validation.
 	FieldsOptionalByDefault bool
 }
 
@@ -45,26 +49,31 @@ func DefaultSchemaNamer(t reflect.Type, hint string) string {
 	// Better support for lists, so e.g. `[]int` becomes `ListInt`.
 	name = strings.ReplaceAll(name, "[]", "List[")
 
-	result := ""
-	var resultSb48 strings.Builder
+	var result strings.Builder
 	for _, part := range strings.FieldsFunc(name, func(r rune) bool {
 		// Split on special characters. Note that `,` is used when there are
 		// multiple inputs to a generic type.
 		return r == '[' || r == ']' || r == '*' || r == ','
 	}) {
 		// Split fully qualified names like `github.com/foo/bar.Baz` into `Baz`.
-		fqn := strings.Split(part, ".")
-		base := fqn[len(fqn)-1]
+		lastDot := strings.LastIndex(part, ".")
+		base := part[lastDot+1:]
 
-		// Add to result, and uppercase for better scalar support (`int` -> `Int`).
+		// Add to result and uppercase for better scalar support (`int` -> `Int`).
 		// Use unicode-aware uppercase to support non-ASCII characters.
-		r, size := utf8.DecodeRuneInString(base)
-		resultSb48.WriteString(strings.ToUpper(string(r)) + base[size:])
+		if len(base) > 0 {
+			r, size := utf8.DecodeRuneInString(base)
+			if r < utf8.RuneSelf && 'a' <= r && r <= 'z' {
+				result.WriteByte(byte(r - ('a' - 'A')))
+				result.WriteString(base[size:])
+			} else {
+				result.WriteString(strings.ToUpper(string(r)))
+				result.WriteString(base[size:])
+			}
+		}
 	}
-	result += resultSb48.String()
-	name = result
 
-	return name
+	return result.String()
 }
 
 type mapRegistry struct {
@@ -74,7 +83,7 @@ type mapRegistry struct {
 	seen    map[reflect.Type]bool
 	namer   func(reflect.Type, string) string
 	aliases map[reflect.Type]reflect.Type
-	config  RegistryConfig
+	config  registryConfig
 }
 
 func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema {
@@ -97,15 +106,16 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 		getsRef = false
 	}
 
-	v := reflect.New(t).Interface()
-	if _, ok := v.(SchemaProvider); ok {
-		// Special case: type provides its own schema.
-		getsRef = false
-	}
-	if _, ok := v.(encoding.TextUnmarshaler); ok {
-		// Special case: type can be unmarshaled from text so will be a `string`
-		// and doesn't need a ref. This simplifies the schema a little bit.
-		getsRef = false
+	if getsRef {
+		ptrT := reflect.PointerTo(t)
+		if t.Implements(schemaProviderType) || ptrT.Implements(schemaProviderType) {
+			// Special case: type provides its own schema.
+			getsRef = false
+		} else if t.Implements(textUnmarshalerType) || ptrT.Implements(textUnmarshalerType) {
+			// Special case: type can be unmarshaled from text so will be a `string`
+			// and doesn't need a ref. This simplifies the schema a little bit.
+			getsRef = false
+		}
 	}
 
 	name := r.namer(origType, hint)
@@ -172,12 +182,7 @@ func (r *mapRegistry) RegisterTypeAlias(t reflect.Type, alias reflect.Type) {
 	r.aliases[t] = alias
 }
 
-func (r *mapRegistry) NameExistsInSchema(t reflect.Type, hint string) bool {
-	_, ok := r.schemas[r.namer(t, hint)]
-	return ok
-}
-
-func (r *mapRegistry) Config() RegistryConfig {
+func (r *mapRegistry) Config() registryConfig {
 	return r.config
 }
 
@@ -191,8 +196,9 @@ func NewMapRegistry(prefix string, namer func(t reflect.Type, hint string) strin
 		seen:    map[reflect.Type]bool{},
 		aliases: map[reflect.Type]reflect.Type{},
 		namer:   namer,
-		config: RegistryConfig{
-			FieldsOptionalByDefault: false,
+		config: registryConfig{
+			AllowAdditionalPropertiesByDefault: false,
+			FieldsOptionalByDefault:            false,
 		},
 	}
 }

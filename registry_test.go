@@ -73,3 +73,37 @@ func TestSchemaAlias(t *testing.T) {
 	schemaWithString := registry.Schema(reflect.TypeFor[StructWithString](), false, "")
 	assert.Equal(t, schemaWithString, schemaWithContainer)
 }
+
+func TestAllowAdditionalPropertiesByDefault(t *testing.T) {
+	type MyStruct struct {
+		Name string `json:"name"`
+	}
+
+	t.Run("DefaultIsFalse", func(t *testing.T) {
+		r := NewMapRegistry("/schemas", DefaultSchemaNamer)
+
+		// Confirm default is false.
+		assert.False(t, getConfig[registryConfig](r).AllowAdditionalPropertiesByDefault)
+
+		s := r.Schema(reflect.TypeFor[MyStruct](), false, "")
+		assert.Equal(t, false, s.AdditionalProperties)
+	})
+
+	t.Run("OverrideViaRegistryConfig", func(t *testing.T) {
+		r := NewMapRegistry("/schemas", DefaultSchemaNamer).(*mapRegistry)
+		r.config.AllowAdditionalPropertiesByDefault = true
+
+		s := r.Schema(reflect.TypeFor[MyStruct](), false, "")
+		assert.Equal(t, true, s.AdditionalProperties)
+	})
+}
+
+func TestRegistryConfigValue(t *testing.T) {
+	r := NewMapRegistry("/schemas", DefaultSchemaNamer)
+
+	cfg := getConfig[registryConfig](r)
+	cfg.AllowAdditionalPropertiesByDefault = true
+
+	// Config() returns a copy, so modifying it shouldn't affect the registry.
+	assert.False(t, getConfig[registryConfig](r).AllowAdditionalPropertiesByDefault)
+}

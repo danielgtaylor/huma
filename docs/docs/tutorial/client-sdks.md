@@ -168,6 +168,17 @@ Congratulations! You just learned:
 -   How to generate a Go SDK for your API
 -   How to build a client using the SDK to call the API
 
+## External Resources
+
+For a more in-depth real-world example, check out [How to build an API with Go and Huma](https://zuplo.com/blog/how-to-build-an-api-with-go-and-huma) on the Zuplo blog. It covers:
+
+-   Creating a new Huma project & defining some endpoints
+-   Setting up MongoDB
+-   Running the service
+-   Hosting our API
+-   Creating a project on Zuplo
+-   Setting up API key authentication
+
 ## Dive Deeper
 
 Want to learn more about OpenAPI tooling like SDK generators and how to use them? Check these out next:
