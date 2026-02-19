@@ -653,7 +653,7 @@ func (a *api) registerDocsRoute() {
 			"form-action 'none'",
 			"frame-ancestors 'none'",
 			"sandbox allow-same-origin allow-scripts",
-			"script-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js 'sha256-pyvxInx2c2C9E/dNMA9dfGa9z3Lhk9YDz1ET62LbfZs='",
+			"script-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js 'sha256-loGQL86SKUDRkBgfqt+XGmcml9Plihleifquht4CLYE='",
 			"style-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui.css",
 		}
 
