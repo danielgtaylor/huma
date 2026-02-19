@@ -405,8 +405,10 @@ func (a *api) Middlewares() Middlewares {
 // spec. If no server URL is set, then an empty string is returned.
 func getAPIPrefix(oapi *OpenAPI) string {
 	for _, server := range oapi.Servers {
-		if u, err := url.Parse(server.URL); err == nil && u.Scheme != "" && u.Path != "" {
-			return u.Path
+		if u, err := url.Parse(server.URL); err == nil && u.Path != "" {
+			if u.Scheme != "" || strings.HasPrefix(server.URL, "/") {
+				return u.Path
+			}
 		}
 	}
 	return ""
