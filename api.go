@@ -154,6 +154,9 @@ func (c subContext) Unwrap() Context {
 // replaced with the given one. This is useful for middleware that needs to
 // modify the request context.
 func WithContext(ctx Context, override context.Context) Context {
+	if sub, ok := ctx.(interface{ WithContext(context.Context) Context }); ok {
+		return sub.WithContext(override)
+	}
 	return subContext{humaContext: ctx, override: override}
 }
 
