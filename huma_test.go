@@ -2916,6 +2916,41 @@ Content-Type: text/plain
 			},
 		},
 		{
+			Name: "reject-unknown-query-params-group",
+			Config: func() huma.Config {
+				cfg := huma.DefaultConfig("Test API", "1.0.0")
+				cfg.RejectUnknownQueryParameters = true
+				return cfg
+			}(),
+			Register: func(t *testing.T, api huma.API) {
+				g := huma.NewGroup(api, "/base")
+				huma.Register(g, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, input *struct {
+					Known string `query:"known"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/base/test?known=ok&unknown=bad",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				var body huma.ErrorModel
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "validation failed", body.Detail)
+				found := false
+				for _, e := range body.Errors {
+					if e.Message == "unknown query parameter" && e.Location == "query.unknown" {
+						found = true
+						break
+					}
+				}
+				require.True(t, found, "expected unknown query parameter error for query.unknown; got: %v", body.Errors)
+			},
+		},
+		{
 			Name: "reject-unknown-query-params-deepobject-allowed",
 			Config: func() huma.Config {
 				cfg := huma.DefaultConfig("Test API", "1.0.0")
