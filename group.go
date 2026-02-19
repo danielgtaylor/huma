@@ -63,8 +63,8 @@ type Group struct {
 	transformers []Transformer
 }
 
-var _ API = new(Group)
-var _ configProvider[Config] = new(Group)
+var _ API = (*Group)(nil)                    // The Group struct must implement our API interface
+var _ configProvider[Config] = (*Group)(nil) // The Group struct must implement the configProvider[Config] interface in order to provide a way to access its configuration
 
 // NewGroup creates a new group of routes with the given prefixes, if any. A
 // group enables a collection of operations to have the same prefix and share

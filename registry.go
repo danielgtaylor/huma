@@ -85,6 +85,9 @@ type mapRegistry struct {
 	config  registryConfig
 }
 
+var _ Registry = (*mapRegistry)(nil)                       // The Registry struct must implement our mapRegistry interface
+var _ configProvider[registryConfig] = (*mapRegistry)(nil) // The Registry struct must implement the configProvider[registryConfig] interface in order to provide a way to access its configuration
+
 func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema {
 	origType := t
 	t = deref(t)

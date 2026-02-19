@@ -313,6 +313,9 @@ type api struct {
 	middlewares  Middlewares
 }
 
+var _ API = (*api)(nil)                    // The api struct must implement our API interface
+var _ configProvider[Config] = (*api)(nil) // The api struct must implement the configProvider[Config] interface in order to provide a way to access its configuration
+
 func (a *api) Adapter() Adapter {
 	return a.adapter
 }
