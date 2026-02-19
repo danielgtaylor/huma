@@ -63,6 +63,9 @@ type Group struct {
 	transformers []Transformer
 }
 
+var _ API = new(Group)
+var _ configProvider[Config] = new(Group)
+
 // NewGroup creates a new group of routes with the given prefixes, if any. A
 // group enables a collection of operations to have the same prefix and share
 // operation modifiers, middlewares, and transformers.
@@ -84,6 +87,10 @@ func NewGroup(api API, prefixes ...string) *Group {
 
 func (g *Group) Adapter() Adapter {
 	return g.adapter
+}
+
+func (g *Group) Config() Config {
+	return getConfig[Config](g.API)
 }
 
 // DocumentOperation adds an operation to the OpenAPI document. This is called
