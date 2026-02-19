@@ -6,6 +6,7 @@ import (
 	"maps"
 	"net/http"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2/yaml"
@@ -875,6 +876,10 @@ type Operation struct {
 	// caution!
 	SkipValidateBody bool `yaml:"-"`
 
+	// RejectUnknownQueryParameters indicates whether unknown query parameters
+	// should be rejected during validation.
+	RejectUnknownQueryParameters bool `yaml:"-"`
+
 	// Hidden will skip documenting this operation in the OpenAPI. This is
 	// useful for operations that are not intended to be used by clients but
 	// you'd still like the benefits of using Huma. Generally not recommended.
@@ -1497,7 +1502,14 @@ type OpenAPI struct {
 // properly added to the Paths map and will call any registered OnAddOperation
 // functions.
 func (o *OpenAPI) AddOperation(op *Operation) {
-	// Check this won't create a duplicate operation ID.
+	// Normalize spaces in operation ID as some tools (e.g., Stoplight) do not
+	// handle them correctly and may redirect or fail to render the operation.
+	op.OperationID = strings.ReplaceAll(op.OperationID, " ", "-")
+
+	if o.Paths == nil {
+		o.Paths = map[string]*PathItem{}
+	}
+
 	if op.OperationID != "" {
 		for _, pathItem := range o.Paths {
 			for _, existingOp := range []*Operation{
@@ -1509,10 +1521,6 @@ func (o *OpenAPI) AddOperation(op *Operation) {
 				}
 			}
 		}
-	}
-
-	if o.Paths == nil {
-		o.Paths = map[string]*PathItem{}
 	}
 
 	item := o.Paths[op.Path]

@@ -181,9 +181,14 @@ type Config struct {
 	// `Info.Version` fields.
 	*OpenAPI
 
+	// registryConfig contains a few minor configuration options for the
+	// internal registry.
+	registryConfig
+
 	// OpenAPIPath is the path to the OpenAPI spec without extension. If set
 	// to `/openapi` it will allow clients to get `/openapi.json` or
-	// `/openapi.yaml`, for example.
+	// `/openapi.yaml`, for example. Note that some middleware like chi's
+	// `URLFormat` can interfere with these paths by stripping the extension.
 	OpenAPIPath string
 
 	// DocsPath is the path to the API documentation. If set to `/docs `, it will
@@ -216,6 +221,10 @@ type Config struct {
 	// negotiated, then a 406 Not Acceptable response will be returned.
 	NoFormatFallback bool
 
+	// RejectUnknownQueryParameters indicates whether unknown query parameters
+	// should be rejected during validation.
+	RejectUnknownQueryParameters bool
+
 	// Transformers are a way to modify a response body before it is serialized.
 	Transformers []Transformer
 
@@ -224,6 +233,22 @@ type Config struct {
 	// for example, if you need access to the path settings that may be changed
 	// by the user after the defaults have been set.
 	CreateHooks []func(Config) Config
+}
+
+// configProvider is an internal interface to get the configuration from an
+// implementation of the API or Registry. This is used to access settings
+// without exposing them through public interfaces.
+type configProvider[T any] interface {
+	Config() T
+}
+
+func getConfig[T any](v any) T {
+	if cp, ok := v.(configProvider[T]); ok {
+		return cp.Config()
+	}
+
+	var zero T
+	return zero
 }
 
 // API represents a Huma API wrapping a specific router.
@@ -280,8 +305,8 @@ type Format struct {
 }
 
 type api struct {
-	config       Config
 	adapter      Adapter
+	config       Config
 	formats      map[string]Format
 	formatKeys   []string
 	transformers []Transformer
@@ -290,6 +315,10 @@ type api struct {
 
 func (a *api) Adapter() Adapter {
 	return a.adapter
+}
+
+func (a *api) Config() Config {
+	return a.config
 }
 
 func (a *api) OpenAPI() *OpenAPI {
@@ -417,8 +446,8 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	newAPI := &api{
-		config:       config,
 		adapter:      a,
+		config:       config,
 		formats:      map[string]Format{},
 		transformers: config.Transformers,
 	}
@@ -437,6 +466,10 @@ func NewAPI(config Config, a Adapter) API {
 
 	if config.Components.Schemas == nil {
 		config.Components.Schemas = NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+	}
+
+	if mr, ok := config.Components.Schemas.(*mapRegistry); ok {
+		mr.config = config.registryConfig
 	}
 
 	if config.DefaultFormat == "" && !config.NoFormatFallback {
@@ -531,8 +564,9 @@ func (a *api) registerDocsRoute() {
 		openAPIPath = path.Join(prefix, openAPIPath)
 	}
 
-	var body []byte
 	var title string
+	var csp []string
+	var body []byte
 
 	if a.config.Info != nil && a.config.Info.Title != "" {
 		title = a.config.Info.Title + " Reference"
@@ -545,22 +579,31 @@ func (a *api) registerDocsRoute() {
 	switch a.config.DocsRenderer {
 	case DocsRendererScalar:
 		if title == "" {
-			title = "Scalar" + "in HTML"
+			title = "Scalar in HTML"
+		}
+
+		csp = []string{
+			"default-src 'none'",
+			"base-uri 'none'",
+			"connect-src 'self'",
+			"form-action 'none'",
+			"frame-ancestors 'none'",
+			"sandbox allow-same-origin allow-scripts",
+			"script-src 'unsafe-eval' https://unpkg.com/@scalar/api-reference@1.44.20/dist/browser/standalone.js", // TODO: Somehow drop 'unsafe-eval'
+			"style-src 'unsafe-inline'", // TODO: Somehow drop 'unsafe-inline'
 		}
 
 		body = []byte(`<!doctype html>
 <html lang="en">
   <head>
-    <title>` + title + `</title>
     <meta charset="utf-8">
-    <meta content="width=device-width,initial-scale=1" name="viewport">
+    <meta name="referrer" content="no-referrer">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>` + title + `</title>
   </head>
   <body>
-    <script data-url="` + openAPIPath + `.yaml" id="api-reference"></script>
-    <script>
-      let apiReference = document.getElementById("api-reference")
-    </script>
-    <script src="https://unpkg.com/@scalar/api-reference@1.44.18/dist/browser/standalone.js"></script>
+    <script id="api-reference" data-url="` + openAPIPath + `.json"></script>
+    <script src="https://unpkg.com/@scalar/api-reference@1.44.20/dist/browser/standalone.js" crossorigin integrity="sha384-tMz7GAo6dMy55x9tLFtH+sHtogji6Scmb+feBR31TAHmvSPRUTboK9H3M5NFaP4R"></script>
   </body>
 </html>`)
 	case DocsRendererStoplightElements:
@@ -568,17 +611,26 @@ func (a *api) registerDocsRoute() {
 			title = "Elements in HTML"
 		}
 
+		csp = []string{
+			"default-src 'none'",
+			"base-uri 'none'",
+			"connect-src 'self'",
+			"form-action 'none'",
+			"frame-ancestors 'none'",
+			"sandbox allow-same-origin allow-scripts",
+			"script-src https://unpkg.com/@stoplight/elements@9.0.15/web-components.min.js",
+			"style-src 'unsafe-inline' https://unpkg.com/@stoplight/elements@9.0.15/styles.min.css",
+		}
+
 		body = []byte(`<!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="referrer" content="same-origin" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta charset="utf-8">
+    <meta name="referrer" content="no-referrer">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>` + title + `</title>
-    <!-- Embed elements Elements via Web Component -->
-    <link href="https://unpkg.com/@stoplight/elements@9.0.0/styles.min.css" rel="stylesheet" />
-    <script src="https://unpkg.com/@stoplight/elements@9.0.0/web-components.min.js" integrity="sha256-Tqvw1qE2abI+G6dPQBc5zbeHqfVwGoamETU3/TSpUw4="
-            crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements@9.0.15/styles.min.css" crossorigin integrity="sha384-iVQBHadsD+eV0M5+ubRCEVXrXEBj+BqcuwjUwPoVJc0Pb1fmrhYSAhL+BFProHdV">
+    <script src="https://unpkg.com/@stoplight/elements@9.0.15/web-components.min.js" crossorigin integrity="sha384-xjOcq9PZ/k+pGtPS/xcsCRXGjKKfTlIa4H1IYEnC+97jNa6sAMWTNrV6hY08W3GL"></script>
   </head>
   <body style="height: 100vh;">
     <elements-api
@@ -586,7 +638,7 @@ func (a *api) registerDocsRoute() {
       router="hash"
       layout="sidebar"
       tryItCredentialsPolicy="same-origin"
-    />
+    ></elements-api>
   </body>
 </html>`)
 	case DocsRendererSwaggerUI:
@@ -594,21 +646,34 @@ func (a *api) registerDocsRoute() {
 			title = "SwaggerUI in HTML"
 		}
 
+		csp = []string{
+			"default-src 'none'",
+			"base-uri 'none'",
+			"connect-src 'self'",
+			"form-action 'none'",
+			"frame-ancestors 'none'",
+			"sandbox allow-same-origin allow-scripts",
+			"script-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js 'sha256-pyvxInx2c2C9E/dNMA9dfGa9z3Lhk9YDz1ET62LbfZs='",
+			"style-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui.css",
+		}
+
 		body = []byte(`<!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="utf-8">
+    <meta name="referrer" content="no-referrer">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>` + title + `</title>
-    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.31.0/swagger-ui.css" />
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui.css" crossorigin integrity="sha384-KX9Rx9vM1AmUNAn07bPAiZhFD4C8jdNgG6f5MRNvR+EfAxs2PmMFtUUazui7ryZQ">
   </head>
   <body>
     <div id="swagger-ui"></div>
-    <script src="https://unpkg.com/swagger-ui-dist@5.31.0/swagger-ui-bundle.js" crossorigin></script>
-    <script>
+    <script src="https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js" crossorigin integrity="sha384-o9idN8HE6/V6SAewgnr6/5nz7+Npt5J0Cb4tNyXK8pycsVmgl1ZNbRS7tlEGxd+J"></script>
+    <script data-url="` + openAPIPath + `.json">
+      const url = document.currentScript.dataset.url;
       window.onload = () => {
         window.ui = SwaggerUIBundle({
-          url: '` + openAPIPath + `.json',
+          url: url,
           dom_id: '#swagger-ui',
         });
       };
@@ -619,10 +684,15 @@ func (a *api) registerDocsRoute() {
 		panic("unknown docs renderer: " + a.config.DocsRenderer)
 	}
 
+	if len(csp) == 0 {
+		panic("missing CSP for docs renderer: " + a.config.DocsRenderer)
+	}
+
 	a.adapter.Handle(&Operation{
 		Method: http.MethodGet,
 		Path:   a.config.DocsPath,
 	}, func(ctx Context) {
+		ctx.SetHeader("Content-Security-Policy", strings.Join(csp, "; "))
 		ctx.SetHeader("Content-Type", "text/html")
 		ctx.BodyWriter().Write(body)
 	})

@@ -264,7 +264,7 @@ func TestDocsRenderers(t *testing.T) {
 
 		resp := api.Get("/docs")
 		assert.Equal(t, http.StatusOK, resp.Code)
-		assert.Contains(t, resp.Body.String(), "<title>Scalarin HTML</title>")
+		assert.Contains(t, resp.Body.String(), "<title>Scalar in HTML</title>")
 	})
 	t.Run("ElementsNoTitle", func(t *testing.T) {
 		_, api := humatest.New(t, huma.Config{

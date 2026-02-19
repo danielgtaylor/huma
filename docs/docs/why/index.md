@@ -96,3 +96,25 @@ Huma provides guardrails & automation to keep your team and your services runnin
 -   Supports automatic CLI & SDK generation
 
 [:material-arrow-right: Start the tutorial now](../tutorial/installation.md)
+
+## Who is using Huma?
+
+Huma is used by a variety of companies and projects, from large-scale production services handling millions of requests to community-driven open-source tools.
+
+### Production at Scale
+
+Huma powers critical services for some of the largest companies in the world:
+
+- **Corporate Adoption**: We see regular traffic and adoption from **FinTechs**, **Mercedes-Benz**, and many other global companies.
+- **Roblox**: The content catalog service uses Huma and handles over a **million requests a second** in production.
+- **Warner Bros. Discovery**: Used to run major live events and services including the **Olympics**, **March Madness**, **CNN**, and more.
+
+### Open Source Projects
+
+The following is a list of open-source projects using Huma. If you would like to see your project listed here, please [open a pull request](https://github.com/danielgtaylor/huma/pulls) or [issue](https://github.com/danielgtaylor/huma/issues) to request it!
+
+- [AvengeMedia - dgop](https://github.com/AvengeMedia/dgop)
+- [ckoliber - GoCRUD](https://github.com/ckoliber/gocrud)
+- [fy0 - CodeKanban](https://github.com/fy0/CodeKanban)
+- [Global Cyber Alliance - Domain Security Scanner](https://github.com/globalcyberalliance/domain-security-scanner)
+- [Mozilla AI - MCPD](https://github.com/mozilla-ai/mcpd)

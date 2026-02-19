@@ -129,7 +129,7 @@
 
 ## インストール方法
 
-`go get`でインストールできます。Go 1.24以降が必要です。
+`go get`でインストールできます。Go 1.25以降が必要です。
 
 ```sh
 # 事前に: go mod init ...
@@ -193,7 +193,7 @@ func main() {
 ```
 
 > **TIP:**
-> Go 1.24以降の標準ライブラリルーターを使う場合は、`chi.NewMux()` → `http.NewServeMux()`、`humachi.New` → `humago.New`に変更してください。`go.mod`の`go`バージョンも1.22以上にする必要があります。それ以外は同じです。
+> Go 1.22 以降の標準ライブラリルーターを使う場合は、`chi.NewMux()` → `http.NewServeMux()`、`humachi.New` → `humago.New`に変更してください。`go.mod`の`go`バージョンも1.22以上にする必要があります。それ以外は同じです。
 
 サーバー起動例:
 `go run greet.go`（ポート指定は`--port`でも可）
@@ -232,6 +232,12 @@ HTTP/1.1 200 OK
 - Go Weekly [#495](https://golangweekly.com/issues/495), [#498](https://golangweekly.com/issues/498) に掲載
 - [Bump.sh Deploying Docs from Huma](https://docs.bump.sh/guides/bump-sh-tutorials/huma/)
 - [Composable HTTP Handlers Using Generics](https://www.willem.dev/articles/generic-http-handlers/) で言及
+
+---
+
+## Humaを使用しているプロジェクト
+
+Humaは多くの企業やオープンソースプロジェクトで使用されています。リストについては、[Humaを使用しているプロジェクト](https://huma.rocks/why/#who-is-using-huma)のページをご覧ください！
 
 ---
 

@@ -212,8 +212,10 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, _ string, v any) (any, er
 	buf.WriteString(schemaURL)
 	buf.WriteString(info.ref)
 	tmp.Field(0).SetString(buf.String())
-	buf.Reset()
-	bufPool.Put(buf)
+	if buf.Cap() <= 1024*1024 {
+		buf.Reset()
+		bufPool.Put(buf)
+	}
 
 	// Copy over all the exported fields.
 	vv = reflect.Indirect(vv)
@@ -235,8 +237,8 @@ func getSchemaHost(ctx Context) string {
 	}
 
 	if fwd := ctx.Header("Forwarded"); fwd != "" {
-		for _, part := range strings.Split(fwd, ",") {
-			for _, directive := range strings.Split(part, ";") {
+		for part := range strings.SplitSeq(fwd, ",") {
+			for directive := range strings.SplitSeq(part, ";") {
 				directive = strings.TrimSpace(directive)
 				if strings.HasPrefix(strings.ToLower(directive), "host=") {
 					return strings.Trim(directive[5:], "\"")

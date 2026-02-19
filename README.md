@@ -109,7 +109,7 @@ A big thank you to our current & former sponsors!
 
 # Install
 
-Install via `go get`. Note that Go 1.24 or newer is required.
+Install via `go get`. Note that Go 1.25 or newer is required.
 
 ```sh
 # After: go mod init ...
@@ -209,6 +209,10 @@ Official Go package documentation can always be found at https://pkg.go.dev/gith
 - Featured in Go Weekly [#495](https://golangweekly.com/issues/495) & [#498](https://golangweekly.com/issues/498)
 - [Bump.sh Deploying Docs from Huma](https://docs.bump.sh/guides/bump-sh-tutorials/huma/)
 - Mentioned in [Composable HTTP Handlers Using Generics](https://www.willem.dev/articles/generic-http-handlers/)
+
+# Who is using Huma?
+
+Huma is used by many companies and open-source projects. See the [Who is using Huma?](https://huma.rocks/why/#who-is-using-huma) page for a list!
 
 Be sure to star the project if you find it useful!
 
