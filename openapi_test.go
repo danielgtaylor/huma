@@ -283,3 +283,14 @@ func TestAddOperationForceUniqueOperationIDs(t *testing.T) {
 		})
 	})
 }
+
+func TestAddOperationNormalizeOperationIDs(t *testing.T) {
+	oapi := &huma.OpenAPI{}
+	oapi.AddOperation(&huma.Operation{
+		OperationID: "test with spaces",
+		Method:      http.MethodGet,
+		Path:        "/test",
+	})
+
+	assert.Equal(t, "test-with-spaces", oapi.Paths["/test"].Get.OperationID)
+}
