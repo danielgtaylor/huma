@@ -89,7 +89,12 @@ type ErrorModel struct {
 	// Errors provides an optional mechanism of passing additional error details
 	// as a list.
 	Errors []*ErrorDetail `json:"errors,omitempty" doc:"Optional list of individual error details"`
+
+	errors []error
 }
+
+// Unwrap satisfies the `error113` interface. It returns an array of wrapped errors.
+func (e ErrorModel) Unwrap() []error { return e.errors }
 
 // Error satisfies the `error` interface. It returns the error's detail field.
 func (e *ErrorModel) Error() string {
@@ -107,8 +112,11 @@ func (e *ErrorModel) Error() string {
 //		Value: 5
 //	})
 func (e *ErrorModel) Add(err error) {
+	e.errors = append(e.errors, err)
+
 	if converted, ok := err.(ErrorDetailer); ok {
 		e.Errors = append(e.Errors, converted.ErrorDetail())
+
 		return
 	}
 
@@ -245,6 +253,7 @@ var NewError = func(status int, msg string, errs ...error) StatusError {
 		Title:  http.StatusText(status),
 		Detail: msg,
 		Errors: details,
+		errors: errs,
 	}
 }
 
