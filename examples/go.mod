@@ -1,6 +1,6 @@
 module github.com/danielgtaylor/huma/v2/examples
 
-go 1.24.1
+go 1.25.0
 
 replace github.com/danielgtaylor/huma/v2 => ../
 
