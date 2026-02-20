@@ -703,7 +703,7 @@ func getFields(typ reflect.Type, visited map[reflect.Type]struct{}) []fieldInfo 
 			continue
 		}
 
-		if f.Anonymous {
+		if f.Anonymous && f.Tag.Get("json") == "" {
 			embedded = append(embedded, f)
 			continue
 		}

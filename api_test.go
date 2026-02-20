@@ -251,6 +251,24 @@ func TestDocsRenderers(t *testing.T) {
 		assert.Contains(t, resp.Body.String(), `apiDescriptionUrl="/api/v1/openapi.yaml"`)
 	})
 
+	t.Run("APIPrefixRelative", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+				Servers: []*huma.Server{
+					{URL: "/api/v1"},
+				},
+			},
+			DocsPath:    "/docs",
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), `apiDescriptionUrl="/api/v1/openapi.yaml"`)
+	})
+
 	t.Run("ScalarNoTitle", func(t *testing.T) {
 		_, api := humatest.New(t, huma.Config{
 			OpenAPI: &huma.OpenAPI{

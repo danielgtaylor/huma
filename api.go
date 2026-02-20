@@ -313,6 +313,9 @@ type api struct {
 	middlewares  Middlewares
 }
 
+var _ API = (*api)(nil)                    // The api struct must implement our API interface
+var _ configProvider[Config] = (*api)(nil) // The api struct must implement the configProvider[Config] interface in order to provide a way to access its configuration
+
 func (a *api) Adapter() Adapter {
 	return a.adapter
 }
@@ -402,8 +405,10 @@ func (a *api) Middlewares() Middlewares {
 // spec. If no server URL is set, then an empty string is returned.
 func getAPIPrefix(oapi *OpenAPI) string {
 	for _, server := range oapi.Servers {
-		if u, err := url.Parse(server.URL); err == nil && u.Scheme != "" && u.Path != "" {
-			return u.Path
+		if u, err := url.Parse(server.URL); err == nil && u.Path != "" {
+			if u.Scheme != "" || strings.HasPrefix(server.URL, "/") {
+				return u.Path
+			}
 		}
 	}
 	return ""
@@ -653,7 +658,7 @@ func (a *api) registerDocsRoute() {
 			"form-action 'none'",
 			"frame-ancestors 'none'",
 			"sandbox allow-same-origin allow-scripts",
-			"script-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js 'sha256-pyvxInx2c2C9E/dNMA9dfGa9z3Lhk9YDz1ET62LbfZs='",
+			"script-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js 'sha256-loGQL86SKUDRkBgfqt+XGmcml9Plihleifquht4CLYE='",
 			"style-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui.css",
 		}
 

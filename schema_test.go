@@ -772,6 +772,51 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-embed-tagged",
+			input: struct {
+				Embedded `json:"meta"`
+				Value2   string `json:"value2"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["meta", "value2"],
+				"properties": {
+					"meta": {
+						"$ref": "#/components/schemas/Embedded"
+					},
+					"value2": {
+						"type": "string"
+					}
+				}
+			}`,
+		},
+		{
+			name: "field-embed-mixed",
+			input: struct {
+				Embedded      `json:"meta"`
+				EmbeddedChild `json:""`
+				Value3        string `json:"value3"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["meta", "value3", "value"],
+				"properties": {
+					"meta": {
+						"$ref": "#/components/schemas/Embedded"
+					},
+					"value": {
+						"type": "string",
+						"description": "old doc"
+					},
+					"value3": {
+						"type": "string"
+					}
+				}
+			}`,
+		},
+		{
 			name: "field-pointer-example",
 			input: struct {
 				Int *int64  `json:"int" example:"123"`
