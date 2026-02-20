@@ -257,7 +257,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			pfi.TimeFormat = timeFormat
 		}
 
-		if !boolTag(f, "hidden", false) {
+		if !boolTag(f, "hidden", false) && pfi.Loc != "form" {
 			documentParam(op, pl)
 		}
 
