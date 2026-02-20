@@ -1277,6 +1277,11 @@ func TestFeatures(t *testing.T) {
 				assert.Equal(t, "object", mpContent.Schema.Type)
 				assert.Equal(t, "binary", mpContent.Schema.Properties["file"].Format)
 				assert.Equal(t, "binary", mpContent.Schema.Properties["greetings"].Items.Format)
+
+				// Ensure no invalid "in": "form" parameters are present.
+				for _, param := range api.OpenAPI().Paths["/upload"].Post.Parameters {
+					assert.NotEqual(t, "form", param.In)
+				}
 			},
 			Method:  http.MethodPost,
 			URL:     "/upload",
