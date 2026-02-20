@@ -182,3 +182,143 @@ func TestResponseContentTypeWithExtensions(t *testing.T) {
 		})
 	})
 }
+
+func TestDocsRenderers(t *testing.T) {
+	t.Run("DefaultRenderer", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+			},
+			DocsPath:    "/docs",
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Equal(t, "text/html", resp.Header().Get("Content-Type"))
+		assert.Contains(t, resp.Body.String(), "@stoplight/elements")
+	})
+
+	t.Run("ScalarRenderer", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+			},
+			DocsPath:     "/docs",
+			DocsRenderer: huma.DocsRendererScalar,
+			OpenAPIPath:  "/openapi",
+			Formats:      huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), "@scalar/api-reference")
+	})
+
+	t.Run("SwaggerUIRenderer", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+			},
+			DocsPath:     "/docs",
+			DocsRenderer: huma.DocsRendererSwaggerUI,
+			OpenAPIPath:  "/openapi",
+			Formats:      huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), "swagger-ui-dist")
+	})
+
+	t.Run("APIPrefix", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+				Servers: []*huma.Server{
+					{URL: "https://example.com/api/v1"},
+				},
+			},
+			DocsPath:    "/docs",
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		// Elements uses apiDescriptionUrl=".../api/v1/openapi.yaml"
+		assert.Contains(t, resp.Body.String(), `apiDescriptionUrl="/api/v1/openapi.yaml"`)
+	})
+
+	t.Run("APIPrefixRelative", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+				Servers: []*huma.Server{
+					{URL: "/api/v1"},
+				},
+			},
+			DocsPath:    "/docs",
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), `apiDescriptionUrl="/api/v1/openapi.yaml"`)
+	})
+
+	t.Run("ScalarNoTitle", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				// No Info or Title
+			},
+			DocsPath:     "/docs",
+			DocsRenderer: huma.DocsRendererScalar,
+			OpenAPIPath:  "/openapi",
+			Formats:      huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), "<title>Scalar in HTML</title>")
+	})
+	t.Run("ElementsNoTitle", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI:     &huma.OpenAPI{},
+			DocsPath:    "/docs",
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), "<title>Elements in HTML</title>")
+	})
+
+	t.Run("SwaggerUINoTitle", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI:      &huma.OpenAPI{},
+			DocsPath:     "/docs",
+			DocsRenderer: huma.DocsRendererSwaggerUI,
+			OpenAPIPath:  "/openapi",
+			Formats:      huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), "<title>SwaggerUI in HTML</title>")
+	})
+	t.Run("UnknownRenderer", func(t *testing.T) {
+		assert.Panics(t, func() {
+			humatest.New(t, huma.Config{
+				OpenAPI:      &huma.OpenAPI{},
+				DocsPath:     "/docs",
+				DocsRenderer: "unknown",
+				OpenAPIPath:  "/openapi",
+				Formats:      huma.DefaultFormats,
+			})
+		})
+	})
+}

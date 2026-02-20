@@ -8,17 +8,21 @@ description: Path, query, and header input parameters as well as input request b
 
 Requests can have parameters and/or a body as input to the handler function. Inputs use standard Go structs with special fields and/or tags. Here are the available tags:
 
-| Tag        | Description                           | Example                  |
-| ---------- | ------------------------------------- | ------------------------ |
-| `path`     | Name of the path parameter            | `path:"thing-id"`        |
-| `query`    | Name of the query string parameter    | `query:"q"`              |
-| `header`   | Name of the header parameter          | `header:"Authorization"` |
-| `cookie`   | Name of the cookie parameter          | `cookie:"session"`       |
-| `required` | Mark a query/header param as required | `required:"true"`        |
+| Tag        | Description                                  | Example                  |
+| ---------- |----------------------------------------------| ------------------------ |
+| `path`     | Name of the path parameter                   | `path:"thing-id"`        |
+| `query`    | Name of the query string parameter           | `query:"q"`              |
+| `header`   | Name of the header parameter                 | `header:"Authorization"` |
+| `cookie`   | Name of the cookie parameter                 | `cookie:"session"`       |
+| `required` | Mark a cookie/header/query param as required | `required:"true"`        |
+
+!!! info "Default Optionality"
+
+    Cookier, header, and query parameters are **optional by default**. Path parameters are always required. This differs from object fields (e.g. in a request body), which are required by default unless `omitempty` or `omitzero` is used.
 
 !!! info "Required"
 
-    The `required` tag is discouraged and is only used for query/header params, which should generally be optional for clients to send.
+    The `required` tag is discouraged and is only used for header/query params, which should generally be optional for clients to send.
 
 ### Parameter Types
 
@@ -89,6 +93,7 @@ The special struct field `Body` will be treated as the input request body and ca
 | Tag           | Description               | Example                                  |
 | ------------- | ------------------------- | ---------------------------------------- |
 | `contentType` | Override the content type | `contentType:"application/my-type+json"` |
+| `nameHint`    | Hint for the schema name  | `nameHint:"MyRequestBody"`                |
 | `required`    | Mark the body as required | `required:"true"`                        |
 
 `RawBody []byte` can also be used alongside `Body` to provide access to the `[]byte` used to validate & parse `Body`.
@@ -102,7 +107,7 @@ The following special types are supported out of the box:
 | `time.Time`       | `{"type": "string", "format": "date-time"}` | `"2020-01-01T12:00:00Z"`      |
 | `url.URL`         | `{"type": "string", "format": "uri"}`       | `"https://example.com"`       |
 | `net.IP`          | `{"type": "string", "format": "ipv4"}`      | `"127.0.0.1"`                 |
-| `netip.Addr`      | `{"type": "string", "format": "ipv4"}`      | `"127.0.0.1"`                 |
+| `netip.Addr`      | `{"type": "string", "format": "ip"}`        | `"127.0.0.1"` or `fe80::1`    |
 | `json.RawMessage` | `{}`                                        | `["whatever", "you", "want"]` |
 
 You can override this default behavior if needed as described in [Schema Customization](./schema-customization.md) and [Request Validation](./request-validation.md), e.g. setting a custom `format` tag for IPv6.

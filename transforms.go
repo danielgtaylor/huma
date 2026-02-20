@@ -20,14 +20,18 @@ type schemaField struct {
 // as-you-type validation & completion of HTTP resources in editors like
 // VSCode.
 type SchemaLinkTransformer struct {
+	oapi        *OpenAPI
 	prefix      string
 	schemasPath string
-	types       map[any]struct {
-		t      reflect.Type
-		fields []int
-		ref    string
-		header string
-	}
+	types       map[any][]schemaLinkType
+}
+
+type schemaLinkType struct {
+	t      reflect.Type
+	fields []int
+	ref    string
+	header string
+	opID   string
 }
 
 // NewSchemaLinkTransformer creates a new transformer that will add a `$schema`
@@ -40,12 +44,7 @@ func NewSchemaLinkTransformer(prefix, schemasPath string) *SchemaLinkTransformer
 	return &SchemaLinkTransformer{
 		prefix:      prefix,
 		schemasPath: schemasPath,
-		types: map[any]struct {
-			t      reflect.Type
-			fields []int
-			ref    string
-			header string
-		}{},
+		types:       map[any][]schemaLinkType{},
 	}
 }
 
@@ -63,7 +62,7 @@ func (t *SchemaLinkTransformer) addSchemaField(oapi *OpenAPI, content *MediaType
 	// they are reading the documentation.
 	server := "https://example.com"
 	for _, s := range oapi.Servers {
-		if s.URL != "" {
+		if s.URL != "" && strings.Contains(s.URL, "://") {
 			server = s.URL
 			break
 		}
@@ -76,6 +75,7 @@ func (t *SchemaLinkTransformer) addSchemaField(oapi *OpenAPI, content *MediaType
 		ReadOnly:    true,
 		Examples:    []any{server + t.schemasPath + "/" + path.Base(content.Schema.Ref) + ".json"},
 	}
+
 	return false
 }
 
@@ -83,6 +83,8 @@ func (t *SchemaLinkTransformer) addSchemaField(oapi *OpenAPI, content *MediaType
 // enabling this transformer to precompute & cache information about the
 // response and schema.
 func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
+	t.oapi = oapi
+
 	// Update registry to be able to get the type from a schema ref.
 	// Register the type in t.types with the generated ref
 	if op.RequestBody != nil && op.RequestBody.Content != nil {
@@ -114,7 +116,7 @@ func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
 
 			fieldIndexes := []int{}
 			fields := []reflect.StructField{
-				reflect.TypeOf(extra).Field(0),
+				reflect.TypeFor[schemaField]().Field(0),
 			}
 			for i := 0; i < typ.NumField(); i++ {
 				f := typ.Field(i)
@@ -138,12 +140,13 @@ func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
 					}
 				}()
 				newType := reflect.StructOf(fields)
-				info := t.types[typ]
-				info.t = newType
-				info.fields = fieldIndexes
-				info.ref = extra.Schema
-				info.header = "<" + extra.Schema + ">; rel=\"describedBy\""
-				t.types[typ] = info
+				t.types[typ] = append(t.types[typ], schemaLinkType{
+					t:      newType,
+					fields: fieldIndexes,
+					ref:    extra.Schema,
+					header: "<" + extra.Schema + ">; rel=\"describedBy\"",
+					opID:   op.OperationID,
+				})
 			}()
 		}
 	}
@@ -163,28 +166,56 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, _ string, v any) (any, er
 		return v, nil
 	}
 
-	info := t.types[typ]
-	if info.t == nil {
+	infos := t.types[typ]
+	if len(infos) == 0 {
 		return v, nil
 	}
 
-	host := ctx.Host()
-	ctx.AppendHeader("Link", info.header)
+	info := infos[0]
+	if len(infos) > 1 {
+		// More than one schema link for this type, try to find the one that
+		// matches the current operation.
+		op := ctx.Operation()
+		if op != nil {
+			opID := op.OperationID
+			for _, i := range infos {
+				if i.opID == opID {
+					info = i
+					break
+				}
+			}
+		}
+	}
 
+	ctx.AppendHeader("Link", info.header)
 	tmp := reflect.New(info.t).Elem()
 
 	// Set the `$schema` field.
-	buf := bufPool.Get().(*bytes.Buffer)
-	if ctx.TLS() == nil && len(host) >= 9 && (host[:9] == "localhost" || host[:9] == "127.0.0.1") {
-		buf.WriteString("http://")
-	} else {
-		buf.WriteString("https://")
+	schemaURL := getSchemaHost(ctx)
+
+	if schemaURL == "" || strings.HasPrefix(schemaURL, "localhost") {
+		if t.oapi != nil && len(t.oapi.Servers) > 0 && t.oapi.Servers[0].URL != "" {
+			schemaURL = t.oapi.Servers[0].URL
+		} else if schemaURL == "" {
+			schemaURL = "localhost"
+		}
 	}
-	buf.WriteString(host)
+
+	buf := bufPool.Get().(*bytes.Buffer)
+	if !strings.Contains(schemaURL, "://") {
+		if ctx.TLS() == nil && (strings.HasPrefix(schemaURL, "localhost") || strings.HasPrefix(schemaURL, "127.0.0.1")) {
+			buf.WriteString("http://")
+		} else {
+			buf.WriteString("https://")
+		}
+	}
+	buf.WriteString(schemaURL)
 	buf.WriteString(info.ref)
 	tmp.Field(0).SetString(buf.String())
-	buf.Reset()
-	bufPool.Put(buf)
+	if buf.Cap() <= 1024*1024 {
+		buf.Reset()
+		bufPool.Put(buf)
+	}
 
 	// Copy over all the exported fields.
 	vv = reflect.Indirect(vv)
@@ -198,4 +229,23 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, _ string, v any) (any, er
 	}
 
 	return tmp.Addr().Interface(), nil
+}
+
+func getSchemaHost(ctx Context) string {
+	if host := ctx.Header("X-Forwarded-Host"); host != "" {
+		return host
+	}
+
+	if fwd := ctx.Header("Forwarded"); fwd != "" {
+		for part := range strings.SplitSeq(fwd, ",") {
+			for directive := range strings.SplitSeq(part, ";") {
+				directive = strings.TrimSpace(directive)
+				if strings.HasPrefix(strings.ToLower(directive), "host=") {
+					return strings.Trim(directive[5:], "\"")
+				}
+			}
+		}
+	}
+
+	return ctx.Host()
 }

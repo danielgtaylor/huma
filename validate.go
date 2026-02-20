@@ -4,11 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net"
 	"net/mail"
+	"net/netip"
 	"net/url"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +17,6 @@ import (
 	"unsafe"
 
 	"github.com/danielgtaylor/huma/v2/validation"
-	"golang.org/x/net/idna"
 )
 
 // ValidateMode describes the direction of validation (server -> client or
@@ -43,7 +43,6 @@ const (
 // disabled by default to match Go's JSON unmarshaling behavior.
 var ValidateStrictCasing = false
 
-var idnaProfile = idna.New(idna.ValidateForRegistration())
 var rxHostname = regexp.MustCompile(`^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$`)
 var rxURITemplate = regexp.MustCompile("^([^{]*({[^}]*})?)*$")
 var rxJSONPointer = regexp.MustCompile("^(?:/(?:[^~/]|~0|~1)*)*$")
@@ -82,12 +81,11 @@ type PathBuffer struct {
 //	pb.Push("foo") // foo
 //	pb.Push("bar") // foo.bar
 func (b *PathBuffer) Push(s string) {
-	if b.off > 0 {
+	if len(b.buf) > 0 {
 		b.buf = append(b.buf, '.')
-		b.off++
 	}
 	b.buf = append(b.buf, s...)
-	b.off += len(s)
+	b.off = len(b.buf)
 }
 
 // PushIndex pushes an entry onto the path surrounded by `[` and `]`.
@@ -95,11 +93,10 @@ func (b *PathBuffer) Push(s string) {
 //	pb.Push("foo")  // foo
 //	pb.PushIndex(1) // foo[1]
 func (b *PathBuffer) PushIndex(i int) {
-	l := len(b.buf)
 	b.buf = append(b.buf, '[')
-	b.buf = append(b.buf, strconv.Itoa(i)...)
+	b.buf = strconv.AppendInt(b.buf, int64(i), 10)
 	b.buf = append(b.buf, ']')
-	b.off += len(b.buf) - l
+	b.off = len(b.buf)
 }
 
 // Pop the latest entry off the path.
@@ -244,22 +241,32 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 		if _, err := mail.ParseAddress(str); err != nil {
 			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC5322Email, err))
 		}
-	case "hostname":
+	case "idn-hostname", "hostname":
 		if len(str) >= 256 || !rxHostname.MatchString(str) {
 			res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
 		}
-	case "idn-hostname":
-		if _, err := idnaProfile.ToASCII(str); err != nil {
-			res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
+	case "ipv4", "ipv6", "ip":
+		addr, err := netip.ParseAddr(str)
+
+		switch s.Format {
+		case "ipv4":
+			if err != nil || !addr.Is4() {
+				res.Add(path, str, validation.MsgExpectedRFC2673IPv4)
+			}
+		case "ipv6":
+			if err != nil || !addr.Is6() || addr.Is4In6() {
+				res.Add(path, str, validation.MsgExpectedRFC2373IPv6)
+			}
+		default: // case "ip".
+			if err != nil {
+				res.Add(path, str, validation.MsgExpectedRFCIPAddr)
+			}
 		}
-	case "ipv4":
-		if ip := net.ParseIP(str); ip == nil || ip.To4() == nil {
-			res.Add(path, str, validation.MsgExpectedRFC2673IPv4)
-		}
-	case "ipv6":
-		if ip := net.ParseIP(str); ip == nil || ip.To16() == nil {
-			res.Add(path, str, validation.MsgExpectedRFC2373IPv6)
-		}
+	// TODO: investigate supporting idn-hostname without external library.
+	// case "idn-hostname":
+	// 	if _, err := idnaProfile.ToASCII(str); err != nil {
+	// 		res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
+	// 	}
 	case "uri", "uri-reference", "iri", "iri-reference":
 		if _, err := url.Parse(str); err != nil {
 			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
@@ -574,13 +581,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 	}
 
 	if len(s.Enum) > 0 {
-		found := false
-		for _, e := range s.Enum {
-			if e == v {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(s.Enum, v)
 		if !found {
 			res.Add(path, v, s.msgEnum)
 		}
