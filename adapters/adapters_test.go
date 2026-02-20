@@ -20,7 +20,8 @@ import (
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/gin-gonic/gin"
 	"github.com/go-chi/chi/v5"
-	"github.com/gofiber/fiber/v2"
+	fiberV2 "github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/gorilla/mux"
 	"github.com/julienschmidt/httprouter"
 	"github.com/labstack/echo/v4"
@@ -103,7 +104,8 @@ func TestAdapters(t *testing.T) {
 				assert.Equal(t, 1, v.ProtoMajor)
 				assert.Equal(t, 1, v.ProtoMinor)
 			} else {
-				assert.Equal(t, "http", v.Proto)
+				// Fiber adapters (both v2 and v3) don't populate ProtoMajor/ProtoMinor
+				assert.Contains(t, []string{"http", "HTTP/1.1"}, v.Proto)
 			}
 
 			// Make sure huma.WithValue works correctly
@@ -130,6 +132,9 @@ func TestAdapters(t *testing.T) {
 		}},
 		{"fiber", func() huma.API {
 			return wrap(humafiber.New(fiber.New(), config()), true, func(ctx huma.Context) { humafiber.Unwrap(ctx) })
+		}},
+		{"fiber-v2", func() huma.API {
+			return wrap(humafiber.NewV2(fiberV2.New(), config()), true, func(ctx huma.Context) { humafiber.UnwrapV2(ctx) })
 		}},
 		{"go", func() huma.API {
 			return wrap(humago.New(http.NewServeMux(), config()), false, func(ctx huma.Context) { humago.Unwrap(ctx) })
