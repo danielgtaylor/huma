@@ -139,7 +139,7 @@ func (c *echoCtx) Version() huma.ProtoVersion {
 }
 
 type router interface {
-	Add(method, path string, handler echo.HandlerFunc, middleware ...echo.MiddlewareFunc) echo.RouteInfo
+	Add(method, path string, handler echo.HandlerFunc, middlewares ...echo.MiddlewareFunc) echo.RouteInfo
 }
 
 type echoAdapter struct {
