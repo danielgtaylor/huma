@@ -13,12 +13,12 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/labstack/echo/v5"
+	echoV4 "github.com/labstack/echo/v4"
 )
 
-var lastModified = time.Now()
+var lastModifiedV4 = time.Now()
 
-func BenchmarkHumaEcho(b *testing.B) {
+func BenchmarkHumaEchoV4(b *testing.B) {
 	type GreetingInput struct {
 		ID          string `path:"id"`
 		ContentType string `header:"Content-Type"`
@@ -40,8 +40,8 @@ func BenchmarkHumaEcho(b *testing.B) {
 		}
 	}
 
-	r := echo.New()
-	app := New(r, huma.DefaultConfig("Test", "1.0.0"))
+	r := echoV4.New()
+	app := NewV4(r, huma.DefaultConfig("Test", "1.0.0"))
 
 	huma.Register(app, huma.Operation{
 		OperationID: "greet",
@@ -75,7 +75,7 @@ func BenchmarkHumaEcho(b *testing.B) {
 	}
 }
 
-func BenchmarkRawEcho(b *testing.B) {
+func BenchmarkRawEchoV4(b *testing.B) {
 	type GreetingInput struct {
 		Suffix string `json:"suffix" maxLength:"5"`
 	}
@@ -98,9 +98,9 @@ func BenchmarkRawEcho(b *testing.B) {
 	strSchema := registry.Schema(reflect.TypeFor[string](), false, "")
 	numSchema := registry.Schema(reflect.TypeFor[int](), false, "")
 
-	r := echo.New()
+	r := echoV4.New()
 
-	r.POST("/foo/:id", func(c *echo.Context) error {
+	r.POST("/foo/:id", func(c echoV4.Context) error {
 		r := c.Request()
 		w := c.Response()
 
@@ -176,7 +176,7 @@ func BenchmarkRawEcho(b *testing.B) {
 	}
 }
 
-func BenchmarkRawEchoFast(b *testing.B) {
+func BenchmarkRawEchoV4Fast(b *testing.B) {
 	type GreetingInput struct {
 		Suffix string `json:"suffix" maxLength:"5"`
 	}
@@ -189,9 +189,9 @@ func BenchmarkRawEchoFast(b *testing.B) {
 		Num         int    `json:"num"`
 	}
 
-	r := echo.New()
+	r := echoV4.New()
 
-	r.POST("/foo/:id", func(c *echo.Context) error {
+	r.POST("/foo/:id", func(c echoV4.Context) error {
 		r := c.Request()
 		w := c.Response()
 
