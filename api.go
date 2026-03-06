@@ -593,7 +593,7 @@ func (a *api) registerDocsRoute() {
 			"connect-src 'self'",
 			"form-action 'none'",
 			"frame-ancestors 'none'",
-			"sandbox allow-same-origin allow-scripts",
+			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox",
 			"script-src 'unsafe-eval' https://unpkg.com/@scalar/api-reference@1.44.20/dist/browser/standalone.js", // TODO: Somehow drop 'unsafe-eval'
 			"style-src 'unsafe-inline'", // TODO: Somehow drop 'unsafe-inline'
 		}
@@ -622,7 +622,7 @@ func (a *api) registerDocsRoute() {
 			"connect-src 'self'",
 			"form-action 'none'",
 			"frame-ancestors 'none'",
-			"sandbox allow-same-origin allow-scripts",
+			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox",
 			"script-src https://unpkg.com/@stoplight/elements@9.0.15/web-components.min.js",
 			"style-src 'unsafe-inline' https://unpkg.com/@stoplight/elements@9.0.15/styles.min.css",
 		}
@@ -657,7 +657,7 @@ func (a *api) registerDocsRoute() {
 			"connect-src 'self'",
 			"form-action 'none'",
 			"frame-ancestors 'none'",
-			"sandbox allow-same-origin allow-scripts",
+			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox",
 			"script-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js 'sha256-loGQL86SKUDRkBgfqt+XGmcml9Plihleifquht4CLYE='",
 			"style-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui.css",
 		}
