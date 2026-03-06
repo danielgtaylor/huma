@@ -16,7 +16,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humafiber"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -64,7 +64,7 @@ const (
 	HelloPath = "/hello"
 )
 
-func PingHandler(c *fiber.Ctx) error {
+func PingHandler(c fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusOK)
 }
 
@@ -192,21 +192,21 @@ func HelloResponseValidate(t *testing.T, expected HelloResponseBody, response *h
 	}
 }
 
-func FiberMiddlewareUserValue(c *fiber.Ctx) error {
+func FiberMiddlewareUserValue(c fiber.Ctx) error {
 	headers := c.GetReqHeaders()
 	if values, found := headers[HeaderNameFiberUserValue]; found && len(values) > 0 {
-		c.Context().SetUserValue(contextValueFiberUserValue, values[0])
+		c.Locals(contextValueFiberUserValue, values[0])
 	}
 	return c.Next()
 }
 
-func FiberMiddlewareUserContext(c *fiber.Ctx) error {
+func FiberMiddlewareUserContext(c fiber.Ctx) error {
 	headers := c.GetReqHeaders()
 	if values, found := headers[HeaderNameFiberUserContext]; found && len(values) > 0 {
-		var original = c.UserContext()
+		var original = c.Context()
 		var result = context.WithValue(original, contextValueFiberUserContext, values[0])
-		c.SetUserContext(result)
-		defer c.SetUserContext(original)
+		c.SetContext(result)
+		defer c.SetContext(original)
 	}
 	return c.Next()
 }
@@ -236,9 +236,7 @@ func TestHumaFiber(t *testing.T) {
 	require.NotZero(t, port)
 	server := fmt.Sprintf("http://localhost:%d", port)
 
-	app := fiber.New(fiber.Config{
-		DisableStartupMessage: true,
-	})
+	app := fiber.New()
 	app.Use(FiberMiddlewareUserValue)
 	app.Use(FiberMiddlewareUserContext)
 	RegisterPing(app)
