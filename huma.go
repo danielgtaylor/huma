@@ -1400,13 +1400,31 @@ func setRequestBodyFromBody(op *Operation, registry Registry, fBody reflect.Stru
 		op.RequestBody.Content[contentType] = &MediaType{}
 	}
 	if op.RequestBody.Content[contentType].Schema == nil {
-		hint := getHint(inputType, fBody.Name, op.OperationID+"Request")
+		hint := getHint(inputType, fBody.Name, getDefaultHint(op.OperationID, registry, inputType, "Request"))
 		if nameHint := fBody.Tag.Get("nameHint"); nameHint != "" {
 			hint = nameHint
 		}
 		s := SchemaFromField(registry, fBody, hint)
 		op.RequestBody.Content[contentType].Schema = s
 	}
+}
+
+// getDefaultHint checks if the hint already exists in the registry and returns a new hint if it does.
+//
+// It suffixes the hint with an increasing number if it already exists, starting from 1.
+//
+// However, the operationID takes precedence if it is not empty.
+func getDefaultHint(operationID string, registry Registry, inputType reflect.Type, defaultPrefix string) string {
+	if operationID != "" {
+		return operationID + defaultPrefix
+	}
+
+	defaultHint := defaultPrefix
+	for i := 1; registry.NameExistsInSchema(inputType, defaultHint); i++ {
+		defaultHint = defaultPrefix + strconv.Itoa(i)
+	}
+
+	return defaultHint
 }
 
 type rawBodyType int
@@ -1538,7 +1556,7 @@ func processOutputType(outputType reflect.Type, op *Operation, registry Registry
 			op.Responses[statusStr].Headers = map[string]*Param{}
 		}
 		if !outBodyFunc {
-			hint := getHint(outputType, f.Name, op.OperationID+"Response")
+			hint := getHint(outputType, f.Name, getDefaultHint(op.OperationID, registry, outputType, "Response"))
 			if nameHint := f.Tag.Get("nameHint"); nameHint != "" {
 				hint = nameHint
 			}
