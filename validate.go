@@ -493,7 +493,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 			}
 		}
 		if s.MultipleOf != nil {
-			if math.Mod(num, *s.MultipleOf) != 0 {
+			if r := math.Mod(num, *s.MultipleOf); math.Abs(r) > 1e-9 && math.Abs(r-*s.MultipleOf) > 1e-9 {
 				res.Add(path, v, s.msgMultipleOf)
 			}
 		}
