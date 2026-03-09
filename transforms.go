@@ -60,7 +60,7 @@ func (t *SchemaLinkTransformer) addSchemaField(oapi *OpenAPI, content *MediaType
 
 	// Create an example so it's easier for users to find the schema URL when
 	// they are reading the documentation.
-	server := ""
+	server := "https://example.com"
 	for _, s := range oapi.Servers {
 		if s.URL != "" {
 			if strings.Contains(s.URL, "://") {
@@ -68,7 +68,7 @@ func (t *SchemaLinkTransformer) addSchemaField(oapi *OpenAPI, content *MediaType
 				break
 			}
 			if strings.HasPrefix(s.URL, "/") {
-				server = s.URL
+				server += s.URL
 				break
 			}
 		}
