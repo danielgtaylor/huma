@@ -2701,6 +2701,44 @@ Content-Type: text/plain
 			},
 		},
 		{
+			Name: "schema-url-relative-openapi-server",
+			Register: func(t *testing.T, api huma.API) {
+				api.OpenAPI().Servers = []*huma.Server{
+					{URL: "/base"},
+				}
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+
+				// Verify the OpenAPI spec reflects the expected example URL
+				// This triggers the `addSchemaField` logic in `transforms.go`
+				// We can check this on the API object if we have access to it,
+				// but here we can just verify the Link header or the body.
+				assert.Contains(t, resp.Header().Get("Link"), "/base/schemas/Get-testResponse.json")
+
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				// Note: at runtime the $schema field in the body depends on the request host.
+				// By default in tests it's http://localhost
+				assert.Contains(t, body["$schema"], "/base/schemas/Get-testResponse.json")
+			},
+		},
+		{
 			Name: "response-marshal-error",
 			Register: func(t *testing.T, api huma.API) {
 				type Resp struct {
