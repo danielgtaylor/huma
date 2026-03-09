@@ -95,8 +95,9 @@ func (c *fiberWrapper) Header(name string) string {
 }
 
 func (c *fiberWrapper) EachHeader(cb func(name, value string)) {
-	c.orig.Request().Header.VisitAll(func(k, v []byte) {
+	c.orig.Request().Header.All()(func(k, v []byte) bool {
 		cb(string(k), string(v))
+		return true // Keep iterating.
 	})
 }
 
@@ -106,7 +107,7 @@ func (c *fiberWrapper) BodyReader() io.Reader {
 		// Streaming is enabled, so send the reader.
 		return orig.Request().BodyStream()
 	}
-	return bytes.NewReader(orig.BodyRaw())
+	return bytes.NewReader(orig.Body())
 }
 
 func (c *fiberWrapper) GetMultipartForm() (*multipart.Form, error) {

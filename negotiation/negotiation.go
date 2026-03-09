@@ -4,6 +4,7 @@
 package negotiation
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -20,13 +21,7 @@ func SelectQValue(header string, allowed []string) string {
 		parts := strings.Split(format, ";")
 		name := strings.Trim(parts[0], " \t")
 
-		found := false
-		for _, n := range allowed {
-			if n == name {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(allowed, name)
 
 		if !found {
 			// Skip formats we don't support.
@@ -92,13 +87,7 @@ func SelectQValueFast(header string, allowed []string) string {
 			start = pos + 1
 			end = start
 
-			found := false
-			for _, n := range allowed {
-				if n == name {
-					found = true
-					break
-				}
-			}
+			found := slices.Contains(allowed, name)
 
 			if !found {
 				// Skip formats we don't support.

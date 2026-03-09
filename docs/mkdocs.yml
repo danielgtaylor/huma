@@ -58,6 +58,7 @@ nav:
       - "Custom Validation": how-to/custom-validation.md
       - "Image Response": how-to/image-response.md
       - "Graceful Shutdown": how-to/graceful-shutdown.md
+      - "HTML Response": how-to/html-response.md
       - "Migrating From V1": how-to/migrate.md
       - "OAuth 2.0 & JWT": how-to/oauth2-jwt.md
   - "Go Reference": "https://pkg.go.dev/github.com/danielgtaylor/huma/v2?tab=doc"

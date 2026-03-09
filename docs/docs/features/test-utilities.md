@@ -59,7 +59,7 @@ func TestMyAPI(t *testing.T) {
 }
 ```
 
-The request convenience methods take a URL path followed by any number of optional arguments. If the argument is a string, it is treated as a header, if it is an `io.Reader` is is treated as the raw body, otherwise it is marshalled as JSON and used as the request body.
+The request convenience methods take a URL path followed by any number of optional arguments. If the argument is a string, it is treated as a header, if it is an `io.Reader` is is treated as the raw body, otherwise it is marshaled as JSON and used as the request body.
 
 ## Assertions
 
