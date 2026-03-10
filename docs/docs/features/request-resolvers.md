@@ -44,7 +44,7 @@ It is recommended that you do not save the context object passed to the `Resolve
 For deeply nested structs within the request body, you may not know the current location of the field being validated (e.g. it may appear in multiple places or be shared by multiple request objects). The [`huma.ResolverWithPath`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ResolverWithPath) interface provides a path prefix that can be used to generate the full path to the field being validated. It uses a [`huma.PathBuffer`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#PathBuffer) for efficient path generation reusing a shared buffer. For example:
 
 ```go title="code.go"
-func (m *MyInput) Resolve(ctx huma.Context, prefix *huma.PathBuffer) []error {
+func (m *MyInput) ResolverWithPath(ctx huma.Context, prefix *huma.PathBuffer) []error {
 	return []error{&huma.ErrorDetail{
 		Message: "Foo has a bad value",
 		Location: prefix.With("foo"),
