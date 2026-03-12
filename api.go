@@ -411,7 +411,7 @@ func getAPIPrefix(oapi *OpenAPI) string {
 
 		serverURL, err := url.Parse(server.URL)
 		if err != nil {
-			continue
+			panic("invalid server URL: " + server.URL + ": " + err.Error())
 		}
 
 		if serverURL.Path == "" {

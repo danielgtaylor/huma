@@ -63,14 +63,8 @@ func (t *SchemaLinkTransformer) addSchemaField(oapi *OpenAPI, content *MediaType
 	server := "https://example.com"
 	for _, s := range oapi.Servers {
 		if s.URL != "" {
-			if strings.Contains(s.URL, "://") {
-				server = s.URL
-				break
-			}
-			if strings.HasPrefix(s.URL, "/") {
-				server += s.URL
-				break
-			}
+			server = s.URL
+			break
 		}
 	}
 

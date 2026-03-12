@@ -244,6 +244,40 @@ func TestFeatures(t *testing.T) {
 			URL:    "/middleware",
 		},
 		{
+			Name: "openapi-relative-server",
+			Config: func() huma.Config {
+				c := huma.DefaultConfig("Test API", "1.0.0")
+				c.OpenAPI.Servers = []*huma.Server{
+					{URL: "/v1"},
+				}
+				return c
+			}(),
+			Register: func(t *testing.T, api huma.API) {},
+			Method:   http.MethodGet,
+			URL:      "/openapi.json",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, 200, resp.Code)
+				assert.Contains(t, resp.Body.String(), `"url":"/v1"`)
+			},
+		},
+		{
+			Name: "openapi-relative-server-dot",
+			Config: func() huma.Config {
+				c := huma.DefaultConfig("Test API", "1.0.0")
+				c.OpenAPI.Servers = []*huma.Server{
+					{URL: "./v1"},
+				}
+				return c
+			}(),
+			Register: func(t *testing.T, api huma.API) {},
+			Method:   http.MethodGet,
+			URL:      "/openapi.json",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, 200, resp.Code)
+				assert.Contains(t, resp.Body.String(), `"url":"./v1"`)
+			},
+		},
+		{
 			Name: "middleware-cookie-invalid-name",
 			Register: func(t *testing.T, api huma.API) {
 				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
