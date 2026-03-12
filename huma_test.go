@@ -247,7 +247,7 @@ func TestFeatures(t *testing.T) {
 			Name: "openapi-relative-server",
 			Config: func() huma.Config {
 				c := huma.DefaultConfig("Test API", "1.0.0")
-				c.OpenAPI.Servers = []*huma.Server{
+				c.Servers = []*huma.Server{
 					{URL: "/v1"},
 				}
 				return c
@@ -264,7 +264,7 @@ func TestFeatures(t *testing.T) {
 			Name: "openapi-relative-server-dot",
 			Config: func() huma.Config {
 				c := huma.DefaultConfig("Test API", "1.0.0")
-				c.OpenAPI.Servers = []*huma.Server{
+				c.Servers = []*huma.Server{
 					{URL: "./v1"},
 				}
 				return c
