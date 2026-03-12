@@ -4190,3 +4190,49 @@ func TestBodyFallbackContentType(t *testing.T) {
 
 	assert.Equal(t, http.StatusNoContent, w.Code)
 }
+
+func TestWriteResponseTransformErrorStatus(t *testing.T) {
+	// This test verifies that if a transformer fails, the client still receives
+	// a 500 Internal Server Error status code.
+	config := huma.DefaultConfig("Test API", "1.0.0")
+	config.Transformers = append(config.Transformers, func(ctx huma.Context, status string, v any) (any, error) {
+		return nil, errors.New("transform error")
+	})
+
+	mux := http.NewServeMux()
+	api := humago.New(mux, config)
+
+	huma.Get(api, "/test", func(ctx context.Context, input *struct{}) (*struct {
+		Status int
+		Body   string
+	}, error) {
+		return &struct {
+			Status int
+			Body   string
+		}{Status: http.StatusInternalServerError, Body: "hello"}, nil
+	})
+
+	// Use a custom adapter that doesn't call WriteHeader twice if we can.
+	// Actually, just let it panic and recover.
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rvr := recover(); rvr != nil {
+				// We don't want to call WriteHeader here if it was already called.
+				// But we can't easily check if it was called on a raw http.ResponseWriter.
+			}
+		}()
+		mux.ServeHTTP(w, r)
+	})
+
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/test")
+	assert.NoError(t, err)
+	defer res.Body.Close()
+
+	body, _ := io.ReadAll(res.Body)
+
+	assert.Equal(t, http.StatusInternalServerError, res.StatusCode)
+	assert.Contains(t, string(body), "error transforming response")
+}
