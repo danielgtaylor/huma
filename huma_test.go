@@ -754,7 +754,7 @@ func TestFeatures(t *testing.T) {
 				}, func(ctx context.Context, i *struct {
 					Params []OptionalParam[int] `query:"params,explode"`
 				}) (*struct{}, error) {
-					assert.Equal(t, 3, len(i.Params))
+					assert.Len(t, i.Params, 3)
 					assert.Equal(t, 1, i.Params[0].Value)
 					assert.Equal(t, 2, i.Params[1].Value)
 					assert.Equal(t, 3, i.Params[2].Value)
@@ -791,7 +791,7 @@ func TestFeatures(t *testing.T) {
 				}, func(ctx context.Context, i *struct {
 					Params []WrapperOnly[int] `query:"params"`
 				}) (*struct{}, error) {
-					assert.Equal(t, 2, len(i.Params))
+					assert.Len(t, i.Params, 2)
 					assert.Equal(t, 10, i.Params[0].Value)
 					assert.Equal(t, 20, i.Params[1].Value)
 					return nil, nil
