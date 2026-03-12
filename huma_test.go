@@ -4219,6 +4219,7 @@ func TestWriteResponseTransformErrorStatus(t *testing.T) {
 			if rvr := recover(); rvr != nil {
 				// We don't want to call WriteHeader here if it was already called.
 				// But we can't easily check if it was called on a raw http.ResponseWriter.
+				return
 			}
 		}()
 		mux.ServeHTTP(w, r)
@@ -4228,7 +4229,7 @@ func TestWriteResponseTransformErrorStatus(t *testing.T) {
 	defer ts.Close()
 
 	res, err := http.Get(ts.URL + "/test")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer res.Body.Close()
 
 	body, _ := io.ReadAll(res.Body)
