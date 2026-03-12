@@ -62,7 +62,7 @@ func (t *SchemaLinkTransformer) addSchemaField(oapi *OpenAPI, content *MediaType
 	// they are reading the documentation.
 	server := "https://example.com"
 	for _, s := range oapi.Servers {
-		if s.URL != "" && strings.Contains(s.URL, "://") {
+		if s.URL != "" {
 			server = s.URL
 			break
 		}
@@ -195,8 +195,12 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, _ string, v any) (any, er
 
 	if schemaURL == "" || strings.HasPrefix(schemaURL, "localhost") {
 		if t.oapi != nil && len(t.oapi.Servers) > 0 && t.oapi.Servers[0].URL != "" {
-			schemaURL = t.oapi.Servers[0].URL
-		} else if schemaURL == "" {
+			serverURL := t.oapi.Servers[0].URL
+			if !strings.HasPrefix(serverURL, "/") {
+				schemaURL = serverURL
+			}
+		}
+		if schemaURL == "" {
 			schemaURL = "localhost"
 		}
 	}

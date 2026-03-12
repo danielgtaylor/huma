@@ -405,12 +405,24 @@ func (a *api) Middlewares() Middlewares {
 // spec. If no server URL is set, then an empty string is returned.
 func getAPIPrefix(oapi *OpenAPI) string {
 	for _, server := range oapi.Servers {
-		if u, err := url.Parse(server.URL); err == nil && u.Path != "" {
-			if u.Scheme != "" || strings.HasPrefix(server.URL, "/") {
-				return u.Path
-			}
+		if server.URL == "" {
+			continue
+		}
+
+		serverURL, err := url.Parse(server.URL)
+		if err != nil {
+			panic("invalid server URL: " + server.URL + ": " + err.Error())
+		}
+
+		if serverURL.Path == "" {
+			continue
+		}
+
+		if strings.HasPrefix(server.URL, "/") || serverURL.Host != "" {
+			return serverURL.Path
 		}
 	}
+
 	return ""
 }
 
