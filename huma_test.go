@@ -106,6 +106,19 @@ func (o *OptionalParam[T]) OnParamSet(isSet bool, parsed any) {
 	o.IsSet = isSet
 }
 
+// WrapperOnly implements ParamWrapper but not ParamReactor.
+type WrapperOnly[T any] struct {
+	Value T
+}
+
+func (w WrapperOnly[T]) Schema(r huma.Registry) *huma.Schema {
+	return huma.SchemaFromType(r, reflect.TypeOf(w.Value))
+}
+
+func (w *WrapperOnly[T]) Receiver() reflect.Value {
+	return reflect.ValueOf(w).Elem().Field(0)
+}
+
 // CountingInner is used to verify resolver traversal skips nil optional fields.
 type CountingInner struct{}
 
@@ -668,6 +681,123 @@ func TestFeatures(t *testing.T) {
 				})
 			},
 			URL:    "/test?param=2023-01-01T12:00:00Z",
+			Method: http.MethodGet,
+		},
+		{
+			Name: "parse-slice-with-param-receiver-int",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Params []OptionalParam[int] `query:"params"`
+				}) (*struct{}, error) {
+					assert.Equal(t, 3, len(i.Params))
+					assert.Equal(t, 1, i.Params[0].Value)
+					assert.True(t, i.Params[0].IsSet)
+					assert.Equal(t, 2, i.Params[1].Value)
+					assert.True(t, i.Params[1].IsSet)
+					assert.Equal(t, 3, i.Params[2].Value)
+					assert.True(t, i.Params[2].IsSet)
+					return nil, nil
+				})
+			},
+			URL:    "/test?params=1,2,3",
+			Method: http.MethodGet,
+		},
+		{
+			Name: "parse-slice-with-param-receiver-string",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Params []OptionalParam[string] `query:"params"`
+				}) (*struct{}, error) {
+					assert.Equal(t, 2, len(i.Params))
+					assert.Equal(t, "foo", i.Params[0].Value)
+					assert.True(t, i.Params[0].IsSet)
+					assert.Equal(t, "bar", i.Params[1].Value)
+					assert.True(t, i.Params[1].IsSet)
+					return nil, nil
+				})
+			},
+			URL:    "/test?params=foo,bar",
+			Method: http.MethodGet,
+		},
+		{
+			Name: "parse-slice-with-param-receiver-float",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Params []OptionalParam[float64] `query:"params"`
+				}) (*struct{}, error) {
+					assert.Equal(t, 2, len(i.Params))
+					assert.InDelta(t, 1.5, i.Params[0].Value, 1e-9)
+					assert.True(t, i.Params[0].IsSet)
+					assert.InDelta(t, 2.7, i.Params[1].Value, 1e-9)
+					assert.True(t, i.Params[1].IsSet)
+					return nil, nil
+				})
+			},
+			URL:    "/test?params=1.5,2.7",
+			Method: http.MethodGet,
+		},
+		{
+			Name: "parse-slice-with-param-receiver-exploded",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Params []OptionalParam[int] `query:"params,explode"`
+				}) (*struct{}, error) {
+					assert.Equal(t, 3, len(i.Params))
+					assert.Equal(t, 1, i.Params[0].Value)
+					assert.Equal(t, 2, i.Params[1].Value)
+					assert.Equal(t, 3, i.Params[2].Value)
+					return nil, nil
+				})
+			},
+			URL:    "/test?params=1&params=2&params=3",
+			Method: http.MethodGet,
+		},
+		{
+			Name: "parse-slice-with-param-receiver-invalid",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Params []OptionalParam[int] `query:"params"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			URL:    "/test?params=1,abc,3",
+			Method: http.MethodGet,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, 422, resp.Code)
+			},
+		},
+		{
+			Name: "parse-slice-with-param-wrapper-only",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Params []WrapperOnly[int] `query:"params"`
+				}) (*struct{}, error) {
+					assert.Equal(t, 2, len(i.Params))
+					assert.Equal(t, 10, i.Params[0].Value)
+					assert.Equal(t, 20, i.Params[1].Value)
+					return nil, nil
+				})
+			},
+			URL:    "/test?params=10,20",
 			Method: http.MethodGet,
 		},
 		{
