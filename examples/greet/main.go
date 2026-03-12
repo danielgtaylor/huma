@@ -33,11 +33,11 @@ type GreetingOutput struct {
 func main() {
 	// Create a CLI app which takes a port option.
 	cli := humacli.New(func(hooks humacli.Hooks, options *Options) {
-		// Create a new router & API
+		// Create a new router & API.
 		router := chi.NewMux()
 		api := humachi.New(router, huma.DefaultConfig("My API", "1.0.0"))
 
-		// Register GET /greeting/{name}
+		// Register GET /greeting/{name}.
 		huma.Register(api, huma.Operation{
 			OperationID: "get-greeting",
 			Summary:     "Get a greeting",

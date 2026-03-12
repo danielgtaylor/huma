@@ -1,6 +1,7 @@
 package huma_test
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -335,4 +336,32 @@ func TestFixWildcardPaths(t *testing.T) {
 	// Test nil input
 	assert.Nil(t, huma.FixWildcardPaths(nil))
 	assert.Empty(t, huma.FixWildcardPaths(map[string]*huma.PathItem{}))
+}
+
+func TestAddOperationForceUniqueOperationIDs(t *testing.T) {
+	oapi := &huma.OpenAPI{}
+	oapi.AddOperation(&huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodGet,
+		Path:        "/test",
+	})
+
+	assert.PanicsWithValue(t, "duplicate operation ID: test", func() {
+		oapi.AddOperation(&huma.Operation{
+			OperationID: "test",
+			Method:      http.MethodPost,
+			Path:        "/test",
+		})
+	})
+}
+
+func TestAddOperationNormalizeOperationIDs(t *testing.T) {
+	oapi := &huma.OpenAPI{}
+	oapi.AddOperation(&huma.Operation{
+		OperationID: "test with spaces",
+		Method:      http.MethodGet,
+		Path:        "/test",
+	})
+
+	assert.Equal(t, "test-with-spaces", oapi.Paths["/test"].Get.OperationID)
 }

@@ -4,11 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"net"
 	"net/mail"
+	"net/netip"
 	"net/url"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -80,12 +81,11 @@ type PathBuffer struct {
 //	pb.Push("foo") // foo
 //	pb.Push("bar") // foo.bar
 func (b *PathBuffer) Push(s string) {
-	if b.off > 0 {
+	if len(b.buf) > 0 {
 		b.buf = append(b.buf, '.')
-		b.off++
 	}
 	b.buf = append(b.buf, s...)
-	b.off += len(s)
+	b.off = len(b.buf)
 }
 
 // PushIndex pushes an entry onto the path surrounded by `[` and `]`.
@@ -93,11 +93,10 @@ func (b *PathBuffer) Push(s string) {
 //	pb.Push("foo")  // foo
 //	pb.PushIndex(1) // foo[1]
 func (b *PathBuffer) PushIndex(i int) {
-	l := len(b.buf)
 	b.buf = append(b.buf, '[')
-	b.buf = append(b.buf, strconv.Itoa(i)...)
+	b.buf = strconv.AppendInt(b.buf, int64(i), 10)
 	b.buf = append(b.buf, ']')
-	b.off += len(b.buf) - l
+	b.off = len(b.buf)
 }
 
 // Pop the latest entry off the path.
@@ -220,42 +219,59 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 			res.Add(path, str, validation.MsgExpectedRFC1123DateTime)
 		}
 	case "date":
-		if _, err := time.Parse("2006-01-02", str); err != nil {
+		if _, err := time.Parse(time.DateOnly, str); err != nil {
 			res.Add(path, str, validation.MsgExpectedRFC3339Date)
 		}
+	case "duration":
+		if _, err := time.ParseDuration(str); err != nil {
+			res.Add(path, str, ErrorFormatter(validation.MsgExpectedDuration, err))
+		}
 	case "time":
-		if _, err := time.Parse("15:04:05", str); err != nil {
-			if _, err := time.Parse("15:04:05Z07:00", str); err != nil {
-				res.Add(path, str, validation.MsgExpectedRFC3339Time)
+		found := false
+		for _, format := range []string{time.TimeOnly, "15:04:05Z07:00"} {
+			if _, err := time.Parse(format, str); err == nil {
+				found = true
+				break
 			}
 		}
-		// TODO: duration
+		if !found {
+			res.Add(path, str, validation.MsgExpectedRFC3339Time)
+		}
 	case "email", "idn-email":
 		if _, err := mail.ParseAddress(str); err != nil {
 			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC5322Email, err))
 		}
-	case "hostname":
+	case "idn-hostname", "hostname":
 		if len(str) >= 256 || !rxHostname.MatchString(str) {
 			res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
 		}
-	// TODO: proper idn-hostname support... need to figure out how.
-	case "ipv4":
-		if ip := net.ParseIP(str); ip == nil || ip.To4() == nil {
-			res.Add(path, str, validation.MsgExpectedRFC2673IPv4)
+	case "ipv4", "ipv6", "ip":
+		addr, err := netip.ParseAddr(str)
+
+		switch s.Format {
+		case "ipv4":
+			if err != nil || !addr.Is4() {
+				res.Add(path, str, validation.MsgExpectedRFC2673IPv4)
+			}
+		case "ipv6":
+			if err != nil || !addr.Is6() || addr.Is4In6() {
+				res.Add(path, str, validation.MsgExpectedRFC2373IPv6)
+			}
+		default: // case "ip".
+			if err != nil {
+				res.Add(path, str, validation.MsgExpectedRFCIPAddr)
+			}
 		}
-	case "ipv6":
-		if ip := net.ParseIP(str); ip == nil || ip.To16() == nil {
-			res.Add(path, str, validation.MsgExpectedRFC2373IPv6)
-		}
+	// TODO: investigate supporting idn-hostname without external library.
+	// case "idn-hostname":
+	// 	if _, err := idnaProfile.ToASCII(str); err != nil {
+	// 		res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
+	// 	}
 	case "uri", "uri-reference", "iri", "iri-reference":
 		if _, err := url.Parse(str); err != nil {
 			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
 		}
 		// TODO: check if it's actually a reference?
-	case "uuid":
-		if err := validateUUID(str); err != nil {
-			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC4122UUID, err))
-		}
 	case "uri-template":
 		u, err := url.Parse(str)
 		if err != nil {
@@ -264,6 +280,10 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 		}
 		if !rxURITemplate.MatchString(u.Path) {
 			res.Add(path, str, validation.MsgExpectedRFC6570URITemplate)
+		}
+	case "uuid":
+		if err := validateUUID(str); err != nil {
+			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC4122UUID, err))
 		}
 	case "json-pointer":
 		if !rxJSONPointer.MatchString(str) {
@@ -473,7 +493,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 			}
 		}
 		if s.MultipleOf != nil {
-			if math.Mod(num, *s.MultipleOf) != 0 {
+			if r := math.Mod(num, *s.MultipleOf); math.Abs(r) > 1e-9 && math.Abs(r-*s.MultipleOf) > 1e-9 {
 				res.Add(path, v, s.msgMultipleOf)
 			}
 		}
@@ -493,11 +513,13 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 				res.Add(path, str, s.msgMinLength)
 			}
 		}
+
 		if s.MaxLength != nil {
 			if utf8.RuneCountInString(str) > *s.MaxLength {
 				res.Add(path, str, s.msgMaxLength)
 			}
 		}
+
 		if s.patternRe != nil {
 			if !s.patternRe.MatchString(str) {
 				res.Add(path, v, s.msgPattern)
@@ -559,13 +581,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 	}
 
 	if len(s.Enum) > 0 {
-		found := false
-		for _, e := range s.Enum {
-			if e == v {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(s.Enum, v)
 		if !found {
 			res.Add(path, v, s.msgEnum)
 		}
