@@ -650,6 +650,35 @@ func parseArrElement[T any](values []string, parse func(string) (T, error)) ([]T
 	return result, nil
 }
 
+// parseArrStructElement parses a slice of string values into a slice of
+// ParamWrapper struct elements. It sets the wrapper slice on f and returns the
+// unwrapped parsed values for validation.
+func parseArrStructElement(ctx Context, f reflect.Value, values []string, p paramFieldInfo) (any, error) {
+	recvType := reflect.New(f.Type().Elem()).Interface().(ParamWrapper).Receiver().Type()
+	elemP := paramFieldInfo{Type: recvType, TimeFormat: p.TimeFormat}
+	isReactor := reflect.PointerTo(f.Type().Elem()).Implements(reflect.TypeFor[ParamReactor]())
+
+	result := reflect.MakeSlice(f.Type(), len(values), len(values))
+	parsed := reflect.MakeSlice(reflect.SliceOf(recvType), len(values), len(values))
+	for i, val := range values {
+		elem := result.Index(i).Addr()
+		recv := elem.Interface().(ParamWrapper).Receiver()
+
+		pv, err := parseInto(ctx, recv, val, nil, elemP)
+		if err != nil {
+			return nil, fmt.Errorf("element %d: %w", i, err)
+		}
+
+		if isReactor {
+			elem.Interface().(ParamReactor).OnParamSet(true, pv)
+		}
+		parsed.Index(i).Set(recv)
+	}
+
+	f.Set(result)
+	return parsed.Interface(), nil
+}
+
 // writeHeader is a utility function to write a header value to the response.
 // the `write` function should be either `ctx.SetHeader` or `ctx.AppendHeader`.
 func writeHeader(write func(string, string), info *headerInfo, f reflect.Value) {
@@ -1727,7 +1756,7 @@ func parseInto(ctx Context, f reflect.Value, value string, preSplit []string, p 
 				values = strings.Split(value, ",")
 			}
 		}
-		pv, err := parseSliceInto(f, values)
+		pv, err := parseSliceInto(ctx, f, values, p)
 		if err != nil {
 			if errors.Is(err, errUnparsable) {
 				break
@@ -1769,7 +1798,7 @@ func parseInto(ctx Context, f reflect.Value, value string, preSplit []string, p 
 
 // parseSliceInto converts a slice of string values into the expected type of f
 // and sets the result on f.
-func parseSliceInto(f reflect.Value, values []string) (any, error) {
+func parseSliceInto(ctx Context, f reflect.Value, values []string, p paramFieldInfo) (any, error) {
 	switch f.Type().Elem().Kind() {
 
 	case reflect.String:
@@ -1954,6 +1983,12 @@ func parseSliceInto(f reflect.Value, values []string) (any, error) {
 		}
 		f.Set(reflect.ValueOf(vs))
 		return vs, nil
+
+	case reflect.Struct:
+		if !reflect.PointerTo(f.Type().Elem()).Implements(reflect.TypeFor[ParamWrapper]()) {
+			return nil, errUnparsable
+		}
+		return parseArrStructElement(ctx, f, values, p)
 	}
 	return nil, errUnparsable
 }
