@@ -3333,15 +3333,21 @@ func TestExhaustiveErrors(t *testing.T) {
 			{
 				"message": "expected number <= 10",
 				"location": "path.id",
-				"value": 15
+				"value": 15,
+				"code": "expected_maximum_number",
+				"params": {"max": 10}
 			}, {
 				"message": "expected number >= 1",
 				"location": "body.count",
-				"value": -6
+				"value": -6,
+				"code": "expected_minimum_number",
+				"params": {"min": 1}
 			}, {
 				"message": "expected length <= 10",
 				"location": "body.name",
-				"value": "12345678901"
+				"value": "12345678901",
+				"code": "expected_max_length",
+				"params": {"max": 10}
 			}, {
 				"message": "input resolver error",
 				"location": "path.id",
