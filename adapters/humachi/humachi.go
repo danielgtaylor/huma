@@ -146,6 +146,15 @@ func (c *chiContext) Version() huma.ProtoVersion {
 	}
 }
 
+func (c *chiContext) WithContext(ctx context.Context) huma.Context {
+	return &chiContext{
+		op:     c.op,
+		r:      c.r.WithContext(ctx),
+		w:      c.w,
+		status: c.status,
+	}
+}
+
 // NewContext creates a new Huma context from an HTTP request and response.
 func NewContext(op *huma.Operation, r *http.Request, w http.ResponseWriter) huma.Context {
 	return &chiContext{op: op, r: r, w: w}
@@ -173,4 +182,14 @@ func NewAdapter(r chi.Router) huma.Adapter {
 // New creates a new Huma API using the latest v5.x.x version of Chi.
 func New(r chi.Router, config huma.Config) huma.API {
 	return huma.NewAPI(config, &chiAdapter{router: r})
+}
+
+func middleware(mw func(http.Handler) http.Handler) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		r, w := Unwrap(ctx)
+		mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx = NewContext(ctx.Operation(), r, w)
+			next(ctx)
+		})).ServeHTTP(w, r)
+	}
 }
