@@ -14,9 +14,86 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
 )
 
 var lastModified = time.Now()
+
+// flushingResponseWriter simulates a ResponseWriter that flushes headers on WriteHeader.
+type flushingResponseWriter struct {
+	rec         *httptest.ResponseRecorder
+	header      http.Header
+	wroteHeader bool
+}
+
+func (m *flushingResponseWriter) Header() http.Header {
+	return m.header
+}
+
+func (m *flushingResponseWriter) WriteHeader(code int) {
+	if m.wroteHeader {
+		return
+	}
+	m.wroteHeader = true
+	// Write current headers to the recorder
+	for k, v := range m.header {
+		m.rec.Header()[k] = v
+	}
+	m.rec.WriteHeader(code)
+	// Create a new header map so subsequent changes are NOT reflected in the recorder
+	m.header = make(http.Header)
+}
+
+func (m *flushingResponseWriter) Write(b []byte) (int, error) {
+	if !m.wroteHeader {
+		m.WriteHeader(http.StatusOK)
+	}
+	return m.rec.Write(b)
+}
+
+func TestEchoLinkHeader(t *testing.T) {
+	e := echo.New()
+	conf := huma.DefaultConfig("My API", "1.0.0")
+	conf.SchemasPath = "/schemas"
+	api := New(e, conf)
+
+	huma.Register(api, huma.Operation{
+		Method:      http.MethodGet,
+		Path:        "/hello",
+		OperationID: "get-hello",
+	}, func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			Message string `json:"message"`
+		}
+	}, error) {
+		resp := &struct {
+			Body struct {
+				Message string `json:"message"`
+			}
+		}{}
+		resp.Body.Message = "Hello"
+		return resp, nil
+	})
+
+	req, _ := http.NewRequest(http.MethodGet, "/hello", nil)
+	rec := httptest.NewRecorder()
+
+	// Use our simulated flushing response writer to catch regression if
+	// SetStatus is called before Transform.
+	f := &flushingResponseWriter{
+		rec:    rec,
+		header: make(http.Header),
+	}
+
+	e.ServeHTTP(f, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Check for Link header
+	link := rec.Header().Get("Link")
+	assert.NotEmpty(t, link, "Link header should not be empty")
+	assert.Contains(t, link, "rel=\"describedBy\"")
+}
 
 func BenchmarkHumaEcho(b *testing.B) {
 	type GreetingInput struct {
