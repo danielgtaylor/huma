@@ -607,15 +607,16 @@ func transformAndWrite(api API, ctx Context, status int, ct string, body any) er
 		statusStr = strconv.Itoa(status)
 	}
 
-	ctx.SetStatus(status)
-
 	tVal, tErr := api.Transform(ctx, statusStr, body)
 	if tErr != nil {
+		ctx.SetStatus(status)
 		ctx.BodyWriter().Write([]byte("error transforming response"))
 		// When including tVal in the panic message, the server may become unresponsive for some time if the value is very large
 		// therefore, it has been removed from the panic message
 		return fmt.Errorf("error transforming response for %s %s %d: %w", ctx.Operation().Method, ctx.Operation().Path, status, tErr)
 	}
+
+	ctx.SetStatus(status)
 
 	if status != http.StatusNoContent && status != http.StatusNotModified {
 		if mErr := api.Marshal(ctx.BodyWriter(), ct, tVal); mErr != nil {
