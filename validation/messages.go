@@ -32,6 +32,7 @@ var (
 	MsgExpectedObject                     = "expected object"
 	MsgExpectedArrayItemsUnique           = "expected array items to be unique"
 	MsgExpectedOneOf                      = "expected value to be one of \"%s\""
+	MsgExpectedConst                      = "expected value to be %v"
 	MsgExpectedMinimumNumber              = "expected number >= %v"
 	MsgExpectedExclusiveMinimumNumber     = "expected number > %v"
 	MsgExpectedMaximumNumber              = "expected number <= %v"
