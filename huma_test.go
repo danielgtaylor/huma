@@ -244,6 +244,40 @@ func TestFeatures(t *testing.T) {
 			URL:    "/middleware",
 		},
 		{
+			Name: "openapi-relative-server",
+			Config: func() huma.Config {
+				c := huma.DefaultConfig("Test API", "1.0.0")
+				c.Servers = []*huma.Server{
+					{URL: "/v1"},
+				}
+				return c
+			}(),
+			Register: func(t *testing.T, api huma.API) {},
+			Method:   http.MethodGet,
+			URL:      "/openapi.json",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, 200, resp.Code)
+				assert.Contains(t, resp.Body.String(), `"url":"/v1"`)
+			},
+		},
+		{
+			Name: "openapi-relative-server-dot",
+			Config: func() huma.Config {
+				c := huma.DefaultConfig("Test API", "1.0.0")
+				c.Servers = []*huma.Server{
+					{URL: "./v1"},
+				}
+				return c
+			}(),
+			Register: func(t *testing.T, api huma.API) {},
+			Method:   http.MethodGet,
+			URL:      "/openapi.json",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, 200, resp.Code)
+				assert.Contains(t, resp.Body.String(), `"url":"./v1"`)
+			},
+		},
+		{
 			Name: "middleware-cookie-invalid-name",
 			Register: func(t *testing.T, api huma.API) {
 				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
@@ -2701,6 +2735,44 @@ Content-Type: text/plain
 			},
 		},
 		{
+			Name: "schema-url-relative-openapi-server",
+			Register: func(t *testing.T, api huma.API) {
+				api.OpenAPI().Servers = []*huma.Server{
+					{URL: "/base"},
+				}
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+
+				// Verify the OpenAPI spec reflects the expected example URL
+				// This triggers the `addSchemaField` logic in `transforms.go`
+				// We can check this on the API object if we have access to it,
+				// but here we can just verify the Link header or the body.
+				assert.Contains(t, resp.Header().Get("Link"), "/base/schemas/Get-testResponse.json")
+
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				// Note: at runtime the $schema field in the body depends on the request host.
+				// By default in tests it's http://localhost
+				assert.Contains(t, body["$schema"], "/base/schemas/Get-testResponse.json")
+			},
+		},
+		{
 			Name: "response-marshal-error",
 			Register: func(t *testing.T, api huma.API) {
 				type Resp struct {
@@ -4117,4 +4189,51 @@ func TestBodyFallbackContentType(t *testing.T) {
 	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+func TestWriteResponseTransformErrorStatus(t *testing.T) {
+	// This test verifies that if a transformer fails, the client still receives
+	// a 500 Internal Server Error status code.
+	config := huma.DefaultConfig("Test API", "1.0.0")
+	config.Transformers = append(config.Transformers, func(ctx huma.Context, status string, v any) (any, error) {
+		return nil, errors.New("transform error")
+	})
+
+	mux := http.NewServeMux()
+	api := humago.New(mux, config)
+
+	huma.Get(api, "/test", func(ctx context.Context, input *struct{}) (*struct {
+		Status int
+		Body   string
+	}, error) {
+		return &struct {
+			Status int
+			Body   string
+		}{Status: http.StatusInternalServerError, Body: "hello"}, nil
+	})
+
+	// Use a custom adapter that doesn't call WriteHeader twice if we can.
+	// Actually, just let it panic and recover.
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rvr := recover(); rvr != nil {
+				// We don't want to call WriteHeader here if it was already called.
+				// But we can't easily check if it was called on a raw http.ResponseWriter.
+				return
+			}
+		}()
+		mux.ServeHTTP(w, r)
+	})
+
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/test")
+	require.NoError(t, err)
+	defer res.Body.Close()
+
+	body, _ := io.ReadAll(res.Body)
+
+	assert.Equal(t, http.StatusInternalServerError, res.StatusCode)
+	assert.Contains(t, string(body), "error transforming response")
 }
