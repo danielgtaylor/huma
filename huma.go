@@ -246,6 +246,12 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			pfi.Required = boolTag(f, "required", false)
 		}
 
+		// Per OpenAPI 3.x spec, path parameters MUST always be required.
+		// Override any user-set `required:"false"` tag for path params.
+		if pfi.Loc == "path" {
+			pfi.Required = true
+		}
+
 		if pfi.Type == timeType {
 			timeFormat := time.RFC3339Nano
 			if pfi.Loc == "header" {
