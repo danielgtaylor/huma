@@ -47,7 +47,7 @@ var rxHostname = regexp.MustCompile(`^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61
 var rxURITemplate = regexp.MustCompile("^([^{]*({[^}]*})?)*$")
 var rxJSONPointer = regexp.MustCompile("^(?:/(?:[^~/]|~0|~1)*)*$")
 var rxRelJSONPointer = regexp.MustCompile("^(?:0|[1-9][0-9]*)(?:#|(?:/(?:[^~/]|~0|~1)*)*)$")
-var rxBase64 = regexp.MustCompile(`^[a-zA-Z0-9+/_-]+=*$`)
+var rxBase64 = regexp.MustCompile(`^[a-zA-Z0-9+/_-]*=*$`)
 
 func mapTo[A, B any](s []A, f func(A) B) []B {
 	r := make([]B, len(s))
