@@ -119,6 +119,7 @@ type Schema struct {
 	AdditionalProperties any                 `yaml:"additionalProperties,omitempty"`
 	Properties           map[string]*Schema  `yaml:"properties,omitempty"`
 	Enum                 []any               `yaml:"enum,omitempty"`
+	Const                any                 `yaml:"const,omitempty"`
 	Minimum              *float64            `yaml:"minimum,omitempty"`
 	ExclusiveMinimum     *float64            `yaml:"exclusiveMinimum,omitempty"`
 	Maximum              *float64            `yaml:"maximum,omitempty"`
@@ -156,6 +157,7 @@ type Schema struct {
 	// Precomputed validation messages. These prevent allocations during
 	// validation and are known at schema creation time.
 	msgEnum              string                       `yaml:"-"`
+	msgConst             string                       `yaml:"-"`
 	msgMinimum           string                       `yaml:"-"`
 	msgExclusiveMinimum  string                       `yaml:"-"`
 	msgMaximum           string                       `yaml:"-"`
@@ -213,6 +215,7 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 		{"additionalProperties", s.AdditionalProperties, omitNil},
 		{"properties", props, omitEmpty},
 		{"enum", s.Enum, omitEmpty},
+		{"const", s.Const, omitNil},
 		{"minimum", s.Minimum, omitEmpty},
 		{"exclusiveMinimum", s.ExclusiveMinimum, omitEmpty},
 		{"maximum", s.Maximum, omitEmpty},
@@ -246,6 +249,9 @@ func (s *Schema) PrecomputeMessages() {
 	s.msgEnum = ErrorFormatter(validation.MsgExpectedOneOf, strings.Join(mapTo(s.Enum, func(v any) string {
 		return fmt.Sprintf("%v", v)
 	}), ", "))
+	if s.Const != nil {
+		s.msgConst = ErrorFormatter(validation.MsgExpectedConst, fmt.Sprintf("%v", s.Const))
+	}
 	if s.Minimum != nil {
 		s.msgMinimum = ErrorFormatter(validation.MsgExpectedMinimumNumber, *s.Minimum)
 	}
@@ -606,6 +612,11 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 			enumValues = append(enumValues, jsonTagValue(registry, f.Name, s, e))
 		}
 		s.Enum = enumValues
+	}
+
+	if constValue := f.Tag.Get("const"); constValue != "" {
+		s := targetSchema(fs)
+		s.Const = jsonTagValue(registry, f.Name, s, constValue)
 	}
 
 	fs.Nullable = boolTag(f, "nullable", fs.Nullable)

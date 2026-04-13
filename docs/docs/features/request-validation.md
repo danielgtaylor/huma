@@ -111,10 +111,11 @@ Nullable types will generate a type array like `"type": ["string", "null"]` whic
 The following additional tags are supported on model fields:
 
 | Tag                  | Description                                | Example                         |
-|----------------------|--------------------------------------------|---------------------------------|
+| -------------------- | ------------------------------------------ | ------------------------------- |
 | `doc`                | Describe the field                         | `doc:"Who to greet"`            |
 | `format`             | Format hint for the field                  | `format:"date-time"`            |
 | `enum`               | A comma-separated list of possible values  | `enum:"one,two,three"`          |
+| `const`              | A constant value that the field must equal | `const:"fixed-value"`           |
 | `default`            | Default value                              | `default:"123"`                 |
 | `minimum`            | Minimum (inclusive)                        | `minimum:"1"`                   |
 | `exclusiveMinimum`   | Minimum (exclusive)                        | `exclusiveMinimum:"0"`          |
@@ -140,7 +141,7 @@ The following additional tags are supported on model fields:
 Built-in string formats include:
 
 | Format                            | Description                     | Example                                |
-|-----------------------------------|---------------------------------|----------------------------------------|
+| --------------------------------- | ------------------------------- | -------------------------------------- |
 | `date-time`                       | Date and time in RFC3339 format | `2021-12-31T23:59:59Z`                 |
 | `date-time-http`                  | Date and time in HTTP format    | `Fri, 31 Dec 2021 23:59:59 GMT`        |
 | `date`                            | Date in RFC3339 format          | `2021-12-31`                           |
@@ -239,21 +240,21 @@ When enabled, any query parameter sent by the client that is not defined in the 
 
 When using custom JSON Schemas, i.e. not generated from Go structs, it's possible to utilize a few more validation rules. The following schema fields are respected by the built-in validator:
 
--   `not` for negation
--   `oneOf` for exclusive inputs
--   `anyOf` for matching one-or-more
--   `allOf` for schema unions
+- `not` for negation
+- `oneOf` for exclusive inputs
+- `anyOf` for matching one-or-more
+- `allOf` for schema unions
 
 See [`huma.Schema`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Schema) for more information. Note that it may be easier to use a custom [resolver](./request-resolvers.md) to implement some of these rules.
 
 ## Dive Deeper
 
--   Tutorial
-    -   [Your First API](../tutorial/your-first-api.md) includes string length validation
--   Reference
-    -   [`huma.Register`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Register) registers new operations
-    -   [`huma.Operation`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Operation) the operation
--   External Links
-    -   [JSON Schema Validation](https://datatracker.ietf.org/doc/html/draft-bhutton-json-schema-validation-00)
-    -   [OpenAPI 3.1 Schema Object](https://spec.openapis.org/oas/v3.1.0#schema-object)
-    -   [OpenAPI 3.1 Operation Object](https://spec.openapis.org/oas/v3.1.0#operation-object)
+- Tutorial
+    - [Your First API](../tutorial/your-first-api.md) includes string length validation
+- Reference
+    - [`huma.Register`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Register) registers new operations
+    - [`huma.Operation`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Operation) the operation
+- External Links
+    - [JSON Schema Validation](https://datatracker.ietf.org/doc/html/draft-bhutton-json-schema-validation-00)
+    - [OpenAPI 3.1 Schema Object](https://spec.openapis.org/oas/v3.1.0#schema-object)
+    - [OpenAPI 3.1 Operation Object](https://spec.openapis.org/oas/v3.1.0#operation-object)
