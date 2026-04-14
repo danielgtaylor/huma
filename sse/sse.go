@@ -60,7 +60,9 @@ func (s Sender) Data(data any) error {
 type flusherFunc func() error
 
 func (f flusherFunc) Flush() {
-	f()
+	if err := f(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: flush failed: %v\n", err)
+	}
 }
 
 // Register a new SSE operation. The `eventTypeMap` maps from event name to
