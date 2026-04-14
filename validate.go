@@ -186,6 +186,22 @@ func (r *ValidateResult) Add(path *PathBuffer, v any, msg string) {
 	})
 }
 
+// AddCode adds an error with a machine-readable code and optional constraint
+// params to the validation result. Pass nil for params when there are no
+// relevant constraint parameters.
+func (r *ValidateResult) AddCode(path *PathBuffer, v any, code, msg string, params map[string]any) {
+	d := &ErrorDetail{
+		Message:  msg,
+		Location: path.String(),
+		Value:    v,
+		Code:     code,
+	}
+	if len(params) > 0 {
+		d.Params = params
+	}
+	r.Errors = append(r.Errors, d)
+}
+
 // Addf adds an error to the validation result at the given path and with
 // the given value, allowing for fmt.Printf-style formatting.
 func (r *ValidateResult) Addf(path *PathBuffer, v any, format string, args ...any) {
@@ -212,19 +228,19 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 			}
 		}
 		if !found {
-			res.Add(path, str, validation.MsgExpectedRFC3339DateTime)
+			res.AddCode(path, str, validation.CodeExpectedRFC3339DateTime, validation.MsgExpectedRFC3339DateTime, nil)
 		}
 	case "date-time-http":
 		if _, err := time.Parse(time.RFC1123, str); err != nil {
-			res.Add(path, str, validation.MsgExpectedRFC1123DateTime)
+			res.AddCode(path, str, validation.CodeExpectedRFC1123DateTime, validation.MsgExpectedRFC1123DateTime, nil)
 		}
 	case "date":
 		if _, err := time.Parse(time.DateOnly, str); err != nil {
-			res.Add(path, str, validation.MsgExpectedRFC3339Date)
+			res.AddCode(path, str, validation.CodeExpectedRFC3339Date, validation.MsgExpectedRFC3339Date, nil)
 		}
 	case "duration":
 		if _, err := time.ParseDuration(str); err != nil {
-			res.Add(path, str, ErrorFormatter(validation.MsgExpectedDuration, err))
+			res.AddCode(path, str, validation.CodeExpectedDuration, ErrorFormatter(validation.MsgExpectedDuration, err), map[string]any{"error": err.Error()})
 		}
 	case "time":
 		found := false
@@ -235,15 +251,15 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 			}
 		}
 		if !found {
-			res.Add(path, str, validation.MsgExpectedRFC3339Time)
+			res.AddCode(path, str, validation.CodeExpectedRFC3339Time, validation.MsgExpectedRFC3339Time, nil)
 		}
 	case "email", "idn-email":
 		if _, err := mail.ParseAddress(str); err != nil {
-			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC5322Email, err))
+			res.AddCode(path, str, validation.CodeExpectedRFC5322Email, ErrorFormatter(validation.MsgExpectedRFC5322Email, err), map[string]any{"error": err.Error()})
 		}
 	case "idn-hostname", "hostname":
 		if len(str) >= 256 || !rxHostname.MatchString(str) {
-			res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
+			res.AddCode(path, str, validation.CodeExpectedRFC5890Hostname, validation.MsgExpectedRFC5890Hostname, nil)
 		}
 	case "ipv4", "ipv6", "ip":
 		addr, err := netip.ParseAddr(str)
@@ -251,51 +267,51 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 		switch s.Format {
 		case "ipv4":
 			if err != nil || !addr.Is4() {
-				res.Add(path, str, validation.MsgExpectedRFC2673IPv4)
+				res.AddCode(path, str, validation.CodeExpectedRFC2673IPv4, validation.MsgExpectedRFC2673IPv4, nil)
 			}
 		case "ipv6":
 			if err != nil || !addr.Is6() || addr.Is4In6() {
-				res.Add(path, str, validation.MsgExpectedRFC2373IPv6)
+				res.AddCode(path, str, validation.CodeExpectedRFC2373IPv6, validation.MsgExpectedRFC2373IPv6, nil)
 			}
 		default: // case "ip".
 			if err != nil {
-				res.Add(path, str, validation.MsgExpectedRFCIPAddr)
+				res.AddCode(path, str, validation.CodeExpectedRFCIPAddr, validation.MsgExpectedRFCIPAddr, nil)
 			}
 		}
 	// TODO: investigate supporting idn-hostname without external library.
 	// case "idn-hostname":
 	// 	if _, err := idnaProfile.ToASCII(str); err != nil {
-	// 		res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
+	// 		res.AddCode(path, str, validation.CodeExpectedRFC5890Hostname, validation.MsgExpectedRFC5890Hostname, nil)
 	// 	}
 	case "uri", "uri-reference", "iri", "iri-reference":
 		if _, err := url.Parse(str); err != nil {
-			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
+			res.AddCode(path, str, validation.CodeExpectedRFC3986URI, ErrorFormatter(validation.MsgExpectedRFC3986URI, err), map[string]any{"error": err.Error()})
 		}
 		// TODO: check if it's actually a reference?
 	case "uri-template":
 		u, err := url.Parse(str)
 		if err != nil {
-			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
+			res.AddCode(path, str, validation.CodeExpectedRFC3986URI, ErrorFormatter(validation.MsgExpectedRFC3986URI, err), map[string]any{"error": err.Error()})
 			return
 		}
 		if !rxURITemplate.MatchString(u.Path) {
-			res.Add(path, str, validation.MsgExpectedRFC6570URITemplate)
+			res.AddCode(path, str, validation.CodeExpectedRFC6570URITemplate, validation.MsgExpectedRFC6570URITemplate, nil)
 		}
 	case "uuid":
 		if err := validateUUID(str); err != nil {
-			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC4122UUID, err))
+			res.AddCode(path, str, validation.CodeExpectedRFC4122UUID, ErrorFormatter(validation.MsgExpectedRFC4122UUID, err), map[string]any{"error": err.Error()})
 		}
 	case "json-pointer":
 		if !rxJSONPointer.MatchString(str) {
-			res.Add(path, str, validation.MsgExpectedRFC6901JSONPointer)
+			res.AddCode(path, str, validation.CodeExpectedRFC6901JSONPointer, validation.MsgExpectedRFC6901JSONPointer, nil)
 		}
 	case "relative-json-pointer":
 		if !rxRelJSONPointer.MatchString(str) {
-			res.Add(path, str, validation.MsgExpectedRFC6901RelativeJSONPointer)
+			res.AddCode(path, str, validation.CodeExpectedRFC6901RelativeJSONPointer, validation.MsgExpectedRFC6901RelativeJSONPointer, nil)
 		}
 	case "regex":
 		if _, err := regexp.Compile(str); err != nil {
-			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRegexp, err))
+			res.AddCode(path, str, validation.CodeExpectedRegexp, ErrorFormatter(validation.MsgExpectedRegexp, err), map[string]any{"error": err.Error()})
 		}
 	}
 }
@@ -314,7 +330,7 @@ func validateOneOf(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v
 		subRes.Reset()
 	}
 	if !found {
-		res.Add(path, v, validation.MsgExpectedMatchExactlyOneSchema)
+		res.AddCode(path, v, validation.CodeExpectedMatchExactlyOneSchema, validation.MsgExpectedMatchExactlyOneSchema, nil)
 	}
 }
 
@@ -330,7 +346,7 @@ func validateAnyOf(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v
 	}
 
 	if matches == 0 {
-		res.Add(path, v, validation.MsgExpectedMatchAtLeastOneSchema)
+		res.AddCode(path, v, validation.CodeExpectedMatchAtLeastOneSchema, validation.MsgExpectedMatchAtLeastOneSchema, nil)
 	}
 }
 
@@ -348,7 +364,7 @@ func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode Validat
 
 	if !found {
 		path.Push(s.Discriminator.PropertyName)
-		res.Add(path, v, validation.MsgExpectedPropertyNameInObject)
+		res.AddCode(path, v, validation.CodeExpectedPropertyNameInObject, validation.MsgExpectedPropertyNameInObject, nil)
 		return
 	}
 
@@ -417,7 +433,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		subRes := &ValidateResult{}
 		Validate(r, s.Not, path, mode, v, subRes)
 		if len(subRes.Errors) == 0 {
-			res.Add(path, v, validation.MsgExpectedNotMatchSchema)
+			res.AddCode(path, v, validation.CodeExpectedNotMatchSchema, validation.MsgExpectedNotMatchSchema, nil)
 		}
 	}
 
@@ -428,7 +444,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 	switch s.Type {
 	case TypeBoolean:
 		if _, ok := v.(bool); !ok {
-			res.Add(path, v, validation.MsgExpectedBoolean)
+			res.AddCode(path, v, validation.CodeExpectedBoolean, validation.MsgExpectedBoolean, nil)
 			return
 		}
 	case TypeNumber, TypeInteger:
@@ -461,40 +477,40 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 			num = float64(v)
 		default:
 			if s.Type == TypeInteger {
-				res.Add(path, v, validation.MsgExpectedInteger)
+				res.AddCode(path, v, validation.CodeExpectedInteger, validation.MsgExpectedInteger, nil)
 			} else {
-				res.Add(path, v, validation.MsgExpectedNumber)
+				res.AddCode(path, v, validation.CodeExpectedNumber, validation.MsgExpectedNumber, nil)
 			}
 			return
 		}
 
 		if s.Type == TypeInteger && num != math.Trunc(num) {
-			res.Add(path, v, validation.MsgExpectedInteger)
+			res.AddCode(path, v, validation.CodeExpectedInteger, validation.MsgExpectedInteger, nil)
 		}
 
 		if s.Minimum != nil {
 			if num < *s.Minimum {
-				res.Add(path, v, s.msgMinimum)
+				res.AddCode(path, v, validation.CodeExpectedMinimumNumber, s.msgMinimum, map[string]any{"min": *s.Minimum})
 			}
 		}
 		if s.ExclusiveMinimum != nil {
 			if num <= *s.ExclusiveMinimum {
-				res.Add(path, v, s.msgExclusiveMinimum)
+				res.AddCode(path, v, validation.CodeExpectedExclusiveMinimumNumber, s.msgExclusiveMinimum, map[string]any{"min": *s.ExclusiveMinimum})
 			}
 		}
 		if s.Maximum != nil {
 			if num > *s.Maximum {
-				res.Add(path, v, s.msgMaximum)
+				res.AddCode(path, v, validation.CodeExpectedMaximumNumber, s.msgMaximum, map[string]any{"max": *s.Maximum})
 			}
 		}
 		if s.ExclusiveMaximum != nil {
 			if num >= *s.ExclusiveMaximum {
-				res.Add(path, v, s.msgExclusiveMaximum)
+				res.AddCode(path, v, validation.CodeExpectedExclusiveMaximumNumber, s.msgExclusiveMaximum, map[string]any{"max": *s.ExclusiveMaximum})
 			}
 		}
 		if s.MultipleOf != nil {
 			if r := math.Mod(num, *s.MultipleOf); math.Abs(r) > 1e-9 && math.Abs(r-*s.MultipleOf) > 1e-9 {
-				res.Add(path, v, s.msgMultipleOf)
+				res.AddCode(path, v, validation.CodeExpectedNumberBeMultipleOf, s.msgMultipleOf, map[string]any{"multiple_of": *s.MultipleOf})
 			}
 		}
 	case TypeString:
@@ -503,26 +519,26 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 			if b, ok := v.([]byte); ok {
 				str = *(*string)(unsafe.Pointer(&b))
 			} else {
-				res.Add(path, v, validation.MsgExpectedString)
+				res.AddCode(path, v, validation.CodeExpectedString, validation.MsgExpectedString, nil)
 				return
 			}
 		}
 
 		if s.MinLength != nil {
 			if utf8.RuneCountInString(str) < *s.MinLength {
-				res.Add(path, str, s.msgMinLength)
+				res.AddCode(path, str, validation.CodeExpectedMinLength, s.msgMinLength, map[string]any{"min": *s.MinLength})
 			}
 		}
 
 		if s.MaxLength != nil {
 			if utf8.RuneCountInString(str) > *s.MaxLength {
-				res.Add(path, str, s.msgMaxLength)
+				res.AddCode(path, str, validation.CodeExpectedMaxLength, s.msgMaxLength, map[string]any{"max": *s.MaxLength})
 			}
 		}
 
 		if s.patternRe != nil {
 			if !s.patternRe.MatchString(str) {
-				res.Add(path, v, s.msgPattern)
+				res.AddCode(path, v, validation.CodeExpectedBePattern, s.msgPattern, map[string]any{"pattern": s.Pattern})
 			}
 		}
 
@@ -532,7 +548,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 
 		if s.ContentEncoding == "base64" {
 			if !rxBase64.MatchString(str) {
-				res.Add(path, str, validation.MsgExpectedBase64String)
+				res.AddCode(path, str, validation.CodeExpectedBase64String, validation.MsgExpectedBase64String, nil)
 			}
 		}
 	case TypeArray:
@@ -565,7 +581,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		case []float64:
 			handleArray(r, s, path, mode, res, arr)
 		default:
-			res.Add(path, v, validation.MsgExpectedArray)
+			res.AddCode(path, v, validation.CodeExpectedArray, validation.MsgExpectedArray, nil)
 			return
 		}
 	case TypeObject:
@@ -575,7 +591,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		case map[any]any:
 			handleMapAny(r, s, path, mode, vv, res)
 		default:
-			res.Add(path, v, validation.MsgExpectedObject)
+			res.AddCode(path, v, validation.CodeExpectedObject, validation.MsgExpectedObject, nil)
 			return
 		}
 	}
@@ -583,7 +599,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 	if len(s.Enum) > 0 {
 		found := slices.Contains(s.Enum, v)
 		if !found {
-			res.Add(path, v, s.msgEnum)
+			res.AddCode(path, v, validation.CodeExpectedOneOf, s.msgEnum, map[string]any{"allowed": s.Enum})
 		}
 	}
 }
@@ -591,12 +607,12 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 func handleArray[T any](r Registry, s *Schema, path *PathBuffer, mode ValidateMode, res *ValidateResult, arr []T) {
 	if s.MinItems != nil {
 		if len(arr) < *s.MinItems {
-			res.Add(path, arr, s.msgMinItems)
+			res.AddCode(path, arr, validation.CodeExpectedMinItems, s.msgMinItems, map[string]any{"min": *s.MinItems})
 		}
 	}
 	if s.MaxItems != nil {
 		if len(arr) > *s.MaxItems {
-			res.Add(path, arr, s.msgMaxItems)
+			res.AddCode(path, arr, validation.CodeExpectedMaxItems, s.msgMaxItems, map[string]any{"max": *s.MaxItems})
 		}
 	}
 
@@ -604,7 +620,7 @@ func handleArray[T any](r Registry, s *Schema, path *PathBuffer, mode ValidateMo
 		seen := make(map[any]struct{}, len(arr))
 		for _, item := range arr {
 			if _, ok := seen[item]; ok {
-				res.Add(path, arr, validation.MsgExpectedArrayItemsUnique)
+				res.AddCode(path, arr, validation.CodeExpectedArrayItemsUnique, validation.MsgExpectedArrayItemsUnique, nil)
 			}
 			seen[item] = struct{}{}
 		}
@@ -620,12 +636,12 @@ func handleArray[T any](r Registry, s *Schema, path *PathBuffer, mode ValidateMo
 func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m map[string]any, res *ValidateResult) {
 	if s.MinProperties != nil {
 		if len(m) < *s.MinProperties {
-			res.Add(path, m, s.msgMinProperties)
+			res.AddCode(path, m, validation.CodeExpectedMinProperties, s.msgMinProperties, map[string]any{"min": *s.MinProperties})
 		}
 	}
 	if s.MaxProperties != nil {
 		if len(m) > *s.MaxProperties {
-			res.Add(path, m, s.msgMaxProperties)
+			res.AddCode(path, m, validation.CodeExpectedMaxProperties, s.msgMaxProperties, map[string]any{"max": *s.MaxProperties})
 		}
 	}
 
@@ -674,7 +690,7 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 				// These are not required for the current mode.
 				continue
 			}
-			res.Add(path, m, s.msgRequired[k])
+			res.AddCode(path, m, validation.CodeExpectedRequiredProperty, s.msgRequired[k], map[string]any{"property": k})
 			continue
 		}
 
@@ -690,7 +706,7 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 					continue
 				}
 
-				res.Add(path, m, s.msgDependentRequired[k][dependent])
+				res.AddCode(path, m, validation.CodeExpectedDependentRequiredProperty, s.msgDependentRequired[k][dependent], map[string]any{"property": dependent, "dependent_on": k})
 			}
 		}
 
@@ -714,7 +730,7 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 				}
 
 				path.Push(k)
-				res.Add(path, m, validation.MsgUnexpectedProperty)
+				res.AddCode(path, m, validation.CodeUnexpectedProperty, validation.MsgUnexpectedProperty, nil)
 				path.Pop()
 			}
 		}
@@ -737,12 +753,12 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m map[any]any, res *ValidateResult) {
 	if s.MinProperties != nil {
 		if len(m) < *s.MinProperties {
-			res.Add(path, m, s.msgMinProperties)
+			res.AddCode(path, m, validation.CodeExpectedMinProperties, s.msgMinProperties, map[string]any{"min": *s.MinProperties})
 		}
 	}
 	if s.MaxProperties != nil {
 		if len(m) > *s.MaxProperties {
-			res.Add(path, m, s.msgMaxProperties)
+			res.AddCode(path, m, validation.CodeExpectedMaxProperties, s.msgMaxProperties, map[string]any{"max": *s.MaxProperties})
 		}
 	}
 
@@ -778,7 +794,7 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 				// These are not required for the current mode.
 				continue
 			}
-			res.Add(path, m, s.msgRequired[k])
+			res.AddCode(path, m, validation.CodeExpectedRequiredProperty, s.msgRequired[k], map[string]any{"property": k})
 			continue
 		}
 
@@ -794,7 +810,7 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 					continue
 				}
 
-				res.Add(path, m, s.msgDependentRequired[k][dependent])
+				res.AddCode(path, m, validation.CodeExpectedDependentRequiredProperty, s.msgDependentRequired[k][dependent], map[string]any{"property": dependent, "dependent_on": k})
 			}
 		}
 
@@ -814,7 +830,7 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 			}
 			if _, ok := s.Properties[kStr]; !ok {
 				path.Push(kStr)
-				res.Add(path, m, validation.MsgUnexpectedProperty)
+				res.AddCode(path, m, validation.CodeUnexpectedProperty, validation.MsgUnexpectedProperty, nil)
 				path.Pop()
 			}
 		}

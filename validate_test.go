@@ -1492,6 +1492,412 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+type errorCodeTest struct {
+	name   string
+	typ    reflect.Type
+	s      *huma.Schema
+	input  any
+	mode   huma.ValidateMode
+	code   string
+	params map[string]any
+}
+
+var validateErrorCodeTests = []errorCodeTest{
+	// Type checks
+	{
+		name:  "bool type error",
+		typ:   reflect.TypeFor[bool](),
+		input: "not-a-bool",
+		code:  validation.CodeExpectedBoolean,
+	},
+	{
+		name:  "integer type error",
+		typ:   reflect.TypeFor[int](),
+		input: "not-an-int",
+		code:  validation.CodeExpectedInteger,
+	},
+	{
+		name:  "number type error",
+		typ:   reflect.TypeFor[float64](),
+		input: "not-a-number",
+		code:  validation.CodeExpectedNumber,
+	},
+	{
+		name:  "integer non-whole float error",
+		typ:   reflect.TypeFor[int](),
+		input: 3.5,
+		code:  validation.CodeExpectedInteger,
+	},
+	{
+		name:  "string type error",
+		typ:   reflect.TypeFor[string](),
+		input: 42,
+		code:  validation.CodeExpectedString,
+	},
+	{
+		name:  "array type error",
+		typ:   reflect.TypeFor[[]string](),
+		input: "not-an-array",
+		code:  validation.CodeExpectedArray,
+	},
+	{
+		name: "object type error",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v"`
+		}](),
+		input: "not-an-object",
+		code:  validation.CodeExpectedObject,
+	},
+	// Numeric constraints
+	{
+		name: "minimum number",
+		typ: reflect.TypeFor[struct {
+			V float64 `json:"v" minimum:"5"`
+		}](),
+		input:  map[string]any{"v": 3.0},
+		code:   validation.CodeExpectedMinimumNumber,
+		params: map[string]any{"min": 5.0},
+	},
+	{
+		name: "exclusive minimum number",
+		typ: reflect.TypeFor[struct {
+			V float64 `json:"v" exclusiveMinimum:"5"`
+		}](),
+		input:  map[string]any{"v": 5.0},
+		code:   validation.CodeExpectedExclusiveMinimumNumber,
+		params: map[string]any{"min": 5.0},
+	},
+	{
+		name: "maximum number",
+		typ: reflect.TypeFor[struct {
+			V float64 `json:"v" maximum:"10"`
+		}](),
+		input:  map[string]any{"v": 15.0},
+		code:   validation.CodeExpectedMaximumNumber,
+		params: map[string]any{"max": 10.0},
+	},
+	{
+		name: "exclusive maximum number",
+		typ: reflect.TypeFor[struct {
+			V float64 `json:"v" exclusiveMaximum:"10"`
+		}](),
+		input:  map[string]any{"v": 10.0},
+		code:   validation.CodeExpectedExclusiveMaximumNumber,
+		params: map[string]any{"max": 10.0},
+	},
+	{
+		name: "multiple of",
+		typ: reflect.TypeFor[struct {
+			V float64 `json:"v" multipleOf:"3"`
+		}](),
+		input:  map[string]any{"v": 7.0},
+		code:   validation.CodeExpectedNumberBeMultipleOf,
+		params: map[string]any{"multiple_of": 3.0},
+	},
+	// String constraints
+	{
+		name: "min length",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" minLength:"5"`
+		}](),
+		input:  map[string]any{"v": "hi"},
+		code:   validation.CodeExpectedMinLength,
+		params: map[string]any{"min": 5},
+	},
+	{
+		name: "max length",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" maxLength:"3"`
+		}](),
+		input:  map[string]any{"v": "toolong"},
+		code:   validation.CodeExpectedMaxLength,
+		params: map[string]any{"max": 3},
+	},
+	{
+		name: "pattern description",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" pattern:"^[a-z]+$" patternDescription:"lowercase letters"`
+		}](),
+		input:  map[string]any{"v": "ABC"},
+		code:   validation.CodeExpectedBePattern,
+		params: map[string]any{"pattern": "^[a-z]+$"},
+	},
+	{
+		name: "base64",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" encoding:"base64"`
+		}](),
+		input: map[string]any{"v": "not!!base64"},
+		code:  validation.CodeExpectedBase64String,
+	},
+	// Array constraints
+	{
+		name: "min items",
+		typ: reflect.TypeFor[struct {
+			V []string `json:"v" minItems:"2"`
+		}](),
+		input:  map[string]any{"v": []any{"one"}},
+		code:   validation.CodeExpectedMinItems,
+		params: map[string]any{"min": 2},
+	},
+	{
+		name: "max items",
+		typ: reflect.TypeFor[struct {
+			V []string `json:"v" maxItems:"2"`
+		}](),
+		input:  map[string]any{"v": []any{"a", "b", "c"}},
+		code:   validation.CodeExpectedMaxItems,
+		params: map[string]any{"max": 2},
+	},
+	{
+		name: "unique items",
+		typ: reflect.TypeFor[struct {
+			V []string `json:"v" uniqueItems:"true"`
+		}](),
+		input: map[string]any{"v": []any{"a", "b", "a"}},
+		code:  validation.CodeExpectedArrayItemsUnique,
+	},
+	// Object constraints
+	{
+		name: "min properties",
+		s: &huma.Schema{
+			Type:          huma.TypeObject,
+			MinProperties: Ptr(2),
+		},
+		input:  map[string]any{"a": 1},
+		code:   validation.CodeExpectedMinProperties,
+		params: map[string]any{"min": 2},
+	},
+	{
+		name: "max properties",
+		s: &huma.Schema{
+			Type:          huma.TypeObject,
+			MaxProperties: Ptr(1),
+		},
+		input:  map[string]any{"a": 1, "b": 2},
+		code:   validation.CodeExpectedMaxProperties,
+		params: map[string]any{"max": 1},
+	},
+	{
+		name: "required property",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v"`
+		}](),
+		input:  map[string]any{},
+		code:   validation.CodeExpectedRequiredProperty,
+		params: map[string]any{"property": "v"},
+	},
+	{
+		name: "dependent required property",
+		typ: reflect.TypeFor[struct {
+			Value string `json:"value,omitempty" dependentRequired:"dep"`
+			Dep   string `json:"dep,omitempty"`
+		}](),
+		input:  map[string]any{"value": "set"},
+		code:   validation.CodeExpectedDependentRequiredProperty,
+		params: map[string]any{"property": "dep", "dependent_on": "value"},
+	},
+	{
+		name: "unexpected property",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v,omitempty"`
+		}](),
+		input: map[string]any{"unknown": "field"},
+		code:  validation.CodeUnexpectedProperty,
+	},
+	// Enum
+	{
+		name: "enum string",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" enum:"foo,bar"`
+		}](),
+		input:  map[string]any{"v": "baz"},
+		code:   validation.CodeExpectedOneOf,
+		params: map[string]any{"allowed": []any{"foo", "bar"}},
+	},
+	// Schema combinators
+	{
+		name: "anyOf fail",
+		s: &huma.Schema{
+			AnyOf: []*huma.Schema{
+				{Type: huma.TypeBoolean},
+				{Type: huma.TypeString},
+			},
+		},
+		input: 123,
+		code:  validation.CodeExpectedMatchAtLeastOneSchema,
+	},
+	{
+		name: "oneOf fail none",
+		s: &huma.Schema{
+			OneOf: []*huma.Schema{
+				{Type: huma.TypeBoolean},
+				{Type: huma.TypeString},
+			},
+		},
+		input: 123,
+		code:  validation.CodeExpectedMatchExactlyOneSchema,
+	},
+	{
+		name:  "not schema fail",
+		s:     &huma.Schema{Not: &huma.Schema{Type: huma.TypeString}},
+		input: "hello",
+		code:  validation.CodeExpectedNotMatchSchema,
+	},
+	// Format validation
+	{
+		name: "format date-time",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" format:"date-time"`
+		}](),
+		input: map[string]any{"v": "not-a-datetime"},
+		code:  validation.CodeExpectedRFC3339DateTime,
+	},
+	{
+		name: "format date",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" format:"date"`
+		}](),
+		input: map[string]any{"v": "not-a-date"},
+		code:  validation.CodeExpectedRFC3339Date,
+	},
+	{
+		name: "format time",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" format:"time"`
+		}](),
+		input: map[string]any{"v": "not-a-time"},
+		code:  validation.CodeExpectedRFC3339Time,
+	},
+	{
+		name: "format email",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" format:"email"`
+		}](),
+		input: map[string]any{"v": "not-an-email"},
+		code:  validation.CodeExpectedRFC5322Email,
+	},
+	{
+		name: "format hostname",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" format:"hostname"`
+		}](),
+		input: map[string]any{"v": strings.Repeat("a", 300)},
+		code:  validation.CodeExpectedRFC5890Hostname,
+	},
+	{
+		name: "format ipv4",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" format:"ipv4"`
+		}](),
+		input: map[string]any{"v": "999.999.999.999"},
+		code:  validation.CodeExpectedRFC2673IPv4,
+	},
+	{
+		name: "format ipv6",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" format:"ipv6"`
+		}](),
+		input: map[string]any{"v": "not-ipv6"},
+		code:  validation.CodeExpectedRFC2373IPv6,
+	},
+	{
+		name: "format ip",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" format:"ip"`
+		}](),
+		input: map[string]any{"v": "not-an-ip"},
+		code:  validation.CodeExpectedRFCIPAddr,
+	},
+	{
+		name: "format uuid",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" format:"uuid"`
+		}](),
+		input: map[string]any{"v": "not-a-uuid"},
+		code:  validation.CodeExpectedRFC4122UUID,
+	},
+	{
+		name: "format json-pointer",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" format:"json-pointer"`
+		}](),
+		input: map[string]any{"v": "no-leading-slash"},
+		code:  validation.CodeExpectedRFC6901JSONPointer,
+	},
+	{
+		name: "format relative-json-pointer",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" format:"relative-json-pointer"`
+		}](),
+		input: map[string]any{"v": "not-relative"},
+		code:  validation.CodeExpectedRFC6901RelativeJSONPointer,
+	},
+	{
+		name: "format regex",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" format:"regex"`
+		}](),
+		input: map[string]any{"v": "[invalid"},
+		code:  validation.CodeExpectedRegexp,
+	},
+	{
+		name: "format uri-template",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" format:"uri-template"`
+		}](),
+		input: map[string]any{"v": "http://example.com/{unclosed"},
+		code:  validation.CodeExpectedRFC6570URITemplate,
+	},
+	{
+		name: "format duration",
+		typ: reflect.TypeFor[struct {
+			V string `json:"v" format:"duration"`
+		}](),
+		input: map[string]any{"v": "not-a-duration"},
+		code:  validation.CodeExpectedDuration,
+	},
+}
+
+func TestValidateErrorCodes(t *testing.T) {
+	pb := huma.NewPathBuffer([]byte(""), 0)
+	res := &huma.ValidateResult{}
+
+	for _, tc := range validateErrorCodeTests {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+
+			var s *huma.Schema
+			if tc.s != nil {
+				s = tc.s
+				s.PrecomputeMessages()
+			} else {
+				s = registry.Schema(tc.typ, true, "TestInput")
+			}
+
+			pb.Reset()
+			res.Reset()
+			huma.Validate(registry, s, pb, tc.mode, tc.input, res)
+
+			require.NotEmpty(t, res.Errors, "expected at least one validation error")
+
+			// Find the error with the expected code.
+			var found *huma.ErrorDetail
+			for _, e := range res.Errors {
+				if d, ok := e.(*huma.ErrorDetail); ok && d.Code == tc.code {
+					found = d
+					break
+				}
+			}
+			require.NotNilf(t, found, "no error with code %q found in %v", tc.code, res.Errors)
+
+			for k, want := range tc.params {
+				assert.Equalf(t, want, found.Params[k], "param %q mismatch", k)
+			}
+		})
+	}
+}
+
 func TestValidateCustomFormatter(t *testing.T) {
 	originalFormatter := huma.ErrorFormatter
 	defer func() {
