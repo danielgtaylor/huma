@@ -144,7 +144,8 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 			Body: func(ctx huma.Context) {
 				ctx.SetHeader("Content-Type", "text/event-stream")
 				bw := ctx.BodyWriter()
-				send := func(deadliner writeDeadliner, flusher http.Flusher, encoder *json.Encoder, writer io.Writer) Sender {
+				send := func(deadliner writeDeadliner, flusher http.Flusher, writer io.Writer) Sender {
+					encoder := json.NewEncoder(writer)
 					return func(msg Message) error {
 						if deadliner != nil {
 							if err := deadliner.SetWriteDeadline(time.Now().Add(WriteTimeout)); err != nil {
@@ -194,13 +195,10 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 				}
 				if fastCtx, ok := bw.(*fasthttp.RequestCtx); ok {
 					fastCtx.SetBodyStreamWriter(func(bfw *bufio.Writer) {
-						encoder := json.NewEncoder(bfw)
-						f(ctx.Context(), input, send(fastCtx.Conn(), flusherFunc(bfw.Flush), encoder, bfw))
+						f(ctx.Context(), input, send(fastCtx.Conn(), flusherFunc(bfw.Flush), bfw))
 					})
 					return
 				}
-				encoder := json.NewEncoder(bw)
-
 				// Get the flusher/deadliner from the response writer if possible.
 				var flusher http.Flusher
 				flushCheck := bw
@@ -231,7 +229,7 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 				}
 
 				// Call the user-provided SSE handler.
-				f(ctx.Context(), input, send(deadliner, flusher, encoder, bw))
+				f(ctx.Context(), input, send(deadliner, flusher, bw))
 			},
 		}, nil
 	})
