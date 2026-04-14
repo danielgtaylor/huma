@@ -792,6 +792,27 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-embed-inline",
+			input: struct {
+				Embedded `json:",inline"`
+				Value2   string `json:"value2"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["value2", "value"],
+				"properties": {
+					"value": {
+						"type": "string",
+						"description": "new doc"
+					},
+					"value2": {
+						"type": "string"
+					}
+				}
+			}`,
+		},
+		{
 			name: "field-embed-mixed",
 			input: struct {
 				Embedded      `json:"meta"`
