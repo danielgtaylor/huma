@@ -41,6 +41,7 @@ var paramReactorType = reflect.TypeFor[ParamReactor]()
 var paramWrapperType = reflect.TypeFor[ParamWrapper]()
 var stringType = reflect.TypeFor[string]()
 var stringSliceType = reflect.TypeFor[[]string]()
+var urlValuesType = reflect.TypeFor[url.Values]()
 
 // Store int to string status number conversions for efficiency.
 var statusStrings = map[int]string{
@@ -863,7 +864,28 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 			var pv any
 			var isSet bool
-			if p.Loc == "query" && p.Style == styleDeepObject {
+			if p.Loc == "query" && p.Explode {
+				// Exploded query parameters is a special case where we store the entire
+				// map of query parameters.
+				if p.Type != urlValuesType && p.Type != reflect.TypeFor[map[string][]string]() {
+					panic("unsupported exploded query param type " + p.Type.String())
+				}
+				u := ctx.URL()
+				value := u.Query()
+				isSet = len(value) > 0
+				if len(value) == 0 {
+					if !op.SkipValidateParams && p.Required {
+						res.Add(pb, "", "required "+p.Loc+" parameter is missing")
+					}
+					return
+				}
+				anyMap := make(map[string]any, len(value))
+				for k, v := range value {
+					anyMap[k] = v
+				}
+				pv = anyMap
+				receiver.Set(reflect.ValueOf(value))
+			} else if p.Loc == "query" && p.Style == styleDeepObject {
 				// Deep object style is a special case where we need to parse the
 				// query parameter into a struct. We do this by parsing the query
 				// parameter into a map, then iterating over the map and setting
