@@ -1956,6 +1956,24 @@ func parseSliceInto(f reflect.Value, values []string) (any, error) {
 		f.Set(reflect.ValueOf(vs))
 		return vs, nil
 	}
+
+	// Last resort: use the `encoding.TextUnmarshaler` interface.
+	if reflect.PointerTo(f.Type().Elem()).Implements(reflect.TypeFor[encoding.TextUnmarshaler]()) {
+		vs := reflect.MakeSlice(f.Type(), 0, len(values))
+
+		for _, s := range values {
+			v := reflect.New(f.Type().Elem())
+			fn := v.Interface().(encoding.TextUnmarshaler)
+			if err := fn.UnmarshalText([]byte(s)); err != nil {
+				return nil, errors.New("invalid value: " + err.Error())
+			}
+
+			vs = reflect.Append(vs, v.Elem())
+		}
+
+		f.Set(vs)
+		return values, nil
+	}
 	return nil, errUnparsable
 }
 
