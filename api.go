@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -204,6 +205,13 @@ type Config struct {
 	// Alternatively, you can set DocsPath to empty to disable the built-in docs
 	// route altogether.
 	DocsRenderer string
+
+	// DocsRendererConfig is optional renderer-specific config that gets
+	// JSON-marshaled into the docs HTML. Only the Scalar renderer uses it,
+	// where it becomes the value of Scalar's `data-configuration` attribute.
+	// See https://github.com/scalar/scalar/blob/main/documentation/configuration.md
+	// for the available options.
+	DocsRendererConfig any
 
 	// SchemasPath is the path to the API schemas. If set to `/schemas` it will
 	// allow clients to get `/schemas/{schema}` to view the schema in a browser
@@ -640,6 +648,15 @@ func (a *api) registerDocsRoute() {
 			"style-src 'unsafe-inline'", // TODO: Somehow drop 'unsafe-inline'
 		}
 
+		var configAttr string
+		if a.config.DocsRendererConfig != nil {
+			b, err := json.Marshal(a.config.DocsRendererConfig)
+			if err != nil {
+				panic("failed to marshal DocsRendererConfig: " + err.Error())
+			}
+			configAttr = ` data-configuration="` + html.EscapeString(string(b)) + `"`
+		}
+
 		body = []byte(`<!doctype html>
 <html lang="en">
   <head>
@@ -649,7 +666,7 @@ func (a *api) registerDocsRoute() {
     <title>` + title + `</title>
   </head>
   <body>
-    <script id="api-reference" data-url="` + openAPIPath + `.json"></script>
+    <script id="api-reference" data-url="` + openAPIPath + `.json"` + configAttr + `></script>
     <script src="https://unpkg.com/@scalar/api-reference@1.44.20/dist/browser/standalone.js" crossorigin integrity="sha384-tMz7GAo6dMy55x9tLFtH+sHtogji6Scmb+feBR31TAHmvSPRUTboK9H3M5NFaP4R"></script>
   </body>
 </html>`)

@@ -216,6 +216,43 @@ func TestDocsRenderers(t *testing.T) {
 		assert.Contains(t, resp.Body.String(), "@scalar/api-reference")
 	})
 
+	t.Run("ScalarRendererConfig", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+			},
+			DocsPath:     "/docs",
+			DocsRenderer: huma.DocsRendererScalar,
+			DocsRendererConfig: map[string]any{
+				"theme":  "purple",
+				"layout": "modern",
+			},
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), `data-configuration="`)
+		assert.Contains(t, resp.Body.String(), `&#34;theme&#34;:&#34;purple&#34;`)
+		assert.Contains(t, resp.Body.String(), `&#34;layout&#34;:&#34;modern&#34;`)
+	})
+
+	t.Run("ScalarRendererConfigInvalid", func(t *testing.T) {
+		assert.Panics(t, func() {
+			humatest.New(t, huma.Config{
+				OpenAPI: &huma.OpenAPI{
+					Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+				},
+				DocsPath:           "/docs",
+				DocsRenderer:       huma.DocsRendererScalar,
+				DocsRendererConfig: make(chan int),
+				OpenAPIPath:        "/openapi",
+				Formats:            huma.DefaultFormats,
+			})
+		})
+	})
+
 	t.Run("SwaggerUIRenderer", func(t *testing.T) {
 		_, api := humatest.New(t, huma.Config{
 			OpenAPI: &huma.OpenAPI{
