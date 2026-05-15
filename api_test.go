@@ -317,7 +317,7 @@ func TestDocsRenderers(t *testing.T) {
 	})
 
 	t.Run("APIPrefixInvalidURL", func(t *testing.T) {
-		assert.PanicsWithValue(t, "invalid server URL:  :invalid: parse \" :invalid\": first path segment in URL cannot contain colon", func() {
+		assert.PanicsWithValue(t, "invalid server URL:  :invalid ( :invalid): parse \" :invalid\": first path segment in URL cannot contain colon", func() {
 			humatest.New(t, huma.Config{
 				OpenAPI: &huma.OpenAPI{
 					Servers: []*huma.Server{
