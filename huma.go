@@ -921,6 +921,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				if err != nil {
 					res.Errors = append(res.Errors, err)
 				} else {
+					if op.BodyReadTimeout > 0 {
+						ctx.SetReadDeadline(time.Time{})
+					}
+
 					var formValueParser func(val reflect.Value)
 					if rbt == rbtMultipart {
 						formValueParser = func(val reflect.Value) {}
@@ -986,6 +990,9 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					bufCloser()
 					writeErr(api, ctx, cErr, *res)
 					return
+				}
+				if op.BodyReadTimeout > 0 {
+					ctx.SetReadDeadline(time.Time{})
 				}
 				body := buf.Bytes()
 
