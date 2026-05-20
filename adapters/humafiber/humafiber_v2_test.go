@@ -6,10 +6,10 @@ import (
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/gofiber/fiber/v3"
+	fiberV2 "github.com/gofiber/fiber/v2"
 )
 
-func BenchmarkHumaFiber(b *testing.B) {
+func BenchmarkHumaFiberV2(b *testing.B) {
 	type GreetingInput struct {
 		ID string `path:"id"`
 	}
@@ -20,8 +20,8 @@ func BenchmarkHumaFiber(b *testing.B) {
 		}
 	}
 
-	r := fiber.New()
-	api := New(r, huma.DefaultConfig("Test API", "1.0.0"))
+	r := fiberV2.New()
+	api := NewV2(r, huma.DefaultConfig("Test API", "1.0.0"))
 
 	huma.Register(api, huma.Operation{
 		OperationID: "greet",
@@ -41,14 +41,14 @@ func BenchmarkHumaFiber(b *testing.B) {
 	}
 }
 
-func BenchmarkNotHuma(b *testing.B) {
+func BenchmarkNotHumaV2(b *testing.B) {
 	type GreetingOutput struct {
 		Greeting string `json:"greeting"`
 	}
 
-	r := fiber.New()
+	r := fiberV2.New()
 
-	r.Get("/foo/:id", func(c fiber.Ctx) error {
+	r.Get("/foo/:id", func(c *fiberV2.Ctx) error {
 		return c.JSON(&GreetingOutput{"Hello, " + c.Params("id")})
 	})
 

@@ -264,7 +264,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 		resourcePath := findRelativeResourcePath(ctx.URL().Path, put.Path)
 
 		// Perform the get!
-		origReq, err := http.NewRequest(http.MethodGet, resourcePath, nil)
+		origReq, err := http.NewRequestWithContext(ctx.Context(), http.MethodGet, resourcePath, nil)
 		if err != nil {
 			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to get resource", err)
 			return
@@ -390,7 +390,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 		}
 
 		// Write the updated data back to the server!
-		putReq, err := http.NewRequest(http.MethodPut, resourcePath, bytes.NewReader(patched))
+		putReq, err := http.NewRequestWithContext(ctx.Context(), http.MethodPut, resourcePath, bytes.NewReader(patched))
 		if err != nil {
 			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to put modified resource", err)
 			return

@@ -213,6 +213,13 @@ var validateTests = []struct {
 		errs:  []string{"expected number to be a multiple of 5"},
 	},
 	{
+		name: "multiple of float success",
+		typ: reflect.TypeFor[struct {
+			Value float64 "json:\"value\" multipleOf:\"0.01\""
+		}](),
+		input: map[string]any{"value": 0.36},
+	},
+	{
 		name:  "string success",
 		typ:   reflect.TypeFor[string](),
 		input: "",
@@ -615,11 +622,25 @@ var validateTests = []struct {
 		input: map[string]any{"value": []byte("ABCD")},
 	},
 	{
+		name: "base64 empty byte success",
+		typ: reflect.TypeFor[struct {
+			Value []byte "json:\"value\""
+		}](),
+		input: map[string]any{"value": []byte("")},
+	},
+	{
 		name: "base64 string success",
 		typ: reflect.TypeFor[struct {
 			Value string "json:\"value\" encoding:\"base64\""
 		}](),
 		input: map[string]any{"value": "ABCD"},
+	},
+	{
+		name: "base64 empty string success",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" encoding:\"base64\""
+		}](),
+		input: map[string]any{"value": ""},
 	},
 	{
 		name: "base64 fail",

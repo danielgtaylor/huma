@@ -47,7 +47,7 @@ grp := huma.NewGroup(api)
 grp.UseModifier(huma.PrefixModifier("/prefix1", "/prefix2", "..."))
 ```
 
-The built-in [`huma.PrefixModifier`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#PrefixModifier) will adjust the operation's ID and tags when more than one prefix is used. If you with to customize this behavior, you can write your own operation modifier.
+The built-in [`huma.PrefixModifier`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#PrefixModifier) will adjust the operation's ID and tags when more than one prefix is used. If you wish to customize this behavior, you can write your own operation modifier.
 
 ## Middleware
 
