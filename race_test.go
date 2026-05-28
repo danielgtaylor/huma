@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"sync"
 	"testing"
 	"time"
@@ -146,6 +148,40 @@ func newKeepAliveClient() *http.Client {
 	}
 }
 
+// connRecorder captures connection details via httptrace.ClientTrace.GotConn.
+// GotConn fires for both fresh dials and pool fetches, so it correctly
+// tracks keep-alive reuse.
+type connRecorder struct {
+	mu     sync.Mutex
+	ready  chan struct{}
+	local  string
+	reused bool
+}
+
+func newConnRecorder() *connRecorder {
+	return &connRecorder{ready: make(chan struct{})}
+}
+
+func (r *connRecorder) withTrace(ctx context.Context) context.Context {
+	trace := &httptrace.ClientTrace{
+		GotConn: func(info httptrace.GotConnInfo) {
+			r.mu.Lock()
+			r.local = info.Conn.LocalAddr().String()
+			r.reused = info.Reused
+			r.mu.Unlock()
+			close(r.ready)
+		},
+	}
+	return httptrace.WithClientTrace(ctx, trace)
+}
+
+func (r *connRecorder) wait() (local string, reused bool) {
+	<-r.ready
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.local, r.reused
+}
+
 func postJSON(client *http.Client, url string, body []byte) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
@@ -222,10 +258,10 @@ func TestNoMiddleware_NoContextCancel(t *testing.T) {
 	assert.Contains(t, string(body1), `"ok":true`)
 }
 
-// TestKeepAlive_SecondRequestUsesFreshContext verifies that a slow request with
-// a body-reading middleware does not poison the keep-alive connection for the
-// next request.
-func TestKeepAlive_SecondRequestUsesFreshContext(t *testing.T) {
+// TestKeepAlive_SecondRequestUsesSameConnection verifies that a second
+// keep-alive request on a body-reading middleware endpoint reuses the same TCP
+// connection and that the request context stays alive.
+func TestKeepAlive_SecondRequestUsesSameConnection(t *testing.T) {
 	bodyReadTimeout := 500 * time.Millisecond
 	handlerSleep := 1 * time.Second
 	payload := []byte(`{"value":"test"}`)
@@ -233,31 +269,279 @@ func TestKeepAlive_SecondRequestUsesFreshContext(t *testing.T) {
 	baseURL, cleanup := startServer(t, true, bodyReadTimeout, handlerSleep)
 	defer cleanup()
 
+	rec1 := newConnRecorder()
+	rec2 := newConnRecorder()
+
 	client := newKeepAliveClient()
 	defer client.CloseIdleConnections()
 
 	url := baseURL + "/webhook"
 
-	resp1, err := postJSON(client, url, payload)
+	ctx1 := context.Background()
+	ctx1 = rec1.withTrace(ctx1)
+	req1, err := http.NewRequestWithContext(ctx1, http.MethodPost, url, bytes.NewReader(payload))
 	require.NoError(t, err)
+	req1.Header.Set("Content-Type", "application/json")
+	resp1, err := client.Do(req1)
+	require.NoError(t, err)
+
 	body1, _ := io.ReadAll(resp1.Body)
 	_ = resp1.Body.Close()
 	t.Logf("Request 1 (with middleware, keep-alive): status=%d body=%s", resp1.StatusCode, string(body1))
 	assert.Contains(t, string(body1), `"cancelled":false`)
 
+	local1, _ := rec1.wait()
+	t.Logf("Request 1 connection local addr: %s", local1)
+
 	// Brief pause to let the keep-alive connection settle.
 	time.Sleep(100 * time.Millisecond)
 
-	resp2, err := postJSON(client, url, payload)
+	ctx2 := context.Background()
+	ctx2 = rec2.withTrace(ctx2)
+	req2, err := http.NewRequestWithContext(ctx2, http.MethodPost, url, bytes.NewReader(payload))
+	require.NoError(t, err)
+	req2.Header.Set("Content-Type", "application/json")
+	resp2, err := client.Do(req2)
 	require.NoError(t, err)
 
 	body2, _ := io.ReadAll(resp2.Body)
 	_ = resp2.Body.Close()
 	t.Logf("Request 2 (with middleware, keep-alive): status=%d body=%s", resp2.StatusCode, string(body2))
-
 	assert.Contains(t, string(body2), `"cancelled":false`,
 		"second keep-alive request should use a live request context")
 	assert.Contains(t, string(body2), `"broken":false`,
 		"second keep-alive request should not inherit a canceled connection context")
 	assert.Contains(t, string(body2), `"ok":true`)
+
+	local2, reused2 := rec2.wait()
+	t.Logf("Request 2 connection local addr: %s (reused=%v)", local2, reused2)
+	assert.True(t, reused2, "second keep-alive request should reuse the same connection")
+	assert.Equal(t, local1, local2,
+		"second keep-alive request should use the same TCP connection")
+}
+
+// multipartSlowOutput is the output struct for the multipart slow handler.
+type multipartSlowOutput struct {
+	Body struct {
+		OK        bool   `json:"ok"`
+		CtxErr    string `json:"ctx_err,omitempty"`
+		Broken    bool   `json:"broken"`
+		Cancelled bool   `json:"cancelled"`
+	}
+}
+
+// multipartSlowInput is the input struct for the multipart test handler.
+type multipartSlowInput struct {
+	RawBody multipart.Form
+}
+
+// newMultipartSlowHandler returns a handler that accepts multipart/form-data,
+// reads the file content from the parsed form, then sleeps and reports on
+// context state.
+func newMultipartSlowHandler(sleep time.Duration) func(context.Context, *multipartSlowInput) (*multipartSlowOutput, error) {
+	return func(ctx context.Context, input *multipartSlowInput) (*multipartSlowOutput, error) {
+		// Read the file content to ensure body was successfully parsed.
+		for _, fh := range input.RawBody.File {
+			for _, header := range fh {
+				f, err := header.Open()
+				if err == nil {
+					_, _ = io.ReadAll(f)
+					_ = f.Close()
+				}
+			}
+		}
+
+		timer := time.NewTimer(sleep)
+		defer timer.Stop()
+
+		out := &multipartSlowOutput{}
+
+		select {
+		case <-ctx.Done():
+			out.Body.Broken = true
+			out.Body.Cancelled = true
+			out.Body.CtxErr = ctx.Err().Error()
+			return out, nil
+		default:
+		}
+
+		select {
+		case <-ctx.Done():
+			out.Body.Cancelled = true
+			out.Body.CtxErr = ctx.Err().Error()
+			return out, nil
+		case <-timer.C:
+			out.Body.OK = true
+			return out, nil
+		}
+	}
+}
+
+// multipartRequestBodyWithMiddleware builds a multipart request body designed to
+// be read by the bodyReadingMiddleware (single file, no JSON field).
+func multipartRequestBodyWithMiddleware(boundary, filename, fileContent string) []byte {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	_ = w.SetBoundary(boundary)
+
+	fw, _ := w.CreateFormFile("file", filename)
+	_, _ = fw.Write([]byte(fileContent))
+
+	_ = w.Close()
+	return buf.Bytes()
+}
+
+// startMultipartServer creates a chi router with huma, registers a multipart
+// handler on the given path, optionally wraps it with middleware, and starts
+// a real TCP server. Returns the base URL and a cleanup function.
+func startMultipartServer(t *testing.T, withMiddleware bool, bodyReadTimeout time.Duration, handlerSleep time.Duration) (string, func()) {
+	t.Helper()
+
+	router := chi.NewRouter()
+
+	if withMiddleware {
+		router.Use(bodyReadingMiddleware)
+	}
+
+	config := huma.DefaultConfig("Test", "1.0.0")
+	api := humachi.New(router, config)
+
+	op := huma.Operation{
+		Path:            "/webhook",
+		Method:          http.MethodPost,
+		DefaultStatus:   http.StatusOK,
+		BodyReadTimeout: bodyReadTimeout,
+	}
+	huma.Register(api, op, newMultipartSlowHandler(handlerSleep))
+
+	listener, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+
+	server := &http.Server{Handler: router}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = server.Serve(listener)
+	}()
+
+	baseURL := "http://" + listener.Addr().String()
+	cleanup := func() {
+		_ = server.Close()
+		wg.Wait()
+	}
+
+	return baseURL, cleanup
+}
+
+// postMultipartFile sends a multipart/form-data POST with only a file field
+// (no JSON wrapper field), which is the most minimal multipart request.
+func postMultipartFile(client *http.Client, url string, boundary string, filename string, content []byte) (*http.Response, error) {
+	body := multipartRequestBodyWithMiddleware(boundary, filename, string(content))
+	req, err := http.NewRequestWithContext(
+		context.Background(),
+		http.MethodPost,
+		url,
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "multipart/form-data; boundary="+boundary)
+	return client.Do(req)
+}
+
+// TestMiddlewareBodyReadMultipart_DoesNotCancelContext verifies that a body-reading
+// middleware + BodyReadTimeout + slow handler does not cancel the context for
+// multipart/form-data requests after Huma has finished reading the form body.
+// This covers the multipart branch of the deadline-clearing fix in huma.go.
+func TestMiddlewareBodyReadMultipart_DoesNotCancelContext(t *testing.T) {
+	bodyReadTimeout := 500 * time.Millisecond
+	handlerSleep := 1 * time.Second
+
+	baseURL, cleanup := startMultipartServer(t, true, bodyReadTimeout, handlerSleep)
+	defer cleanup()
+
+	client := newKeepAliveClient()
+	defer client.CloseIdleConnections()
+
+	url := baseURL + "/webhook"
+	boundary := "MultipartBoundary"
+
+	resp1, err := postMultipartFile(client, url, boundary, "test.txt", []byte("hello world"))
+	require.NoError(t, err)
+
+	body1, _ := io.ReadAll(resp1.Body)
+	_ = resp1.Body.Close()
+	t.Logf("Request 1 (multipart, with middleware): status=%d body=%s", resp1.StatusCode, string(body1))
+
+	assert.Contains(t, string(body1), `"cancelled":false`,
+		"handler should not observe context cancellation after middleware body read (multipart)")
+	assert.Contains(t, string(body1), `"broken":false`,
+		"handler should not start with a canceled context after middleware body read (multipart)")
+	assert.Contains(t, string(body1), `"ok":true`)
+}
+
+// TestKeepAlive_SecondRequestMultipart_UsesSameConnection verifies that a second
+// keep-alive multipart request on a body-reading middleware endpoint reuses the
+// same TCP connection and that the request context stays alive.
+func TestKeepAlive_SecondRequestMultipart_UsesSameConnection(t *testing.T) {
+	bodyReadTimeout := 500 * time.Millisecond
+	handlerSleep := 1 * time.Second
+
+	baseURL, cleanup := startMultipartServer(t, true, bodyReadTimeout, handlerSleep)
+	defer cleanup()
+
+	rec1 := newConnRecorder()
+	rec2 := newConnRecorder()
+
+	client := newKeepAliveClient()
+	defer client.CloseIdleConnections()
+
+	url := baseURL + "/webhook"
+	boundary := "MultipartBoundary"
+
+	ctx1 := context.Background()
+	ctx1 = rec1.withTrace(ctx1)
+	req1, err := http.NewRequestWithContext(ctx1, http.MethodPost, url, bytes.NewReader(
+		multipartRequestBodyWithMiddleware(boundary, "test.txt", "hello world")))
+	require.NoError(t, err)
+	req1.Header.Set("Content-Type", "multipart/form-data; boundary="+boundary)
+	resp1, err := client.Do(req1)
+	require.NoError(t, err)
+
+	body1, _ := io.ReadAll(resp1.Body)
+	_ = resp1.Body.Close()
+	t.Logf("Request 1 (multipart, keep-alive): status=%d body=%s", resp1.StatusCode, string(body1))
+	assert.Contains(t, string(body1), `"cancelled":false`)
+
+	local1, _ := rec1.wait()
+	t.Logf("Multipart request 1 connection local addr: %s", local1)
+
+	// Brief pause to let the keep-alive connection settle.
+	time.Sleep(100 * time.Millisecond)
+
+	ctx2 := context.Background()
+	ctx2 = rec2.withTrace(ctx2)
+	req2, err := http.NewRequestWithContext(ctx2, http.MethodPost, url, bytes.NewReader(
+		multipartRequestBodyWithMiddleware(boundary, "test2.txt", "hello world again")))
+	require.NoError(t, err)
+	req2.Header.Set("Content-Type", "multipart/form-data; boundary="+boundary)
+	resp2, err := client.Do(req2)
+	require.NoError(t, err)
+
+	body2, _ := io.ReadAll(resp2.Body)
+	_ = resp2.Body.Close()
+	t.Logf("Request 2 (multipart, keep-alive): status=%d body=%s", resp2.StatusCode, string(body2))
+	assert.Contains(t, string(body2), `"cancelled":false`,
+		"second keep-alive multipart request should use a live request context")
+	assert.Contains(t, string(body2), `"broken":false`,
+		"second keep-alive multipart request should not inherit a canceled connection context")
+	assert.Contains(t, string(body2), `"ok":true`)
+
+	local2, reused2 := rec2.wait()
+	t.Logf("Multipart request 2 connection local addr: %s (reused=%v)", local2, reused2)
+	assert.True(t, reused2, "second keep-alive multipart request should reuse the same connection")
+	assert.Equal(t, local1, local2,
+		"second keep-alive multipart request should reuse the same TCP connection")
 }
