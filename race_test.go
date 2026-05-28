@@ -205,10 +205,11 @@ func TestNoMiddleware_NoContextCancel(t *testing.T) {
 
 	// Without middleware, Huma reads the body itself:
 	// 1. Huma sets SetReadDeadline(now + 500ms)
-	// 2. Huma reads body (consuming the deadline for its intended purpose)
-	// 3. startBackgroundRead fires after body is read
-	// 4. Handler sleeps 1s, but backgroundRead's deadline was already satisfied
-	//    during the body read phase
+	// 2. Huma reads the body
+	// 3. Huma clears the read deadline after the body has been read
+	// 4. startBackgroundRead fires after body is read
+	// 5. Handler sleeps 1s, but the later background read is not governed by the
+	//    earlier deadline because Huma removed it
 	resp1, err := postJSON(client, url, payload)
 	require.NoError(t, err)
 
