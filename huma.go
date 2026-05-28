@@ -241,9 +241,17 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		pfi := pl.pfi
 		pfi.Schema = SchemaFromField(registry, f, "")
 
-		// While discouraged, make it possible to make query/header params required.
+		// While discouraged, make it possible to override `required` for non-path
+		// params via the struct tag. Path params are always required per the
+		// OpenAPI 3.x spec and are forced back to true below.
 		if _, ok = f.Tag.Lookup("required"); ok {
 			pfi.Required = boolTag(f, "required", false)
+		}
+
+		// Per OpenAPI 3.x spec, path parameters MUST always be required.
+		// Override any user-set `required:"false"` tag for path params.
+		if pfi.Loc == "path" {
+			pfi.Required = true
 		}
 
 		if pfi.Type == timeType {

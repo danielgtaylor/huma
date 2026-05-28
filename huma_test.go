@@ -619,6 +619,28 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
+			Name: "path-param-required-overrides-tag",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/items/{id}",
+				}, func(ctx context.Context, input *struct {
+					ID string `path:"id" required:"false"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+
+				// Per OpenAPI 3.x spec, path parameters must always be required,
+				// even if the struct tag says otherwise. Regression test for #1009.
+				param := api.OpenAPI().Paths["/items/{id}"].Get.Parameters[0]
+				assert.Equal(t, "id", param.Name)
+				assert.Equal(t, "path", param.In)
+				assert.True(t, param.Required)
+			},
+			Method: http.MethodGet,
+			URL:    "/items/abc",
+		},
+		{
 			Name: "param-bypass-validation",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
