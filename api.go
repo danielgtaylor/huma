@@ -206,11 +206,18 @@ type Config struct {
 	// route altogether.
 	DocsRenderer string
 
-	// DocsRendererConfig is optional renderer-specific config that gets
-	// JSON-marshaled into the docs HTML. Only the Scalar renderer uses it,
-	// where it becomes the value of Scalar's `data-configuration` attribute.
-	// See https://github.com/scalar/scalar/blob/main/documentation/configuration.md
-	// for the available options.
+	// DocsRendererConfig is an optional renderer-specific config. When set, it is
+	// JSON-marshaled into the docs HTML. Scalar and SwaggerUI use it, Stoplight
+	// Elements ignores it.
+	//
+	// Scalar reads it from the `data-configuration` attribute. See
+	// https://github.com/scalar/scalar/blob/main/documentation/configuration.md
+	// for the options.
+	//
+	// SwaggerUI merges its fields into the SwaggerUIBundle config object. See
+	// https://swagger.io/docs/open-source-tools/swagger-ui/usage/configuration/
+	// for the options. Huma owns the `url` and `dom_id` fields, so setting
+	// them here does nothing.
 	DocsRendererConfig any
 
 	// SchemasPath is the path to the API schemas. If set to `/schemas` it will
@@ -717,8 +724,17 @@ func (a *api) registerDocsRoute() {
 			"form-action 'none'",
 			"frame-ancestors 'none'",
 			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox",
-			"script-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js 'sha256-loGQL86SKUDRkBgfqt+XGmcml9Plihleifquht4CLYE='",
+			"script-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js 'sha256-gRya58TMnKTH/Tne/zBInjBwFUxL66aMDYvPuAX0lNY='",
 			"style-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui.css",
+		}
+
+		var configAttr string
+		if a.config.DocsRendererConfig != nil {
+			b, err := json.Marshal(a.config.DocsRendererConfig)
+			if err != nil {
+				panic("failed to marshal DocsRendererConfig: " + err.Error())
+			}
+			configAttr = ` data-config="` + html.EscapeString(string(b)) + `"`
 		}
 
 		body = []byte(`<!doctype html>
@@ -733,10 +749,13 @@ func (a *api) registerDocsRoute() {
   <body>
     <div id="swagger-ui"></div>
     <script src="https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js" crossorigin integrity="sha384-o9idN8HE6/V6SAewgnr6/5nz7+Npt5J0Cb4tNyXK8pycsVmgl1ZNbRS7tlEGxd+J"></script>
-    <script data-url="` + openAPIPath + `.json">
-      const url = document.currentScript.dataset.url;
+    <script data-url="` + openAPIPath + `.json"` + configAttr + `>
+      const script = document.currentScript;
+      const url = script.dataset.url;
+      const config = script.dataset.config ? JSON.parse(script.dataset.config) : {};
       window.onload = () => {
         window.ui = SwaggerUIBundle({
+          ...config,
           url: url,
           dom_id: '#swagger-ui',
         });

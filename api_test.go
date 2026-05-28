@@ -269,6 +269,43 @@ func TestDocsRenderers(t *testing.T) {
 		assert.Contains(t, resp.Body.String(), "swagger-ui-dist")
 	})
 
+	t.Run("SwaggerUIRendererConfig", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+			},
+			DocsPath:     "/docs",
+			DocsRenderer: huma.DocsRendererSwaggerUI,
+			DocsRendererConfig: map[string]any{
+				"docExpansion":             "none",
+				"defaultModelsExpandDepth": -1,
+			},
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), `data-config="`)
+		assert.Contains(t, resp.Body.String(), `&#34;docExpansion&#34;:&#34;none&#34;`)
+		assert.Contains(t, resp.Body.String(), `&#34;defaultModelsExpandDepth&#34;:-1`)
+	})
+
+	t.Run("SwaggerUIRendererConfigInvalid", func(t *testing.T) {
+		assert.Panics(t, func() {
+			humatest.New(t, huma.Config{
+				OpenAPI: &huma.OpenAPI{
+					Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+				},
+				DocsPath:           "/docs",
+				DocsRenderer:       huma.DocsRendererSwaggerUI,
+				DocsRendererConfig: make(chan int),
+				OpenAPIPath:        "/openapi",
+				Formats:            huma.DefaultFormats,
+			})
+		})
+	})
+
 	t.Run("APIPrefix", func(t *testing.T) {
 		_, api := humatest.New(t, huma.Config{
 			OpenAPI: &huma.OpenAPI{
