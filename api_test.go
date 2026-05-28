@@ -224,8 +224,8 @@ func TestDocsRenderers(t *testing.T) {
 			DocsPath:     "/docs",
 			DocsRenderer: huma.DocsRendererScalar,
 			DocsRendererConfig: map[string]any{
-				"theme":  "purple",
-				"layout": "modern",
+				"theme":      "mars",
+				"hideModels": true,
 			},
 			OpenAPIPath: "/openapi",
 			Formats:     huma.DefaultFormats,
@@ -234,8 +234,8 @@ func TestDocsRenderers(t *testing.T) {
 		resp := api.Get("/docs")
 		assert.Equal(t, http.StatusOK, resp.Code)
 		assert.Contains(t, resp.Body.String(), `data-configuration="`)
-		assert.Contains(t, resp.Body.String(), `&#34;theme&#34;:&#34;purple&#34;`)
-		assert.Contains(t, resp.Body.String(), `&#34;layout&#34;:&#34;modern&#34;`)
+		assert.Contains(t, resp.Body.String(), `&#34;theme&#34;:&#34;mars&#34;`)
+		assert.Contains(t, resp.Body.String(), `&#34;hideModels&#34;:true`)
 	})
 
 	t.Run("ScalarRendererConfigInvalid", func(t *testing.T) {
@@ -277,8 +277,8 @@ func TestDocsRenderers(t *testing.T) {
 			DocsPath:     "/docs",
 			DocsRenderer: huma.DocsRendererSwaggerUI,
 			DocsRendererConfig: map[string]any{
-				"docExpansion":             "none",
 				"defaultModelsExpandDepth": -1,
+				"tryItOutEnabled":          true,
 			},
 			OpenAPIPath: "/openapi",
 			Formats:     huma.DefaultFormats,
@@ -287,8 +287,8 @@ func TestDocsRenderers(t *testing.T) {
 		resp := api.Get("/docs")
 		assert.Equal(t, http.StatusOK, resp.Code)
 		assert.Contains(t, resp.Body.String(), `data-config="`)
-		assert.Contains(t, resp.Body.String(), `&#34;docExpansion&#34;:&#34;none&#34;`)
 		assert.Contains(t, resp.Body.String(), `&#34;defaultModelsExpandDepth&#34;:-1`)
+		assert.Contains(t, resp.Body.String(), `&#34;tryItOutEnabled&#34;:true`)
 	})
 
 	t.Run("SwaggerUIRendererConfigInvalid", func(t *testing.T) {
