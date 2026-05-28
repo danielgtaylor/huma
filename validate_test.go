@@ -1100,6 +1100,35 @@ var validateTests = []struct {
 		errs:  []string{"expected value to be one of \"one, two\""},
 	},
 	{
+		name: "const string success",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" const:\"fixed\""
+		}](),
+		input: map[string]any{"value": "fixed"},
+	},
+	{
+		name: "const int success",
+		typ: reflect.TypeFor[struct {
+			Value int "json:\"value\" const:\"42\""
+		}](),
+		input: map[string]any{"value": 42.0},
+	},
+	{
+		name: "const bool success",
+		typ: reflect.TypeFor[struct {
+			Value bool "json:\"value\" const:\"true\""
+		}](),
+		input: map[string]any{"value": true},
+	},
+	{
+		name: "expected const",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" const:\"fixed\""
+		}](),
+		input: map[string]any{"value": "not fixed"},
+		errs:  []string{"expected value to be fixed"},
+	},
+	{
 		name: "optional success",
 		typ: reflect.TypeFor[struct {
 			Value string "json:\"value,omitempty\" minLength:\"1\""
