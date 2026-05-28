@@ -18,7 +18,7 @@ You can switch to other documentation renderers using `config.DocsRenderer`. The
 
 !!! info "Disabling the Docs"
 
-    You can disable the built-in documentation by setting `config.DocsPath` to an empty string. This allows you to provide your own documentation renderer if you wish.
+    You can disable the built-in documentation by setting `config.DocsPath` to an empty string, then register your own route on the underlying router. The `DocsRenderer*` functions in [`api.go`](https://github.com/danielgtaylor/huma/blob/main/api.go) show what to return.
 
 !!! warning "Middleware Conflicts"
 
@@ -26,9 +26,7 @@ You can switch to other documentation renderers using `config.DocsRenderer`. The
 
 ## Customizing Documentation
 
-Each renderer takes its own options through `config.DocsRendererConfig`. Set it to any value that marshals to JSON (a `map[string]any` is easiest), and Huma writes it into the docs HTML. Scalar and SwaggerUI support it; Stoplight Elements ignores it.
-
-If you'd rather control the HTML yourself, set `config.DocsPath` to an empty string to turn off the built-in docs, then register your own `/docs` route on the underlying router. The `DocsRenderer*` functions in [`api.go`](https://github.com/danielgtaylor/huma/blob/main/api.go) show what to return.
+Each renderer accepts its own options through `config.DocsRendererConfig`. Set it to any value that marshals to JSON (a `map[string]any` is easiest), and Huma writes it into the docs HTML. Scalar and SwaggerUI support it; Stoplight Elements ignores it.
 
 ### Scalar Docs
 
