@@ -251,6 +251,35 @@ func TestDocsRenderers(t *testing.T) {
 		assert.Contains(t, resp.Body.String(), `apiDescriptionUrl="/api/v1/openapi.yaml"`)
 	})
 
+	t.Run("APIPrefixWithServerVars", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+				Servers: []*huma.Server{
+					{
+						URL: "http://localhost:{port}/api/{version}",
+						Variables: map[string]*huma.ServerVariable{
+							"port": {
+								Default: "8080",
+							},
+							"version": {
+								Enum: []string{"v1", "v2"},
+							},
+						},
+					},
+				},
+			},
+			DocsPath:    "/docs",
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		// Elements uses apiDescriptionUrl=".../api/v1/openapi.yaml"
+		assert.Contains(t, resp.Body.String(), `apiDescriptionUrl="/api/v1/openapi.yaml"`)
+	})
+
 	t.Run("APIPrefixRelative", func(t *testing.T) {
 		_, api := humatest.New(t, huma.Config{
 			OpenAPI: &huma.OpenAPI{
@@ -288,7 +317,7 @@ func TestDocsRenderers(t *testing.T) {
 	})
 
 	t.Run("APIPrefixInvalidURL", func(t *testing.T) {
-		assert.PanicsWithValue(t, "invalid server URL:  :invalid: parse \" :invalid\": first path segment in URL cannot contain colon", func() {
+		assert.PanicsWithValue(t, "invalid server URL:  :invalid ( :invalid): parse \" :invalid\": first path segment in URL cannot contain colon", func() {
 			humatest.New(t, huma.Config{
 				OpenAPI: &huma.OpenAPI{
 					Servers: []*huma.Server{

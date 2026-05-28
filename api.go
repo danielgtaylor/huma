@@ -19,7 +19,10 @@ import (
 	"github.com/danielgtaylor/huma/v2/negotiation"
 )
 
-var rxSchema = regexp.MustCompile(`#/components/schemas/([^"]+)`)
+var (
+	rxSchema       = regexp.MustCompile(`#/components/schemas/([^"]+)`)
+	rxServerURLVar = regexp.MustCompile(`(?i){([a-z0-9._~-]+)}`)
+)
 
 var ErrUnknownContentType = errors.New("unknown content type")
 
@@ -409,9 +412,11 @@ func getAPIPrefix(oapi *OpenAPI) string {
 			continue
 		}
 
-		serverURL, err := url.Parse(server.URL)
+		urlWithVars := getServerURLWithDefaultVars(*server)
+
+		serverURL, err := url.Parse(urlWithVars)
 		if err != nil {
-			panic("invalid server URL: " + server.URL + ": " + err.Error())
+			panic("invalid server URL: " + urlWithVars + " (" + server.URL + "): " + err.Error())
 		}
 
 		if serverURL.Path == "" {
@@ -424,6 +429,31 @@ func getAPIPrefix(oapi *OpenAPI) string {
 	}
 
 	return ""
+}
+
+func getServerURLWithDefaultVars(s Server) string {
+	if s.URL == "" || len(s.Variables) == 0 {
+		return s.URL
+	}
+
+	res := s.URL
+	matches := rxServerURLVar.FindAllStringSubmatch(s.URL, -1)
+
+	for _, m := range matches {
+		v, ok := s.Variables[m[1]]
+		if !ok {
+			continue
+		}
+
+		val := v.Default
+		if val == "" && len(v.Enum) > 0 {
+			val = v.Enum[0]
+		}
+
+		res = strings.ReplaceAll(res, m[0], val)
+	}
+
+	return res
 }
 
 func parseContentType(contentType string) (int, int, error) {
