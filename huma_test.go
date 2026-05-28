@@ -600,7 +600,7 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
-			Name: "param-unsupported-500",
+			Name: "param-unsupported-type",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
@@ -614,7 +614,8 @@ func TestFeatures(t *testing.T) {
 			Method: http.MethodGet,
 			URL:    "/test-params/255.255.0.0",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-				assert.Equal(t, http.StatusInternalServerError, resp.Code)
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "unsupported param type: net.IPNet")
 			},
 		},
 		{
@@ -725,7 +726,8 @@ func TestFeatures(t *testing.T) {
 			Method: http.MethodGet,
 			URL:    "/test?mynumber=fail",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-				assert.Equal(t, http.StatusInternalServerError, resp.Code)
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "unsupported param type: []struct {}")
 			},
 		},
 		{
