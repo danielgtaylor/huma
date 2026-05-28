@@ -195,10 +195,10 @@ func postJSON(client *http.Client, url string, body []byte) (*http.Response, err
 // middleware + BodyReadTimeout + slow handler does not cancel the context after
 // Huma has finished reading the restored request body.
 func TestMiddlewareBodyRead_DoesNotCancelContext(t *testing.T) {
-	// BodyReadTimeout = 500ms, handler sleeps 1s. The read deadline should be
+	// BodyReadTimeout = 50ms, handler sleeps 100ms. The read deadline should be
 	// cleared after body read, so the handler context stays alive.
-	bodyReadTimeout := 500 * time.Millisecond
-	handlerSleep := 1 * time.Second
+	bodyReadTimeout := 50 * time.Millisecond
+	handlerSleep := 100 * time.Millisecond
 	payload := []byte(`{"value":"test"}`)
 
 	baseURL, cleanup := startServer(t, true, bodyReadTimeout, handlerSleep)
@@ -227,8 +227,8 @@ func TestMiddlewareBodyRead_DoesNotCancelContext(t *testing.T) {
 // middleware, the same handler + BodyReadTimeout does NOT cause context cancellation.
 func TestNoMiddleware_NoContextCancel(t *testing.T) {
 	// Same timeout/sleep as above, but no middleware.
-	bodyReadTimeout := 500 * time.Millisecond
-	handlerSleep := 1 * time.Second
+	bodyReadTimeout := 50 * time.Millisecond
+	handlerSleep := 100 * time.Millisecond
 	payload := []byte(`{"value":"test"}`)
 
 	baseURL, cleanup := startServer(t, false, bodyReadTimeout, handlerSleep)
@@ -262,8 +262,8 @@ func TestNoMiddleware_NoContextCancel(t *testing.T) {
 // keep-alive request on a body-reading middleware endpoint reuses the same TCP
 // connection and that the request context stays alive.
 func TestKeepAlive_SecondRequestUsesSameConnection(t *testing.T) {
-	bodyReadTimeout := 500 * time.Millisecond
-	handlerSleep := 1 * time.Second
+	bodyReadTimeout := 50 * time.Millisecond
+	handlerSleep := 100 * time.Millisecond
 	payload := []byte(`{"value":"test"}`)
 
 	baseURL, cleanup := startServer(t, true, bodyReadTimeout, handlerSleep)
@@ -456,8 +456,8 @@ func postMultipartFile(client *http.Client, url string, boundary string, filenam
 // multipart/form-data requests after Huma has finished reading the form body.
 // This covers the multipart branch of the deadline-clearing fix in huma.go.
 func TestMiddlewareBodyReadMultipart_DoesNotCancelContext(t *testing.T) {
-	bodyReadTimeout := 500 * time.Millisecond
-	handlerSleep := 1 * time.Second
+	bodyReadTimeout := 50 * time.Millisecond
+	handlerSleep := 100 * time.Millisecond
 
 	baseURL, cleanup := startMultipartServer(t, true, bodyReadTimeout, handlerSleep)
 	defer cleanup()
@@ -486,8 +486,8 @@ func TestMiddlewareBodyReadMultipart_DoesNotCancelContext(t *testing.T) {
 // keep-alive multipart request on a body-reading middleware endpoint reuses the
 // same TCP connection and that the request context stays alive.
 func TestKeepAlive_SecondRequestMultipart_UsesSameConnection(t *testing.T) {
-	bodyReadTimeout := 500 * time.Millisecond
-	handlerSleep := 1 * time.Second
+	bodyReadTimeout := 50 * time.Millisecond
+	handlerSleep := 100 * time.Millisecond
 
 	baseURL, cleanup := startMultipartServer(t, true, bodyReadTimeout, handlerSleep)
 	defer cleanup()
