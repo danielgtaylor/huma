@@ -1732,6 +1732,11 @@ func (o *OpenAPI) YAML() ([]byte, error) {
 }
 
 func downgradeSpec(input any) {
+	downgradeSpecValue(input)
+	downgradeSchemaRefs(input)
+}
+
+func downgradeSpecValue(input any) {
 	switch value := input.(type) {
 	case map[string]any:
 		m := value
@@ -1814,11 +1819,246 @@ func downgradeSpec(input any) {
 				delete(m, k)
 			}
 
-			downgradeSpec(v)
+			downgradeSpecValue(v)
 		}
 	case []any:
 		for _, item := range value {
-			downgradeSpec(item)
+			downgradeSpecValue(item)
+		}
+	}
+}
+
+func downgradeSchemaRefs(input any) {
+	root, ok := input.(map[string]any)
+	if !ok {
+		return
+	}
+
+	if paths, ok := root["paths"].(map[string]any); ok {
+		for _, pathItem := range paths {
+			downgradePathItemSchemas(pathItem)
+		}
+	}
+
+	if webhooks, ok := root["webhooks"].(map[string]any); ok {
+		for _, pathItem := range webhooks {
+			downgradePathItemSchemas(pathItem)
+		}
+	}
+
+	components, ok := root["components"].(map[string]any)
+	if !ok {
+		return
+	}
+
+	if schemas, ok := components["schemas"].(map[string]any); ok {
+		for _, schema := range schemas {
+			downgradeSchema(schema)
+		}
+	}
+
+	if responses, ok := components["responses"].(map[string]any); ok {
+		for _, response := range responses {
+			downgradeResponseSchemas(response)
+		}
+	}
+
+	if parameters, ok := components["parameters"].(map[string]any); ok {
+		for _, param := range parameters {
+			downgradeParamSchemas(param)
+		}
+	}
+
+	if requestBodies, ok := components["requestBodies"].(map[string]any); ok {
+		for _, requestBody := range requestBodies {
+			downgradeRequestBodySchemas(requestBody)
+		}
+	}
+
+	if headers, ok := components["headers"].(map[string]any); ok {
+		for _, header := range headers {
+			downgradeParamSchemas(header)
+		}
+	}
+
+	if callbacks, ok := components["callbacks"].(map[string]any); ok {
+		for _, callback := range callbacks {
+			downgradeCallbackSchemas(callback)
+		}
+	}
+
+	if pathItems, ok := components["pathItems"].(map[string]any); ok {
+		for _, pathItem := range pathItems {
+			downgradePathItemSchemas(pathItem)
+		}
+	}
+}
+
+func downgradePathItemSchemas(input any) {
+	m, ok := input.(map[string]any)
+	if !ok {
+		return
+	}
+
+	if parameters, ok := m["parameters"].([]any); ok {
+		for _, param := range parameters {
+			downgradeParamSchemas(param)
+		}
+	}
+
+	for _, method := range []string{
+		http.MethodGet,
+		http.MethodPost,
+		http.MethodPut,
+		http.MethodPatch,
+		http.MethodDelete,
+		http.MethodHead,
+		http.MethodOptions,
+		http.MethodTrace,
+	} {
+		downgradeOperationSchemas(m[strings.ToLower(method)])
+	}
+}
+
+func downgradeOperationSchemas(input any) {
+	m, ok := input.(map[string]any)
+	if !ok {
+		return
+	}
+
+	if parameters, ok := m["parameters"].([]any); ok {
+		for _, param := range parameters {
+			downgradeParamSchemas(param)
+		}
+	}
+
+	downgradeRequestBodySchemas(m["requestBody"])
+
+	if responses, ok := m["responses"].(map[string]any); ok {
+		for _, response := range responses {
+			downgradeResponseSchemas(response)
+		}
+	}
+
+	if callbacks, ok := m["callbacks"].(map[string]any); ok {
+		for _, callback := range callbacks {
+			downgradeCallbackSchemas(callback)
+		}
+	}
+}
+
+func downgradeCallbackSchemas(input any) {
+	pathItems, ok := input.(map[string]any)
+	if !ok {
+		return
+	}
+
+	for _, pathItem := range pathItems {
+		downgradePathItemSchemas(pathItem)
+	}
+}
+
+func downgradeParamSchemas(input any) {
+	m, ok := input.(map[string]any)
+	if !ok {
+		return
+	}
+
+	downgradeSchema(m["schema"])
+	downgradeContentSchemas(m["content"])
+}
+
+func downgradeRequestBodySchemas(input any) {
+	m, ok := input.(map[string]any)
+	if !ok {
+		return
+	}
+
+	downgradeContentSchemas(m["content"])
+}
+
+func downgradeResponseSchemas(input any) {
+	m, ok := input.(map[string]any)
+	if !ok {
+		return
+	}
+
+	if headers, ok := m["headers"].(map[string]any); ok {
+		for _, header := range headers {
+			downgradeParamSchemas(header)
+		}
+	}
+
+	downgradeContentSchemas(m["content"])
+}
+
+func downgradeContentSchemas(input any) {
+	content, ok := input.(map[string]any)
+	if !ok {
+		return
+	}
+
+	for _, mediaType := range content {
+		downgradeMediaTypeSchemas(mediaType)
+	}
+}
+
+func downgradeMediaTypeSchemas(input any) {
+	m, ok := input.(map[string]any)
+	if !ok {
+		return
+	}
+
+	downgradeSchema(m["schema"])
+
+	if encoding, ok := m["encoding"].(map[string]any); ok {
+		for _, encoding := range encoding {
+			if encodingMap, ok := encoding.(map[string]any); ok {
+				if headers, ok := encodingMap["headers"].(map[string]any); ok {
+					for _, header := range headers {
+						downgradeParamSchemas(header)
+					}
+				}
+			}
+		}
+	}
+}
+
+func downgradeSchema(input any) {
+	m, ok := input.(map[string]any)
+	if !ok {
+		return
+	}
+
+	for k, v := range m {
+		switch k {
+		case "items", "additionalProperties", "not":
+			downgradeSchema(v)
+		case "properties":
+			if props, ok := v.(map[string]any); ok {
+				for _, prop := range props {
+					downgradeSchema(prop)
+				}
+			}
+		case "oneOf", "anyOf", "allOf":
+			if schemas, ok := v.([]any); ok {
+				for _, schema := range schemas {
+					downgradeSchema(schema)
+				}
+			}
+		}
+	}
+
+	if ref, ok := m["$ref"]; ok && len(m) > 1 {
+		delete(m, "$ref")
+		refSchema := map[string]any{
+			"$ref": ref,
+		}
+
+		if allOf, ok := m["allOf"].([]any); ok {
+			m["allOf"] = append([]any{refSchema}, allOf...)
+		} else {
+			m["allOf"] = []any{refSchema}
 		}
 	}
 }
