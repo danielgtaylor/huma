@@ -13,24 +13,24 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 )
 
-var lastModified = time.Now()
+var lastModifiedV4 = time.Now()
 
-// flushingResponseWriter simulates a ResponseWriter that flushes headers on WriteHeader.
-type flushingResponseWriter struct {
+// flushingResponseWriterV4 simulates a ResponseWriter that flushes headers on WriteHeader.
+type flushingResponseWriterV4 struct {
 	rec         *httptest.ResponseRecorder
 	header      http.Header
 	wroteHeader bool
 }
 
-func (m *flushingResponseWriter) Header() http.Header {
+func (m *flushingResponseWriterV4) Header() http.Header {
 	return m.header
 }
 
-func (m *flushingResponseWriter) WriteHeader(code int) {
+func (m *flushingResponseWriterV4) WriteHeader(code int) {
 	if m.wroteHeader {
 		return
 	}
@@ -44,18 +44,18 @@ func (m *flushingResponseWriter) WriteHeader(code int) {
 	m.header = make(http.Header)
 }
 
-func (m *flushingResponseWriter) Write(b []byte) (int, error) {
+func (m *flushingResponseWriterV4) Write(b []byte) (int, error) {
 	if !m.wroteHeader {
 		m.WriteHeader(http.StatusOK)
 	}
 	return m.rec.Write(b)
 }
 
-func TestEchoLinkHeader(t *testing.T) {
+func TestEchoLinkHeaderV4(t *testing.T) {
 	e := echo.New()
 	conf := huma.DefaultConfig("My API", "1.0.0")
 	conf.SchemasPath = "/schemas"
-	api := New(e, conf)
+	api := NewV4(e, conf)
 
 	huma.Register(api, huma.Operation{
 		Method:      http.MethodGet,
@@ -80,7 +80,7 @@ func TestEchoLinkHeader(t *testing.T) {
 
 	// Use our simulated flushing response writer to catch regression if
 	// SetStatus is called before Transform.
-	f := &flushingResponseWriter{
+	f := &flushingResponseWriterV4{
 		rec:    rec,
 		header: make(http.Header),
 	}
@@ -95,7 +95,7 @@ func TestEchoLinkHeader(t *testing.T) {
 	assert.Contains(t, link, "rel=\"describedBy\"")
 }
 
-func BenchmarkHumaEcho(b *testing.B) {
+func BenchmarkHumaEchoV4(b *testing.B) {
 	type GreetingInput struct {
 		ID          string `path:"id"`
 		ContentType string `header:"Content-Type"`
@@ -118,7 +118,7 @@ func BenchmarkHumaEcho(b *testing.B) {
 	}
 
 	r := echo.New()
-	app := New(r, huma.DefaultConfig("Test", "1.0.0"))
+	app := NewV4(r, huma.DefaultConfig("Test", "1.0.0"))
 
 	huma.Register(app, huma.Operation{
 		OperationID: "greet",
@@ -127,7 +127,7 @@ func BenchmarkHumaEcho(b *testing.B) {
 	}, func(ctx context.Context, input *GreetingInput) (*GreetingOutput, error) {
 		resp := &GreetingOutput{}
 		resp.ETag = "abc123"
-		resp.LastModified = lastModified
+		resp.LastModified = lastModifiedV4
 		resp.Body.Greeting = "Hello, " + input.ID + input.Body.Suffix
 		resp.Body.Suffix = input.Body.Suffix
 		resp.Body.Length = len(resp.Body.Greeting)
@@ -152,7 +152,7 @@ func BenchmarkHumaEcho(b *testing.B) {
 	}
 }
 
-func BenchmarkRawEcho(b *testing.B) {
+func BenchmarkRawEchoV4(b *testing.B) {
 	type GreetingInput struct {
 		Suffix string `json:"suffix" maxLength:"5"`
 	}
@@ -177,7 +177,7 @@ func BenchmarkRawEcho(b *testing.B) {
 
 	r := echo.New()
 
-	r.POST("/foo/:id", func(c *echo.Context) error {
+	r.POST("/foo/:id", func(c echo.Context) error {
 		r := c.Request()
 		w := c.Response()
 
@@ -222,7 +222,7 @@ func BenchmarkRawEcho(b *testing.B) {
 		// Set up and write the response
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("ETag", "abc123")
-		w.Header().Set("Last-Modified", lastModified.Format(http.TimeFormat))
+		w.Header().Set("Last-Modified", lastModifiedV4.Format(http.TimeFormat))
 		w.Header().Set("Link", "</schemas/GreetingOutput.json>; rel=\"describedBy\"")
 		w.WriteHeader(http.StatusOK)
 		resp := &GreetingOutput{}
@@ -253,7 +253,7 @@ func BenchmarkRawEcho(b *testing.B) {
 	}
 }
 
-func BenchmarkRawEchoFast(b *testing.B) {
+func BenchmarkRawEchoFastV4(b *testing.B) {
 	type GreetingInput struct {
 		Suffix string `json:"suffix" maxLength:"5"`
 	}
@@ -268,7 +268,7 @@ func BenchmarkRawEchoFast(b *testing.B) {
 
 	r := echo.New()
 
-	r.POST("/foo/:id", func(c *echo.Context) error {
+	r.POST("/foo/:id", func(c echo.Context) error {
 		r := c.Request()
 		w := c.Response()
 
@@ -289,7 +289,7 @@ func BenchmarkRawEchoFast(b *testing.B) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("ETag", "abc123")
-		w.Header().Set("Last-Modified", lastModified.Format(http.TimeFormat))
+		w.Header().Set("Last-Modified", lastModifiedV4.Format(http.TimeFormat))
 		w.WriteHeader(http.StatusOK)
 		resp := &GreetingOutput{}
 		resp.Greeting = "Hello, " + c.Param("id") + input.Suffix
