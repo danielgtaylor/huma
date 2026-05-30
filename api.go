@@ -723,7 +723,7 @@ func (a *api) registerDocsRoute() {
 			"connect-src 'self'",
 			"form-action 'none'",
 			"frame-ancestors 'none'",
-			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox",
+			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms",
 			"script-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js 'sha256-gRya58TMnKTH/Tne/zBInjBwFUxL66aMDYvPuAX0lNY='",
 			"style-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui.css",
 		}
