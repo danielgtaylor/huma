@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
@@ -55,6 +56,35 @@ type WrappedDeadliner struct {
 
 func (w *WrappedDeadliner) SetWriteDeadline(t time.Time) error {
 	return w.deadlineErr
+}
+
+// orderedWriter records the order in which WriteHeader, Write, and Flush
+// are called so tests can assert headers are committed before body writes.
+type orderedWriter struct {
+	events []string
+	status int
+}
+
+func (w *orderedWriter) Header() http.Header {
+	return http.Header{}
+}
+
+func (w *orderedWriter) Write(p []byte) (int, error) {
+	w.events = append(w.events, "write")
+	return len(p), nil
+}
+
+func (w *orderedWriter) WriteHeader(statusCode int) {
+	w.status = statusCode
+	w.events = append(w.events, "writeHeader")
+}
+
+func (w *orderedWriter) Flush() {
+	w.events = append(w.events, "flush")
+}
+
+func (w *orderedWriter) SetWriteDeadline(t time.Time) error {
+	return nil
 }
 
 type sseTest struct {
@@ -129,6 +159,50 @@ data: {"error": "encode error: json: unsupported type: chan int"}
 			w = &DummyWriter{deadlineErr: errors.New("whoops")}
 			req, _ = http.NewRequest(http.MethodGet, "/sse", nil)
 			api.Adapter().ServeHTTP(w, req)
+		},
+	},
+	{
+		Title: "sse flushes headers before first event",
+		TestFunc: func(t *testing.T) {
+			_, api := humatest.New(t)
+			started := make(chan struct{})
+			release := make(chan struct{})
+			sse.Register(api, huma.Operation{
+				OperationID: "sse",
+				Method:      http.MethodGet,
+				Path:        "/sse",
+			}, map[string]any{
+				"message": &DefaultMessage{},
+			}, func(ctx context.Context, input *struct{}, send sse.Sender) {
+				close(started)
+				<-release
+			})
+
+			w := &orderedWriter{}
+			req, _ := http.NewRequest(http.MethodGet, "/sse", nil)
+			done := make(chan struct{})
+			go func() {
+				api.Adapter().ServeHTTP(w, req)
+				close(done)
+			}()
+			<-started
+			// At this point the user handler is running but has not sent any
+			// events yet. Headers must already be committed and flushed so
+			// that EventSource.onopen fires on the client.
+			eventsBeforeRelease := append([]string(nil), w.events...)
+			close(release)
+			<-done
+
+			assert.Equal(t, http.StatusOK, w.status)
+			require.Contains(t, eventsBeforeRelease, "writeHeader",
+				"WriteHeader must be called before the user handler blocks")
+			require.Contains(t, eventsBeforeRelease, "flush",
+				"Flush must be called before the user handler blocks")
+			whIdx := slices.Index(eventsBeforeRelease, "writeHeader")
+			flushIdx := slices.Index(eventsBeforeRelease, "flush")
+			assert.Less(t, whIdx, flushIdx, "WriteHeader must precede Flush")
+			assert.NotContains(t, eventsBeforeRelease, "write",
+				"no body write should occur before the user handler sends an event")
 		},
 	},
 	{
