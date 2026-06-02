@@ -10,6 +10,7 @@ package autopatch
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -20,10 +21,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/casing"
 	"github.com/danielgtaylor/shorthand/v2"
 	jsonpatch "github.com/evanphx/json-patch/v5"
+	"github.com/go-chi/chi/v5"
+
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/casing"
 )
 
 const MergePatchNullabilityExtension = "x-merge-patch-nullability"
@@ -41,6 +44,22 @@ func RegisterNullabilityExtension(api huma.API, stringRepresentationOfNull strin
 		Enabled:                    true,
 		StringRepresentationOfNull: stringRepresentationOfNull,
 	}
+}
+
+type internalRequestContext struct {
+	context.Context
+}
+
+func (c internalRequestContext) Value(key any) any {
+	if key == chi.RouteCtxKey {
+		return nil
+	}
+
+	return c.Context.Value(key)
+}
+
+func autopatchRequestContext(ctx context.Context) context.Context {
+	return internalRequestContext{Context: ctx}
 }
 
 func replaceNulls(data []byte, settings MergePatchNullabilitySettings) ([]byte, error) {
@@ -264,7 +283,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 		resourcePath := findRelativeResourcePath(ctx.URL().Path, put.Path)
 
 		// Perform the get!
-		origReq, err := http.NewRequestWithContext(ctx.Context(), http.MethodGet, resourcePath, nil)
+		origReq, err := http.NewRequestWithContext(autopatchRequestContext(ctx.Context()), http.MethodGet, resourcePath, nil)
 		if err != nil {
 			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to get resource", err)
 			return
@@ -390,7 +409,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 		}
 
 		// Write the updated data back to the server!
-		putReq, err := http.NewRequestWithContext(ctx.Context(), http.MethodPut, resourcePath, bytes.NewReader(patched))
+		putReq, err := http.NewRequestWithContext(autopatchRequestContext(ctx.Context()), http.MethodPut, resourcePath, bytes.NewReader(patched))
 		if err != nil {
 			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to put modified resource", err)
 			return
