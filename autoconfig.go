@@ -17,7 +17,7 @@ type AutoConfigVar struct {
 // are advertised via OpenAPI extension and picked up by the CLI to make it
 // easier to get started using an API. This struct should be put into the
 // `OpenAPI.Extensions` map under the key `x-cli-config`. See also:
-// https://rest.sh/#/openapi?id=autoconfiguration
+// https://rest.sh/docs/reference/openapi/
 type AutoConfig struct {
 	Security string                   `json:"security"`
 	Headers  map[string]string        `json:"headers,omitempty"`

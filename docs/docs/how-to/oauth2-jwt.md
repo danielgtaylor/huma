@@ -212,7 +212,7 @@ As mentioned previously, the Oauth2.0 standard does not specify the format of th
 
 ## Optional: Client Auto-Configuration
 
-Some clients like [Restish](https://rest.sh/) support [OpenAPI-based auth auto-configuration](https://rest.sh/#/openapi?id=autoconfiguration). This means that you can configure your client to fetch the OpenAPI document and automatically configure itself to use the correct auth mechanism. This is done by adding the `x-cli-config` extension to the OpenAPI:
+Some clients like [Restish](https://rest.sh/) support [OpenAPI-based auth auto-configuration](https://rest.sh/docs/reference/openapi/). This means that you can configure your client to fetch the OpenAPI document and automatically configure itself to use the correct auth mechanism. This is done by adding the `x-cli-config` extension to the OpenAPI:
 
 ```go title="main.go"
 config.Extensions["x-cli-config"] = huma.AutoConfig{ /* ... */ }
