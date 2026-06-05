@@ -12,7 +12,7 @@ o.Components.SecuritySchemes["my-scheme"] = &huma.SecurityScheme{
 	Type: "oauth2",
 	// ... security scheme definition ...
 }
-o.Extensions["x-cli-autoconfig"] = huma.AutoConfig{
+o.Extensions["x-cli-config"] = huma.AutoConfig{
 	Security: "my-scheme",
 	Params: map[string]string{
 		"client_id": "abc123",
@@ -23,4 +23,4 @@ o.Extensions["x-cli-autoconfig"] = huma.AutoConfig{
 }
 ```
 
-See the [CLI AutoConfiguration](https://rest.sh/#/openapi?id=autoconfiguration) documentation for more info, including how to ask the user for custom parameters.
+See the [CLI AutoConfiguration](https://rest.sh/docs/reference/openapi/) documentation for more info, including how to ask the user for custom parameters.

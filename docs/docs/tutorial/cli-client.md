@@ -14,44 +14,42 @@ First, install [Restish](https://rest.sh/):
 
 === "Mac"
 
-    Install using Homebrew, Go, or [download a release](https://github.com/danielgtaylor/restish/releases).
+    Install using Homebrew, Go, or [download a release](https://github.com/rest-sh/restish/releases).
 
     ```bash title="Terminal"
     # Homebrew
-    $ brew tap danielgtaylor/restish
     $ brew install restish
 
-    # Go (requires Go 1.18+)
-    $ go install github.com/danielgtaylor/restish@latest
+    # Go
+    $ go install github.com/rest-sh/restish/v2/cmd/restish@latest
     ```
 
 === "Linux"
 
-    Install using Go, Homebrew for Linux, or [download a release](https://github.com/danielgtaylor/restish/releases).
+    Install using Go, Homebrew for Linux, or [download a release](https://github.com/rest-sh/restish/releases).
 
     ```bash title="Terminal"
-    # Go (requires Go 1.18+)
-    $ go install github.com/danielgtaylor/restish@latest
+    # Go
+    $ go install github.com/rest-sh/restish/v2/cmd/restish@latest
 
     # Homebrew for Linux
-    $ brew tap danielgtaylor/restish
     $ brew install restish
     ```
 
 === "Windows"
 
-    Install using Go or [download a release](https://github.com/danielgtaylor/restish/releases).
+    Install using Go or [download a release](https://github.com/rest-sh/restish/releases).
 
     ```bash title="Terminal"
-    # Go (requires Go 1.18+)
-    $ go install github.com/danielgtaylor/restish@latest
+    # Go
+    $ go install github.com/rest-sh/restish/v2/cmd/restish@latest
     ```
 
-Also consider setting up [shell command-line completion](https://rest.sh/#/guide?id=shell-command-line-completion) for Restish.
+Also consider setting up [shell command-line completion](https://rest.sh/docs/getting-started/shell-setup/) for Restish.
 
 ## Configure your API
 
-Next, we need to tell Restish about your API and give it a short name, which we'll call `tutorial`. Do this using the `api configure` command. This only needs to be done one time. Make sure your API is running and accessible before continuing, as this pulls the OpenAPI spec from the service.
+Next, we need to tell Restish about your API and give it a short name, which we'll call `tutorial`. Do this using the `api connect` command. This only needs to be done one time. Make sure your API is running and accessible before continuing, as this pulls the OpenAPI spec from the service.
 
 {{ asciinema("../../terminal/restish-config.cast", rows="8") }}
 
@@ -77,6 +75,6 @@ Congratulations! You just learned:
 Want to learn more about how Restish works and how to use it? Check these out next:
 
 -   [Restish](https://rest.sh/)
--   [Restish OpenAPI 3 support](https://rest.sh/#/openapi)
--   [Restish input](https://rest.sh/#/input)
+-   [Restish OpenAPI reference](https://rest.sh/docs/reference/openapi/)
+-   [Restish input](https://rest.sh/docs/guides/input-and-shorthand/)
 -   [A CLI for REST APIs](https://dev.to/danielgtaylor/a-cli-for-rest-apis-part-1-104b)

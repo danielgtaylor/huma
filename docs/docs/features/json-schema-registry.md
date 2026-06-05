@@ -38,7 +38,7 @@ Alternatively, you can manually manage your `Transformers` and `OnAddOperation` 
 
 !!! info "Editing"
 
-    The `$schema` field is incredibly powerful when paired with Restish's [edit](https://rest.sh/#/guide?id=editing-resources) command, giving you a quick and easy way to edit strongly-typed resources in your favorite editor.
+    The `$schema` field is incredibly powerful when paired with Restish's [edit](https://rest.sh/docs/reference/edit-command/) command, giving you a quick and easy way to edit strongly-typed resources in your favorite editor.
 
 ## Schema Registry
 
