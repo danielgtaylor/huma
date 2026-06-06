@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -714,7 +715,14 @@ func getFields(typ reflect.Type, visited map[reflect.Type]struct{}) []fieldInfo 
 			continue
 		}
 
-		if f.Anonymous && f.Tag.Get("json") == "" {
+		jsonTag := f.Tag.Get("json")
+		parts := strings.Split(jsonTag, ",")
+		if len(parts) > 0 && parts[0] == "" && slices.Contains(parts, "inline") {
+			embedded = append(embedded, f)
+			continue
+		}
+
+		if f.Anonymous && (len(parts) == 0 || parts[0] == "") {
 			embedded = append(embedded, f)
 			continue
 		}
