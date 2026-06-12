@@ -608,12 +608,41 @@ func handleArray[T any](r Registry, s *Schema, path *PathBuffer, mode ValidateMo
 	}
 
 	if s.UniqueItems {
-		seen := make(map[any]struct{}, len(arr))
+		// uniqueItemsContains reports whether item already appears in seen.
+		// It uses a map[any]struct{} for O(1) lookups but falls back to a
+		// reflect.DeepEqual linear scan when item is a non-hashable type
+		// (e.g. map[string]interface{} from malformed JSON like [{}]).
+		// Without this guard, inserting an unhashable key panics with
+		// "hash of unhashable type" and crashes the server (issue #1042).
+		uniqueItemsContains := func(seen []any, item any) (found bool) {
+			defer func() {
+				if recover() != nil {
+					// item is unhashable (e.g. a map or slice): fall back to
+					// deep equality so we still catch genuine duplicates.
+					for _, s := range seen {
+						if reflect.DeepEqual(s, item) {
+							found = true
+							return
+						}
+					}
+				}
+			}()
+			// Fast path: attempt a map lookup. This will panic for unhashable
+			// types, which the deferred recover above will catch.
+			m := make(map[any]struct{}, len(seen)+1)
+			for _, s := range seen {
+				m[s] = struct{}{}
+			}
+			_, found = m[item]
+			return
+		}
+
+		seen := make([]any, 0, len(arr))
 		for _, item := range arr {
-			if _, ok := seen[item]; ok {
+			if uniqueItemsContains(seen, item) {
 				res.Add(path, arr, validation.MsgExpectedArrayItemsUnique)
 			}
-			seen[item] = struct{}{}
+			seen = append(seen, item)
 		}
 	}
 
