@@ -586,6 +586,13 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 			res.Add(path, v, s.msgEnum)
 		}
 	}
+
+	if s.Const != nil {
+		// Deep equality check for const validation
+		if !reflect.DeepEqual(s.Const, v) {
+			res.Add(path, v, s.msgConst)
+		}
+	}
 }
 
 func handleArray[T any](r Registry, s *Schema, path *PathBuffer, mode ValidateMode, res *ValidateResult, arr []T) {

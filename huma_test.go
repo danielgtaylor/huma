@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -84,8 +85,25 @@ type MyTextUnmarshaler struct {
 	value string
 }
 
+// MyCustomUnmarshaler is a custom type that imitates performing
+// operations on integers
+type MyCustomUnmarshaler struct {
+	value int
+	raw   string
+}
+
 func (m *MyTextUnmarshaler) UnmarshalText(text []byte) error {
 	m.value = "Hello, World!"
+	return nil
+}
+
+func (m *MyCustomUnmarshaler) UnmarshalText(text []byte) error {
+	var err error
+	m.value, err = strconv.Atoi(string(text)[1:])
+	if err != nil {
+		return err
+	}
+	m.raw = string(text)
 	return nil
 }
 
@@ -582,7 +600,7 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
-			Name: "param-unsupported-500",
+			Name: "param-unsupported-type",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
@@ -596,8 +614,31 @@ func TestFeatures(t *testing.T) {
 			Method: http.MethodGet,
 			URL:    "/test-params/255.255.0.0",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-				assert.Equal(t, http.StatusInternalServerError, resp.Code)
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "unsupported param type: net.IPNet")
 			},
+		},
+		{
+			Name: "path-param-required-overrides-tag",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/items/{id}",
+				}, func(ctx context.Context, input *struct {
+					ID string `path:"id" required:"false"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+
+				// Per OpenAPI 3.x spec, path parameters must always be required,
+				// even if the struct tag says otherwise. Regression test for #1009.
+				param := api.OpenAPI().Paths["/items/{id}"].Get.Parameters[0]
+				assert.Equal(t, "id", param.Name)
+				assert.Equal(t, "path", param.In)
+				assert.True(t, param.Required)
+			},
+			Method: http.MethodGet,
+			URL:    "/items/abc",
 		},
 		{
 			Name: "param-bypass-validation",
@@ -634,6 +675,82 @@ func TestFeatures(t *testing.T) {
 			},
 			Method: http.MethodGet,
 			URL:    "/test",
+		},
+		{
+			Name: "parse-uuid-slice",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					MyUUIDs []uuid.UUID `query:"myuuid"`
+				}) (*struct{}, error) {
+					assert.Equal(t, uuid.MustParse("9993a7ca-4c0f-4f22-b388-2677e0ec91ab"), i.MyUUIDs[0])
+					assert.Equal(t, uuid.MustParse("46cfcb8b-473f-4c0a-9eef-2cdcbc68c2bc"), i.MyUUIDs[1])
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?myuuid=9993a7ca-4c0f-4f22-b388-2677e0ec91ab,46cfcb8b-473f-4c0a-9eef-2cdcbc68c2bc",
+		},
+		{
+			Name: "parse-custom-type-slice",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					MyInts []MyCustomUnmarshaler `query:"mynumber"`
+				}) (*struct{}, error) {
+					assert.Equal(t, 50, i.MyInts[0].value)
+					assert.Equal(t, ">50", i.MyInts[0].raw)
+					assert.Equal(t, 100, i.MyInts[1].value)
+					assert.Equal(t, "<100", i.MyInts[1].raw)
+
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?mynumber=>50,<100",
+		},
+		{
+			Name: "parseSliceInto-unmarshal-error",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					MyInts []MyCustomUnmarshaler `query:"mynumber"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?mynumber=!fail",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "invalid value")
+			},
+		},
+		{
+			Name: "parseSliceInto-unsupported-type",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					// []struct{} represents a struct that does not implement TextUnmarshaler
+					MyInts []struct{} `query:"mynumber"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?mynumber=fail",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "unsupported param type: []struct {}")
+			},
 		},
 		{
 			Name: "parse-with-param-receiver",

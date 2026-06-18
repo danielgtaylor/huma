@@ -216,6 +216,43 @@ func TestDocsRenderers(t *testing.T) {
 		assert.Contains(t, resp.Body.String(), "@scalar/api-reference")
 	})
 
+	t.Run("ScalarRendererConfig", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+			},
+			DocsPath:     "/docs",
+			DocsRenderer: huma.DocsRendererScalar,
+			DocsRendererConfig: map[string]any{
+				"theme":      "mars",
+				"hideModels": true,
+			},
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), `data-configuration="`)
+		assert.Contains(t, resp.Body.String(), `&#34;theme&#34;:&#34;mars&#34;`)
+		assert.Contains(t, resp.Body.String(), `&#34;hideModels&#34;:true`)
+	})
+
+	t.Run("ScalarRendererConfigInvalid", func(t *testing.T) {
+		assert.Panics(t, func() {
+			humatest.New(t, huma.Config{
+				OpenAPI: &huma.OpenAPI{
+					Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+				},
+				DocsPath:           "/docs",
+				DocsRenderer:       huma.DocsRendererScalar,
+				DocsRendererConfig: make(chan int),
+				OpenAPIPath:        "/openapi",
+				Formats:            huma.DefaultFormats,
+			})
+		})
+	})
+
 	t.Run("SwaggerUIRenderer", func(t *testing.T) {
 		_, api := humatest.New(t, huma.Config{
 			OpenAPI: &huma.OpenAPI{
@@ -232,12 +269,78 @@ func TestDocsRenderers(t *testing.T) {
 		assert.Contains(t, resp.Body.String(), "swagger-ui-dist")
 	})
 
+	t.Run("SwaggerUIRendererConfig", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+			},
+			DocsPath:     "/docs",
+			DocsRenderer: huma.DocsRendererSwaggerUI,
+			DocsRendererConfig: map[string]any{
+				"defaultModelsExpandDepth": -1,
+				"tryItOutEnabled":          true,
+			},
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), `data-config="`)
+		assert.Contains(t, resp.Body.String(), `&#34;defaultModelsExpandDepth&#34;:-1`)
+		assert.Contains(t, resp.Body.String(), `&#34;tryItOutEnabled&#34;:true`)
+	})
+
+	t.Run("SwaggerUIRendererConfigInvalid", func(t *testing.T) {
+		assert.Panics(t, func() {
+			humatest.New(t, huma.Config{
+				OpenAPI: &huma.OpenAPI{
+					Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+				},
+				DocsPath:           "/docs",
+				DocsRenderer:       huma.DocsRendererSwaggerUI,
+				DocsRendererConfig: make(chan int),
+				OpenAPIPath:        "/openapi",
+				Formats:            huma.DefaultFormats,
+			})
+		})
+	})
+
 	t.Run("APIPrefix", func(t *testing.T) {
 		_, api := humatest.New(t, huma.Config{
 			OpenAPI: &huma.OpenAPI{
 				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
 				Servers: []*huma.Server{
 					{URL: "https://example.com/api/v1"},
+				},
+			},
+			DocsPath:    "/docs",
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		// Elements uses apiDescriptionUrl=".../api/v1/openapi.yaml"
+		assert.Contains(t, resp.Body.String(), `apiDescriptionUrl="/api/v1/openapi.yaml"`)
+	})
+
+	t.Run("APIPrefixWithServerVars", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+				Servers: []*huma.Server{
+					{
+						URL: "http://localhost:{port}/api/{version}",
+						Variables: map[string]*huma.ServerVariable{
+							"port": {
+								Default: "8080",
+							},
+							"version": {
+								Enum: []string{"v1", "v2"},
+							},
+						},
+					},
 				},
 			},
 			DocsPath:    "/docs",
@@ -288,7 +391,7 @@ func TestDocsRenderers(t *testing.T) {
 	})
 
 	t.Run("APIPrefixInvalidURL", func(t *testing.T) {
-		assert.PanicsWithValue(t, "invalid server URL:  :invalid: parse \" :invalid\": first path segment in URL cannot contain colon", func() {
+		assert.PanicsWithValue(t, "invalid server URL:  :invalid ( :invalid): parse \" :invalid\": first path segment in URL cannot contain colon", func() {
 			humatest.New(t, huma.Config{
 				OpenAPI: &huma.OpenAPI{
 					Servers: []*huma.Server{

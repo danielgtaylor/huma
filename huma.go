@@ -241,9 +241,17 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		pfi := pl.pfi
 		pfi.Schema = SchemaFromField(registry, f, "")
 
-		// While discouraged, make it possible to make query/header params required.
+		// While discouraged, make it possible to override `required` for non-path
+		// params via the struct tag. Path params are always required per the
+		// OpenAPI 3.x spec and are forced back to true below.
 		if _, ok = f.Tag.Lookup("required"); ok {
 			pfi.Required = boolTag(f, "required", false)
+		}
+
+		// Per OpenAPI 3.x spec, path parameters MUST always be required.
+		// Override any user-set `required:"false"` tag for path params.
+		if pfi.Loc == "path" {
+			pfi.Required = true
 		}
 
 		if pfi.Type == timeType {
@@ -921,6 +929,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				if err != nil {
 					res.Errors = append(res.Errors, err)
 				} else {
+					if op.BodyReadTimeout > 0 {
+						ctx.SetReadDeadline(time.Time{})
+					}
+
 					var formValueParser func(val reflect.Value)
 					if rbt == rbtMultipart {
 						formValueParser = func(val reflect.Value) {}
@@ -986,6 +998,9 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					bufCloser()
 					writeErr(api, ctx, cErr, *res)
 					return
+				}
+				if op.BodyReadTimeout > 0 {
+					ctx.SetReadDeadline(time.Time{})
 				}
 				body := buf.Bytes()
 
@@ -1683,7 +1698,7 @@ var errUnparsable = errors.New("unparsable value")
 // parseInto converts the string value into the expected type using the
 // parameter field information p and sets the result on f.
 func parseInto(ctx Context, f reflect.Value, value string, preSplit []string, p paramFieldInfo) (any, error) {
-	// built-in types
+	// Built-in types.
 	switch p.Type.Kind() {
 	case reflect.String:
 		f.SetString(value)
@@ -1693,28 +1708,36 @@ func parseInto(ctx Context, f reflect.Value, value string, preSplit []string, p 
 		if err != nil {
 			return nil, errors.New("invalid integer")
 		}
+
 		f.SetInt(v)
+
 		return v, nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		v, err := strconv.ParseUint(value, 10, 64)
 		if err != nil {
 			return nil, errors.New("invalid integer")
 		}
+
 		f.SetUint(v)
+
 		return v, nil
 	case reflect.Float32, reflect.Float64:
 		v, err := strconv.ParseFloat(value, 64)
 		if err != nil {
 			return nil, errors.New("invalid float")
 		}
+
 		f.SetFloat(v)
+
 		return v, nil
 	case reflect.Bool:
 		v, err := strconv.ParseBool(value)
 		if err != nil {
 			return nil, errors.New("invalid boolean")
 		}
+
 		f.SetBool(v)
+
 		return v, nil
 	case reflect.Slice:
 		var values []string
@@ -1728,27 +1751,31 @@ func parseInto(ctx Context, f reflect.Value, value string, preSplit []string, p 
 				values = strings.Split(value, ",")
 			}
 		}
+
 		pv, err := parseSliceInto(f, values)
 		if err != nil {
 			if errors.Is(err, errUnparsable) {
 				break
 			}
+
 			return nil, err
 		}
+
 		return pv, nil
 	}
 
-	// special types
+	// Special types.
 	switch f.Type() {
-	case timeType: // Special case: time.Time
-		// return nil, errors.New(value)
+	case timeType: // Special case: time.Time.
 		t, err := time.Parse(p.TimeFormat, value)
 		if err != nil {
 			return nil, errors.New("invalid date/time for format " + p.TimeFormat)
 		}
+
 		f.Set(reflect.ValueOf(t))
+
 		return value, nil
-	case urlType: // Special case: url.URL
+	case urlType: // Special case: url.URL.
 		u, err := url.Parse(value)
 		if err != nil {
 			return nil, errors.New("invalid url.URL value")
@@ -1762,207 +1789,253 @@ func parseInto(ctx Context, f reflect.Value, value string, preSplit []string, p 
 		if err := fn.UnmarshalText([]byte(value)); err != nil {
 			return nil, errors.New("invalid value: " + err.Error())
 		}
+
 		return value, nil
 	}
 
-	panic("unsupported param type " + p.Type.String())
+	return nil, fmt.Errorf("unsupported param type: %s", p.Type.String())
 }
 
 // parseSliceInto converts a slice of string values into the expected type of f
 // and sets the result on f.
 func parseSliceInto(f reflect.Value, values []string) (any, error) {
 	switch f.Type().Elem().Kind() {
-
 	case reflect.String:
 		if f.Type() == stringSliceType {
 			f.Set(reflect.ValueOf(values))
 		} else {
-			// Change element type to support slice of string subtypes (enums)
+			// Change element type to support slice of string subtypes (enums).
 			enumValues := reflect.New(f.Type()).Elem()
 			for _, val := range values {
 				enumVal := reflect.New(f.Type().Elem()).Elem()
 				enumVal.SetString(val)
 				enumValues.Set(reflect.Append(enumValues, enumVal))
 			}
+
 			f.Set(enumValues)
 		}
-		return values, nil
 
+		return values, nil
 	case reflect.Int:
 		vs, err := parseArrElement(values, func(s string) (int, error) {
 			val, err := strconv.ParseInt(s, 10, strconv.IntSize)
 			if err != nil {
 				return 0, err
 			}
+
 			return int(val), nil
 		})
 		if err != nil {
 			return nil, errors.New("invalid integer")
 		}
-		f.Set(reflect.ValueOf(vs))
-		return vs, nil
 
+		f.Set(reflect.ValueOf(vs))
+
+		return vs, nil
 	case reflect.Int8:
 		vs, err := parseArrElement(values, func(s string) (int8, error) {
 			val, err := strconv.ParseInt(s, 10, 8)
 			if err != nil {
 				return 0, err
 			}
+
 			return int8(val), nil
 		})
 		if err != nil {
 			return nil, errors.New("invalid integer")
 		}
-		f.Set(reflect.ValueOf(vs))
-		return vs, nil
 
+		f.Set(reflect.ValueOf(vs))
+
+		return vs, nil
 	case reflect.Int16:
 		vs, err := parseArrElement(values, func(s string) (int16, error) {
 			val, err := strconv.ParseInt(s, 10, 16)
 			if err != nil {
 				return 0, err
 			}
+
 			return int16(val), nil
 		})
 		if err != nil {
 			return nil, errors.New("invalid integer")
 		}
-		f.Set(reflect.ValueOf(vs))
-		return vs, nil
 
+		f.Set(reflect.ValueOf(vs))
+
+		return vs, nil
 	case reflect.Int32:
 		vs, err := parseArrElement(values, func(s string) (int32, error) {
 			val, err := strconv.ParseInt(s, 10, 32)
 			if err != nil {
 				return 0, err
 			}
+
 			return int32(val), nil
 		})
 		if err != nil {
 			return nil, errors.New("invalid integer")
 		}
-		f.Set(reflect.ValueOf(vs))
-		return vs, nil
 
+		f.Set(reflect.ValueOf(vs))
+
+		return vs, nil
 	case reflect.Int64:
 		vs, err := parseArrElement(values, func(s string) (int64, error) {
 			val, err := strconv.ParseInt(s, 10, 64)
 			if err != nil {
 				return 0, err
 			}
+
 			return val, nil
 		})
 		if err != nil {
 			return nil, errors.New("invalid integer")
 		}
-		f.Set(reflect.ValueOf(vs))
-		return vs, nil
 
+		f.Set(reflect.ValueOf(vs))
+
+		return vs, nil
 	case reflect.Uint:
 		vs, err := parseArrElement(values, func(s string) (uint, error) {
 			val, err := strconv.ParseUint(s, 10, strconv.IntSize)
 			if err != nil {
 				return 0, err
 			}
+
 			return uint(val), nil
 		})
 		if err != nil {
 			return nil, errors.New("invalid integer")
 		}
-		f.Set(reflect.ValueOf(vs))
-		return vs, nil
 
+		f.Set(reflect.ValueOf(vs))
+
+		return vs, nil
 	case reflect.Uint8:
 		vs, err := parseArrElement(values, func(s string) (uint8, error) {
 			val, err := strconv.ParseUint(s, 10, 8)
 			if err != nil {
 				return 0, err
 			}
+
 			return uint8(val), nil
 		})
 		if err != nil {
 			return nil, errors.New("invalid integer")
 		}
-		f.Set(reflect.ValueOf(vs))
-		return vs, nil
 
+		f.Set(reflect.ValueOf(vs))
+
+		return vs, nil
 	case reflect.Uint16:
 		vs, err := parseArrElement(values, func(s string) (uint16, error) {
 			val, err := strconv.ParseUint(s, 10, 16)
 			if err != nil {
 				return 0, err
 			}
+
 			return uint16(val), nil
 		})
 		if err != nil {
 			return nil, errors.New("invalid integer")
 		}
-		f.Set(reflect.ValueOf(vs))
-		return vs, nil
 
+		f.Set(reflect.ValueOf(vs))
+
+		return vs, nil
 	case reflect.Uint32:
 		vs, err := parseArrElement(values, func(s string) (uint32, error) {
 			val, err := strconv.ParseUint(s, 10, 32)
 			if err != nil {
 				return 0, err
 			}
+
 			return uint32(val), nil
 		})
 		if err != nil {
 			return nil, errors.New("invalid integer")
 		}
-		f.Set(reflect.ValueOf(vs))
-		return vs, nil
 
+		f.Set(reflect.ValueOf(vs))
+
+		return vs, nil
 	case reflect.Uint64:
 		vs, err := parseArrElement(values, func(s string) (uint64, error) {
 			val, err := strconv.ParseUint(s, 10, 64)
 			if err != nil {
 				return 0, err
 			}
+
 			return val, nil
 		})
 		if err != nil {
 			return nil, errors.New("invalid integer")
 		}
-		f.Set(reflect.ValueOf(vs))
-		return vs, nil
 
+		f.Set(reflect.ValueOf(vs))
+
+		return vs, nil
 	case reflect.Float32:
 		vs, err := parseArrElement(values, func(s string) (float32, error) {
 			val, err := strconv.ParseFloat(s, 32)
 			if err != nil {
 				return 0, err
 			}
+
 			return float32(val), nil
 		})
 		if err != nil {
 			return nil, errors.New("invalid floating value")
 		}
-		f.Set(reflect.ValueOf(vs))
-		return vs, nil
 
+		f.Set(reflect.ValueOf(vs))
+
+		return vs, nil
 	case reflect.Float64:
 		vs, err := parseArrElement(values, func(s string) (float64, error) {
 			val, err := strconv.ParseFloat(s, 64)
 			if err != nil {
 				return 0, err
 			}
-			return float64(val), nil
+
+			return val, nil
 		})
 		if err != nil {
 			return nil, errors.New("invalid floating value")
 		}
+
 		f.Set(reflect.ValueOf(vs))
+
 		return vs, nil
 	}
+
+	// Last resort: use the `encoding.TextUnmarshaler` interface.
+	if reflect.PointerTo(f.Type().Elem()).Implements(textUnmarshalerType) {
+		vs := reflect.MakeSlice(f.Type(), 0, len(values))
+
+		for _, s := range values {
+			v := reflect.New(f.Type().Elem())
+			fn := v.Interface().(encoding.TextUnmarshaler)
+			if err := fn.UnmarshalText([]byte(s)); err != nil {
+				return nil, errors.New("invalid value: " + err.Error())
+			}
+
+			vs = reflect.Append(vs, v.Elem())
+		}
+
+		f.Set(vs)
+
+		return values, nil
+	}
+
 	return nil, errUnparsable
 }
 
 type contextError struct {
 	Code int
-	Msg  string
 	Errs []error
+	Msg  string
 }
 
 func (e *contextError) Error() string {
@@ -1998,6 +2071,7 @@ func processMultipartMsgBody(form *multipart.Form, op Operation, v reflect.Value
 			return &contextError{Code: http.StatusUnprocessableEntity, Msg: "validation failed", Errs: errs}
 		}
 	}
+
 	return nil
 }
 

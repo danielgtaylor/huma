@@ -132,6 +132,9 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 		return &huma.StreamResponse{
 			Body: func(ctx huma.Context) {
 				ctx.SetHeader("Content-Type", "text/event-stream")
+				// Commit response headers immediately so the client's
+				// EventSource.onopen fires without waiting for the first event.
+				ctx.SetStatus(http.StatusOK)
 				bw := ctx.BodyWriter()
 				encoder := json.NewEncoder(bw)
 
@@ -148,6 +151,9 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 					} else {
 						break
 					}
+				}
+				if flusher != nil {
+					flusher.Flush()
 				}
 
 				var deadliner writeDeadliner
