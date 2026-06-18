@@ -14,11 +14,11 @@ import (
 	echoV4 "github.com/labstack/echo/v4"
 )
 
-// MultipartMaxMemory is the maximum memory to use when parsing multipart
+// MultipartMaxMemoryV4 is the maximum memory to use when parsing multipart
 // form data.
-var MultipartMaxMemoryv4 int64 = 8 * 1024
+var MultipartMaxMemoryV4 int64 = 8 * 1024
 
-// Unwrap extracts the underlying Echo v4.x context from a Huma context. If passed a
+// UnwrapV4 extracts the underlying Echo v4.x context from a Huma context. If passed a
 // context from a different adapter it will panic.
 func UnwrapV4(ctx huma.Context) echoV4.Context {
 	for {
@@ -40,7 +40,7 @@ type echoV4Ctx struct {
 	status int
 }
 
-// check that echoCtx implements huma.Context
+// check that echoV4Ctx implements huma.Context
 var _ huma.Context = &echoV4Ctx{}
 
 func (c *echoV4Ctx) Unwrap() echoV4.Context {
@@ -96,7 +96,7 @@ func (c *echoV4Ctx) BodyReader() io.Reader {
 }
 
 func (c *echoV4Ctx) GetMultipartForm() (*multipart.Form, error) {
-	err := c.orig.Request().ParseMultipartForm(MultipartMaxMemoryv4)
+	err := c.orig.Request().ParseMultipartForm(MultipartMaxMemoryV4)
 	return c.orig.Request().MultipartForm, err
 }
 
@@ -163,10 +163,10 @@ func NewV4(r *echoV4.Echo, config huma.Config) huma.API {
 	return huma.NewAPI(config, &echoV4Adapter{Handler: r, router: r})
 }
 
-// NewWithGroupV4 creates a new Huma API using the provided echo v4.x router and group,
+// NewV4WithGroup creates a new Huma API using the provided echo v4.x router and group,
 // letting you mount the API at a sub-path. Can be used in combination with
 // the `OpenAPI.Servers` field to set the correct base URL for the API / docs
 // / schemas / etc.
-func NewWithGroupV4(r *echoV4.Echo, g *echoV4.Group, config huma.Config) huma.API {
+func NewV4WithGroup(r *echoV4.Echo, g *echoV4.Group, config huma.Config) huma.API {
 	return huma.NewAPI(config, &echoV4Adapter{Handler: r, router: g})
 }

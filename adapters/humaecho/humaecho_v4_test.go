@@ -14,7 +14,52 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	echoV4 "github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
 )
+
+func TestEchoLinkHeaderV4(t *testing.T) {
+	e := echoV4.New()
+	conf := huma.DefaultConfig("My API", "1.0.0")
+	conf.SchemasPath = "/schemas"
+	api := NewV4(e, conf)
+
+	huma.Register(api, huma.Operation{
+		Method:      http.MethodGet,
+		Path:        "/hello",
+		OperationID: "get-hello",
+	}, func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			Message string `json:"message"`
+		}
+	}, error) {
+		resp := &struct {
+			Body struct {
+				Message string `json:"message"`
+			}
+		}{}
+		resp.Body.Message = "Hello"
+		return resp, nil
+	})
+
+	req, _ := http.NewRequest(http.MethodGet, "/hello", nil)
+	rec := httptest.NewRecorder()
+
+	// Use our simulated flushing response writer to catch regression if
+	// SetStatus is called before Transform.
+	f := &flushingResponseWriter{
+		rec:    rec,
+		header: make(http.Header),
+	}
+
+	e.ServeHTTP(f, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Check for Link header
+	link := rec.Header().Get("Link")
+	assert.NotEmpty(t, link, "Link header should not be empty")
+	assert.Contains(t, link, "rel=\"describedBy\"")
+}
 
 func BenchmarkHumaEchoV4(b *testing.B) {
 	type GreetingInput struct {
