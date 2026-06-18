@@ -10,6 +10,7 @@ package autopatch
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -25,6 +26,27 @@ import (
 	"github.com/danielgtaylor/shorthand/v2"
 	jsonpatch "github.com/evanphx/json-patch/v5"
 )
+
+// internalContextSanitizer is an optional interface an adapter may implement to
+// strip router-specific state from a context before autopatch re-dispatches an
+// internal GET/PUT sub-request through that same adapter. Some routers (e.g.
+// chi) store their matched-route state in the request context and reuse it
+// instead of routing again; left unsanitized, the internal request would
+// inherit the original PATCH route and recurse into the same handler.
+type internalContextSanitizer interface {
+	SanitizeInternalContext(ctx context.Context) context.Context
+}
+
+// internalRequestContext returns the context to use for autopatch's internal
+// GET/PUT sub-requests. It gives the adapter a chance to remove any routing
+// state that must not leak into a request re-dispatched through it; adapters
+// that don't need this leave the context unchanged.
+func internalRequestContext(adapter huma.Adapter, ctx context.Context) context.Context {
+	if s, ok := adapter.(internalContextSanitizer); ok {
+		return s.SanitizeInternalContext(ctx)
+	}
+	return ctx
+}
 
 const MergePatchNullabilityExtension = "x-merge-patch-nullability"
 
@@ -264,7 +286,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 		resourcePath := findRelativeResourcePath(ctx.URL().Path, put.Path)
 
 		// Perform the get!
-		origReq, err := http.NewRequestWithContext(ctx.Context(), http.MethodGet, resourcePath, nil)
+		origReq, err := http.NewRequestWithContext(internalRequestContext(adapter, ctx.Context()), http.MethodGet, resourcePath, nil)
 		if err != nil {
 			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to get resource", err)
 			return
@@ -390,7 +412,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 		}
 
 		// Write the updated data back to the server!
-		putReq, err := http.NewRequestWithContext(ctx.Context(), http.MethodPut, resourcePath, bytes.NewReader(patched))
+		putReq, err := http.NewRequestWithContext(internalRequestContext(adapter, ctx.Context()), http.MethodPut, resourcePath, bytes.NewReader(patched))
 		if err != nil {
 			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to put modified resource", err)
 			return
