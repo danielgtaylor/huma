@@ -1119,6 +1119,26 @@ var validateTests = []struct {
 		input: int64(2),
 	},
 	{
+		// json.Number is produced by decoders configured with UseNumber().
+		name:  "number json.Number success",
+		s:     &huma.Schema{Type: huma.TypeNumber},
+		input: json.Number("5.5"),
+	},
+	{
+		name: "enum integer json.Number value",
+		s: &huma.Schema{
+			Type: huma.TypeInteger,
+			Enum: []any{float64(1), float64(2)},
+		},
+		input: json.Number("2"),
+	},
+	{
+		name:  "number invalid json.Number",
+		s:     &huma.Schema{Type: huma.TypeNumber},
+		input: json.Number("not-a-number"),
+		errs:  []string{"expected number"},
+	},
+	{
 		name: "expected enum",
 		typ: reflect.TypeFor[struct {
 			Value string "json:\"value\" enum:\"one,two\""
