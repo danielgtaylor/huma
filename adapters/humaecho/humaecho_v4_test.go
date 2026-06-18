@@ -13,49 +13,15 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/labstack/echo/v5"
+	echoV4 "github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 )
 
-var lastModified = time.Now()
-
-// flushingResponseWriter simulates a ResponseWriter that flushes headers on WriteHeader.
-type flushingResponseWriter struct {
-	rec         *httptest.ResponseRecorder
-	header      http.Header
-	wroteHeader bool
-}
-
-func (m *flushingResponseWriter) Header() http.Header {
-	return m.header
-}
-
-func (m *flushingResponseWriter) WriteHeader(code int) {
-	if m.wroteHeader {
-		return
-	}
-	m.wroteHeader = true
-	// Write current headers to the recorder
-	for k, v := range m.header {
-		m.rec.Header()[k] = v
-	}
-	m.rec.WriteHeader(code)
-	// Create a new header map so subsequent changes are NOT reflected in the recorder
-	m.header = make(http.Header)
-}
-
-func (m *flushingResponseWriter) Write(b []byte) (int, error) {
-	if !m.wroteHeader {
-		m.WriteHeader(http.StatusOK)
-	}
-	return m.rec.Write(b)
-}
-
-func TestEchoLinkHeader(t *testing.T) {
-	e := echo.New()
+func TestEchoLinkHeaderV4(t *testing.T) {
+	e := echoV4.New()
 	conf := huma.DefaultConfig("My API", "1.0.0")
 	conf.SchemasPath = "/schemas"
-	api := New(e, conf)
+	api := NewV4(e, conf)
 
 	huma.Register(api, huma.Operation{
 		Method:      http.MethodGet,
@@ -95,7 +61,7 @@ func TestEchoLinkHeader(t *testing.T) {
 	assert.Contains(t, link, "rel=\"describedBy\"")
 }
 
-func BenchmarkHumaEcho(b *testing.B) {
+func BenchmarkHumaEchoV4(b *testing.B) {
 	type GreetingInput struct {
 		ID          string `path:"id"`
 		ContentType string `header:"Content-Type"`
@@ -117,8 +83,8 @@ func BenchmarkHumaEcho(b *testing.B) {
 		}
 	}
 
-	r := echo.New()
-	app := New(r, huma.DefaultConfig("Test", "1.0.0"))
+	r := echoV4.New()
+	app := NewV4(r, huma.DefaultConfig("Test", "1.0.0"))
 
 	huma.Register(app, huma.Operation{
 		OperationID: "greet",
@@ -152,7 +118,7 @@ func BenchmarkHumaEcho(b *testing.B) {
 	}
 }
 
-func BenchmarkRawEcho(b *testing.B) {
+func BenchmarkRawEchoV4(b *testing.B) {
 	type GreetingInput struct {
 		Suffix string `json:"suffix" maxLength:"5"`
 	}
@@ -175,9 +141,9 @@ func BenchmarkRawEcho(b *testing.B) {
 	strSchema := registry.Schema(reflect.TypeFor[string](), false, "")
 	numSchema := registry.Schema(reflect.TypeFor[int](), false, "")
 
-	r := echo.New()
+	r := echoV4.New()
 
-	r.POST("/foo/:id", func(c *echo.Context) error {
+	r.POST("/foo/:id", func(c echoV4.Context) error {
 		r := c.Request()
 		w := c.Response()
 
@@ -253,7 +219,7 @@ func BenchmarkRawEcho(b *testing.B) {
 	}
 }
 
-func BenchmarkRawEchoFast(b *testing.B) {
+func BenchmarkRawEchoV4Fast(b *testing.B) {
 	type GreetingInput struct {
 		Suffix string `json:"suffix" maxLength:"5"`
 	}
@@ -266,9 +232,9 @@ func BenchmarkRawEchoFast(b *testing.B) {
 		Num         int    `json:"num"`
 	}
 
-	r := echo.New()
+	r := echoV4.New()
 
-	r.POST("/foo/:id", func(c *echo.Context) error {
+	r.POST("/foo/:id", func(c echoV4.Context) error {
 		r := c.Request()
 		w := c.Response()
 
