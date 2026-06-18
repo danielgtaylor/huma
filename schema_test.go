@@ -841,6 +841,10 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			// A *named* (non-anonymous) field is never inlined by the standard
+			// encoding/json marshaler that huma uses by default; the `,inline`
+			// option is ignored and the field is nested under its Go name. The
+			// schema must match that wire behavior.
 			name: "field-named-inline",
 			input: struct {
 				Field  Embedded `json:",inline"`
@@ -849,11 +853,10 @@ func TestSchema(t *testing.T) {
 			expected: `{
 				"type": "object",
 				"additionalProperties": false,
-				"required": ["value2", "value"],
+				"required": ["Field", "value2"],
 				"properties": {
-					"value": {
-						"type": "string",
-						"description": "new doc"
+					"Field": {
+						"$ref": "#/components/schemas/Embedded"
 					},
 					"value2": {
 						"type": "string"

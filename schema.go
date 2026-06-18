@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"reflect"
 	"regexp"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -715,14 +714,13 @@ func getFields(typ reflect.Type, visited map[reflect.Type]struct{}) []fieldInfo 
 			continue
 		}
 
-		jsonTag := f.Tag.Get("json")
-		parts := strings.Split(jsonTag, ",")
-		if len(parts) > 0 && parts[0] == "" && slices.Contains(parts, "inline") {
-			embedded = append(embedded, f)
-			continue
-		}
-
-		if f.Anonymous && (len(parts) == 0 || parts[0] == "") {
+		// An anonymous (embedded) field is merged into the parent object when
+		// it has no explicit JSON name. This covers both an absent tag and a
+		// name-less tag such as `json:",inline"` or `json:",omitempty"`. Giving
+		// the field a name (e.g. `json:"meta"`) makes it a nested object
+		// instead, matching encoding/json's behavior.
+		jsonName, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+		if f.Anonymous && jsonName == "" {
 			embedded = append(embedded, f)
 			continue
 		}
