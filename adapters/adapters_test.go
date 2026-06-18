@@ -24,6 +24,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/gorilla/mux"
 	"github.com/julienschmidt/httprouter"
+	echoV4 "github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/uptrace/bunrouter"
@@ -129,6 +130,9 @@ func TestAdapters(t *testing.T) {
 		}},
 		{"echo", func() huma.API {
 			return wrap(humaecho.New(echo.New(), config()), false, func(ctx huma.Context) { humaecho.Unwrap(ctx) })
+		}},
+		{"echo-v4", func() huma.API {
+			return wrap(humaecho.NewV4(echoV4.New(), config()), false, func(ctx huma.Context) { humaecho.UnwrapV4(ctx) })
 		}},
 		{"fiber", func() huma.API {
 			return wrap(humafiber.New(fiber.New(), config()), true, func(ctx huma.Context) { humafiber.Unwrap(ctx) })

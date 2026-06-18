@@ -96,7 +96,7 @@ func (c *echoV4Ctx) BodyReader() io.Reader {
 }
 
 func (c *echoV4Ctx) GetMultipartForm() (*multipart.Form, error) {
-	err := c.orig.Request().ParseMultipartForm(MultipartMaxMemory)
+	err := c.orig.Request().ParseMultipartForm(MultipartMaxMemoryv4)
 	return c.orig.Request().MultipartForm, err
 }
 

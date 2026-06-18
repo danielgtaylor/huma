@@ -16,8 +16,6 @@ import (
 	echoV4 "github.com/labstack/echo/v4"
 )
 
-var lastModifiedV4 = time.Now()
-
 func BenchmarkHumaEchoV4(b *testing.B) {
 	type GreetingInput struct {
 		ID          string `path:"id"`
