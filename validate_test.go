@@ -1092,6 +1092,53 @@ var validateTests = []struct {
 		input: map[string]any{"value": []any{1.0}},
 	},
 	{
+		// Regression for #1044: enum tag values are stored as float64 while
+		// query/path params are parsed as int64; the two must compare equal.
+		name: "enum int success int64 value",
+		typ: reflect.TypeFor[struct {
+			Value int "json:\"value\" enum:\"1,5,9\""
+		}](),
+		input: map[string]any{"value": int64(5)},
+	},
+	{
+		name: "enum int int64 value not in enum",
+		typ: reflect.TypeFor[struct {
+			Value int "json:\"value\" enum:\"1,5,9\""
+		}](),
+		input: map[string]any{"value": int64(2)},
+		errs:  []string{"expected value to be one of \"1, 5, 9\""},
+	},
+	{
+		// Custom Schema() emitting float64 enum values, validated against an
+		// int64 value (the query/path parameter path from #1044).
+		name: "enum integer float64 stored int64 value",
+		s: &huma.Schema{
+			Type: huma.TypeInteger,
+			Enum: []any{float64(1), float64(2)},
+		},
+		input: int64(2),
+	},
+	{
+		// json.Number is produced by decoders configured with UseNumber().
+		name:  "number json.Number success",
+		s:     &huma.Schema{Type: huma.TypeNumber},
+		input: json.Number("5.5"),
+	},
+	{
+		name: "enum integer json.Number value",
+		s: &huma.Schema{
+			Type: huma.TypeInteger,
+			Enum: []any{float64(1), float64(2)},
+		},
+		input: json.Number("2"),
+	},
+	{
+		name:  "number invalid json.Number",
+		s:     &huma.Schema{Type: huma.TypeNumber},
+		input: json.Number("not-a-number"),
+		errs:  []string{"expected number"},
+	},
+	{
 		name: "expected enum",
 		typ: reflect.TypeFor[struct {
 			Value string "json:\"value\" enum:\"one,two\""
