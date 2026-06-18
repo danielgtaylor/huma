@@ -688,7 +688,7 @@ func (a *api) registerDocsRoute() {
 			"connect-src 'self'",
 			"form-action 'none'",
 			"frame-ancestors 'none'",
-			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox",
+			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads",
 			"script-src https://unpkg.com/@stoplight/elements@9.0.15/web-components.min.js",
 			"style-src 'unsafe-inline' https://unpkg.com/@stoplight/elements@9.0.15/styles.min.css",
 		}
