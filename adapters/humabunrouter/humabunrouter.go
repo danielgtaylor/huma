@@ -337,6 +337,8 @@ func middleware(mw bunrouter.MiddlewareFunc) func(ctx huma.Context, next func(hu
 			next(ctx)
 			return nil
 		})
-		f(w, r)
+		if err := f(w, r); err != nil {
+			panic(err)
+		}
 	}
 }

@@ -268,6 +268,8 @@ func middleware(mw func(next fiber.Handler) fiber.Handler) func(ctx huma.Context
 			next(ctx)
 			return nil
 		})
-		h(fCtx)
+		if err := h(fCtx); err != nil {
+			panic(err)
+		}
 	}
 }

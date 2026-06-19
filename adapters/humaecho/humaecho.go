@@ -188,6 +188,8 @@ func middleware(mw echo.MiddlewareFunc) func(ctx huma.Context, next func(huma.Co
 			next(ctx)
 			return nil
 		})
-		f(eCtx)
+		if err := f(eCtx); err != nil {
+			panic(err)
+		}
 	}
 }
