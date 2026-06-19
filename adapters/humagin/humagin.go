@@ -138,11 +138,10 @@ func (c *ginCtx) Version() huma.ProtoVersion {
 }
 
 func (c *ginCtx) WithContext(ctx context.Context) huma.Context {
-	new := c.orig
-	new.Request = c.orig.Request.WithContext(ctx)
+	c.orig.Request = c.orig.Copy().Request.WithContext(ctx)
 	return &ginCtx{
 		op:     c.op,
-		orig:   new,
+		orig:   c.orig,
 		status: c.status,
 	}
 }

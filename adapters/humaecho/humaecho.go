@@ -139,11 +139,10 @@ func (c *echoCtx) Version() huma.ProtoVersion {
 }
 
 func (c *echoCtx) WithContext(ctx context.Context) huma.Context {
-	new := c.orig
-	new.SetRequest(new.Request().WithContext(ctx))
+	c.orig.SetRequest(c.orig.Request().WithContext(ctx))
 	return &echoCtx{
 		op:     c.op,
-		orig:   new,
+		orig:   c.orig,
 		status: c.status,
 	}
 }

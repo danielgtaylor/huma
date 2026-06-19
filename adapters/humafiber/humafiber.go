@@ -156,12 +156,11 @@ func (c *fiberWrapper) Version() huma.ProtoVersion {
 }
 
 func (c *fiberWrapper) WithContext(ctx context.Context) huma.Context {
-	new := c.orig
-	new.SetContext(ctx)
+	c.orig.SetContext(ctx)
 	return &fiberWrapper{
 		op:     c.op,
 		status: c.status,
-		orig:   new,
+		orig:   c.orig,
 		ctx:    ctx,
 	}
 }
