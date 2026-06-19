@@ -345,6 +345,65 @@ func (r *findResult[T]) Every(v reflect.Value, f func(reflect.Value, T)) {
 	}
 }
 
+// everyAlloc behaves like every, but allocates nil pointers encountered along
+// the path so nested input fields can be populated. A pointer this call
+// allocated is reset to nil when nothing below it was set, so an optional nested
+// group that received no values stays nil rather than becoming an empty struct.
+// The callback reports whether it set a value; everyAlloc returns whether
+// anything below the current node was set.
+func (r *findResult[T]) everyAlloc(current reflect.Value, path []int, v T, f func(reflect.Value, T) bool) bool {
+	if len(path) == 0 {
+		return f(current, v)
+	}
+
+	var allocated reflect.Value
+	if current.Kind() == reflect.Pointer {
+		if current.IsNil() {
+			if !current.CanSet() {
+				return false
+			}
+			current.Set(reflect.New(current.Type().Elem()))
+			allocated = current
+		}
+		current = current.Elem()
+	}
+
+	if current.Kind() == reflect.Invalid {
+		return false
+	}
+
+	set := false
+	switch current.Kind() {
+	case reflect.Struct:
+		set = r.everyAlloc(current.Field(path[0]), path[1:], v, f)
+	case reflect.Slice:
+		for j := 0; j < current.Len(); j++ {
+			if r.everyAlloc(current.Index(j), path, v, f) {
+				set = true
+			}
+		}
+	case reflect.Map:
+		for _, k := range current.MapKeys() {
+			if r.everyAlloc(current.MapIndex(k), path, v, f) {
+				set = true
+			}
+		}
+	default:
+		panic("unsupported")
+	}
+
+	if allocated.IsValid() && !set {
+		allocated.Set(reflect.Zero(allocated.Type()))
+	}
+	return set
+}
+
+func (r *findResult[T]) EveryAlloc(v reflect.Value, f func(reflect.Value, T) bool) {
+	for i := range r.Paths {
+		r.everyAlloc(v, r.Paths[i].Path, r.Paths[i].Value, f)
+	}
+}
+
 func jsonName(field reflect.StructField) string {
 	name := strings.ToLower(field.Name)
 	if jsonName := field.Tag.Get("json"); jsonName != "" {
@@ -724,10 +783,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		var cookies map[string]*http.Cookie
 
 		v := reflect.ValueOf(&input).Elem()
-		inputParams.Every(v, func(f reflect.Value, p *paramFieldInfo) {
+		inputParams.EveryAlloc(v, func(f reflect.Value, p *paramFieldInfo) bool {
 			f = reflect.Indirect(f)
 			if f.Kind() == reflect.Invalid {
-				return
+				return false
 			}
 
 			pb.Reset()
@@ -746,7 +805,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					// Special case: http.Cookie type, meaning we want the entire parsed
 					// cookie struct, not just the value.
 					f.Set(reflect.ValueOf(c).Elem())
-					return
+					return true
 				}
 			}
 
@@ -769,7 +828,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					if !op.SkipValidateParams && p.Required {
 						res.Add(pb, "", "required "+p.Loc+" parameter is missing")
 					}
-					return
+					return false
 				}
 				pv = setDeepObjectValue(pb, res, receiver, value)
 			} else {
@@ -780,13 +839,13 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						// Path params are always required.
 						res.Add(pb, "", "required "+p.Loc+" parameter is missing")
 					}
-					return
+					return false
 				}
 				var err error
 				pv, err = parseInto(ctx, receiver, value, nil, *p)
 				if err != nil {
 					res.Add(pb, value, err.Error())
-					return
+					return false
 				}
 			}
 
@@ -797,6 +856,8 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			if !op.SkipValidateParams {
 				Validate(oapi.Components.Schemas, p.Schema, pb, ModeWriteToServer, pv, res)
 			}
+
+			return true
 		})
 
 		// Read input body if defined.
@@ -825,10 +886,10 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 						rawBodyInputParams := findParams(oapi.Components.Schemas, &op, rawBodyDataT)
 						formValueParser = func(val reflect.Value) {
-							rawBodyInputParams.Every(val, func(f reflect.Value, p *paramFieldInfo) {
+							rawBodyInputParams.EveryAlloc(val, func(f reflect.Value, p *paramFieldInfo) bool {
 								f = reflect.Indirect(f)
 								if f.Kind() == reflect.Invalid {
-									return
+									return false
 								}
 
 								pb.Reset()
@@ -841,14 +902,14 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 									if !op.SkipValidateParams && p.Required && !isFile {
 										res.Add(pb, "", "required "+p.Loc+" parameter is missing")
 									}
-									return
+									return false
 								}
 
 								// Validation should fail if multiple values are
 								// provided but the type of f is not a slice.
 								if len(value) > 1 && f.Type().Kind() != reflect.Slice {
 									res.Add(pb, value, "expected at most one value, but received multiple values")
-									return
+									return false
 								}
 								pv, err := parseInto(ctx, f, value[0], value, *p)
 								if err != nil {
@@ -858,6 +919,8 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 								if !op.SkipValidateParams {
 									Validate(oapi.Components.Schemas, p.Schema, pb, ModeWriteToServer, pv, res)
 								}
+
+								return true
 							})
 						}
 					}

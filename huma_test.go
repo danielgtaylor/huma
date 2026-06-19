@@ -3562,3 +3562,71 @@ func TestResponseHeaderPromotion(t *testing.T) {
 	assert.Equal(t, "tagged", resp.Header().Get("X-Nested-Tagged"))
 	assert.Empty(t, resp.Header().Values("NestedNoTag"))
 }
+
+// TestNestedInputParamPopulation verifies that params declared on nested input
+// structs are populated at request time, including pointer-nested structs (the
+// pointer is allocated as needed). An optional pointer group that receives no
+// values is left nil rather than being allocated as an empty struct.
+func TestNestedInputParamPopulation(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test", "1.0.0"))
+
+	type ValueGroup struct {
+		Foo string `query:"foo"`
+		Bar string `header:"X-Bar"`
+	}
+	type PtrGroup struct {
+		Baz string `query:"baz"`
+	}
+	type Input struct {
+		Top   string `query:"top"`
+		Value ValueGroup
+		Ptr   *PtrGroup
+	}
+
+	var got Input
+	huma.Register(api, huma.Operation{
+		OperationID: "nested",
+		Method:      http.MethodGet,
+		Path:        "/nested",
+	}, func(ctx context.Context, in *Input) (*struct{}, error) {
+		got = *in
+		return &struct{}{}, nil
+	})
+
+	// Nested params (value and pointer) should be documented.
+	params := api.OpenAPI().Paths["/nested"].Get.Parameters
+	names := map[string]bool{}
+	for _, p := range params {
+		names[p.In+":"+p.Name] = true
+	}
+	assert.True(t, names["query:foo"], "value-nested query param should be documented")
+	assert.True(t, names["header:X-Bar"], "value-nested header param should be documented")
+	assert.True(t, names["query:baz"], "pointer-nested query param should be documented")
+
+	t.Run("populated", func(t *testing.T) {
+		got = Input{}
+		req := httptest.NewRequest(http.MethodGet, "/nested?top=T&foo=F&baz=B", nil)
+		req.Header.Set("X-Bar", "BAR")
+		w := httptest.NewRecorder()
+		api.Adapter().ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Equal(t, "T", got.Top)
+		assert.Equal(t, "F", got.Value.Foo)
+		assert.Equal(t, "BAR", got.Value.Bar)
+		if assert.NotNil(t, got.Ptr, "pointer-nested group should be allocated and populated") {
+			assert.Equal(t, "B", got.Ptr.Baz)
+		}
+	})
+
+	t.Run("absent pointer group stays nil", func(t *testing.T) {
+		got = Input{}
+		req := httptest.NewRequest(http.MethodGet, "/nested?top=T", nil)
+		w := httptest.NewRecorder()
+		api.Adapter().ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Equal(t, "T", got.Top)
+		assert.Nil(t, got.Ptr, "absent optional pointer group should remain nil")
+	})
+}
