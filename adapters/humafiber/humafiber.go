@@ -165,6 +165,11 @@ func (c *fiberWrapper) WithContext(ctx context.Context) huma.Context {
 	}
 }
 
+// NewContext creates a new Huma context from a fiber context
+func NewContext(op *huma.Operation, c fiber.Ctx) huma.Context {
+	return &fiberWrapper{op: op, orig: c, ctx: c.Context()}
+}
+
 type router interface {
 	Add(methods []string, path string, handler any, handlers ...any) fiber.Router
 }
