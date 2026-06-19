@@ -264,6 +264,7 @@ func middleware(mw func(next fiber.Handler) fiber.Handler) func(ctx huma.Context
 	return func(ctx huma.Context, next func(huma.Context)) {
 		fCtx := Unwrap(ctx)
 		h := mw(func(c fiber.Ctx) error {
+			ctx := NewContext(ctx.Operation(), c)
 			next(ctx)
 			return nil
 		})
