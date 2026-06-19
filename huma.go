@@ -242,6 +242,27 @@ type headerInfo struct {
 	TimeFormat string
 }
 
+// isPromotedField reports whether the field identified by the index path is
+// reachable from the root type purely through embedded (anonymous) structs, so
+// Go promotes it as if it were declared at the top level. Such fields keep the
+// legacy behavior of being auto-named as a header from the field name; named
+// (non-embedded) nested struct fields must opt in with an explicit `header`
+// tag instead.
+func isPromotedField(root reflect.Type, path []int) bool {
+	t := baseType(root)
+	for _, idx := range path[:len(path)-1] {
+		if t.Kind() != reflect.Struct || idx >= t.NumField() {
+			return false
+		}
+		f := t.Field(idx)
+		if !f.Anonymous {
+			return false
+		}
+		t = baseType(f.Type)
+	}
+	return true
+}
+
 func findHeaders(t reflect.Type) *findResult[*headerInfo] {
 	return findInType(t, nil, func(sf reflect.StructField, i []int) *headerInfo {
 		// Ignore embedded fields.
@@ -251,12 +272,15 @@ func findHeaders(t reflect.Type) *findResult[*headerInfo] {
 
 		header := sf.Tag.Get("header")
 		if header == "" {
-			// Only use field name as header if this is a top-level field (depth 1)
-			// and it's not a struct (which we recurse into).
-			if len(i) > 1 {
+			// Only auto-name a header from the field name for "surface level"
+			// fields: literal top-level fields and fields promoted via embedded
+			// structs. Named nested struct fields must use an explicit `header`
+			// tag, which is handled by recursion above.
+			if !isPromotedField(t, i) {
 				return nil
 			}
 
+			// Never name a header after a struct we recurse into.
 			fieldType := baseType(sf.Type)
 			if fieldType.Kind() == reflect.Struct && fieldType != timeType {
 				return nil

@@ -2051,13 +2051,13 @@ Content-Type: text/plain
 			Register: func(t *testing.T, api huma.API) {
 				type HiddenHeaders struct {
 					HiddenWithTag    string `header:"X-Hidden-With-Tag"`
-					HiddenWithoutTag string // No header tag - should NOT be set as a header.
+					HiddenWithoutTag string // No header tag - promoted via embedding, so set using field name.
 				}
 
 				// Slice element type w/ unique header name so assertions remain stable.
 				type HiddenHeadersSliceElem struct {
 					HiddenWithTag    string `header:"X-Hidden-With-Tag-Slice"`
-					HiddenWithoutTag string // No header tag - should be set as header using field name.
+					HiddenWithoutTag string // No header tag - nested (not promoted), so NOT set as a header.
 				}
 
 				type Resp struct {
@@ -2081,7 +2081,7 @@ Content-Type: text/plain
 					return &Resp{
 						HiddenHeaders: &HiddenHeaders{
 							HiddenWithTag:    "hidden-with-tag-value",
-							HiddenWithoutTag: "should-not-be-header",
+							HiddenWithoutTag: "should-be-header",
 						},
 						HiddenSlice: []HiddenHeadersSliceElem{
 							{
@@ -2122,8 +2122,10 @@ Content-Type: text/plain
 				// Hidden headers with explicit tag SHOULD still be sent at runtime.
 				assert.Equal(t, "hidden-with-tag-value", resp.Header().Get("X-Hidden-With-Tag"))
 
-				// Hidden headers without tag should NOT be set.
-				assert.Empty(t, resp.Header().Values("HiddenWithoutTag"))
+				// Hidden headers without tag are promoted via embedding, so they
+				// are still sent at runtime using the field name (but stay out of
+				// the OpenAPI docs above because the embedded struct is hidden).
+				assert.Equal(t, "should-be-header", resp.Header().Get("HiddenWithoutTag"))
 
 				// Hidden slice element header with explicit tag SHOULD still be sent at runtime.
 				assert.Equal(t, "hidden-slice-with-tag-value", resp.Header().Get("X-Hidden-With-Tag-Slice"))
@@ -3515,4 +3517,48 @@ func TestGenerateFuncsPanicWithDescriptiveMessage(t *testing.T) {
 		huma.GenerateSummary("GET", "/foo", resp)
 	})
 
+}
+
+// TestResponseHeaderPromotion locks in the rule that a response field without
+// an explicit `header` tag is auto-named as a header from its field name only
+// when it is "surface level": a literal top-level field or a field promoted via
+// an embedded struct. Genuinely nested (named) struct fields must opt in with an
+// explicit `header` tag. This mirrors Go's field-promotion semantics so embedded
+// fields behave identically to top-level fields.
+func TestResponseHeaderPromotion(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	type Promoted struct {
+		PromotedNoTag string // promoted via embedding -> header "PromotedNoTag"
+	}
+	type Nested struct {
+		NestedNoTag  string // named nested, no tag -> NOT a header
+		NestedTagged string `header:"X-Nested-Tagged"`
+	}
+	type Resp struct {
+		Promoted              // embedded
+		TopNoTag string       // top-level -> header "TopNoTag"
+		Inner    Nested       // named nested struct
+		Body     struct{ OK bool }
+	}
+
+	huma.Get(api, "/promotion", func(ctx context.Context, input *struct{}) (*Resp, error) {
+		resp := &Resp{TopNoTag: "top"}
+		resp.PromotedNoTag = "promoted"
+		resp.Inner = Nested{NestedNoTag: "nested", NestedTagged: "tagged"}
+		return resp, nil
+	})
+
+	headers := api.OpenAPI().Paths["/promotion"].Get.Responses["200"].Headers
+	assert.NotNil(t, headers["TopNoTag"], "top-level untagged field should be a header")
+	assert.NotNil(t, headers["PromotedNoTag"], "embedded (promoted) untagged field should be a header")
+	assert.NotNil(t, headers["X-Nested-Tagged"], "named nested field with tag should be a header")
+	assert.Nil(t, headers["NestedNoTag"], "named nested field without tag should NOT be a header")
+	assert.Nil(t, headers["Inner"], "a struct we recurse into should not be a header named after itself")
+
+	resp := api.Get("/promotion")
+	assert.Equal(t, "top", resp.Header().Get("TopNoTag"))
+	assert.Equal(t, "promoted", resp.Header().Get("PromotedNoTag"))
+	assert.Equal(t, "tagged", resp.Header().Get("X-Nested-Tagged"))
+	assert.Empty(t, resp.Header().Values("NestedNoTag"))
 }
