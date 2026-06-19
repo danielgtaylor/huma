@@ -1,10 +1,8 @@
-package humabunrouter
+package humaecho
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,14 +12,56 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uptrace/bunrouter"
-
 	"github.com/danielgtaylor/huma/v2"
+	echoV4 "github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
 )
 
-var lastModified = time.Now()
+func TestEchoLinkHeaderV4(t *testing.T) {
+	e := echoV4.New()
+	conf := huma.DefaultConfig("My API", "1.0.0")
+	conf.SchemasPath = "/schemas"
+	api := NewV4(e, conf)
 
-func BenchmarkHumaV2BunRouterNormal(b *testing.B) {
+	huma.Register(api, huma.Operation{
+		Method:      http.MethodGet,
+		Path:        "/hello",
+		OperationID: "get-hello",
+	}, func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			Message string `json:"message"`
+		}
+	}, error) {
+		resp := &struct {
+			Body struct {
+				Message string `json:"message"`
+			}
+		}{}
+		resp.Body.Message = "Hello"
+		return resp, nil
+	})
+
+	req, _ := http.NewRequest(http.MethodGet, "/hello", nil)
+	rec := httptest.NewRecorder()
+
+	// Use our simulated flushing response writer to catch regression if
+	// SetStatus is called before Transform.
+	f := &flushingResponseWriter{
+		rec:    rec,
+		header: make(http.Header),
+	}
+
+	e.ServeHTTP(f, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Check for Link header
+	link := rec.Header().Get("Link")
+	assert.NotEmpty(t, link, "Link header should not be empty")
+	assert.Contains(t, link, "rel=\"describedBy\"")
+}
+
+func BenchmarkHumaEchoV4(b *testing.B) {
 	type GreetingInput struct {
 		ID          string `path:"id"`
 		ContentType string `header:"Content-Type"`
@@ -43,13 +83,13 @@ func BenchmarkHumaV2BunRouterNormal(b *testing.B) {
 		}
 	}
 
-	r := bunrouter.New()
-	app := New(r, huma.DefaultConfig("Test", "1.0.0"))
+	r := echoV4.New()
+	app := NewV4(r, huma.DefaultConfig("Test", "1.0.0"))
 
 	huma.Register(app, huma.Operation{
 		OperationID: "greet",
 		Method:      http.MethodPost,
-		Path:        "/foo/{id}",
+		Path:        "/foo/:id",
 	}, func(ctx context.Context, input *GreetingInput) (*GreetingOutput, error) {
 		resp := &GreetingOutput{}
 		resp.ETag = "abc123"
@@ -78,88 +118,7 @@ func BenchmarkHumaV2BunRouterNormal(b *testing.B) {
 	}
 }
 
-type GreetingInputWithResolverBody struct {
-	Suffix string `json:"suffix" maxLength:"5"`
-}
-
-func (b *GreetingInputWithResolverBody) Resolve(ctx huma.Context, prefix *huma.PathBuffer) []error {
-	if len(b.Suffix) > 0 && b.Suffix[0] == 'a' {
-		return []error{&huma.ErrorDetail{
-			Location: prefix.With("suffix"),
-			Message:  "foo bar baz",
-			Value:    b.Suffix,
-		}}
-	}
-	return nil
-}
-
-type GreetingInputWithResolver struct {
-	ID          string `path:"id"`
-	ContentType string `header:"Content-Type"`
-	Num         int    `query:"num"`
-	Body        GreetingInputWithResolverBody
-}
-
-func (i *GreetingInputWithResolver) Resolve(ctx huma.Context, prefix *huma.PathBuffer) []error {
-	if i.Num == 3 {
-		return []error{&huma.ErrorDetail{
-			Location: prefix.With("num"),
-			Message:  "foo bar baz",
-			Value:    i.Num,
-		}}
-	}
-	return nil
-}
-
-func BenchmarkHumaV2BunRouterResolver(b *testing.B) {
-	type GreetingOutput struct {
-		ETag         string    `header:"ETag"`
-		LastModified time.Time `header:"Last-Modified"`
-		Body         struct {
-			Greeting    string `json:"greeting"`
-			Suffix      string `json:"suffix"`
-			Length      int    `json:"length"`
-			ContentType string `json:"content_type"`
-			Num         int    `json:"num"`
-		}
-	}
-
-	r := bunrouter.New()
-	app := New(r, huma.DefaultConfig("Test", "1.0.0"))
-
-	huma.Register(app, huma.Operation{
-		OperationID: "greet",
-		Method:      http.MethodPost,
-		Path:        "/foo/{id}",
-	}, func(ctx context.Context, input *GreetingInputWithResolver) (*GreetingOutput, error) {
-		resp := &GreetingOutput{}
-		resp.ETag = "abc123"
-		resp.LastModified = lastModified
-		resp.Body.Greeting = "Hello, " + input.ID + input.Body.Suffix
-		resp.Body.Suffix = input.Body.Suffix
-		resp.Body.Length = len(resp.Body.Greeting)
-		resp.Body.ContentType = input.ContentType
-		resp.Body.Num = input.Num
-		return resp, nil
-	})
-
-	reqBody := strings.NewReader(`{"suffix": "!"}`)
-	req, _ := http.NewRequest(http.MethodPost, "/foo/123?num=5", reqBody)
-	req.Header.Set("Content-Type", "application/json")
-	b.ResetTimer()
-	b.ReportAllocs()
-	w := httptest.NewRecorder()
-	for i := 0; i < b.N; i++ {
-		reqBody.Seek(0, 0)
-		w.Body.Reset()
-		r.ServeHTTP(w, req)
-		if w.Code != http.StatusOK {
-			b.Fatal(w.Body.String())
-		}
-	}
-}
-
-func BenchmarkRawBunRouter(b *testing.B) {
+func BenchmarkRawEchoV4(b *testing.B) {
 	type GreetingInput struct {
 		Suffix string `json:"suffix" maxLength:"5"`
 	}
@@ -182,22 +141,25 @@ func BenchmarkRawBunRouter(b *testing.B) {
 	strSchema := registry.Schema(reflect.TypeFor[string](), false, "")
 	numSchema := registry.Schema(reflect.TypeFor[int](), false, "")
 
-	r := bunrouter.New()
+	r := echoV4.New()
 
-	r.POST("/foo/:id", func(w http.ResponseWriter, r bunrouter.Request) error {
+	r.POST("/foo/:id", func(c echoV4.Context) error {
+		r := c.Request()
+		w := c.Response()
+
 		pb := huma.NewPathBuffer([]byte{}, 0)
 		res := &huma.ValidateResult{}
 
 		// Read and validate params
-		id := r.Param("id")
+		id := c.Param("id")
 		huma.Validate(registry, strSchema, pb, huma.ModeReadFromServer, id, res)
 
 		ct := r.Header.Get("Content-Type")
 		huma.Validate(registry, strSchema, pb, huma.ModeReadFromServer, ct, res)
 
-		num, err := strconv.Atoi(r.URL.Query().Get("num"))
+		num, err := strconv.Atoi(c.QueryParam("num"))
 		if err != nil {
-			return err
+			panic(err)
 		}
 		huma.Validate(registry, numSchema, pb, huma.ModeReadFromServer, num, res)
 
@@ -205,22 +167,22 @@ func BenchmarkRawBunRouter(b *testing.B) {
 		defer r.Body.Close()
 		data, err := io.ReadAll(r.Body)
 		if err != nil {
-			return err
+			panic(err)
 		}
 
 		var tmp any
 		if err := json.Unmarshal(data, &tmp); err != nil {
-			return err
+			panic(err)
 		}
 
 		huma.Validate(registry, schema, pb, huma.ModeWriteToServer, tmp, res)
 		if len(res.Errors) > 0 {
-			return fmt.Errorf("%v", res.Errors)
+			panic(res.Errors)
 		}
 
 		var input GreetingInput
 		if err := json.Unmarshal(data, &input); err != nil {
-			return err
+			panic(err)
 		}
 
 		// Set up and write the response
@@ -238,10 +200,9 @@ func BenchmarkRawBunRouter(b *testing.B) {
 		resp.Num = num
 		data, err = json.Marshal(resp)
 		if err != nil {
-			return err
+			panic(err)
 		}
 		w.Write(data)
-
 		return nil
 	})
 
@@ -258,7 +219,7 @@ func BenchmarkRawBunRouter(b *testing.B) {
 	}
 }
 
-func BenchmarkRawBunRouterFast(b *testing.B) {
+func BenchmarkRawEchoV4Fast(b *testing.B) {
 	type GreetingInput struct {
 		Suffix string `json:"suffix" maxLength:"5"`
 	}
@@ -271,22 +232,25 @@ func BenchmarkRawBunRouterFast(b *testing.B) {
 		Num         int    `json:"num"`
 	}
 
-	r := bunrouter.New()
+	r := echoV4.New()
 
-	r.POST("/foo/:id", func(w http.ResponseWriter, r bunrouter.Request) error {
+	r.POST("/foo/:id", func(c echoV4.Context) error {
+		r := c.Request()
+		w := c.Response()
+
 		defer r.Body.Close()
 		data, err := io.ReadAll(r.Body)
 		if err != nil {
-			return err
+			panic(err)
 		}
 
 		var input GreetingInput
 		if err := json.Unmarshal(data, &input); err != nil {
-			return err
+			panic(err)
 		}
 
 		if len(input.Suffix) > 5 {
-			return errors.New("suffix too long")
+			panic("suffix too long")
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -294,17 +258,16 @@ func BenchmarkRawBunRouterFast(b *testing.B) {
 		w.Header().Set("Last-Modified", lastModified.Format(http.TimeFormat))
 		w.WriteHeader(http.StatusOK)
 		resp := &GreetingOutput{}
-		resp.Greeting = "Hello, " + r.Param("id") + input.Suffix
+		resp.Greeting = "Hello, " + c.Param("id") + input.Suffix
 		resp.Suffix = input.Suffix
 		resp.Length = len(resp.Greeting)
-		resp.ContentType = r.Header.Get("Content-Type")
-		resp.Num, _ = strconv.Atoi(r.URL.Query().Get("num"))
+		resp.ContentType = c.Request().Header.Get("Content-Type")
+		resp.Num, _ = strconv.Atoi(c.QueryParam("num"))
 		data, err = json.Marshal(resp)
 		if err != nil {
-			return err
+			panic(err)
 		}
 		w.Write(data)
-
 		return nil
 	})
 

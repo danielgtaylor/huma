@@ -55,23 +55,49 @@ func TestErrorResponses(t *testing.T) {
 		constructor func(msg string, errs ...error) huma.StatusError
 		expected    int
 	}{
+		// Client errors.
 		{huma.Error400BadRequest, 400},
 		{huma.Error401Unauthorized, 401},
+		{huma.Error402PaymentRequired, 402},
 		{huma.Error403Forbidden, 403},
 		{huma.Error404NotFound, 404},
 		{huma.Error405MethodNotAllowed, 405},
 		{huma.Error406NotAcceptable, 406},
+		{huma.Error407ProxyAuthRequired, 407},
+		{huma.Error408RequestTimeout, 408},
 		{huma.Error409Conflict, 409},
 		{huma.Error410Gone, 410},
+		{huma.Error411LengthRequired, 411},
 		{huma.Error412PreconditionFailed, 412},
+		{huma.Error413RequestEntityTooLarge, 413},
+		{huma.Error414RequestURITooLong, 414},
 		{huma.Error415UnsupportedMediaType, 415},
+		{huma.Error416RequestedRangeNotSatisfiable, 416},
+		{huma.Error417ExpectationFailed, 417},
+		{huma.Error418Teapot, 418},
+		{huma.Error421MisdirectedRequest, 421},
 		{huma.Error422UnprocessableEntity, 422},
+		{huma.Error423Locked, 423},
+		{huma.Error424FailedDependency, 424},
+		{huma.Error425TooEarly, 425},
+		{huma.Error426UpgradeRequired, 426},
+		{huma.Error428PreconditionRequired, 428},
 		{huma.Error429TooManyRequests, 429},
+		{huma.Error431RequestHeaderFieldsTooLarge, 431},
+		{huma.Error451UnavailableForLegalReasons, 451},
+
+		// Server errors.
 		{huma.Error500InternalServerError, 500},
 		{huma.Error501NotImplemented, 501},
 		{huma.Error502BadGateway, 502},
 		{huma.Error503ServiceUnavailable, 503},
 		{huma.Error504GatewayTimeout, 504},
+		{huma.Error505HTTPVersionNotSupported, 505},
+		{huma.Error506VariantAlsoNegotiates, 506},
+		{huma.Error507InsufficientStorage, 507},
+		{huma.Error508LoopDetected, 508},
+		{huma.Error510NotExtended, 510},
+		{huma.Error511NetworkAuthenticationRequired, 511},
 	} {
 		err := item.constructor("test")
 		assert.Equal(t, item.expected, err.GetStatus())

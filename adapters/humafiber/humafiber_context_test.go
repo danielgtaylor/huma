@@ -16,7 +16,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humafiber"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -64,7 +64,7 @@ const (
 	HelloPath = "/hello"
 )
 
-func PingHandler(c *fiber.Ctx) error {
+func PingHandler(c fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusOK)
 }
 
@@ -118,9 +118,7 @@ func SimulateAccessToContextOutsideHandler(
 	retries int,
 ) func(ctx context.Context) {
 	return func(ctx context.Context) {
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
+		wait.Go(func() {
 			global, cancel := context.WithTimeout(global, timeout*time.Duration(retries))
 			defer cancel()
 			for {
@@ -136,7 +134,7 @@ func SimulateAccessToContextOutsideHandler(
 				case <-time.After(timeout / 10):
 				}
 			}
-		}()
+		})
 	}
 }
 
@@ -194,21 +192,21 @@ func HelloResponseValidate(t *testing.T, expected HelloResponseBody, response *h
 	}
 }
 
-func FiberMiddlewareUserValue(c *fiber.Ctx) error {
+func FiberMiddlewareUserValue(c fiber.Ctx) error {
 	headers := c.GetReqHeaders()
 	if values, found := headers[HeaderNameFiberUserValue]; found && len(values) > 0 {
-		c.Context().SetUserValue(contextValueFiberUserValue, values[0])
+		c.Locals(contextValueFiberUserValue, values[0])
 	}
 	return c.Next()
 }
 
-func FiberMiddlewareUserContext(c *fiber.Ctx) error {
+func FiberMiddlewareUserContext(c fiber.Ctx) error {
 	headers := c.GetReqHeaders()
 	if values, found := headers[HeaderNameFiberUserContext]; found && len(values) > 0 {
-		var original = c.UserContext()
+		var original = c.Context()
 		var result = context.WithValue(original, contextValueFiberUserContext, values[0])
-		c.SetUserContext(result)
-		defer c.SetUserContext(original)
+		c.SetContext(result)
+		defer c.SetContext(original)
 	}
 	return c.Next()
 }
@@ -238,9 +236,7 @@ func TestHumaFiber(t *testing.T) {
 	require.NotZero(t, port)
 	server := fmt.Sprintf("http://localhost:%d", port)
 
-	app := fiber.New(fiber.Config{
-		DisableStartupMessage: true,
-	})
+	app := fiber.New()
 	app.Use(FiberMiddlewareUserValue)
 	app.Use(FiberMiddlewareUserContext)
 	RegisterPing(app)
@@ -250,12 +246,10 @@ func TestHumaFiber(t *testing.T) {
 	api.UseMiddleware(HumaMiddleware)
 	huma.Register(api, HelloOperation(), HelloHandler(simulator))
 
-	wait.Add(1)
-	go func() {
-		defer wait.Done()
+	wait.Go(func() {
 		err := app.Listener(ln)
 		assert.NoError(t, err)
-	}()
+	})
 	defer wait.Wait()
 
 	err = WaitPing(ctx, server, timeout)
@@ -297,9 +291,7 @@ func TestHumaFiber(t *testing.T) {
 
 	// check that delay works
 	doneFirst := make(chan bool)
-	wait.Add(1)
-	go func() {
-		defer wait.Done()
+	wait.Go(func() {
 		defer close(doneFirst)
 		response, err := http.DefaultClient.Do(request)
 		if response != nil && response.Body != nil {
@@ -307,9 +299,9 @@ func TestHumaFiber(t *testing.T) {
 				_ = response.Body.Close()
 			}()
 		}
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		HelloResponseValidate(t, expected, response)
-	}()
+	})
 	select {
 	case <-ctx.Done():
 		return
@@ -329,9 +321,7 @@ func TestHumaFiber(t *testing.T) {
 
 	// check graceful shutdown
 	doneSecond := make(chan bool)
-	wait.Add(1)
-	go func() {
-		defer wait.Done()
+	wait.Go(func() {
 		defer close(doneSecond)
 		response, err := http.DefaultClient.Do(request)
 		if response != nil && response.Body != nil {
@@ -339,21 +329,19 @@ func TestHumaFiber(t *testing.T) {
 				_ = response.Body.Close()
 			}()
 		}
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		HelloResponseValidate(t, expected, response)
-	}()
+	})
 
 	// perform shutdown
 	doneShutdown := make(chan bool)
-	wait.Add(1)
-	go func() {
-		defer wait.Done()
+	wait.Go(func() {
 		defer close(doneShutdown)
 		time.Sleep(timeout) // delay before shutdown to start request processing
 		err := app.ShutdownWithContext(ctx)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		time.Sleep(timeout) // delay after shutdown to catch request processing
-	}()
+	})
 
 	// request should be handled
 	select {

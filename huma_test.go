@@ -1,6 +1,7 @@
 package huma_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +26,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
+	_ "github.com/danielgtaylor/huma/v2/formats/cbor"
 	"github.com/danielgtaylor/huma/v2/humatest"
 )
 
@@ -82,8 +85,25 @@ type MyTextUnmarshaler struct {
 	value string
 }
 
+// MyCustomUnmarshaler is a custom type that imitates performing
+// operations on integers
+type MyCustomUnmarshaler struct {
+	value int
+	raw   string
+}
+
 func (m *MyTextUnmarshaler) UnmarshalText(text []byte) error {
 	m.value = "Hello, World!"
+	return nil
+}
+
+func (m *MyCustomUnmarshaler) UnmarshalText(text []byte) error {
+	var err error
+	m.value, err = strconv.Atoi(string(text)[1:])
+	if err != nil {
+		return err
+	}
+	m.raw = string(text)
 	return nil
 }
 
@@ -102,6 +122,16 @@ func (o *OptionalParam[T]) Receiver() reflect.Value {
 
 func (o *OptionalParam[T]) OnParamSet(isSet bool, parsed any) {
 	o.IsSet = isSet
+}
+
+// CountingInner is used to verify resolver traversal skips nil optional fields.
+type CountingInner struct{}
+
+var resolverCalls int
+
+func (b *CountingInner) Resolve(_ huma.Context, _ *huma.PathBuffer) []error {
+	resolverCalls++
+	return nil
 }
 
 func TestFeatures(t *testing.T) {
@@ -230,6 +260,40 @@ func TestFeatures(t *testing.T) {
 			},
 			Method: http.MethodGet,
 			URL:    "/middleware",
+		},
+		{
+			Name: "openapi-relative-server",
+			Config: func() huma.Config {
+				c := huma.DefaultConfig("Test API", "1.0.0")
+				c.Servers = []*huma.Server{
+					{URL: "/v1"},
+				}
+				return c
+			}(),
+			Register: func(t *testing.T, api huma.API) {},
+			Method:   http.MethodGet,
+			URL:      "/openapi.json",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, 200, resp.Code)
+				assert.Contains(t, resp.Body.String(), `"url":"/v1"`)
+			},
+		},
+		{
+			Name: "openapi-relative-server-dot",
+			Config: func() huma.Config {
+				c := huma.DefaultConfig("Test API", "1.0.0")
+				c.Servers = []*huma.Server{
+					{URL: "./v1"},
+				}
+				return c
+			}(),
+			Register: func(t *testing.T, api huma.API) {},
+			Method:   http.MethodGet,
+			URL:      "/openapi.json",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, 200, resp.Code)
+				assert.Contains(t, resp.Body.String(), `"url":"./v1"`)
+			},
 		},
 		{
 			Name: "middleware-cookie-invalid-name",
@@ -536,7 +600,7 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
-			Name: "param-unsupported-500",
+			Name: "param-unsupported-type",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
@@ -550,8 +614,31 @@ func TestFeatures(t *testing.T) {
 			Method: http.MethodGet,
 			URL:    "/test-params/255.255.0.0",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-				assert.Equal(t, http.StatusInternalServerError, resp.Code)
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "unsupported param type: net.IPNet")
 			},
+		},
+		{
+			Name: "path-param-required-overrides-tag",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/items/{id}",
+				}, func(ctx context.Context, input *struct {
+					ID string `path:"id" required:"false"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+
+				// Per OpenAPI 3.x spec, path parameters must always be required,
+				// even if the struct tag says otherwise. Regression test for #1009.
+				param := api.OpenAPI().Paths["/items/{id}"].Get.Parameters[0]
+				assert.Equal(t, "id", param.Name)
+				assert.Equal(t, "path", param.In)
+				assert.True(t, param.Required)
+			},
+			Method: http.MethodGet,
+			URL:    "/items/abc",
 		},
 		{
 			Name: "param-bypass-validation",
@@ -588,6 +675,82 @@ func TestFeatures(t *testing.T) {
 			},
 			Method: http.MethodGet,
 			URL:    "/test",
+		},
+		{
+			Name: "parse-uuid-slice",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					MyUUIDs []uuid.UUID `query:"myuuid"`
+				}) (*struct{}, error) {
+					assert.Equal(t, uuid.MustParse("9993a7ca-4c0f-4f22-b388-2677e0ec91ab"), i.MyUUIDs[0])
+					assert.Equal(t, uuid.MustParse("46cfcb8b-473f-4c0a-9eef-2cdcbc68c2bc"), i.MyUUIDs[1])
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?myuuid=9993a7ca-4c0f-4f22-b388-2677e0ec91ab,46cfcb8b-473f-4c0a-9eef-2cdcbc68c2bc",
+		},
+		{
+			Name: "parse-custom-type-slice",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					MyInts []MyCustomUnmarshaler `query:"mynumber"`
+				}) (*struct{}, error) {
+					assert.Equal(t, 50, i.MyInts[0].value)
+					assert.Equal(t, ">50", i.MyInts[0].raw)
+					assert.Equal(t, 100, i.MyInts[1].value)
+					assert.Equal(t, "<100", i.MyInts[1].raw)
+
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?mynumber=>50,<100",
+		},
+		{
+			Name: "parseSliceInto-unmarshal-error",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					MyInts []MyCustomUnmarshaler `query:"mynumber"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?mynumber=!fail",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "invalid value")
+			},
+		},
+		{
+			Name: "parseSliceInto-unsupported-type",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					// []struct{} represents a struct that does not implement TextUnmarshaler
+					MyInts []struct{} `query:"mynumber"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?mynumber=fail",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "unsupported param type: []struct {}")
+			},
 		},
 		{
 			Name: "parse-with-param-receiver",
@@ -934,8 +1097,8 @@ func TestFeatures(t *testing.T) {
 						// Test defaults for fields in the same linked struct. Even though
 						// we have seen the struct before we still need to set the default
 						// since it's a new/different field.
-						S1 StructWithDefaultField `json:"s1,omitempty"`
-						S2 StructWithDefaultField `json:"s2,omitempty"`
+						S1 StructWithDefaultField `json:"s1,omitzero"`
+						S2 StructWithDefaultField `json:"s2,omitzero"`
 					}
 				}) (*struct{}, error) {
 					assert.Equal(t, "Huma", input.Body.Name)
@@ -1265,6 +1428,11 @@ func TestFeatures(t *testing.T) {
 				assert.Equal(t, "object", mpContent.Schema.Type)
 				assert.Equal(t, "binary", mpContent.Schema.Properties["file"].Format)
 				assert.Equal(t, "binary", mpContent.Schema.Properties["greetings"].Items.Format)
+
+				// Ensure no invalid "in": "form" parameters are present.
+				for _, param := range api.OpenAPI().Paths["/upload"].Post.Parameters {
+					assert.NotEqual(t, "form", param.In)
+				}
 			},
 			Method:  http.MethodPost,
 			URL:     "/upload",
@@ -1340,7 +1508,7 @@ Hello, World!
 					Path:   "/upload",
 				}, func(ctx context.Context, input *struct {
 					RawBody huma.MultipartFormFiles[struct {
-						HelloWorld huma.FormFile `form:"file" contentType:"text/plain"`
+						HelloWorld huma.FormFile `form:"file" contentType:"text/plain" required:"false"`
 					}]
 				}) (*struct{}, error) {
 					assert.False(t, input.RawBody.Data().HelloWorld.IsSet)
@@ -1421,6 +1589,67 @@ Hello, World!
 				assert.Len(t, errors.Errors, 2) // Both single and multiple file receiver should fail
 				assert.Equal(t, "file", errors.Errors[0].Location)
 				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+			},
+		},
+		{
+			Name: "request-body-multipart-file-decoded-text-value-sent-to-file-field",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						Avatar huma.FormFile `form:"avatar" contentType:"image/jpeg, image/png"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="avatar"
+
+test
+--SimpleBoundary--`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				// Should return validation error, not panic
+				var errors huma.ErrorModel
+				err := json.Unmarshal(resp.Body.Bytes(), &errors)
+				require.NoError(t, err)
+				assert.Equal(t, "File required", errors.Errors[0].Message)
+				assert.Equal(t, "avatar", errors.Errors[0].Location)
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+			},
+		},
+		{
+			Name: "request-body-multipart-file-decoded-text-value-sent-to-optional-file-field",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						Avatar huma.FormFile `form:"avatar" contentType:"image/jpeg, image/png" required:"false"`
+					}]
+				}) (*struct{}, error) {
+					// Field should be empty, not panic
+					assert.False(t, input.RawBody.Data().Avatar.IsSet)
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="avatar"
+
+test
+--SimpleBoundary--`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				// Should succeed - optional field just stays empty (returns 204 No Content)
+				assert.Equal(t, http.StatusNoContent, resp.Code)
 			},
 		},
 		{
@@ -2337,7 +2566,7 @@ Content-Type: text/plain
 			URL:    "/response",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusOK, resp.Code)
-				assert.JSONEq(t, `{"$schema": "https:///schemas/RespBody.json", "greeting":"Hello, world!"}`, resp.Body.String())
+				assert.JSONEq(t, `{"$schema": "http://localhost/schemas/RespBody.json", "greeting":"Hello, world!"}`, resp.Body.String())
 			},
 		},
 		{
@@ -2469,6 +2698,231 @@ Content-Type: text/plain
 			},
 		},
 		{
+			Name: "schema-url-from-x-forwarded-host",
+			Transformers: []huma.Transformer{
+				huma.NewSchemaLinkTransformer("/", "/").Transform,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Headers: map[string]string{
+				"X-Forwarded-Host": "api.example.com",
+			},
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "https://api.example.com/schemas/Get-testResponse.json", body["$schema"])
+			},
+		},
+		{
+			Name: "schema-url-from-forwarded-header",
+			Transformers: []huma.Transformer{
+				huma.NewSchemaLinkTransformer("/", "/").Transform,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Headers: map[string]string{
+				"Forwarded": "for=192.0.2.1;host=api.example.com;proto=https",
+			},
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "https://api.example.com/schemas/Get-testResponse.json", body["$schema"])
+			},
+		},
+		{
+			Name: "schema-url-x-forwarded-host-takes-precedence",
+			Transformers: []huma.Transformer{
+				huma.NewSchemaLinkTransformer("/", "/").Transform,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Headers: map[string]string{
+				"X-Forwarded-Host": "preferred.example.com",
+				"Forwarded":        "host=fallback.example.com",
+			},
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "https://preferred.example.com/schemas/Get-testResponse.json", body["$schema"])
+			},
+		},
+		{
+			Name: "schema-url-localhost-fallback",
+			Transformers: []huma.Transformer{
+				huma.NewSchemaLinkTransformer("/", "/").Transform,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "http://localhost/schemas/Get-testResponse.json", body["$schema"])
+			},
+		},
+		{
+			Name: "schema-url-openapi-server-fallback",
+			Transformers: []huma.Transformer{
+				huma.NewSchemaLinkTransformer("/", "/").Transform,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				api.OpenAPI().Servers = []*huma.Server{
+					{URL: "https://api.production.com"},
+				}
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "https://api.production.com/schemas/Get-testResponse.json", body["$schema"])
+			},
+		},
+		{
+			Name: "schema-url-openapi-server-without-scheme",
+			Transformers: []huma.Transformer{
+				huma.NewSchemaLinkTransformer("/", "/").Transform,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				api.OpenAPI().Servers = []*huma.Server{
+					{URL: "api.production.com"},
+				}
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "https://api.production.com/schemas/Get-testResponse.json", body["$schema"])
+			},
+		},
+		{
+			Name: "schema-url-forwarded-host-overrides-openapi-server",
+			Transformers: []huma.Transformer{
+				huma.NewSchemaLinkTransformer("/", "/").Transform,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				api.OpenAPI().Servers = []*huma.Server{
+					{URL: "https://api.production.com"},
+				}
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Headers: map[string]string{
+				"X-Forwarded-Host": "custom.example.com",
+			},
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "https://custom.example.com/schemas/Get-testResponse.json", body["$schema"])
+			},
+		},
+		{
 			Name: "response-transform-error",
 			Transformers: []huma.Transformer{
 				func(ctx huma.Context, status string, v any) (any, error) {
@@ -2504,6 +2958,44 @@ Content-Type: text/plain
 				// into the body and dumped via a panic.
 				assert.Equal(t, http.StatusOK, resp.Code)
 				assert.Equal(t, `error transforming response`, resp.Body.String())
+			},
+		},
+		{
+			Name: "schema-url-relative-openapi-server",
+			Register: func(t *testing.T, api huma.API) {
+				api.OpenAPI().Servers = []*huma.Server{
+					{URL: "/base"},
+				}
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+
+				// Verify the OpenAPI spec reflects the expected example URL
+				// This triggers the `addSchemaField` logic in `transforms.go`
+				// We can check this on the API object if we have access to it,
+				// but here we can just verify the Link header or the body.
+				assert.Contains(t, resp.Header().Get("Link"), "/base/schemas/Get-testResponse.json")
+
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				// Note: at runtime the $schema field in the body depends on the request host.
+				// By default in tests it's http://localhost
+				assert.Contains(t, body["$schema"], "/base/schemas/Get-testResponse.json")
 			},
 		},
 		{
@@ -2691,6 +3183,181 @@ Content-Type: text/plain
 			Method: http.MethodPut,
 			URL:    "/one-of",
 			Body:   `[{"foo": "first"}, {"foo": "second"}]`,
+		},
+		{
+			Name: "reject-unknown-query-params",
+			Config: func() huma.Config {
+				cfg := huma.DefaultConfig("Test API", "1.0.0")
+				cfg.RejectUnknownQueryParameters = true
+				return cfg
+			}(),
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, input *struct {
+					Known string `query:"known"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?known=ok&unknown=bad",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				var body huma.ErrorModel
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "validation failed", body.Detail)
+				found := false
+				for _, e := range body.Errors {
+					if e.Message == "unknown query parameter" && e.Location == "query.unknown" {
+						found = true
+						break
+					}
+				}
+				require.True(t, found, "expected unknown query parameter error for query.unknown; got: %v", body.Errors)
+			},
+		},
+		{
+			Name: "reject-unknown-query-params-group",
+			Config: func() huma.Config {
+				cfg := huma.DefaultConfig("Test API", "1.0.0")
+				cfg.RejectUnknownQueryParameters = true
+				return cfg
+			}(),
+			Register: func(t *testing.T, api huma.API) {
+				g := huma.NewGroup(api, "/base")
+				huma.Register(g, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, input *struct {
+					Known string `query:"known"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/base/test?known=ok&unknown=bad",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				var body huma.ErrorModel
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "validation failed", body.Detail)
+				found := false
+				for _, e := range body.Errors {
+					if e.Message == "unknown query parameter" && e.Location == "query.unknown" {
+						found = true
+						break
+					}
+				}
+				require.True(t, found, "expected unknown query parameter error for query.unknown; got: %v", body.Errors)
+			},
+		},
+		{
+			Name: "reject-unknown-query-params-deepobject-allowed",
+			Config: func() huma.Config {
+				cfg := huma.DefaultConfig("Test API", "1.0.0")
+				cfg.RejectUnknownQueryParameters = true
+				return cfg
+			}(),
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, input *struct {
+					Test struct {
+						Int    int    `json:"int"`
+						String string `json:"string"`
+					} `query:"test,deepObject"`
+				}) (*struct{}, error) {
+					// Should parse and succeed, no validation error.
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?test[int]=1&test[string]=foo",
+			// No Assert: default check ensures status < 300.
+		},
+		{
+			Name: "reject-unknown-query-params-skip-non-query",
+			Config: func() huma.Config {
+				cfg := huma.DefaultConfig("Test API", "1.0.0")
+				cfg.RejectUnknownQueryParameters = true
+				return cfg
+			}(),
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/hdr",
+				}, func(ctx context.Context, input *struct {
+					Header string `header:"X-Test"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodGet,
+			URL:     "/hdr",
+			Headers: map[string]string{"X-Test": "ok"},
+		},
+		{
+			Name: "resolver-skip-nil-optional",
+			Register: func(t *testing.T, api huma.API) {
+				resolverCalls = 0
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/opt",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Optional *CountingInner `json:"optional,omitempty"`
+					}
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodPost,
+			URL:    "/opt",
+			Body:   `{}`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNoContent, resp.Code)
+				assert.Equal(t, 0, resolverCalls)
+			},
+		},
+		{
+			Name: "reject-unknown-query-params-deepobject-unknown",
+			Config: func() huma.Config {
+				cfg := huma.DefaultConfig("Test API", "1.0.0")
+				cfg.RejectUnknownQueryParameters = true
+				return cfg
+			}(),
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, input *struct {
+					Test struct {
+						Int    int    `json:"int"`
+						String string `json:"string"`
+					} `query:"test,deepObject"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?test[int]=1&test[string]=foo&test2[foo]=a",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				var body huma.ErrorModel
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				assert.Equal(t, "validation failed", body.Detail)
+				found := false
+				for _, e := range body.Errors {
+					if e.Message == "unknown query parameter" && e.Location == "query.test2[foo]" {
+						found = true
+						break
+					}
+				}
+				require.True(t, found, "expected unknown query parameter error for query.test2[foo]; got: %v", body.Errors)
+			},
 		},
 		{
 			Name: "security-override-public",
@@ -2884,7 +3551,7 @@ func TestExhaustiveErrors(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
 	assert.JSONEq(t, `{
-		"$schema": "https:///schemas/ErrorModel.json",
+				"$schema": "http://localhost/schemas/ErrorModel.json",
 		"title": "Unprocessable Entity",
 		"status": 422,
 		"detail": "validation failed",
@@ -3260,8 +3927,29 @@ func TestSchemaWithExample(t *testing.T) {
 		return nil, nil
 	})
 
-	example := app.OpenAPI().Paths["/test"].Get.Parameters[0].Example
+	example := app.OpenAPI().Paths["/test"].Get.Parameters[0].Schema.Examples[0]
 	assert.Equal(t, 1, example)
+}
+
+func TestParameterExampleRedundancy(t *testing.T) {
+	_, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	type Input struct {
+		Name string `query:"name" example:"world"`
+	}
+
+	huma.Get(app, "/test", func(ctx context.Context, input *Input) (*struct{}, error) {
+		return nil, nil
+	})
+
+	param := app.OpenAPI().Paths["/test"].Get.Parameters[0]
+	assert.Equal(t, "name", param.Name)
+
+	// The example should be in the schema, not at the parameter level.
+	// OpenAPI 3.1+ prefers examples in the schema.
+	assert.Nil(t, param.Example)
+	require.NotNil(t, param.Schema)
+	assert.Equal(t, []any{"world"}, param.Schema.Examples)
 }
 
 func TestCustomSchemaErrors(t *testing.T) {
@@ -3317,7 +4005,7 @@ func TestBodyRace(t *testing.T) {
 		return nil, nil
 	})
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		t.Run(fmt.Sprintf("test-%d", i), func(tt *testing.T) {
 			tt.Parallel()
 			resp := api.Post("/ping", map[string]any{"value": "hello"})
@@ -3371,6 +4059,39 @@ func TestCustomValidationErrorStatus(t *testing.T) {
 	resp := api.Post("/test", map[string]any{"value": "foo"})
 	assert.Equal(t, http.StatusBadRequest, resp.Result().StatusCode)
 	assert.Contains(t, resp.Body.String(), "Bad Request")
+}
+
+func TestMinItemsValidation(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	huma.Get(api, "/test", func(ctx context.Context, input *struct {
+		Names []string `query:"names" minItems:"2" required:"true"`
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	// 1. Missing query parameter should fail because it is required
+	resp := api.Get("/test")
+	assert.Equal(t, http.StatusUnprocessableEntity, resp.Result().StatusCode)
+	assert.Contains(t, resp.Body.String(), "required query parameter is missing")
+
+	// 2. Query parameter with 1 item should fail minItems
+	resp = api.Get("/test?names=foo")
+	assert.Equal(t, http.StatusUnprocessableEntity, resp.Result().StatusCode)
+	assert.Contains(t, resp.Body.String(), "expected array length >= 2")
+
+	huma.Get(api, "/optional", func(ctx context.Context, input *struct {
+		Names []string `query:"names" minItems:"2"`
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	// Query Optional (should pass when missing)
+	resp = api.Get("/optional")
+	assert.Contains(t, []int{200, 204}, resp.Code)
+
+	// But still fail if provided with too few items
+	assert.Equal(t, 422, api.Get("/optional?names=foo").Code)
 }
 
 // func BenchmarkSecondDecode(b *testing.B) {
@@ -3463,7 +4184,7 @@ func TestCustomValidationErrorStatus(t *testing.T) {
 // 	})
 // }
 
-func globalHandler(ctx context.Context, input *struct {
+func globalHandler(_ context.Context, input *struct {
 	Count int `query:"count"`
 }) (*struct{ Body int }, error) {
 	return &struct{ Body int }{Body: input.Count * 3 / 2}, nil
@@ -3629,4 +4350,228 @@ func TestNestedInputParamPopulation(t *testing.T) {
 		assert.Equal(t, "T", got.Top)
 		assert.Nil(t, got.Ptr, "absent optional pointer group should remain nil")
 	})
+}
+
+func TestNonJSONValidation(t *testing.T) {
+	// Test that validation works when only non-JSON content type is specified.
+	// This tests the fix for supporting validation schemas from non-JSON content types.
+	type CBORInput struct {
+		Body struct {
+			Name string `json:"name" minLength:"2" doc:"User name"`
+		} `contentType:"application/cbor"`
+	}
+
+	// Use default config which includes CBOR via the import above.
+	_, api := humatest.New(t, huma.DefaultConfig("Test", "1.0.0"))
+
+	huma.Post(api, "/cbor-test", func(ctx context.Context, input *CBORInput) (*struct{}, error) {
+		return &struct{}{}, nil
+	})
+
+	// Check that CBOR is in the OpenAPI spec (not JSON).
+	op := api.OpenAPI().Paths["/cbor-test"].Post
+	assert.NotNil(t, op.RequestBody)
+	assert.Contains(t, op.RequestBody.Content, "application/cbor")
+	assert.NotContains(t, op.RequestBody.Content, "application/json")
+
+	// Marshal valid data as CBOR.
+	var validBuf bytes.Buffer
+	huma.DefaultFormats["application/cbor"].Marshal(&validBuf, map[string]any{"name": "John"})
+
+	// Valid CBOR request should work (name >= 2 chars).
+	w := api.Post("/cbor-test", "Content-Type: application/cbor", &validBuf)
+	assert.Equal(t, 204, w.Code)
+
+	// Marshal invalid data as CBOR (name < 2 chars).
+	var invalidBuf bytes.Buffer
+	huma.DefaultFormats["application/cbor"].Marshal(&invalidBuf, map[string]any{"name": "J"})
+
+	// Invalid CBOR request should fail validation.
+	w = api.Post("/cbor-test", "Content-Type: application/cbor", &invalidBuf)
+	assert.Equal(t, 422, w.Code)
+}
+
+func TestFieldsOptionalByDefault(t *testing.T) {
+	type MyInput struct {
+		Body struct {
+			Name string `json:"name"`
+			Age  int    `json:"age" required:"true"`
+		}
+	}
+
+	// Default behavior.
+	{
+		config := huma.DefaultConfig("Test", "1.0.0")
+		config.FieldsOptionalByDefault = false
+		_, api := humatest.New(t, config)
+
+		huma.Post(api, "/test", func(ctx context.Context, input *MyInput) (*struct{}, error) {
+			return nil, nil
+		})
+
+		// Missing name should fail because it's required by default.
+		resp := api.Post("/test", map[string]any{
+			"age": 25,
+		})
+		assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+		assert.Contains(t, resp.Body.String(), "required property name")
+	}
+
+	// Mark fields optional by default.
+	{
+		config := huma.DefaultConfig("Test", "1.0.0")
+		config.FieldsOptionalByDefault = true
+		_, api := humatest.New(t, config)
+
+		huma.Post(api, "/test", func(ctx context.Context, input *MyInput) (*struct{}, error) {
+			return nil, nil
+		})
+
+		// Missing name should pass because it's optional by default.
+		resp := api.Post("/test", map[string]any{
+			"age": 25,
+		})
+		assert.Equal(t, http.StatusNoContent, resp.Code)
+
+		// Missing age should still fail because it's explicitly marked as required.
+		resp = api.Post("/test", map[string]any{
+			"name": "John",
+		})
+		assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+		assert.Contains(t, resp.Body.String(), "required property age")
+	}
+}
+
+func TestSchemaLinkDuplicateTypes(t *testing.T) {
+	config := huma.DefaultConfig("Test API", "1.0.0")
+	_, api := humatest.New(t, config)
+
+	// Both operations use an identical anonymous struct type for the body.
+	// In Go, identical anonymous structs are the same type.
+	huma.Get(api, "/test1", func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			Message string `json:"message"`
+		}
+	}, error) {
+		return &struct {
+			Body struct {
+				Message string `json:"message"`
+			}
+		}{
+			Body: struct {
+				Message string `json:"message"`
+			}{Message: "hello from test1"},
+		}, nil
+	})
+
+	huma.Get(api, "/test2", func(ctx context.Context, input *struct{}) (*struct {
+		Body struct {
+			Message string `json:"message"`
+		}
+	}, error) {
+		return &struct {
+			Body struct {
+				Message string `json:"message"`
+			}
+		}{
+			Body: struct {
+				Message string `json:"message"`
+			}{Message: "hello from test2"},
+		}, nil
+	})
+
+	// Verify test1.
+	resp1 := api.Get("/test1")
+	assert.Equal(t, http.StatusOK, resp1.Code)
+	// The schema name is derived from OperationID + Response -> Get-test1Response.
+	assert.Contains(t, resp1.Body.String(), "Get-test1Response.json")
+	assert.Contains(t, resp1.Header().Get("Link"), "Get-test1Response.json")
+
+	// Verify test2.
+	resp2 := api.Get("/test2")
+	assert.Equal(t, http.StatusOK, resp2.Code)
+	// The schema name is derived from OperationID + Response -> Get-test2Response.
+	assert.Contains(t, resp2.Body.String(), "Get-test2Response.json")
+	assert.Contains(t, resp2.Header().Get("Link"), "Get-test2Response.json")
+
+	// Crucially, they should NOT be the same.
+	assert.NotEqual(t, resp1.Header().Get("Link"), resp2.Header().Get("Link"))
+}
+
+func TestBodyFallbackContentType(t *testing.T) {
+	mux := http.NewServeMux()
+	config := huma.DefaultConfig("Test", "1.0.0")
+	config.Formats = map[string]huma.Format{
+		"test-ct-custom": huma.DefaultJSONFormat,
+	}
+	config.DefaultFormat = "test-ct-custom"
+	api := humago.New(mux, config)
+
+	type HelloInput struct {
+		Body struct {
+			Name string `json:"name"`
+		} `contentType:"test-ct-custom"`
+	}
+
+	huma.Register(api, huma.Operation{
+		Method: http.MethodPost,
+		Path:   "/hello",
+	}, func(ctx context.Context, input *HelloInput) (*struct{}, error) {
+		assert.Equal(t, "world", input.Body.Name)
+		return nil, nil
+	})
+
+	// Request without "Content-Type" header.
+	req := httptest.NewRequest(http.MethodPost, "/hello", strings.NewReader(`{"name":"world"}`))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+func TestWriteResponseTransformErrorStatus(t *testing.T) {
+	// This test verifies that if a transformer fails, the client still receives
+	// a 500 Internal Server Error status code.
+	config := huma.DefaultConfig("Test API", "1.0.0")
+	config.Transformers = append(config.Transformers, func(ctx huma.Context, status string, v any) (any, error) {
+		return nil, errors.New("transform error")
+	})
+
+	mux := http.NewServeMux()
+	api := humago.New(mux, config)
+
+	huma.Get(api, "/test", func(ctx context.Context, input *struct{}) (*struct {
+		Status int
+		Body   string
+	}, error) {
+		return &struct {
+			Status int
+			Body   string
+		}{Status: http.StatusInternalServerError, Body: "hello"}, nil
+	})
+
+	// Use a custom adapter that doesn't call WriteHeader twice if we can.
+	// Actually, just let it panic and recover.
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rvr := recover(); rvr != nil {
+				// We don't want to call WriteHeader here if it was already called.
+				// But we can't easily check if it was called on a raw http.ResponseWriter.
+				return
+			}
+		}()
+		mux.ServeHTTP(w, r)
+	})
+
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/test")
+	require.NoError(t, err)
+	defer res.Body.Close()
+
+	body, _ := io.ReadAll(res.Body)
+
+	assert.Equal(t, http.StatusInternalServerError, res.StatusCode)
+	assert.Contains(t, string(body), "error transforming response")
 }

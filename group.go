@@ -1,6 +1,7 @@
 package huma
 
 import (
+	"maps"
 	"strings"
 )
 
@@ -62,6 +63,9 @@ type Group struct {
 	transformers []Transformer
 }
 
+var _ API = (*Group)(nil)                    // The Group struct must implement our API interface
+var _ configProvider[Config] = (*Group)(nil) // The Group struct must implement the configProvider[Config] interface in order to provide a way to access its configuration
+
 // NewGroup creates a new group of routes with the given prefixes, if any. A
 // group enables a collection of operations to have the same prefix and share
 // operation modifiers, middlewares, and transformers.
@@ -83,6 +87,10 @@ func NewGroup(api API, prefixes ...string) *Group {
 
 func (g *Group) Adapter() Adapter {
 	return g.adapter
+}
+
+func (g *Group) Config() Config {
+	return getConfig[Config](g.API)
 }
 
 // DocumentOperation adds an operation to the OpenAPI document. This is called
@@ -134,9 +142,7 @@ func (g *Group) ModifyOperation(op *Operation, next func(*Operation)) {
 		if op.Metadata != nil {
 			// Copy so we don't modify the original map.
 			meta := make(map[string]any, len(op.Metadata))
-			for k, v := range op.Metadata {
-				meta[k] = v
-			}
+			maps.Copy(meta, op.Metadata)
 			op.Metadata = meta
 
 			// If the conveniences are set, we need to regenerate the operation ID and

@@ -10,9 +10,11 @@ package autopatch
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -24,6 +26,27 @@ import (
 	"github.com/danielgtaylor/shorthand/v2"
 	jsonpatch "github.com/evanphx/json-patch/v5"
 )
+
+// internalContextSanitizer is an optional interface an adapter may implement to
+// strip router-specific state from a context before autopatch re-dispatches an
+// internal GET/PUT sub-request through that same adapter. Some routers (e.g.
+// chi) store their matched-route state in the request context and reuse it
+// instead of routing again; left unsanitized, the internal request would
+// inherit the original PATCH route and recurse into the same handler.
+type internalContextSanitizer interface {
+	SanitizeInternalContext(ctx context.Context) context.Context
+}
+
+// internalRequestContext returns the context to use for autopatch's internal
+// GET/PUT sub-requests. It gives the adapter a chance to remove any routing
+// state that must not leak into a request re-dispatched through it; adapters
+// that don't need this leave the context unchanged.
+func internalRequestContext(adapter huma.Adapter, ctx context.Context) context.Context {
+	if s, ok := adapter.(internalContextSanitizer); ok {
+		return s.SanitizeInternalContext(ctx)
+	}
+	return ctx
+}
 
 const MergePatchNullabilityExtension = "x-merge-patch-nullability"
 
@@ -108,13 +131,13 @@ func restoreNulls(data []byte, settings MergePatchNullabilitySettings) ([]byte, 
 // jsonPatchOp describes an RFC 6902 JSON Patch operation. See also:
 // https://www.rfc-editor.org/rfc/rfc6902
 type jsonPatchOp struct {
-	Op    string      `json:"op" enum:"add,remove,replace,move,copy,test" doc:"Operation name"`
-	From  string      `json:"from,omitempty" doc:"JSON Pointer for the source of a move or copy"`
-	Path  string      `json:"path" doc:"JSON Pointer to the field being operated on, or the destination of a move/copy operation"`
-	Value interface{} `json:"value,omitempty" doc:"The value to set"`
+	Op    string `json:"op" enum:"add,remove,replace,move,copy,test" doc:"Operation name"`
+	From  string `json:"from,omitempty" doc:"JSON Pointer for the source of a move or copy"`
+	Path  string `json:"path" doc:"JSON Pointer to the field being operated on, or the destination of a move/copy operation"`
+	Value any    `json:"value,omitempty" doc:"The value to set"`
 }
 
-var jsonPatchType = reflect.TypeOf([]jsonPatchOp{})
+var jsonPatchType = reflect.TypeFor[[]jsonPatchOp]()
 
 // AutoPatch generates HTTP PATCH operations for any resource which has a GET &
 // PUT but no pre-existing PATCH operation. Generated PATCH operations will call
@@ -181,9 +204,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 
 	// Augment the response list with ones we may return from the PATCH.
 	responses := make(map[string]*huma.Response, len(put.Responses))
-	for k, v := range put.Responses {
-		responses[k] = v
-	}
+	maps.Copy(responses, put.Responses)
 	statuses := append([]int{}, put.Errors...)
 	if responses["default"] == nil {
 		for _, code := range []int{
@@ -265,7 +286,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 		resourcePath := findRelativeResourcePath(ctx.URL().Path, put.Path)
 
 		// Perform the get!
-		origReq, err := http.NewRequest(http.MethodGet, resourcePath, nil)
+		origReq, err := http.NewRequestWithContext(internalRequestContext(adapter, ctx.Context()), http.MethodGet, resourcePath, nil)
 		if err != nil {
 			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to get resource", err)
 			return
@@ -391,7 +412,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 		}
 
 		// Write the updated data back to the server!
-		putReq, err := http.NewRequest(http.MethodPut, resourcePath, bytes.NewReader(patched))
+		putReq, err := http.NewRequestWithContext(internalRequestContext(adapter, ctx.Context()), http.MethodPut, resourcePath, bytes.NewReader(patched))
 		if err != nil {
 			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to put modified resource", err)
 			return

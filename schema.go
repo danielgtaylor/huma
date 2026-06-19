@@ -40,11 +40,14 @@ const (
 
 // Special JSON Schema formats.
 var (
-	timeType       = reflect.TypeOf(time.Time{})
-	ipType         = reflect.TypeOf(net.IP{})
-	ipAddrType     = reflect.TypeOf(netip.Addr{})
-	urlType        = reflect.TypeOf(url.URL{})
-	rawMessageType = reflect.TypeOf(json.RawMessage{})
+	ipType                = reflect.TypeFor[net.IP]()
+	ipAddrType            = reflect.TypeFor[netip.Addr]()
+	rawMessageType        = reflect.TypeFor[json.RawMessage]()
+	schemaProviderType    = reflect.TypeFor[SchemaProvider]()
+	schemaTransformerType = reflect.TypeFor[SchemaTransformer]()
+	textUnmarshalerType   = reflect.TypeFor[encoding.TextUnmarshaler]()
+	timeType              = reflect.TypeFor[time.Time]()
+	urlType               = reflect.TypeFor[url.URL]()
 )
 
 func baseType(t reflect.Type) reflect.Type {
@@ -60,7 +63,7 @@ func baseType(t reflect.Type) reflect.Type {
 }
 
 func deref(t reflect.Type) reflect.Type {
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	return t
@@ -116,6 +119,7 @@ type Schema struct {
 	AdditionalProperties any                 `yaml:"additionalProperties,omitempty"`
 	Properties           map[string]*Schema  `yaml:"properties,omitempty"`
 	Enum                 []any               `yaml:"enum,omitempty"`
+	Const                any                 `yaml:"const,omitempty"`
 	Minimum              *float64            `yaml:"minimum,omitempty"`
 	ExclusiveMinimum     *float64            `yaml:"exclusiveMinimum,omitempty"`
 	Maximum              *float64            `yaml:"maximum,omitempty"`
@@ -153,6 +157,7 @@ type Schema struct {
 	// Precomputed validation messages. These prevent allocations during
 	// validation and are known at schema creation time.
 	msgEnum              string                       `yaml:"-"`
+	msgConst             string                       `yaml:"-"`
 	msgMinimum           string                       `yaml:"-"`
 	msgExclusiveMinimum  string                       `yaml:"-"`
 	msgMaximum           string                       `yaml:"-"`
@@ -210,6 +215,7 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 		{"additionalProperties", s.AdditionalProperties, omitNil},
 		{"properties", props, omitEmpty},
 		{"enum", s.Enum, omitEmpty},
+		{"const", s.Const, omitNil},
 		{"minimum", s.Minimum, omitEmpty},
 		{"exclusiveMinimum", s.ExclusiveMinimum, omitEmpty},
 		{"maximum", s.Maximum, omitEmpty},
@@ -243,6 +249,9 @@ func (s *Schema) PrecomputeMessages() {
 	s.msgEnum = ErrorFormatter(validation.MsgExpectedOneOf, strings.Join(mapTo(s.Enum, func(v any) string {
 		return fmt.Sprintf("%v", v)
 	}), ", "))
+	if s.Const != nil {
+		s.msgConst = ErrorFormatter(validation.MsgExpectedConst, fmt.Sprintf("%v", s.Const))
+	}
 	if s.Minimum != nil {
 		s.msgMinimum = ErrorFormatter(validation.MsgExpectedMinimumNumber, *s.Minimum)
 	}
@@ -358,7 +367,7 @@ func boolTag(f reflect.StructField, tag string, def bool) bool {
 	return def
 }
 
-func intTag(f reflect.StructField, tag string, def *int) *int {
+func intTag(f reflect.StructField, tag string) *int {
 	if v := f.Tag.Get(tag); v != "" {
 		if i, err := strconv.Atoi(v); err == nil {
 			return &i
@@ -366,10 +375,10 @@ func intTag(f reflect.StructField, tag string, def *int) *int {
 			panic(fmt.Errorf("invalid int tag '%s' for field '%s': %v (%w)", tag, f.Name, v, err))
 		}
 	}
-	return def
+	return nil
 }
 
-func floatTag(f reflect.StructField, tag string, def *float64) *float64 {
+func floatTag(f reflect.StructField, tag string) *float64 {
 	if v := f.Tag.Get(tag); v != "" {
 		if i, err := strconv.ParseFloat(v, 64); err == nil {
 			return &i
@@ -377,7 +386,7 @@ func floatTag(f reflect.StructField, tag string, def *float64) *float64 {
 			panic(fmt.Errorf("invalid float tag '%s' for field '%s': %v (%w)", tag, f.Name, v, err))
 		}
 	}
-	return def
+	return nil
 }
 
 func stringTag(f reflect.StructField, tag string, def string) string {
@@ -445,53 +454,70 @@ func ensureType(r Registry, fieldName string, s *Schema, value string, v any) {
 // convertType panics if the given value does not match or cannot be converted
 // to the field's Go type.
 func convertType(fieldName string, t reflect.Type, v any) any {
-	vv := reflect.ValueOf(v)
-	tv := reflect.TypeOf(v)
-	if v != nil && tv != t {
-		if tv.Kind() == reflect.Slice {
-			// Slices can't be cast due to the different layouts. Instead, we make a
-			// new instance of the destination slice and convert each value in
-			// the original to the new type.
-			tmp := reflect.MakeSlice(t, 0, vv.Len())
-			for i := 0; i < vv.Len(); i++ {
-				item := vv.Index(i)
-				if item.Kind() == reflect.Interface {
-					// E.g. []any and we want the underlying type.
-					item = item.Elem()
-				}
-				item = reflect.Indirect(item)
-				typ := deref(t.Elem())
-				if !item.Type().ConvertibleTo(typ) {
-					panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", item.Interface(), t.Elem(), fieldName, ErrSchemaInvalid))
-				}
-
-				value := item.Convert(typ)
-				if t.Elem().Kind() == reflect.Ptr {
-					// Special case: if the field is a pointer, we need to get a pointer
-					// to the converted value.
-					ptr := reflect.New(value.Type())
-					ptr.Elem().Set(value)
-					value = ptr
-				}
-
-				tmp = reflect.Append(tmp, value)
-			}
-			v = tmp.Interface()
-		} else if !tv.ConvertibleTo(deref(t)) {
-			panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", tv, t, fieldName, ErrSchemaInvalid))
-		}
-
-		converted := reflect.ValueOf(v).Convert(deref(t))
-		if t.Kind() == reflect.Ptr {
-			// Special case: if the field is a pointer, we need to get a pointer
-			// to the converted value.
-			tmp := reflect.New(t.Elem())
-			tmp.Elem().Set(converted)
-			converted = tmp
-		}
-		v = converted.Interface()
+	if v == nil {
+		return v
 	}
-	return v
+
+	tv := reflect.TypeOf(v)
+	if tv == t {
+		return v
+	}
+
+	// Directly convert equal underlying types, avoiding traversal.
+	// e.g., json.RawMessage -> []byte.
+	if tv.ConvertibleTo(t) {
+		return reflect.ValueOf(v).Convert(t).Interface()
+	}
+
+	val := reflect.ValueOf(v)
+
+	if tv.Kind() == reflect.Slice {
+		// Slices can't be cast due to the different layouts. Instead, we make a
+		// new instance of the destination slice, and convert each value in
+		// the original to the new type.
+		tmp := reflect.MakeSlice(t, 0, val.Len())
+		for i := 0; i < val.Len(); i++ {
+			item := val.Index(i)
+			if item.Kind() == reflect.Interface {
+				// E.g. []any and we want the underlying type.
+				item = item.Elem()
+			}
+
+			item = reflect.Indirect(item)
+			typ := deref(t.Elem())
+			if !item.Type().ConvertibleTo(typ) {
+				panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", item.Interface(), t.Elem(), fieldName, ErrSchemaInvalid))
+			}
+
+			value := item.Convert(typ)
+			if t.Elem().Kind() == reflect.Pointer {
+				// Special case: if the field is a pointer, we need to get a pointer
+				// to the converted value.
+				ptr := reflect.New(value.Type())
+				ptr.Elem().Set(value)
+				value = ptr
+			}
+
+			tmp = reflect.Append(tmp, value)
+		}
+
+		return tmp.Interface()
+	}
+
+	if !tv.ConvertibleTo(deref(t)) {
+		panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", tv, t, fieldName, ErrSchemaInvalid))
+	}
+
+	converted := val.Convert(deref(t))
+	if t.Kind() == reflect.Pointer {
+		// Special case: if the field is a pointer, we need to get a pointer
+		// to the converted value.
+		tmp := reflect.New(t.Elem())
+		tmp.Elem().Set(converted)
+		converted = tmp
+	}
+
+	return converted.Interface()
 }
 
 func jsonTagValue(r Registry, fieldName string, s *Schema, value string) any {
@@ -510,7 +536,7 @@ func jsonTagValue(r Registry, fieldName string, s *Schema, value string) any {
 	// Special case: array of strings with comma-separated values and no quotes.
 	if s.Type == TypeArray && s.Items != nil && s.Items.Type == TypeString && value[0] != '[' {
 		var values []string
-		for _, s := range strings.Split(value, ",") {
+		for s := range strings.SplitSeq(value, ",") {
 			values = append(values, strings.TrimSpace(s))
 		}
 		return values
@@ -554,15 +580,18 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 		// tags later.
 		fs.Format = "date-time-http"
 	}
-	fs.Format = stringTag(f, "format", fs.Format)
+	if format := f.Tag.Get("format"); format != "" {
+		targetSchema(fs).Format = format
+	}
 	if timeFmt := f.Tag.Get("timeFormat"); timeFmt != "" {
+		s := targetSchema(fs)
 		switch timeFmt {
 		case "2006-01-02":
-			fs.Format = "date"
+			s.Format = "date"
 		case "15:04:05":
-			fs.Format = "time"
+			s.Format = "time"
 		default:
-			fs.Format = timeFmt
+			s.Format = timeFmt
 		}
 	}
 	fs.ContentEncoding = stringTag(f, "encoding", fs.ContentEncoding)
@@ -577,19 +606,17 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 	}
 
 	if enum := f.Tag.Get("enum"); enum != "" {
-		s := fs
-		if s.Type == TypeArray {
-			s = s.Items
-		}
-		enumValues := []any{}
-		for _, e := range strings.Split(enum, ",") {
+		s := targetSchema(fs)
+		var enumValues []any
+		for e := range strings.SplitSeq(enum, ",") {
 			enumValues = append(enumValues, jsonTagValue(registry, f.Name, s, e))
 		}
-		if fs.Type == TypeArray {
-			fs.Items.Enum = enumValues
-		} else {
-			fs.Enum = enumValues
-		}
+		s.Enum = enumValues
+	}
+
+	if constValue := f.Tag.Get("const"); constValue != "" {
+		s := targetSchema(fs)
+		s.Const = jsonTagValue(registry, f.Name, s, constValue)
 	}
 
 	fs.Nullable = boolTag(f, "nullable", fs.Nullable)
@@ -603,20 +630,46 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 		panic(fmt.Errorf("nullable is not supported for field '%s' which is type '%s'", f.Name, fs.Ref))
 	}
 
-	fs.Minimum = floatTag(f, "minimum", fs.Minimum)
-	fs.ExclusiveMinimum = floatTag(f, "exclusiveMinimum", fs.ExclusiveMinimum)
-	fs.Maximum = floatTag(f, "maximum", fs.Maximum)
-	fs.ExclusiveMaximum = floatTag(f, "exclusiveMaximum", fs.ExclusiveMaximum)
-	fs.MultipleOf = floatTag(f, "multipleOf", fs.MultipleOf)
-	fs.MinLength = intTag(f, "minLength", fs.MinLength)
-	fs.MaxLength = intTag(f, "maxLength", fs.MaxLength)
-	fs.Pattern = stringTag(f, "pattern", fs.Pattern)
-	fs.PatternDescription = stringTag(f, "patternDescription", fs.PatternDescription)
-	fs.MinItems = intTag(f, "minItems", fs.MinItems)
-	fs.MaxItems = intTag(f, "maxItems", fs.MaxItems)
+	if v := floatTag(f, "minimum"); v != nil {
+		targetSchema(fs).Minimum = v
+	}
+	if v := floatTag(f, "exclusiveMinimum"); v != nil {
+		targetSchema(fs).ExclusiveMinimum = v
+	}
+	if v := floatTag(f, "maximum"); v != nil {
+		targetSchema(fs).Maximum = v
+	}
+	if v := floatTag(f, "exclusiveMaximum"); v != nil {
+		targetSchema(fs).ExclusiveMaximum = v
+	}
+	if v := floatTag(f, "multipleOf"); v != nil {
+		targetSchema(fs).MultipleOf = v
+	}
+	if v := intTag(f, "minLength"); v != nil {
+		targetSchema(fs).MinLength = v
+	}
+	if v := intTag(f, "maxLength"); v != nil {
+		targetSchema(fs).MaxLength = v
+	}
+	if v := f.Tag.Get("pattern"); v != "" {
+		targetSchema(fs).Pattern = v
+	}
+	if v := f.Tag.Get("patternDescription"); v != "" {
+		targetSchema(fs).PatternDescription = v
+	}
+	if v := intTag(f, "minItems"); v != nil {
+		fs.MinItems = v
+	}
+	if v := intTag(f, "maxItems"); v != nil {
+		fs.MaxItems = v
+	}
+	if v := intTag(f, "minProperties"); v != nil {
+		fs.MinProperties = v
+	}
+	if v := intTag(f, "maxProperties"); v != nil {
+		fs.MaxProperties = v
+	}
 	fs.UniqueItems = boolTag(f, "uniqueItems", fs.UniqueItems)
-	fs.MinProperties = intTag(f, "minProperties", fs.MinProperties)
-	fs.MaxProperties = intTag(f, "maxProperties", fs.MaxProperties)
 	fs.ReadOnly = boolTag(f, "readOnly", fs.ReadOnly)
 	fs.WriteOnly = boolTag(f, "writeOnly", fs.WriteOnly)
 	fs.Deprecated = boolTag(f, "deprecated", fs.Deprecated)
@@ -624,6 +677,15 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 
 	fs.hidden = boolTag(f, "hidden", fs.hidden)
 
+	return fs
+}
+
+// targetSchema returns the schema to apply scalar constraints to
+// (the items schema for arrays, otherwise the schema itself).
+func targetSchema(fs *Schema) *Schema {
+	if fs.Type == TypeArray {
+		return fs.Items
+	}
 	return fs
 }
 
@@ -652,7 +714,13 @@ func getFields(typ reflect.Type, visited map[reflect.Type]struct{}) []fieldInfo 
 			continue
 		}
 
-		if f.Anonymous {
+		// An anonymous (embedded) field is merged into the parent object when
+		// it has no explicit JSON name. This covers both an absent tag and a
+		// name-less tag such as `json:",inline"` or `json:",omitempty"`. Giving
+		// the field a name (e.g. `json:"meta"`) makes it a nested object
+		// instead, matching encoding/json's behavior.
+		jsonName, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+		if f.Anonymous && jsonName == "" {
 			embedded = append(embedded, f)
 			continue
 		}
@@ -662,7 +730,7 @@ func getFields(typ reflect.Type, visited map[reflect.Type]struct{}) []fieldInfo 
 
 	for _, f := range embedded {
 		newTyp := f.Type
-		for newTyp.Kind() == reflect.Ptr {
+		for newTyp.Kind() == reflect.Pointer {
 			newTyp = newTyp.Elem()
 		}
 		if newTyp.Kind() == reflect.Struct {
@@ -700,9 +768,9 @@ func SchemaFromType(r Registry, t reflect.Type) *Schema {
 	t = deref(t)
 
 	// Transform generated schema if type implements SchemaTransformer
-	v := reflect.New(t).Interface()
-	if st, ok := v.(SchemaTransformer); ok {
-		s = st.TransformSchema(r, s)
+	ptrT := reflect.PointerTo(t)
+	if t.Implements(schemaTransformerType) || ptrT.Implements(schemaTransformerType) {
+		s = reflect.New(t).Interface().(SchemaTransformer).TransformSchema(r, s)
 
 		// The schema may have been modified, so recompute the error messages.
 		s.PrecomputeMessages()
@@ -716,10 +784,10 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 	s := Schema{}
 	t = deref(t)
 
-	v := reflect.New(t).Interface()
-	if sp, ok := v.(SchemaProvider); ok {
+	ptrT := reflect.PointerTo(t)
+	if t.Implements(schemaProviderType) || ptrT.Implements(schemaProviderType) {
 		// Special case: type provides its own schema. Do not try to generate.
-		custom := sp.Schema(r)
+		custom := reflect.New(t).Interface().(SchemaProvider).Schema(r)
 		custom.PrecomputeMessages()
 		return custom
 	}
@@ -733,12 +801,12 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 	case ipType:
 		return &Schema{Type: TypeString, Nullable: isPointer, Format: "ipv4"}
 	case ipAddrType:
-		return &Schema{Type: TypeString, Nullable: isPointer, Format: "ipv4"}
+		return &Schema{Type: TypeString, Nullable: isPointer, Format: "ip"}
 	case rawMessageType:
 		return &Schema{}
 	}
 
-	if _, ok := v.(encoding.TextUnmarshaler); ok {
+	if t.Implements(textUnmarshalerType) || ptrT.Implements(textUnmarshalerType) {
 		// Special case: types that implement encoding.TextUnmarshaler are able to
 		// be loaded from plain text, and so should be treated as strings.
 		// This behavior can be overridden by implementing `huma.SchemaProvider`
@@ -827,10 +895,10 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 			fieldSet[f.Name] = struct{}{}
 
 			// Controls whether the field is required or not. All fields start as
-			// required, then can be made optional with the `omitempty` JSON tag,
-			// `omitzero` JSON tag, or it can be overridden manually via the
-			// `required` tag.
-			fieldRequired := true
+			// required (unless the registry says otherwise), then can be made
+			// optional with the `omitempty` JSON tag, `omitzero` JSON tag, or it
+			// can be overridden manually via the `required` tag.
+			fieldRequired := !getConfig[registryConfig](r).FieldsOptionalByDefault
 
 			name := f.Name
 			if j := f.Tag.Get("json"); j != "" {
@@ -875,7 +943,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 
 				// Special case: pointer with omitempty and not manually set to
 				// nullable, which will never get `null` sent over the wire.
-				if f.Type.Kind() == reflect.Ptr && strings.Contains(f.Tag.Get("json"), "omitempty") && f.Tag.Get("nullable") != "true" {
+				if f.Type.Kind() == reflect.Pointer && strings.Contains(f.Tag.Get("json"), "omitempty") && f.Tag.Get("nullable") != "true" {
 					fs.Nullable = false
 				}
 			}
@@ -902,19 +970,19 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 			panic(errors.New(strings.Join(errs, "; ")))
 		}
 
-		additionalProps := false
+		additionalProps := getConfig[registryConfig](r).AllowAdditionalPropertiesByDefault
 		if f, ok := t.FieldByName("_"); ok {
 			if _, ok = f.Tag.Lookup("additionalProperties"); ok {
 				additionalProps = boolTag(f, "additionalProperties", false)
 			}
 
-			if _, ok := f.Tag.Lookup("nullable"); ok {
+			if _, ok = f.Tag.Lookup("nullable"); ok {
 				// Allow overriding nullability per struct.
 				s.Nullable = boolTag(f, "nullable", false)
 			}
 		}
-		s.AdditionalProperties = additionalProps
 
+		s.AdditionalProperties = additionalProps
 		s.Properties = props
 		s.propertyNames = propNames
 		s.Required = required

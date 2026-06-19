@@ -1,14 +1,16 @@
 package huma
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
-	"net"
 	"net/mail"
+	"net/netip"
 	"net/url"
 	"reflect"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +18,6 @@ import (
 	"unsafe"
 
 	"github.com/danielgtaylor/huma/v2/validation"
-	"golang.org/x/net/idna"
 )
 
 // ValidateMode describes the direction of validation (server -> client or
@@ -43,12 +44,11 @@ const (
 // disabled by default to match Go's JSON unmarshaling behavior.
 var ValidateStrictCasing = false
 
-var idnaProfile = idna.New(idna.ValidateForRegistration())
 var rxHostname = regexp.MustCompile(`^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$`)
 var rxURITemplate = regexp.MustCompile("^([^{]*({[^}]*})?)*$")
 var rxJSONPointer = regexp.MustCompile("^(?:/(?:[^~/]|~0|~1)*)*$")
 var rxRelJSONPointer = regexp.MustCompile("^(?:0|[1-9][0-9]*)(?:#|(?:/(?:[^~/]|~0|~1)*)*)$")
-var rxBase64 = regexp.MustCompile(`^[a-zA-Z0-9+/_-]+=*$`)
+var rxBase64 = regexp.MustCompile(`^[a-zA-Z0-9+/_-]*=*$`)
 
 func mapTo[A, B any](s []A, f func(A) B) []B {
 	r := make([]B, len(s))
@@ -82,12 +82,11 @@ type PathBuffer struct {
 //	pb.Push("foo") // foo
 //	pb.Push("bar") // foo.bar
 func (b *PathBuffer) Push(s string) {
-	if b.off > 0 {
+	if len(b.buf) > 0 {
 		b.buf = append(b.buf, '.')
-		b.off++
 	}
 	b.buf = append(b.buf, s...)
-	b.off += len(s)
+	b.off = len(b.buf)
 }
 
 // PushIndex pushes an entry onto the path surrounded by `[` and `]`.
@@ -95,11 +94,10 @@ func (b *PathBuffer) Push(s string) {
 //	pb.Push("foo")  // foo
 //	pb.PushIndex(1) // foo[1]
 func (b *PathBuffer) PushIndex(i int) {
-	l := len(b.buf)
 	b.buf = append(b.buf, '[')
-	b.buf = append(b.buf, strconv.Itoa(i)...)
+	b.buf = strconv.AppendInt(b.buf, int64(i), 10)
 	b.buf = append(b.buf, ']')
-	b.off += len(b.buf) - l
+	b.off = len(b.buf)
 }
 
 // Pop the latest entry off the path.
@@ -244,22 +242,32 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 		if _, err := mail.ParseAddress(str); err != nil {
 			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC5322Email, err))
 		}
-	case "hostname":
+	case "idn-hostname", "hostname":
 		if len(str) >= 256 || !rxHostname.MatchString(str) {
 			res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
 		}
-	case "idn-hostname":
-		if _, err := idnaProfile.ToASCII(str); err != nil {
-			res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
+	case "ipv4", "ipv6", "ip":
+		addr, err := netip.ParseAddr(str)
+
+		switch s.Format {
+		case "ipv4":
+			if err != nil || !addr.Is4() {
+				res.Add(path, str, validation.MsgExpectedRFC2673IPv4)
+			}
+		case "ipv6":
+			if err != nil || !addr.Is6() || addr.Is4In6() {
+				res.Add(path, str, validation.MsgExpectedRFC2373IPv6)
+			}
+		default: // case "ip".
+			if err != nil {
+				res.Add(path, str, validation.MsgExpectedRFCIPAddr)
+			}
 		}
-	case "ipv4":
-		if ip := net.ParseIP(str); ip == nil || ip.To4() == nil {
-			res.Add(path, str, validation.MsgExpectedRFC2673IPv4)
-		}
-	case "ipv6":
-		if ip := net.ParseIP(str); ip == nil || ip.To16() == nil {
-			res.Add(path, str, validation.MsgExpectedRFC2373IPv6)
-		}
+	// TODO: investigate supporting idn-hostname without external library.
+	// case "idn-hostname":
+	// 	if _, err := idnaProfile.ToASCII(str); err != nil {
+	// 		res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
+	// 	}
 	case "uri", "uri-reference", "iri", "iri-reference":
 		if _, err := url.Parse(str); err != nil {
 			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
@@ -366,6 +374,44 @@ func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode Validat
 	Validate(r, r.SchemaFromRef(ref), path, mode, v, res)
 }
 
+// toFloat64 normalizes any supported numeric Go type to a float64. The second
+// return value is false when v is not a numeric type. This lets numeric
+// validation treat values uniformly regardless of whether they came from a
+// JSON body (float64), a query/path parameter (int64), or a custom schema.
+func toFloat64(v any) (float64, bool) {
+	switch v := v.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int8:
+		return float64(v), true
+	case int16:
+		return float64(v), true
+	case int32:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case uint:
+		return float64(v), true
+	case uint8:
+		return float64(v), true
+	case uint16:
+		return float64(v), true
+	case uint32:
+		return float64(v), true
+	case uint64:
+		return float64(v), true
+	case json.Number:
+		f, err := v.Float64()
+		return f, err == nil
+	default:
+		return 0, false
+	}
+}
+
 // Validate an input value against a schema, collecting errors in the validation
 // result object. If successful, `res.Errors` will be empty. It is suggested
 // to use a `sync.Pool` to reuse the PathBuffer and ValidateResult objects,
@@ -425,34 +471,8 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 			return
 		}
 	case TypeNumber, TypeInteger:
-		var num float64
-
-		switch v := v.(type) {
-		case float64:
-			num = v
-		case float32:
-			num = float64(v)
-		case int:
-			num = float64(v)
-		case int8:
-			num = float64(v)
-		case int16:
-			num = float64(v)
-		case int32:
-			num = float64(v)
-		case int64:
-			num = float64(v)
-		case uint:
-			num = float64(v)
-		case uint8:
-			num = float64(v)
-		case uint16:
-			num = float64(v)
-		case uint32:
-			num = float64(v)
-		case uint64:
-			num = float64(v)
-		default:
+		num, ok := toFloat64(v)
+		if !ok {
 			if s.Type == TypeInteger {
 				res.Add(path, v, validation.MsgExpectedInteger)
 			} else {
@@ -486,7 +506,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 			}
 		}
 		if s.MultipleOf != nil {
-			if math.Mod(num, *s.MultipleOf) != 0 {
+			if r := math.Mod(num, *s.MultipleOf); math.Abs(r) > 1e-9 && math.Abs(r-*s.MultipleOf) > 1e-9 {
 				res.Add(path, v, s.msgMultipleOf)
 			}
 		}
@@ -574,15 +594,30 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 	}
 
 	if len(s.Enum) > 0 {
-		found := false
-		for _, e := range s.Enum {
-			if e == v {
-				found = true
-				break
+		found := slices.Contains(s.Enum, v)
+		if !found && (s.Type == TypeInteger || s.Type == TypeNumber) {
+			// Numeric enums may be stored with a different Go type than the
+			// parsed value (e.g. float64 from JSON bodies vs int64 from query
+			// or path params), so a strict type comparison is not enough.
+			// Compare numerically instead. Note this uses float64 like the rest
+			// of the numeric validation above, so integer values beyond 2^53
+			// are subject to the same precision limits.
+			if num, ok := toFloat64(v); ok {
+				found = slices.ContainsFunc(s.Enum, func(e any) bool {
+					ev, ok := toFloat64(e)
+					return ok && ev == num
+				})
 			}
 		}
 		if !found {
 			res.Add(path, v, s.msgEnum)
+		}
+	}
+
+	if s.Const != nil {
+		// Deep equality check for const validation
+		if !reflect.DeepEqual(s.Const, v) {
+			res.Add(path, v, s.msgConst)
 		}
 	}
 }

@@ -3,10 +3,10 @@ package huma
 // AutoConfigVar represents a variable given by the user when prompted during
 // autoconfiguration setup of an API.
 type AutoConfigVar struct {
-	Description string        `json:"description,omitempty"`
-	Example     string        `json:"example,omitempty"`
-	Default     interface{}   `json:"default,omitempty"`
-	Enum        []interface{} `json:"enum,omitempty"`
+	Description string `json:"description,omitempty"`
+	Example     string `json:"example,omitempty"`
+	Default     any    `json:"default,omitempty"`
+	Enum        []any  `json:"enum,omitempty"`
 
 	// Exclude the value from being sent to the server. This essentially makes
 	// it a value which is only used in param templates.
@@ -17,7 +17,7 @@ type AutoConfigVar struct {
 // are advertised via OpenAPI extension and picked up by the CLI to make it
 // easier to get started using an API. This struct should be put into the
 // `OpenAPI.Extensions` map under the key `x-cli-config`. See also:
-// https://rest.sh/#/openapi?id=autoconfiguration
+// https://rest.sh/docs/reference/openapi/
 type AutoConfig struct {
 	Security string                   `json:"security"`
 	Headers  map[string]string        `json:"headers,omitempty"`

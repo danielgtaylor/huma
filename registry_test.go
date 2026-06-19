@@ -62,14 +62,48 @@ func TestSchemaAlias(t *testing.T) {
 		Value string
 	}
 	type StructWithStringContainer struct {
-		Name StringContainer `json:"name,omitempty"`
+		Name StringContainer `json:"name,omitzero"`
 	}
 	type StructWithString struct {
 		Name string `json:"name,omitempty"`
 	}
 	registry := NewMapRegistry("#/components/schemas", DefaultSchemaNamer)
-	registry.RegisterTypeAlias(reflect.TypeOf(StringContainer{}), reflect.TypeOf(""))
-	schemaWithContainer := registry.Schema(reflect.TypeOf(StructWithStringContainer{}), false, "")
-	schemaWithString := registry.Schema(reflect.TypeOf(StructWithString{}), false, "")
+	registry.RegisterTypeAlias(reflect.TypeFor[StringContainer](), reflect.TypeFor[string]())
+	schemaWithContainer := registry.Schema(reflect.TypeFor[StructWithStringContainer](), false, "")
+	schemaWithString := registry.Schema(reflect.TypeFor[StructWithString](), false, "")
 	assert.Equal(t, schemaWithString, schemaWithContainer)
+}
+
+func TestAllowAdditionalPropertiesByDefault(t *testing.T) {
+	type MyStruct struct {
+		Name string `json:"name"`
+	}
+
+	t.Run("DefaultIsFalse", func(t *testing.T) {
+		r := NewMapRegistry("/schemas", DefaultSchemaNamer)
+
+		// Confirm default is false.
+		assert.False(t, getConfig[registryConfig](r).AllowAdditionalPropertiesByDefault)
+
+		s := r.Schema(reflect.TypeFor[MyStruct](), false, "")
+		assert.Equal(t, false, s.AdditionalProperties)
+	})
+
+	t.Run("OverrideViaRegistryConfig", func(t *testing.T) {
+		r := NewMapRegistry("/schemas", DefaultSchemaNamer).(*mapRegistry)
+		r.config.AllowAdditionalPropertiesByDefault = true
+
+		s := r.Schema(reflect.TypeFor[MyStruct](), false, "")
+		assert.Equal(t, true, s.AdditionalProperties)
+	})
+}
+
+func TestRegistryConfigValue(t *testing.T) {
+	r := NewMapRegistry("/schemas", DefaultSchemaNamer)
+
+	cfg := getConfig[registryConfig](r)
+	cfg.AllowAdditionalPropertiesByDefault = true
+
+	// Config() returns a copy, so modifying it shouldn't affect the registry.
+	assert.False(t, getConfig[registryConfig](r).AllowAdditionalPropertiesByDefault)
 }

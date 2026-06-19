@@ -51,6 +51,8 @@ $ restish example.com/things/1 -H 'Fields: {id, tag_names: tags[].name}'
 
 See the [`huma.SchemaLinkTransformer`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#SchemaLinkTransformer) for a more real-world in-depth example.
 
+This transformer is what adds the `$schema` field and `Link` headers to responses. For information on how to disable it, see the [JSON Schema](./json-schema-registry.md#disabling-schema) documentation.
+
 ## Dive Deeper
 
 -   Reference

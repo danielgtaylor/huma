@@ -96,7 +96,7 @@ func TestGroupConvenienceEquivalency(t *testing.T) {
 	// Ensure group overrides still work.
 	grp4 := huma.NewGroup(api, "/v4")
 	grp4.UseModifier(func(op *huma.Operation, next func(*huma.Operation)) {
-		op.OperationID = "custom-id"
+		op.OperationID = "custom-id-2"
 		op.Summary = "Custom summary"
 		next(op)
 	})
@@ -123,7 +123,7 @@ func TestGroupConvenienceEquivalency(t *testing.T) {
 	assert.Equal(t, "get-v1-users", oapi.Paths["/v1/users"].Get.OperationID)
 	assert.Equal(t, "get-v2-users", oapi.Paths["/v2/users"].Get.OperationID)
 	assert.Equal(t, "custom-id", oapi.Paths["/v3/users"].Get.OperationID)
-	assert.Equal(t, "custom-id", oapi.Paths["/v4/users"].Get.OperationID)
+	assert.Equal(t, "custom-id-2", oapi.Paths["/v4/users"].Get.OperationID)
 	assert.Equal(t, "get-v5-users", oapi.Paths["/v5/users/"].Get.OperationID)
 
 	assert.Equal(t, "Get v1 users", oapi.Paths["/v1/users"].Get.Summary)

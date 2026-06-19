@@ -3,8 +3,10 @@ package huma
 import (
 	"bytes"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2/yaml"
@@ -63,7 +65,7 @@ func isNilValue(v any) bool {
 	// https://go.dev/doc/faq#nil_error
 	vv := reflect.ValueOf(v)
 	switch vv.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
 		return vv.IsNil()
 	}
 
@@ -88,9 +90,7 @@ func marshalJSON(fields []jsonFieldInfo, extensions map[string]any) ([]byte, err
 		value[v.name] = v.value
 	}
 
-	for k, v := range extensions {
-		value[k] = v
-	}
+	maps.Copy(value, extensions)
 
 	return json.Marshal(value)
 }
@@ -876,9 +876,18 @@ type Operation struct {
 	// caution!
 	SkipValidateBody bool `yaml:"-"`
 
+	// RejectUnknownQueryParameters indicates whether unknown query parameters
+	// should be rejected during validation.
+	RejectUnknownQueryParameters bool `yaml:"-"`
+
 	// Hidden will skip documenting this operation in the OpenAPI. This is
 	// useful for operations that are not intended to be used by clients but
 	// you'd still like the benefits of using Huma. Generally not recommended.
+	//
+	// The operation is omitted from the document's `paths`, and any schemas it
+	// is the sole user of are omitted from `components/schemas` as well, so they
+	// do not leak into the exported document. The schemas remain available
+	// internally for request/response validation.
 	Hidden bool `yaml:"-"`
 
 	// Metadata is a map of arbitrary data that can be attached to the operation.
@@ -1495,11 +1504,28 @@ type OpenAPI struct {
 
 // AddOperation adds an operation to the OpenAPI. This is the preferred way to
 // add operations to the OpenAPI, as it will ensure that the operation is
-// properly added to the Paths map, and will call any registered OnAddOperation
+// properly added to the Paths map and will call any registered OnAddOperation
 // functions.
 func (o *OpenAPI) AddOperation(op *Operation) {
+	// Normalize spaces in operation ID as some tools (e.g., Stoplight) do not
+	// handle them correctly and may redirect or fail to render the operation.
+	op.OperationID = strings.ReplaceAll(op.OperationID, " ", "-")
+
 	if o.Paths == nil {
 		o.Paths = map[string]*PathItem{}
+	}
+
+	if op.OperationID != "" {
+		for _, pathItem := range o.Paths {
+			for _, existingOp := range []*Operation{
+				pathItem.Get, pathItem.Post, pathItem.Put, pathItem.Patch,
+				pathItem.Delete, pathItem.Head, pathItem.Options, pathItem.Trace,
+			} {
+				if existingOp != nil && existingOp.OperationID == op.OperationID {
+					panic("duplicate operation ID: " + op.OperationID)
+				}
+			}
+		}
 	}
 
 	item := o.Paths[op.Path]
@@ -1534,7 +1560,40 @@ func (o *OpenAPI) AddOperation(op *Operation) {
 	}
 }
 
+// MarshalJSON serializes the OpenAPI object into JSON with custom handling for unused schemas in components.
 func (o *OpenAPI) MarshalJSON() ([]byte, error) {
+	full, err := o.marshalDoc(o.Components)
+	if err != nil {
+		return nil, err
+	}
+
+	// Operations marked `Hidden` are never added to `Paths`, but the schemas
+	// generated for their request/response bodies are still registered so they
+	// can be used for request validation. Prune any unreferenced schemas to
+	// avoid leaking them under `components/schemas`.
+	keep := usedSchemas(full)
+	if keep == nil {
+		// Nothing to prune (no schemas, all are used, or the document could not
+		// be analyzed). Emit the document we already marshaled.
+		return full, nil
+	}
+
+	pruned := *o.Components
+	if len(keep) == 0 {
+		// Every schema is unused. Drop the registry entirely so
+		// `components.schemas` is omitted rather than rendered as `{}`.
+		pruned.Schemas = nil
+	} else {
+		pruned.Schemas = newFilteredRegistry(o.Components.Schemas, keep)
+	}
+
+	return o.marshalDoc(&pruned)
+}
+
+// marshalDoc marshals the document using the given components. It is the shared
+// implementation behind `MarshalJSON`, factored out so a pruned copy of the
+// components can be substituted without recursing back into `MarshalJSON`.
+func (o *OpenAPI) marshalDoc(components *Components) ([]byte, error) {
 	return marshalJSON([]jsonFieldInfo{
 		{"openapi", o.OpenAPI, omitNever},
 		{"info", o.Info, omitNever},
@@ -1542,12 +1601,124 @@ func (o *OpenAPI) MarshalJSON() ([]byte, error) {
 		{"servers", o.Servers, omitEmpty},
 		{"paths", o.Paths, omitEmpty},
 		{"webhooks", o.Webhooks, omitEmpty},
-		{"components", o.Components, omitEmpty},
+		{"components", components, omitEmpty},
 		{"security", o.Security, omitNil},
 		{"tags", o.Tags, omitEmpty},
 		{"externalDocs", o.ExternalDocs, omitEmpty},
 	}, o.Extensions)
 }
+
+const schemaRefPrefix = "#/components/schemas/"
+
+// usedSchemas parses a marshaled OpenAPI document and returns the set of schema
+// names under `components/schemas` that are referenced, directly or
+// transitively, from the rest of the document. Walking the marshaled JSON finds
+// every `$ref` regardless of which field holds it, so it is robust to custom
+// schemas, extensions, and future fields, and can only ever keep a schema alive
+// (never drop a referenced one); it cannot produce dangling references.
+//
+// Only refs with the `#/components/schemas/` prefix are considered, so a ref
+// like `#/components/responses/Foo` cannot falsely mark a schema named `Foo`
+// as used.
+//
+// It returns nil to mean "do not prune": when there are no schemas, when every
+// schema is used, or when the document cannot be analyzed. An empty (non-nil)
+// map means "prune everything".
+func usedSchemas(doc []byte) map[string]bool {
+	var v any
+	if json.Unmarshal(doc, &v) != nil {
+		return nil
+	}
+
+	// Root must be an object. If it's not, avoid pruning nothing.
+	m, ok := v.(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	// `components` and `components.schemas` are both optional; failed
+	// assertions yield nil maps, which the `len(schemas) == 0` check below
+	// handles uniformly. Clone the components map before mutating so we never
+	// modify a map shared with the caller's parsed tree.
+	comp, _ := m["components"].(map[string]any)
+	schemas, _ := comp["schemas"].(map[string]any)
+	if len(schemas) == 0 {
+		return nil
+	}
+
+	compCopy := maps.Clone(comp)
+	delete(compCopy, "schemas")
+	m["components"] = compCopy
+
+	keep := map[string]bool{}
+	var mark func(node any)
+	mark = func(node any) {
+		collectRefs(node, func(ref string) {
+			if !strings.HasPrefix(ref, schemaRefPrefix) {
+				return
+			}
+			name := ref[len(schemaRefPrefix):]
+			if _, ok := schemas[name]; ok && !keep[name] {
+				keep[name] = true
+				mark(schemas[name])
+			}
+		})
+	}
+	mark(m)
+
+	if len(keep) == len(schemas) {
+		return nil
+	}
+
+	return keep
+}
+
+// collectRefs walks an arbitrary JSON value (as produced by `json.Unmarshal`
+// into `any`) and calls visit() for every `$ref` string it finds.
+func collectRefs(v any, visit func(string)) {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, val := range t {
+			if k == "$ref" {
+				if ref, ok := val.(string); ok {
+					visit(ref)
+				}
+				continue
+			}
+			collectRefs(val, visit)
+		}
+	case []any:
+		for _, val := range t {
+			collectRefs(val, visit)
+		}
+	}
+}
+
+// filteredRegistry wraps a Registry but exposes only a subset of its schemas. It
+// is used to omit unreferenced schemas from the exported OpenAPI document while
+// leaving the underlying registry (used for request validation) untouched. The
+// wrapper is short-lived and only ever JSON-marshaled, so it implements just
+// `Map` and `MarshalJSON`; the remaining `Registry` methods delegate to the
+// embedded registry.
+type filteredRegistry struct {
+	Registry
+	schemas map[string]*Schema
+}
+
+func newFilteredRegistry(r Registry, keep map[string]bool) *filteredRegistry {
+	all := r.Map()
+	schemas := make(map[string]*Schema, len(keep))
+	for name := range keep {
+		if s, ok := all[name]; ok {
+			schemas[name] = s
+		}
+	}
+	return &filteredRegistry{Registry: r, schemas: schemas}
+}
+
+func (r *filteredRegistry) Map() map[string]*Schema { return r.schemas }
+
+func (r *filteredRegistry) MarshalJSON() ([]byte, error) { return json.Marshal(r.schemas) }
 
 // YAML returns the OpenAPI represented as YAML without needing to include a
 // library to serialize YAML.
@@ -1638,6 +1809,11 @@ func downgradeSpec(input any) {
 				continue
 			}
 
+			if k == "contentEncoding" || k == "contentMediaType" {
+				m["x-"+k] = m[k]
+				delete(m, k)
+			}
+
 			downgradeSpec(v)
 		}
 	case []any:
@@ -1653,7 +1829,7 @@ func downgradeSpec(input any) {
 //
 // It reverses the changes documented at:
 // https://www.openapis.org/blog/2021/02/16/migrating-from-openapi-3-0-to-3-1-0
-func (o OpenAPI) Downgrade() ([]byte, error) {
+func (o *OpenAPI) Downgrade() ([]byte, error) {
 	b, err := o.MarshalJSON()
 	if err == nil {
 		var v any
