@@ -352,7 +352,7 @@ func (a *api) Unmarshal(contentType string, data []byte, v any) error {
 		return err
 	}
 
-	ct := contentType[start:end]
+	ct := strings.ToLower(contentType[start:end])
 	if ct == "" {
 		// Default to assume JSON since this is an API.
 		ct = "application/json"
@@ -396,14 +396,15 @@ func (a *api) Transform(ctx Context, status string, v any) (any, error) {
 }
 
 func (a *api) Marshal(w io.Writer, ct string, v any) error {
-	f, ok := a.formats[ct]
+	lower := strings.ToLower(ct)
+	f, ok := a.formats[lower]
 	if !ok {
-		start, end, err := parseContentType(ct)
+		start, end, err := parseContentType(lower)
 		if err != nil {
 			return err
 		}
 
-		f, ok = a.formats[ct[start:end]]
+		f, ok = a.formats[lower[start:end]]
 	}
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrUnknownContentType, ct)
