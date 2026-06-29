@@ -140,6 +140,16 @@ func (c *httprouterContext) Version() huma.ProtoVersion {
 	}
 }
 
+func (c *httprouterContext) WithContext(ctx context.Context) huma.Context {
+	return &httprouterContext{
+		op:     c.op,
+		r:      c.r.WithContext(ctx),
+		w:      c.w,
+		ps:     c.ps,
+		status: c.status,
+	}
+}
+
 type httprouterAdapter struct {
 	router *httprouter.Router
 }
@@ -160,4 +170,23 @@ func (a *httprouterAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func New(r *httprouter.Router, config huma.Config) huma.API {
 	return huma.NewAPI(config, &httprouterAdapter{router: r})
+}
+
+// middleware adapts a Httprouter middleware to huma's middleware type for testing
+func middleware(mw func(next httprouter.Handle) httprouter.Handle) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		// Unwrap the context to get the httprouter params
+		r, w, ps := Unwrap(ctx)
+		h := mw(func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+			ctx = &httprouterContext{
+				op:     ctx.Operation(),
+				r:      r,
+				w:      w,
+				ps:     p,
+				status: ctx.Status(),
+			}
+			next(ctx)
+		})
+		h(w, r, ps)
+	}
 }

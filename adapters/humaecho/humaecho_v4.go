@@ -138,6 +138,15 @@ func (c *echoV4Ctx) Version() huma.ProtoVersion {
 	}
 }
 
+func (c *echoV4Ctx) WithContext(ctx context.Context) huma.Context {
+	c.orig.SetRequest(c.orig.Request().WithContext(ctx))
+	return &echoV4Ctx{
+		op:     c.op,
+		orig:   c.orig,
+		status: c.status,
+	}
+}
+
 type routerV4 interface {
 	Add(method, path string, handler echoV4.HandlerFunc, middlewares ...echoV4.MiddlewareFunc) *echoV4.Route
 }
@@ -169,4 +178,16 @@ func NewV4(r *echoV4.Echo, config huma.Config) huma.API {
 // / schemas / etc.
 func NewV4WithGroup(r *echoV4.Echo, g *echoV4.Group, config huma.Config) huma.API {
 	return huma.NewAPI(config, &echoV4Adapter{Handler: r, router: g})
+}
+
+func middlewareV4(mw echoV4.MiddlewareFunc) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		eCtx := UnwrapV4(ctx)
+		f := mw(func(c echoV4.Context) error {
+			ctx = &echoV4Ctx{op: ctx.Operation(), orig: c}
+			next(ctx)
+			return nil
+		})
+		f(eCtx)
+	}
 }

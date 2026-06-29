@@ -137,6 +137,15 @@ func (c *ginCtx) Version() huma.ProtoVersion {
 	}
 }
 
+func (c *ginCtx) WithContext(ctx context.Context) huma.Context {
+	c.orig.Request = c.orig.Copy().Request.WithContext(ctx)
+	return &ginCtx{
+		op:     c.op,
+		orig:   c.orig,
+		status: c.status,
+	}
+}
+
 // NewContext creates a new Huma context from a Gin context
 func NewContext(op *huma.Operation, c *gin.Context) huma.Context {
 	return &ginCtx{op: op, orig: c}
@@ -173,4 +182,16 @@ func New(r *gin.Engine, config huma.Config) huma.API {
 // / schemas / etc.
 func NewWithGroup(r *gin.Engine, g *gin.RouterGroup, config huma.Config) huma.API {
 	return huma.NewAPI(config, &ginAdapter{Handler: r, router: g})
+}
+
+// middleware converts a Gin middleware function to a Huma middleware function.
+func middleware(mw func(gin.HandlerFunc) gin.HandlerFunc) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		c := Unwrap(ctx)
+		f := mw(func(gCtx *gin.Context) {
+			ctx := NewContext(ctx.Operation(), gCtx)
+			next(ctx)
+		})
+		f(c)
+	}
 }

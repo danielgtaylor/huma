@@ -155,6 +155,21 @@ func (c *fiberWrapper) Version() huma.ProtoVersion {
 	}
 }
 
+func (c *fiberWrapper) WithContext(ctx context.Context) huma.Context {
+	c.orig.SetContext(ctx)
+	return &fiberWrapper{
+		op:     c.op,
+		status: c.status,
+		orig:   c.orig,
+		ctx:    ctx,
+	}
+}
+
+// NewContext creates a new Huma context from a fiber context
+func NewContext(op *huma.Operation, c fiber.Ctx) huma.Context {
+	return &fiberWrapper{op: op, orig: c, ctx: c.Context()}
+}
+
 type router interface {
 	Add(methods []string, path string, handler any, handlers ...any) fiber.Router
 }
@@ -243,4 +258,18 @@ func New(r *fiber.App, config huma.Config) huma.API {
 // NewWithGroup creates a new Huma API using the Fiber adapter with a route group.
 func NewWithGroup(r *fiber.App, g fiber.Router, config huma.Config) huma.API {
 	return huma.NewAPI(config, &fiberAdapter{tester: r, router: g})
+}
+
+func middleware(mw func(next fiber.Handler) fiber.Handler) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		fCtx := Unwrap(ctx)
+		h := mw(func(c fiber.Ctx) error {
+			ctx := NewContext(ctx.Operation(), c)
+			next(ctx)
+			return nil
+		})
+		if err := h(fCtx); err != nil {
+			panic(err)
+		}
+	}
 }
