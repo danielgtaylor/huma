@@ -762,6 +762,41 @@ var validateTests = []struct {
 		errs:  []string{"expected array items to be unique"},
 	},
 	{
+		// Regression test for issue #1042:
+		// uniqueItems validation must NOT panic when array items are
+		// non-hashable types (e.g. objects decoded from JSON like [{}]).
+		// Expected: a 422 type-validation error, not a server crash.
+		name: "uniqueItems with unhashable object element must not panic",
+		typ: reflect.TypeFor[struct {
+			Value []string "json:\"value\" uniqueItems:\"true\""
+		}](),
+		input: map[string]any{"value": []any{map[string]any{"key": "val"}}},
+		errs:  []string{"expected string"},
+	},
+	{
+		// Regression test for issue #1042:
+		// Duplicate unhashable objects should still be detected as non-unique.
+		name: "uniqueItems detects duplicate unhashable objects",
+		typ: reflect.TypeFor[struct {
+			Value []any "json:\"value\" uniqueItems:\"true\""
+		}](),
+		input: map[string]any{"value": []any{
+			map[string]any{"a": 1},
+			map[string]any{"a": 1},
+		}},
+		errs: []string{"expected array items to be unique"},
+	},
+	{
+		// Regression test for issue #1042:
+		// Mixed arrays (some hashable, some not) must not panic.
+		name: "uniqueItems with mixed hashable and unhashable elements must not panic",
+		typ: reflect.TypeFor[struct {
+			Value []any "json:\"value\" uniqueItems:\"true\""
+		}](),
+		input: map[string]any{"value": []any{"ok", map[string]any{"k": "v"}}},
+	},
+
+	{
 		name:  "map success",
 		typ:   reflect.TypeFor[map[string]int](),
 		input: map[string]any{"one": 1, "two": 2},
