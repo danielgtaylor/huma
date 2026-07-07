@@ -55,6 +55,27 @@ func TestNewJSONLoggerPresets(t *testing.T) {
 			t.Fatalf("GCP log should not include msg: %#v", entry)
 		}
 	})
+
+	t.Run("azure", func(t *testing.T) {
+		var buf bytes.Buffer
+		logger := middleware.NewJSONLogger(middleware.JSONLoggerConfig{
+			Writer: &buf,
+			Preset: middleware.LogPresetAzure,
+		})
+
+		logger.Warn("slow")
+
+		entry := decodeLogEntries(t, &buf)[0]
+		if entry["message"] != "slow" {
+			t.Fatalf("message = %v, want slow", entry["message"])
+		}
+		if entry["level"] != "WARNING" {
+			t.Fatalf("level = %v, want WARNING", entry["level"])
+		}
+		if _, ok := entry["msg"]; ok {
+			t.Fatalf("Azure log should not include msg: %#v", entry)
+		}
+	})
 }
 
 func TestAccessLoggerGeneric(t *testing.T) {
@@ -71,7 +92,7 @@ func TestAccessLoggerGeneric(t *testing.T) {
 	)
 
 	huma.Get(api, "/test", func(ctx context.Context, _ *struct{}) (*struct{ Status int }, error) {
-		middleware.Logger(ctx).InfoContext(ctx, "handler")
+		middleware.RequestLogger(ctx).InfoContext(ctx, "handler")
 		return &struct{ Status int }{Status: http.StatusCreated}, nil
 	})
 
@@ -141,8 +162,14 @@ func TestAccessLoggerGCPPreset(t *testing.T) {
 	if entry["logging.googleapis.com/trace"] != "projects/test-project/traces/3d23d071b5bfd6579171efce907685cb" {
 		t.Fatalf("trace field = %v", entry["logging.googleapis.com/trace"])
 	}
-	if entry["logging.googleapis.com/spanId"] != "08f067aa0ba902b7" {
-		t.Fatalf("span field = %v", entry["logging.googleapis.com/spanId"])
+	if entry["parentId"] != "08f067aa0ba902b7" {
+		t.Fatalf("parentId = %v, want 08f067aa0ba902b7", entry["parentId"])
+	}
+	if entry["traceFlags"] != "01" {
+		t.Fatalf("traceFlags = %v, want 01", entry["traceFlags"])
+	}
+	if _, ok := entry["logging.googleapis.com/spanId"]; ok {
+		t.Fatalf("GCP log should not emit spanId without an active span: %#v", entry)
 	}
 	if entry["logging.googleapis.com/trace_sampled"] != true {
 		t.Fatalf("trace_sampled = %v, want true", entry["logging.googleapis.com/trace_sampled"])
@@ -154,6 +181,8 @@ func TestAccessLoggerGCPPreset(t *testing.T) {
 }
 
 func TestAccessLoggerAWSCloudWatchShape(t *testing.T) {
+	const traceparent = "00-3d23d071b5bfd6579171efce907685cb-08f067aa0ba902b7-01"
+
 	var buf bytes.Buffer
 	_, api := humatest.New(t)
 	api.UseMiddleware(
@@ -177,7 +206,7 @@ func TestAccessLoggerAWSCloudWatchShape(t *testing.T) {
 		return &struct{ Status int }{Status: http.StatusNoContent}, nil
 	})
 
-	api.Get("/test")
+	api.Get("/test", "traceparent: "+traceparent)
 
 	entry := decodeLogEntries(t, &buf)[0]
 	if entry["message"] != "request completed" {
@@ -186,6 +215,18 @@ func TestAccessLoggerAWSCloudWatchShape(t *testing.T) {
 	if entry["requestId"] != "req-123" {
 		t.Fatalf("requestId = %v, want req-123", entry["requestId"])
 	}
+	if entry["traceId"] != "3d23d071b5bfd6579171efce907685cb" {
+		t.Fatalf("traceId = %v, want trace ID", entry["traceId"])
+	}
+	if entry["parentId"] != "08f067aa0ba902b7" {
+		t.Fatalf("parentId = %v, want parent ID", entry["parentId"])
+	}
+	if entry["traceFlags"] != "01" {
+		t.Fatalf("traceFlags = %v, want 01", entry["traceFlags"])
+	}
+	if _, ok := entry["spanId"]; ok {
+		t.Fatalf("AWS log should not emit spanId without an active span: %#v", entry)
+	}
 	if entry["service"] != "billing" {
 		t.Fatalf("service = %v, want billing", entry["service"])
 	}
@@ -193,6 +234,112 @@ func TestAccessLoggerAWSCloudWatchShape(t *testing.T) {
 	response := httpGroup["response"].(map[string]any)
 	if response["status_code"] != float64(http.StatusNoContent) {
 		t.Fatalf("http.response.status_code = %v, want 204", response["status_code"])
+	}
+}
+
+func TestAccessLoggerAzureMonitorShape(t *testing.T) {
+	const traceparent = "00-3d23d071b5bfd6579171efce907685cb-08f067aa0ba902b7-01"
+
+	var buf bytes.Buffer
+	_, api := humatest.New(t)
+	api.UseMiddleware(
+		middleware.RequestContext(middleware.RequestContextConfig{
+			NewRequestID: func() string { return "req-123" },
+		}),
+		middleware.AccessLogger(middleware.AccessLoggerConfig{
+			Logger: middleware.NewJSONLogger(middleware.JSONLoggerConfig{
+				Writer: &buf,
+				Preset: middleware.LogPresetAzure,
+			}),
+			Preset: middleware.LogPresetAzure,
+			Now:    sequenceNow(time.Unix(100, 0), time.Unix(100, int64(time.Millisecond))),
+		}),
+	)
+
+	huma.Get(api, "/test", func(ctx context.Context, _ *struct{}) (*struct{ Status int }, error) {
+		return &struct{ Status int }{Status: http.StatusAccepted}, nil
+	})
+
+	api.Get("/test", "traceparent: "+traceparent)
+
+	entry := decodeLogEntries(t, &buf)[0]
+	if entry["message"] != "request completed" {
+		t.Fatalf("message = %v, want request completed", entry["message"])
+	}
+	if entry["level"] != "INFO" {
+		t.Fatalf("level = %v, want INFO", entry["level"])
+	}
+	if entry["operationId"] != "3d23d071b5bfd6579171efce907685cb" {
+		t.Fatalf("operationId = %v, want trace ID", entry["operationId"])
+	}
+	if entry["traceId"] != "3d23d071b5bfd6579171efce907685cb" {
+		t.Fatalf("traceId = %v, want trace ID", entry["traceId"])
+	}
+	if entry["parentId"] != "08f067aa0ba902b7" {
+		t.Fatalf("parentId = %v, want parent ID", entry["parentId"])
+	}
+	if entry["traceFlags"] != "01" {
+		t.Fatalf("traceFlags = %v, want 01", entry["traceFlags"])
+	}
+	httpGroup := entry["http"].(map[string]any)
+	response := httpGroup["response"].(map[string]any)
+	if response["status_code"] != float64(http.StatusAccepted) {
+		t.Fatalf("http.response.status_code = %v, want 202", response["status_code"])
+	}
+}
+
+func TestAccessLoggerGCPCloudTraceContextSampleOption(t *testing.T) {
+	tests := []struct {
+		name    string
+		header  string
+		sampled bool
+	}{
+		{
+			name:    "sampled",
+			header:  "3d23d071b5bfd6579171efce907685cb/123;o=1",
+			sampled: true,
+		},
+		{
+			name:   "not substring matched",
+			header: "3d23d071b5bfd6579171efce907685cb/123;o=10",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			_, api := humatest.New(t)
+			api.UseMiddleware(
+				middleware.RequestContext(middleware.RequestContextConfig{
+					NewRequestID: func() string { return "req-123" },
+				}),
+				middleware.AccessLogger(middleware.AccessLoggerConfig{
+					Logger: middleware.NewJSONLogger(middleware.JSONLoggerConfig{
+						Writer: &buf,
+						Preset: middleware.LogPresetGCP,
+					}),
+					Preset: middleware.LogPresetGCP,
+					GCP: middleware.GCPConfig{
+						ProjectID: "test-project",
+					},
+					Now: sequenceNow(time.Unix(100, 0), time.Unix(100, int64(time.Millisecond))),
+				}),
+			)
+
+			huma.Get(api, "/test", func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+				return &struct{}{}, nil
+			})
+
+			api.Get("/test", "X-Cloud-Trace-Context: "+tc.header)
+
+			entry := decodeLogEntries(t, &buf)[0]
+			if entry["logging.googleapis.com/trace"] != "projects/test-project/traces/3d23d071b5bfd6579171efce907685cb" {
+				t.Fatalf("trace field = %v", entry["logging.googleapis.com/trace"])
+			}
+			if entry["logging.googleapis.com/trace_sampled"] != tc.sampled {
+				t.Fatalf("trace_sampled = %v, want %v", entry["logging.googleapis.com/trace_sampled"], tc.sampled)
+			}
+		})
 	}
 }
 
@@ -263,8 +410,8 @@ func sequenceNow(times ...time.Time) func() time.Time {
 	}
 }
 
-func TestLoggerFallback(t *testing.T) {
-	if middleware.Logger(nil) == nil {
-		t.Fatal("Logger(nil) returned nil")
+func TestRequestLoggerFallback(t *testing.T) {
+	if middleware.RequestLogger(nil) == nil {
+		t.Fatal("RequestLogger(nil) returned nil")
 	}
 }

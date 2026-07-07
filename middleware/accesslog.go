@@ -17,7 +17,9 @@ type AccessLoggerConfig struct {
 	// slog.Default().
 	Logger *slog.Logger
 
-	// Preset configures built-in field names for a log aggregation target.
+	// Preset configures request and access-log field names for a log aggregation
+	// target. When Logger is created by NewJSONLogger, set both configs to the
+	// same preset.
 	Preset LogPreset
 
 	// GCP configures Google Cloud Logging fields.
@@ -46,7 +48,9 @@ type GCPConfig struct {
 }
 
 // AccessLogger returns middleware that stores a request-scoped logger and emits
-// one structured access log after the operation completes.
+// one structured access log after the operation completes. Register
+// RequestContext before AccessLogger to include request ID and trace correlation
+// fields.
 func AccessLogger(config AccessLoggerConfig) func(huma.Context, func(huma.Context)) {
 	config = withAccessLoggerDefaults(config)
 
@@ -102,6 +106,8 @@ func loggerRequestAttrs(ctx huma.Context, config AccessLoggerConfig) []slog.Attr
 		return gcpRequestAttrs(ctx, config, info)
 	case LogPresetAWS:
 		return awsRequestAttrs(info)
+	case LogPresetAzure:
+		return azureRequestAttrs(info)
 	default:
 		return genericRequestAttrs(info)
 	}
@@ -119,6 +125,8 @@ func accessAttrs(ctx huma.Context, config AccessLoggerConfig, status int, durati
 		return gcpAccessAttrs(ctx, config, info, status, duration)
 	case LogPresetAWS:
 		return awsAccessAttrs(ctx, info, status, duration, config.ExtraAttrs)
+	case LogPresetAzure:
+		return azureAccessAttrs(ctx, info, status, duration, config.ExtraAttrs)
 	default:
 		return genericAccessAttrs(ctx, info, status, duration, config.ExtraAttrs)
 	}
@@ -202,7 +210,8 @@ func genericRequestAttrs(info RequestInfo) []slog.Attr {
 	if info.Trace.Valid {
 		attrs = append(attrs,
 			slog.String("trace_id", info.Trace.TraceID),
-			slog.String("span_id", info.Trace.ParentID),
+			slog.String("parent_id", info.Trace.ParentID),
+			slog.String("trace_flags", traceFlagsText(info.Trace.Flags)),
 			slog.Bool("sampled", info.Trace.Sampled),
 		)
 	}
@@ -219,17 +228,18 @@ func gcpRequestAttrs(ctx huma.Context, config AccessLoggerConfig, info RequestIn
 	}
 
 	traceID := ""
-	spanID := ""
+	parentID := ""
+	traceFlags := byte(0)
 	sampled := false
 	if info.Trace.Valid {
 		traceID = info.Trace.TraceID
-		spanID = info.Trace.ParentID
+		parentID = info.Trace.ParentID
+		traceFlags = info.Trace.Flags
 		sampled = info.Trace.Sampled
 	} else if config.GCP.CloudTraceContextHeader != "" {
 		trace := parseCloudTraceContext(ctx.Header(config.GCP.CloudTraceContextHeader))
 		if trace.Valid {
 			traceID = trace.TraceID
-			spanID = trace.SpanID
 			sampled = trace.Sampled
 		}
 	}
@@ -238,11 +248,15 @@ func gcpRequestAttrs(ctx huma.Context, config AccessLoggerConfig, info RequestIn
 		return attrs
 	}
 	if config.GCP.ProjectID == "" {
-		return append(attrs, slog.String("traceId", traceID))
+		attrs = append(attrs, slog.String("traceId", traceID))
+	} else {
+		attrs = append(attrs, slog.String("logging.googleapis.com/trace", "projects/"+config.GCP.ProjectID+"/traces/"+traceID))
 	}
-	attrs = append(attrs, slog.String("logging.googleapis.com/trace", "projects/"+config.GCP.ProjectID+"/traces/"+traceID))
-	if spanID != "" {
-		attrs = append(attrs, slog.String("logging.googleapis.com/spanId", spanID))
+	if parentID != "" {
+		attrs = append(attrs, slog.String("parentId", parentID))
+	}
+	if info.Trace.Valid {
+		attrs = append(attrs, slog.String("traceFlags", traceFlagsText(traceFlags)))
 	}
 	return append(attrs, slog.Bool("logging.googleapis.com/trace_sampled", sampled))
 }
@@ -258,7 +272,52 @@ func awsRequestAttrs(info RequestInfo) []slog.Attr {
 	if info.Trace.Valid {
 		attrs = append(attrs,
 			slog.String("traceId", info.Trace.TraceID),
-			slog.String("spanId", info.Trace.ParentID),
+			slog.String("parentId", info.Trace.ParentID),
+			slog.String("traceFlags", traceFlagsText(info.Trace.Flags)),
+			slog.Bool("sampled", info.Trace.Sampled),
+		)
+	}
+	return attrs
+}
+
+func azureAccessAttrs(ctx huma.Context, info RequestInfo, status int, duration time.Duration, extra func(huma.Context) []slog.Attr) []slog.Attr {
+	route := ""
+	if op := ctx.Operation(); op != nil {
+		route = op.Path
+	}
+	attrs := []slog.Attr{
+		slog.Group("http",
+			slog.Group("request",
+				slog.String("method", ctx.Method()),
+			),
+			slog.String("route", route),
+			slog.Group("response",
+				slog.Int("status_code", status),
+			),
+		),
+		slog.Float64("duration_ms", durationMilliseconds(duration)),
+	}
+	attrs = append(attrs, azureRequestAttrs(info)...)
+	if extra != nil {
+		attrs = append(attrs, extra(ctx)...)
+	}
+	return attrs
+}
+
+func azureRequestAttrs(info RequestInfo) []slog.Attr {
+	var attrs []slog.Attr
+	if info.RequestID != "" {
+		attrs = append(attrs, slog.String("requestId", info.RequestID))
+	}
+	if info.CorrelationID != "" {
+		attrs = append(attrs, slog.String("correlationId", info.CorrelationID))
+	}
+	if info.Trace.Valid {
+		attrs = append(attrs,
+			slog.String("operationId", info.Trace.TraceID),
+			slog.String("traceId", info.Trace.TraceID),
+			slog.String("parentId", info.Trace.ParentID),
+			slog.String("traceFlags", traceFlagsText(info.Trace.Flags)),
 			slog.Bool("sampled", info.Trace.Sampled),
 		)
 	}
@@ -295,7 +354,6 @@ const (
 
 type cloudTraceContext struct {
 	TraceID string
-	SpanID  string
 	Sampled bool
 	Valid   bool
 }
@@ -317,10 +375,18 @@ func parseCloudTraceContext(header string) cloudTraceContext {
 	}
 	return cloudTraceContext{
 		TraceID: traceID,
-		SpanID:  spanID,
-		Sampled: strings.Contains(options, "o=1"),
+		Sampled: cloudTraceSampled(options),
 		Valid:   true,
 	}
+}
+
+func cloudTraceSampled(options string) bool {
+	for _, option := range strings.Split(options, ";") {
+		if strings.TrimSpace(option) == "o=1" {
+			return true
+		}
+	}
+	return false
 }
 
 func allDigits(value string) bool {
@@ -330,4 +396,9 @@ func allDigits(value string) bool {
 		}
 	}
 	return true
+}
+
+func traceFlagsText(flags byte) string {
+	const hex = "0123456789abcdef"
+	return string([]byte{hex[flags>>4], hex[flags&0x0f]})
 }

@@ -35,6 +35,10 @@ func TestParseTraceparent(t *testing.T) {
 			valid:  true,
 		},
 		{
+			name:   "future version extra data requires delimiter",
+			header: "01-" + validTraceID + "-" + validParentID + "-00extra",
+		},
+		{
 			name:   "all-zero trace ID",
 			header: "00-00000000000000000000000000000000-" + validParentID + "-01",
 		},

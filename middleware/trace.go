@@ -52,6 +52,9 @@ func ParseTraceparent(header string) TraceContext {
 	if version == "00" && len(header) != traceparentSize {
 		return TraceContext{}
 	}
+	if version != "00" && len(header) > traceparentSize && header[traceparentSize] != '-' {
+		return TraceContext{}
+	}
 
 	traceID := header[3:35]
 	parentID := header[36:52]
