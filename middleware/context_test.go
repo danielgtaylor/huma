@@ -104,6 +104,27 @@ func TestRequestContextRejectsUnsafeRequestID(t *testing.T) {
 	}
 }
 
+func TestRequestContextAcceptsSafeRequestID(t *testing.T) {
+	_, api := humatest.New(t)
+	api.UseMiddleware(middleware.RequestContext(middleware.RequestContextConfig{
+		NewRequestID: func() string { return "generated-id" },
+	}))
+
+	var gotRequestID string
+	huma.Get(api, "/test", func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+		gotRequestID = middleware.RequestID(ctx)
+		return &struct{}{}, nil
+	})
+
+	resp := api.Get("/test", "X-Request-Id: client-id_123")
+	if gotRequestID != "client-id_123" {
+		t.Fatalf("RequestID = %q, want client-id_123", gotRequestID)
+	}
+	if header := resp.Header().Get("X-Request-Id"); header != "client-id_123" {
+		t.Fatalf("response request ID header = %q, want client-id_123", header)
+	}
+}
+
 func TestRequestContextCanDisableResponseHeader(t *testing.T) {
 	_, api := humatest.New(t)
 	api.UseMiddleware(middleware.RequestContext(middleware.RequestContextConfig{

@@ -7,11 +7,13 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humago"
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/danielgtaylor/huma/v2/middleware"
 )
@@ -231,6 +233,66 @@ func TestAccessLoggerGCPTraceWithoutProjectID(t *testing.T) {
 	}
 }
 
+func TestAccessLoggerGCPRemoteIPStripsPort(t *testing.T) {
+	tests := []struct {
+		name       string
+		remoteAddr string
+		remoteIP   string
+	}{
+		{
+			name:       "ipv4 with port",
+			remoteAddr: "203.0.113.10:4321",
+			remoteIP:   "203.0.113.10",
+		},
+		{
+			name:       "ipv6 with port",
+			remoteAddr: "[2001:db8::1]:4321",
+			remoteIP:   "2001:db8::1",
+		},
+		{
+			name:       "ipv6 without port",
+			remoteAddr: "2001:db8::2",
+			remoteIP:   "2001:db8::2",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			mux := http.NewServeMux()
+			api := humago.New(mux, huma.DefaultConfig("Test API", "1.0.0"))
+			api.UseMiddleware(
+				middleware.RequestContext(middleware.RequestContextConfig{
+					NewRequestID: func() string { return "req-123" },
+				}),
+				middleware.AccessLogger(middleware.AccessLoggerConfig{
+					Logger: middleware.NewJSONLogger(middleware.JSONLoggerConfig{
+						Writer: &buf,
+						Preset: middleware.LogPresetGCP,
+					}),
+					Preset: middleware.LogPresetGCP,
+					Now:    sequenceNow(time.Unix(100, 0), time.Unix(100, int64(time.Millisecond))),
+				}),
+			)
+
+			huma.Get(api, "/test", func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+				return &struct{}{}, nil
+			})
+
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			req.RemoteAddr = tc.remoteAddr
+			resp := httptest.NewRecorder()
+			mux.ServeHTTP(resp, req)
+
+			entry := decodeLogEntries(t, &buf)[0]
+			httpRequest := entry["httpRequest"].(map[string]any)
+			if httpRequest["remoteIp"] != tc.remoteIP {
+				t.Fatalf("httpRequest.remoteIp = %v, want %s", httpRequest["remoteIp"], tc.remoteIP)
+			}
+		})
+	}
+}
+
 func TestAccessLoggerAWSCloudWatchShape(t *testing.T) {
 	const traceparent = "00-3d23d071b5bfd6579171efce907685cb-08f067aa0ba902b7-01"
 
@@ -391,6 +453,39 @@ func TestAccessLoggerGCPCloudTraceContextSampleOption(t *testing.T) {
 				t.Fatalf("trace_sampled = %v, want %v", entry["logging.googleapis.com/trace_sampled"], tc.sampled)
 			}
 		})
+	}
+}
+
+func TestAccessLoggerClampsNegativeDuration(t *testing.T) {
+	var buf bytes.Buffer
+	_, api := humatest.New(t)
+	api.UseMiddleware(
+		middleware.RequestContext(middleware.RequestContextConfig{
+			NewRequestID: func() string { return "req-123" },
+		}),
+		middleware.AccessLogger(middleware.AccessLoggerConfig{
+			Logger: middleware.NewJSONLogger(middleware.JSONLoggerConfig{
+				Writer: &buf,
+				Preset: middleware.LogPresetGCP,
+			}),
+			Preset: middleware.LogPresetGCP,
+			Now:    sequenceNow(time.Unix(100, 0), time.Unix(99, 0)),
+		}),
+	)
+
+	huma.Get(api, "/test", func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+		return &struct{}{}, nil
+	})
+
+	api.Get("/test")
+
+	entry := decodeLogEntries(t, &buf)[0]
+	if entry["duration_ms"] != float64(0) {
+		t.Fatalf("duration_ms = %v, want 0", entry["duration_ms"])
+	}
+	httpRequest := entry["httpRequest"].(map[string]any)
+	if httpRequest["latency"] != "0s" {
+		t.Fatalf("httpRequest.latency = %v, want 0s", httpRequest["latency"])
 	}
 }
 

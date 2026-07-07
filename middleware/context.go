@@ -49,17 +49,10 @@ type RequestContextConfig struct {
 	NewRequestID func() string
 }
 
-// RequestInfo contains request-scoped correlation data.
-type RequestInfo struct {
-	// RequestID is the accepted or generated request ID.
-	RequestID string
-
-	// CorrelationID is the valid W3C trace ID when present, otherwise the
-	// request ID.
+type requestInfo struct {
+	RequestID     string
 	CorrelationID string
-
-	// Trace is the parsed W3C Trace Context data.
-	Trace TraceContext
+	Trace         TraceContext
 }
 
 // RequestContext returns middleware that parses request correlation data and
@@ -83,7 +76,7 @@ func RequestContext(config RequestContextConfig) func(huma.Context, func(huma.Co
 			correlationID = trace.TraceID
 		}
 
-		info := RequestInfo{
+		info := requestInfo{
 			RequestID:     requestID,
 			CorrelationID: correlationID,
 			Trace:         trace,
@@ -99,24 +92,24 @@ func RequestContext(config RequestContextConfig) func(huma.Context, func(huma.Co
 
 // RequestID returns the request ID stored in ctx, if any.
 func RequestID(ctx context.Context) string {
-	return requestInfo(ctx).RequestID
+	return requestContextInfo(ctx).RequestID
 }
 
 // CorrelationID returns the correlation ID stored in ctx, if any.
 func CorrelationID(ctx context.Context) string {
-	return requestInfo(ctx).CorrelationID
+	return requestContextInfo(ctx).CorrelationID
 }
 
 // Trace returns the W3C Trace Context stored in ctx, if any.
 func Trace(ctx context.Context) TraceContext {
-	return requestInfo(ctx).Trace
+	return requestContextInfo(ctx).Trace
 }
 
-func requestInfo(ctx context.Context) RequestInfo {
+func requestContextInfo(ctx context.Context) requestInfo {
 	if ctx == nil {
-		return RequestInfo{}
+		return requestInfo{}
 	}
-	info, _ := ctx.Value(requestInfoKey{}).(RequestInfo)
+	info, _ := ctx.Value(requestInfoKey{}).(requestInfo)
 	return info
 }
 

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"log/slog"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -101,7 +102,7 @@ func requestLogger(ctx huma.Context, config AccessLoggerConfig) *slog.Logger {
 }
 
 func loggerRequestAttrs(ctx huma.Context, config AccessLoggerConfig) []slog.Attr {
-	info := requestInfo(ctx.Context())
+	info := requestContextInfo(ctx.Context())
 	switch config.Preset {
 	case LogPresetGCP:
 		return gcpRequestAttrs(ctx, config, info)
@@ -115,12 +116,12 @@ func loggerRequestAttrs(ctx huma.Context, config AccessLoggerConfig) []slog.Attr
 }
 
 func writeAccessLog(ctx huma.Context, logger *slog.Logger, config AccessLoggerConfig, start time.Time, status int) {
-	attrs := accessAttrs(ctx, config, status, config.Now().Sub(start))
+	attrs := accessAttrs(ctx, config, status, elapsed(start, config.Now()))
 	logger.LogAttrs(ctx.Context(), config.StatusLevel(status), "request completed", attrs...)
 }
 
 func accessAttrs(ctx huma.Context, config AccessLoggerConfig, status int, duration time.Duration) []slog.Attr {
-	info := requestInfo(ctx.Context())
+	info := requestContextInfo(ctx.Context())
 	switch config.Preset {
 	case LogPresetGCP:
 		return gcpAccessAttrs(ctx, config, info, status, duration)
@@ -133,7 +134,7 @@ func accessAttrs(ctx huma.Context, config AccessLoggerConfig, status int, durati
 	}
 }
 
-func genericAccessAttrs(ctx huma.Context, info RequestInfo, status int, duration time.Duration, extra func(huma.Context) []slog.Attr) []slog.Attr {
+func genericAccessAttrs(ctx huma.Context, info requestInfo, status int, duration time.Duration, extra func(huma.Context) []slog.Attr) []slog.Attr {
 	attrs := []slog.Attr{
 		slog.String("method", ctx.Method()),
 		slog.Int("status", status),
@@ -152,14 +153,14 @@ func genericAccessAttrs(ctx huma.Context, info RequestInfo, status int, duration
 	return attrs
 }
 
-func gcpAccessAttrs(ctx huma.Context, config AccessLoggerConfig, info RequestInfo, status int, duration time.Duration) []slog.Attr {
+func gcpAccessAttrs(ctx huma.Context, config AccessLoggerConfig, info requestInfo, status int, duration time.Duration) []slog.Attr {
 	attrs := []slog.Attr{
 		slog.Group("httpRequest",
 			slog.String("requestMethod", ctx.Method()),
 			slog.String("requestUrl", ctx.URL().Path),
 			slog.Int("status", status),
 			slog.String("userAgent", ctx.Header("User-Agent")),
-			slog.String("remoteIp", ctx.RemoteAddr()),
+			slog.String("remoteIp", remoteIP(ctx.RemoteAddr())),
 			slog.String("latency", durationSeconds(duration)),
 		),
 		slog.Float64("duration_ms", durationMilliseconds(duration)),
@@ -177,7 +178,7 @@ func gcpAccessAttrs(ctx huma.Context, config AccessLoggerConfig, info RequestInf
 	return attrs
 }
 
-func awsAccessAttrs(ctx huma.Context, info RequestInfo, status int, duration time.Duration, extra func(huma.Context) []slog.Attr) []slog.Attr {
+func awsAccessAttrs(ctx huma.Context, info requestInfo, status int, duration time.Duration, extra func(huma.Context) []slog.Attr) []slog.Attr {
 	route := ""
 	if op := ctx.Operation(); op != nil {
 		route = op.Path
@@ -201,7 +202,7 @@ func awsAccessAttrs(ctx huma.Context, info RequestInfo, status int, duration tim
 	return attrs
 }
 
-func genericRequestAttrs(info RequestInfo) []slog.Attr {
+func genericRequestAttrs(info requestInfo) []slog.Attr {
 	var attrs []slog.Attr
 	if info.RequestID != "" {
 		attrs = append(attrs, slog.String("request_id", info.RequestID))
@@ -220,7 +221,7 @@ func genericRequestAttrs(info RequestInfo) []slog.Attr {
 	return attrs
 }
 
-func gcpRequestAttrs(ctx huma.Context, config AccessLoggerConfig, info RequestInfo) []slog.Attr {
+func gcpRequestAttrs(ctx huma.Context, config AccessLoggerConfig, info requestInfo) []slog.Attr {
 	var attrs []slog.Attr
 	if info.RequestID != "" {
 		attrs = append(attrs, slog.String("requestId", info.RequestID))
@@ -263,7 +264,7 @@ func gcpRequestAttrs(ctx huma.Context, config AccessLoggerConfig, info RequestIn
 	return append(attrs, slog.Bool("logging.googleapis.com/trace_sampled", sampled))
 }
 
-func awsRequestAttrs(info RequestInfo) []slog.Attr {
+func awsRequestAttrs(info requestInfo) []slog.Attr {
 	var attrs []slog.Attr
 	if info.RequestID != "" {
 		attrs = append(attrs, slog.String("requestId", info.RequestID))
@@ -282,7 +283,7 @@ func awsRequestAttrs(info RequestInfo) []slog.Attr {
 	return attrs
 }
 
-func azureAccessAttrs(ctx huma.Context, info RequestInfo, status int, duration time.Duration, extra func(huma.Context) []slog.Attr) []slog.Attr {
+func azureAccessAttrs(ctx huma.Context, info requestInfo, status int, duration time.Duration, extra func(huma.Context) []slog.Attr) []slog.Attr {
 	route := ""
 	if op := ctx.Operation(); op != nil {
 		route = op.Path
@@ -306,7 +307,7 @@ func azureAccessAttrs(ctx huma.Context, info RequestInfo, status int, duration t
 	return attrs
 }
 
-func azureRequestAttrs(info RequestInfo) []slog.Attr {
+func azureRequestAttrs(info requestInfo) []slog.Attr {
 	var attrs []slog.Attr
 	if info.RequestID != "" {
 		attrs = append(attrs, slog.String("requestId", info.RequestID))
@@ -344,6 +345,14 @@ func statusOrDefault(status, defaultStatus int) int {
 	return status
 }
 
+func elapsed(start, end time.Time) time.Duration {
+	duration := end.Sub(start)
+	if duration < 0 {
+		return 0
+	}
+	return duration
+}
+
 func durationMilliseconds(duration time.Duration) float64 {
 	return float64(duration) / float64(time.Millisecond)
 }
@@ -359,6 +368,16 @@ func durationSeconds(duration time.Duration) string {
 	}
 	fraction := strings.TrimRight(strconv.FormatInt(int64(nanos)+int64(time.Second), 10)[1:], "0")
 	return strconv.FormatInt(int64(seconds), 10) + "." + fraction + "s"
+}
+
+func remoteIP(addr string) string {
+	if host, _, err := net.SplitHostPort(addr); err == nil {
+		return host
+	}
+	if strings.HasPrefix(addr, "[") && strings.HasSuffix(addr, "]") {
+		return strings.TrimPrefix(strings.TrimSuffix(addr, "]"), "[")
+	}
+	return addr
 }
 
 const (
