@@ -19,9 +19,8 @@ type AccessLoggerConfig struct {
 	// slog.Default().
 	Logger *slog.Logger
 
-	// Preset configures request and access-log field names for a log aggregation
-	// target. When Logger is created by NewJSONLogger, set both configs to the
-	// same preset.
+	// Preset configures request and access-log field names. When Logger is
+	// created by NewJSONLogger, use the same preset in both configs.
 	Preset LogPreset
 
 	// GCP configures Google Cloud Logging fields.
@@ -40,12 +39,13 @@ type AccessLoggerConfig struct {
 
 // GCPConfig configures Google Cloud Logging fields.
 type GCPConfig struct {
-	// ProjectID is the Google Cloud project ID used to format Cloud Trace links.
+	// ProjectID is the Google Cloud project ID. When set, trace IDs are formatted
+	// as full Cloud Trace resource names.
 	ProjectID string
 
-	// CloudTraceContextHeader is the optional provider-specific request header
-	// used by Cloud Run for request-log nesting. The default is
-	// "X-Cloud-Trace-Context" when LogPresetGCP is selected.
+	// CloudTraceContextHeader is the fallback request header used for Google
+	// Cloud trace correlation when traceparent is absent or invalid. The default
+	// is "X-Cloud-Trace-Context" when LogPresetGCP is selected.
 	CloudTraceContextHeader string
 }
 

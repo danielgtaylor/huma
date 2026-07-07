@@ -21,18 +21,18 @@ type requestInfoKey struct{}
 
 var fallbackRequestID atomic.Uint64
 
-// RequestContextConfig configures the request context middleware.
+// RequestContextConfig configures RequestContext.
 type RequestContextConfig struct {
-	// RequestIDHeader is the request header used to accept an existing request
-	// ID. The default is "X-Request-Id".
+	// RequestIDHeader is the request header used to accept an existing request ID.
+	// The default is "X-Request-Id".
 	RequestIDHeader string
 
-	// TraceparentHeader is the request header used for W3C Trace Context. The
-	// default is "traceparent".
+	// TraceparentHeader is the W3C Trace Context traceparent header. The default
+	// is "traceparent".
 	TraceparentHeader string
 
-	// TracestateHeader is the request header used for W3C Trace Context state.
-	// The default is "tracestate".
+	// TracestateHeader is the W3C Trace Context tracestate header. The default is
+	// "tracestate".
 	TracestateHeader string
 
 	// ResponseRequestIDHeader is the response header used to echo the request ID.
@@ -43,9 +43,8 @@ type RequestContextConfig struct {
 	// response.
 	DisableResponseRequestIDHeader bool
 
-	// NewRequestID creates a request ID when the incoming request ID is missing
-	// or invalid. The default uses crypto/rand and returns 16 lowercase hex
-	// encoded random bytes.
+	// NewRequestID creates a request ID when the incoming request ID is missing or
+	// invalid. The default returns 16 random bytes encoded as lowercase hex.
 	NewRequestID func() string
 }
 
@@ -55,8 +54,8 @@ type requestInfo struct {
 	Trace         TraceContext
 }
 
-// RequestContext returns middleware that parses request correlation data and
-// stores it on the underlying context.Context.
+// RequestContext returns middleware that stores request ID and trace correlation
+// data on the underlying context.Context.
 func RequestContext(config RequestContextConfig) func(huma.Context, func(huma.Context)) {
 	config = withRequestContextDefaults(config)
 

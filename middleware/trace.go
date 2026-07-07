@@ -16,13 +16,13 @@ type TraceContext struct {
 	// TraceID is the 16-byte trace ID as lowercase hex.
 	TraceID string
 
-	// ParentID is the parent span ID as lowercase hex.
+	// ParentID is the traceparent parent-id as lowercase hex.
 	ParentID string
 
 	// Flags is the parsed trace-flags byte.
 	Flags byte
 
-	// Sampled reports whether the sampled bit is set in Flags.
+	// Sampled reports whether the sampled flag is set.
 	Sampled bool
 
 	// Traceparent is the raw traceparent header value.
@@ -36,7 +36,8 @@ type TraceContext struct {
 	Valid bool
 }
 
-// ParseTraceparent parses a W3C Trace Context traceparent header value.
+// ParseTraceparent parses a W3C Trace Context traceparent header value. It
+// returns a zero TraceContext when the header is invalid.
 func ParseTraceparent(header string) TraceContext {
 	if len(header) < traceparentSize || len(header) > traceparentMaxSize {
 		return TraceContext{}

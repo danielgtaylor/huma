@@ -11,8 +11,7 @@ import (
 
 type loggerKey struct{}
 
-// LogPreset configures JSON and access-log field names for common log
-// aggregation targets.
+// LogPreset configures JSON and access-log field names for common targets.
 type LogPreset string
 
 const (
@@ -22,7 +21,7 @@ const (
 	// LogPresetGCP uses Google Cloud Logging field names.
 	LogPresetGCP LogPreset = "gcp"
 
-	// LogPresetAWS uses AWS CloudWatch-friendly field names.
+	// LogPresetAWS uses AWS CloudWatch Logs-friendly field names.
 	LogPresetAWS LogPreset = "aws"
 
 	// LogPresetAzure uses Azure Monitor-friendly field names.
@@ -37,9 +36,8 @@ type JSONLoggerConfig struct {
 	// Level is the minimum enabled log level.
 	Level slog.Leveler
 
-	// Preset configures built-in JSON field names for a log aggregation target.
-	// Use the same value for AccessLoggerConfig.Preset when composing
-	// NewJSONLogger with AccessLogger.
+	// Preset configures built-in JSON field names. Use the same value for
+	// AccessLoggerConfig.Preset when composing NewJSONLogger with AccessLogger.
 	Preset LogPreset
 
 	// ReplaceAttr optionally rewrites attributes after the preset mapping has
