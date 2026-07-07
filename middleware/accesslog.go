@@ -61,13 +61,13 @@ func AccessLogger(config AccessLoggerConfig) func(huma.Context, func(huma.Contex
 
 		defer func() {
 			if recovered := recover(); recovered != nil {
-				writeAccessLog(ctx, logger, config, start, httpStatusInternalServerError)
+				writeAccessLog(ctx, config.Logger, config, start, httpStatusInternalServerError)
 				panic(recovered)
 			}
 		}()
 
 		next(ctx)
-		writeAccessLog(ctx, logger, config, start, statusOrDefault(ctx.Status(), httpStatusOK))
+		writeAccessLog(ctx, config.Logger, config, start, statusOrDefault(ctx.Status(), httpStatusOK))
 	}
 }
 

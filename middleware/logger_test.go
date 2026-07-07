@@ -98,12 +98,23 @@ func TestAccessLoggerGeneric(t *testing.T) {
 
 	api.Get("/test")
 
-	entries := decodeLogEntries(t, &buf)
+	raw := strings.TrimSpace(buf.String())
+	lines := strings.Split(raw, "\n")
+	entries := decodeLogEntries(t, strings.NewReader(raw))
 	if len(entries) != 2 {
 		t.Fatalf("log entries = %d, want 2", len(entries))
 	}
+	if len(lines) != 2 {
+		t.Fatalf("raw log lines = %d, want 2: %q", len(lines), raw)
+	}
 	if entries[0]["request_id"] != "req-123" {
 		t.Fatalf("handler request_id = %v, want req-123", entries[0]["request_id"])
+	}
+	if count := strings.Count(lines[1], `"request_id":`); count != 1 {
+		t.Fatalf("access log request_id count = %d, want 1: %s", count, lines[1])
+	}
+	if count := strings.Count(lines[1], `"correlation_id":`); count != 1 {
+		t.Fatalf("access log correlation_id count = %d, want 1: %s", count, lines[1])
 	}
 
 	access := entries[1]
