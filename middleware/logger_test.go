@@ -189,6 +189,46 @@ func TestAccessLoggerGCPPreset(t *testing.T) {
 	if httpRequest["requestMethod"] != http.MethodGet {
 		t.Fatalf("httpRequest.requestMethod = %v, want GET", httpRequest["requestMethod"])
 	}
+	if httpRequest["latency"] != "0.001s" {
+		t.Fatalf("httpRequest.latency = %v, want 0.001s", httpRequest["latency"])
+	}
+}
+
+func TestAccessLoggerGCPTraceWithoutProjectID(t *testing.T) {
+	const traceparent = "00-3d23d071b5bfd6579171efce907685cb-08f067aa0ba902b7-01"
+
+	var buf bytes.Buffer
+	_, api := humatest.New(t)
+	api.UseMiddleware(
+		middleware.RequestContext(middleware.RequestContextConfig{
+			NewRequestID: func() string { return "req-123" },
+		}),
+		middleware.AccessLogger(middleware.AccessLoggerConfig{
+			Logger: middleware.NewJSONLogger(middleware.JSONLoggerConfig{
+				Writer: &buf,
+				Preset: middleware.LogPresetGCP,
+			}),
+			Preset: middleware.LogPresetGCP,
+			Now:    sequenceNow(time.Unix(100, 0), time.Unix(100, int64(time.Millisecond))),
+		}),
+	)
+
+	huma.Get(api, "/test", func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+		return &struct{}{}, nil
+	})
+
+	api.Get("/test", "traceparent: "+traceparent)
+
+	entry := decodeLogEntries(t, &buf)[0]
+	if entry["logging.googleapis.com/trace"] != "3d23d071b5bfd6579171efce907685cb" {
+		t.Fatalf("trace field = %v", entry["logging.googleapis.com/trace"])
+	}
+	if _, ok := entry["traceId"]; ok {
+		t.Fatalf("GCP log should use Cloud Logging trace field, not plain traceId: %#v", entry)
+	}
+	if entry["logging.googleapis.com/trace_sampled"] != true {
+		t.Fatalf("trace_sampled = %v, want true", entry["logging.googleapis.com/trace_sampled"])
+	}
 }
 
 func TestAccessLoggerAWSCloudWatchShape(t *testing.T) {

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -159,6 +160,7 @@ func gcpAccessAttrs(ctx huma.Context, config AccessLoggerConfig, info RequestInf
 			slog.Int("status", status),
 			slog.String("userAgent", ctx.Header("User-Agent")),
 			slog.String("remoteIp", ctx.RemoteAddr()),
+			slog.String("latency", durationSeconds(duration)),
 		),
 		slog.Float64("duration_ms", durationMilliseconds(duration)),
 	}
@@ -247,11 +249,11 @@ func gcpRequestAttrs(ctx huma.Context, config AccessLoggerConfig, info RequestIn
 	if traceID == "" {
 		return attrs
 	}
-	if config.GCP.ProjectID == "" {
-		attrs = append(attrs, slog.String("traceId", traceID))
-	} else {
-		attrs = append(attrs, slog.String("logging.googleapis.com/trace", "projects/"+config.GCP.ProjectID+"/traces/"+traceID))
+	trace := traceID
+	if config.GCP.ProjectID != "" {
+		trace = "projects/" + config.GCP.ProjectID + "/traces/" + traceID
 	}
+	attrs = append(attrs, slog.String("logging.googleapis.com/trace", trace))
 	if parentID != "" {
 		attrs = append(attrs, slog.String("parentId", parentID))
 	}
@@ -344,6 +346,19 @@ func statusOrDefault(status, defaultStatus int) int {
 
 func durationMilliseconds(duration time.Duration) float64 {
 	return float64(duration) / float64(time.Millisecond)
+}
+
+func durationSeconds(duration time.Duration) string {
+	if duration <= 0 {
+		return "0s"
+	}
+	seconds := duration / time.Second
+	nanos := duration % time.Second
+	if nanos == 0 {
+		return strconv.FormatInt(int64(seconds), 10) + "s"
+	}
+	fraction := strings.TrimRight(strconv.FormatInt(int64(nanos)+int64(time.Second), 10)[1:], "0")
+	return strconv.FormatInt(int64(seconds), 10) + "." + fraction + "s"
 }
 
 const (
