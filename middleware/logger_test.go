@@ -137,6 +137,37 @@ func TestAccessLoggerGeneric(t *testing.T) {
 	}
 }
 
+func TestAccessLoggerUsesHandlerErrorStatus(t *testing.T) {
+	var buf bytes.Buffer
+	_, api := humatest.New(t)
+	api.UseMiddleware(
+		middleware.RequestContext(middleware.RequestContextConfig{
+			NewRequestID: func() string { return "req-123" },
+		}),
+		middleware.AccessLogger(middleware.AccessLoggerConfig{
+			Logger: middleware.NewJSONLogger(middleware.JSONLoggerConfig{Writer: &buf}),
+			Now:    sequenceNow(time.Unix(100, 0), time.Unix(100, int64(time.Millisecond))),
+		}),
+	)
+
+	huma.Get(api, "/test", func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+		return nil, huma.Error403Forbidden("denied")
+	})
+
+	resp := api.Get("/test")
+	if resp.Code != http.StatusForbidden {
+		t.Fatalf("response status = %d, want 403", resp.Code)
+	}
+
+	entry := decodeLogEntries(t, &buf)[0]
+	if entry["level"] != "WARN" {
+		t.Fatalf("level = %v, want WARN", entry["level"])
+	}
+	if entry["status"] != float64(http.StatusForbidden) {
+		t.Fatalf("status = %v, want 403", entry["status"])
+	}
+}
+
 func TestAccessLoggerGCPPreset(t *testing.T) {
 	const traceparent = "00-3d23d071b5bfd6579171efce907685cb-08f067aa0ba902b7-01"
 

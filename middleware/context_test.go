@@ -83,6 +83,50 @@ func TestRequestContextTraceparent(t *testing.T) {
 	}
 }
 
+func TestRequestContextCustomHeaders(t *testing.T) {
+	const traceparent = "00-3d23d071b5bfd6579171efce907685cb-08f067aa0ba902b7-01"
+
+	_, api := humatest.New(t)
+	api.UseMiddleware(middleware.RequestContext(middleware.RequestContextConfig{
+		RequestIDHeader:         "X-Correlation-Id",
+		TraceparentHeader:       "X-Traceparent",
+		TracestateHeader:        "X-Tracestate",
+		ResponseRequestIDHeader: "X-Response-Request-Id",
+		NewRequestID:            func() string { return "generated-id" },
+	}))
+
+	var gotRequestID string
+	var gotCorrelationID string
+	var gotTrace middleware.TraceContext
+	huma.Get(api, "/test", func(ctx context.Context, _ *struct{}) (*struct{}, error) {
+		gotRequestID = middleware.RequestID(ctx)
+		gotCorrelationID = middleware.CorrelationID(ctx)
+		gotTrace = middleware.Trace(ctx)
+		return &struct{}{}, nil
+	})
+
+	resp := api.Get("/test",
+		"X-Correlation-Id: client-id",
+		"X-Traceparent: "+traceparent,
+		"X-Tracestate: congo=t61rcWkgMzE",
+	)
+	if header := resp.Header().Get("X-Response-Request-Id"); header != "client-id" {
+		t.Fatalf("response request ID header = %q, want client-id", header)
+	}
+	if gotRequestID != "client-id" {
+		t.Fatalf("RequestID = %q, want client-id", gotRequestID)
+	}
+	if gotCorrelationID != "3d23d071b5bfd6579171efce907685cb" {
+		t.Fatalf("CorrelationID = %q, want trace ID", gotCorrelationID)
+	}
+	if !gotTrace.Valid {
+		t.Fatal("Trace.Valid = false, want true")
+	}
+	if gotTrace.Tracestate != "congo=t61rcWkgMzE" {
+		t.Fatalf("Trace.Tracestate = %q, want custom tracestate", gotTrace.Tracestate)
+	}
+}
+
 func TestRequestContextRejectsUnsafeRequestID(t *testing.T) {
 	_, api := humatest.New(t)
 	api.UseMiddleware(middleware.RequestContext(middleware.RequestContextConfig{
