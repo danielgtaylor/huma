@@ -41,6 +41,8 @@ type Message struct {
 	ID    int
 	Data  any
 	Retry int
+	// Comment is sent with a message that has only a comment set (nil `Data`).
+	Comment string
 }
 
 // Sender is a send function for sending SSE messages to the client. It is
@@ -52,6 +54,13 @@ type Sender func(Message) error
 // to calling `sender(Message{Data: data})`.
 func (s Sender) Data(data any) error {
 	return s(Message{Data: data})
+}
+
+// Comment sends an SSE comment to the client. Comments are ignored by clients
+// and are commonly used as heartbeats to keep the connection alive. This is
+// equivalent to calling `sender(Message{Comment: comment})`.
+func (s Sender) Comment(comment string) error {
+	return s(Message{Comment: comment})
 }
 
 // Register a new SSE operation. The `eventTypeMap` maps from event name to
@@ -170,6 +179,15 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 					}
 				}
 
+				flush := func() error {
+					if flusher == nil {
+						fmt.Fprintln(os.Stderr, "error: unable to flush")
+						return fmt.Errorf("unable to flush: %w", http.ErrNotSupported)
+					}
+					flusher.Flush()
+					return nil
+				}
+
 				send := func(msg Message) error {
 					if deadliner != nil {
 						if err := deadliner.SetWriteDeadline(time.Now().Add(WriteTimeout)); err != nil {
@@ -185,6 +203,17 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 					}
 					if msg.Retry > 0 {
 						bw.Write(fmt.Appendf(nil, "retry: %d\n", msg.Retry))
+					}
+
+					if msg.Comment != "" {
+						for line := range strings.SplitSeq(msg.Comment, "\n") {
+							bw.Write(fmt.Appendf(nil, ": %s\n", line))
+						}
+					}
+
+					if msg.Data == nil {
+						bw.Write([]byte("\n"))
+						return flush()
 					}
 
 					event, ok := typeToEvent[deref(reflect.TypeOf(msg.Data))]
@@ -208,13 +237,7 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 						return err
 					}
 					bw.Write([]byte("\n"))
-					if flusher != nil {
-						flusher.Flush()
-					} else {
-						fmt.Fprintln(os.Stderr, "error: unable to flush")
-						return fmt.Errorf("unable to flush: %w", http.ErrNotSupported)
-					}
-					return nil
+					return flush()
 				}
 
 				// Call the user-provided SSE handler.

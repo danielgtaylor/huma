@@ -162,6 +162,36 @@ data: {"error": "encode error: json: unsupported type: chan int"}
 		},
 	},
 	{
+		Title: "sse comment heartbeat",
+		TestFunc: func(t *testing.T) {
+			_, api := humatest.New(t)
+			sse.Register(api, huma.Operation{
+				OperationID: "sse",
+				Method:      http.MethodGet,
+				Path:        "/sse",
+			}, map[string]any{
+				"message": &DefaultMessage{},
+			}, func(ctx context.Context, input *struct{}, send sse.Sender) {
+				send.Comment("heartbeat")
+				send(sse.Message{ID: 5, Comment: "keep\nalive"})
+				send.Data(DefaultMessage{Message: "Hello, world!"})
+			})
+
+			resp := api.Get("/sse")
+
+			assert.Equal(t, http.StatusOK, resp.Code)
+			assert.Equal(t, `: heartbeat
+
+id: 5
+: keep
+: alive
+
+data: {"message":"Hello, world!"}
+
+`, resp.Body.String())
+		},
+	},
+	{
 		Title: "sse flushes headers before first event",
 		TestFunc: func(t *testing.T) {
 			_, api := humatest.New(t)
