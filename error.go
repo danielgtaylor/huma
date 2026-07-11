@@ -28,6 +28,17 @@ type ErrorDetail struct {
 	// the client didn't send extra whitespace or help when the client
 	// did not log an outgoing request.
 	Value any `json:"value,omitempty" doc:"The value at the given location"`
+
+	// Code is a machine-readable identifier for the error type, corresponding
+	// to one of the validation.Code* constants. It enables programmatic error
+	// handling without parsing the human-readable Message field.
+	Code string `json:"code,omitempty" doc:"Machine-readable error code"`
+
+	// Params contains the constraint parameters relevant to the error, e.g.
+	// {"allowed": ["a","b"]} for a CodeExpectedOneOf error or {"min": 3} for
+	// a CodeExpectedMinLength error. It is omitted when there are no relevant
+	// parameters.
+	Params map[string]any `json:"params,omitempty" doc:"Constraint parameters for the error"`
 }
 
 // Error returns the error message / satisfies the `error` interface. If a
