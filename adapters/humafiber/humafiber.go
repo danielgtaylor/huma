@@ -155,9 +155,9 @@ func (c *fiberWrapper) Version() huma.ProtoVersion {
 	}
 }
 
-// WithContext replaces the underlying context. Note that Fiber stores a single
-// context per request, so this mutates the underlying context in place rather
-// than returning a fully isolated copy.
+// WithContext replaces the underlying context. Fiber stores a single context
+// per request, so this mutates it in place (rather than returning an isolated
+// copy) so that native Fiber middleware observe values set via huma.WithValue.
 func (c *fiberWrapper) WithContext(ctx context.Context) huma.Context {
 	c.orig.SetContext(ctx)
 	return &fiberWrapper{

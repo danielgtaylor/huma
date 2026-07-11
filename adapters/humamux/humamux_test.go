@@ -184,9 +184,10 @@ func middleware(mw func(next http.Handler) http.Handler) func(ctx huma.Context, 
 		r, w := Unwrap(ctx)
 		mw(http.HandlerFunc(func(gw http.ResponseWriter, gr *http.Request) {
 			ctx = &gmuxContext{
-				op: ctx.Operation(),
-				r:  gr,
-				w:  gw,
+				op:     ctx.Operation(),
+				r:      gr,
+				w:      gw,
+				status: ctx.Status(),
 			}
 			next(ctx)
 		})).ServeHTTP(w, r)

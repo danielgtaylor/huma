@@ -138,9 +138,10 @@ func (c *echoCtx) Version() huma.ProtoVersion {
 	}
 }
 
-// WithContext replaces the underlying context. Note that Echo exposes only the
-// request's context, so this mutates the underlying request in place rather
-// than returning a fully isolated copy.
+// WithContext replaces the underlying context. Echo exposes only the request's
+// context, so this mutates the request in place (rather than returning an
+// isolated copy) so that native Echo middleware observe values set via
+// huma.WithValue.
 func (c *echoCtx) WithContext(ctx context.Context) huma.Context {
 	c.orig.SetRequest(c.orig.Request().WithContext(ctx))
 	return &echoCtx{

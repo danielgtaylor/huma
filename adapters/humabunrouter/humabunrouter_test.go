@@ -381,3 +381,55 @@ func middleware(mw bunrouter.MiddlewareFunc) func(ctx huma.Context, next func(hu
 		}
 	}
 }
+
+// See https://github.com/danielgtaylor/huma/issues/859
+func TestWithValueShouldPropagateContextCompat(t *testing.T) {
+	r := bunrouter.New()
+	app := NewCompat(r.Compat(), huma.DefaultConfig("Test", "1.0.0"))
+
+	type (
+		testInput  struct{}
+		testOutput struct{}
+		ctxKey     struct{}
+	)
+
+	ctxValue := "sentinelValue"
+
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Path:        "/test",
+		Method:      http.MethodGet,
+		Middlewares: huma.Middlewares{
+			func(ctx huma.Context, next func(huma.Context)) {
+				ctx = huma.WithValue(ctx, ctxKey{}, ctxValue)
+				next(ctx)
+			},
+			middlewareCompat(func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					val, _ := r.Context().Value(ctxKey{}).(string)
+					_, _ = io.WriteString(w, val)
+				})
+			}),
+		},
+	}, func(ctx context.Context, input *testInput) (*testOutput, error) {
+		out := &testOutput{}
+		return out, nil
+	})
+
+	tapi := humatest.Wrap(t, app)
+
+	resp := tapi.Get("/test")
+	assert.Equal(t, http.StatusOK, resp.Code)
+	out, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, ctxValue, string(out))
+}
+
+func middlewareCompat(mw func(http.Handler) http.Handler) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		cc := ctx.(*bunCompatContext)
+		mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next(NewCompatContext(ctx.Operation(), r, w))
+		})).ServeHTTP(cc.w, cc.r)
+	}
+}
