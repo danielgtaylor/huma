@@ -924,6 +924,32 @@ func TestFeatures(t *testing.T) {
 			Body: `{"name":"foo"}`,
 		},
 		{
+			// Media types are case-insensitive (RFC 9110 §8.3.1). A client sending
+			// e.g. `Application/Json` must still be matched to the registered
+			// `application/json` format rather than rejected with 415.
+			Name: "request-body-content-type-case-insensitive",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name string `json:"name"`
+					}
+				}) (*struct{}, error) {
+					assert.Equal(t, "foo", input.Body.Name)
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPut,
+			URL:     "/body",
+			Headers: map[string]string{"Content-Type": "Application/Json; charset=UTF-8"},
+			Body:    `{"name":"foo"}`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
+			},
+		},
+		{
 			Name: "request-body-embed",
 			Register: func(t *testing.T, api huma.API) {
 				type Input struct {
