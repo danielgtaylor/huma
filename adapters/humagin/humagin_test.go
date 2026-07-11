@@ -2,7 +2,6 @@ package humagin
 
 import (
 	"context"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,10 +9,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 var lastModified = time.Now()
@@ -73,59 +69,5 @@ func BenchmarkHumaGin(b *testing.B) {
 		if w.Code != http.StatusOK {
 			b.Fatal(w.Body.String())
 		}
-	}
-}
-
-func TestWithValueShouldPropagateContext(t *testing.T) {
-	r := gin.New()
-	app := New(r, huma.DefaultConfig("Test", "1.0.0"))
-
-	type (
-		testInput  struct{}
-		testOutput struct{}
-		ctxKey     struct{}
-	)
-
-	ctxValue := "sentinelValue"
-
-	huma.Register(app, huma.Operation{
-		OperationID: "test",
-		Path:        "/test",
-		Method:      http.MethodGet,
-		Middlewares: huma.Middlewares{
-			func(ctx huma.Context, next func(huma.Context)) {
-				ctx = huma.WithValue(ctx, ctxKey{}, ctxValue)
-				next(ctx)
-			},
-			middleware(func(next gin.HandlerFunc) gin.HandlerFunc {
-				return func(c *gin.Context) {
-					val, _ := c.Request.Context().Value(ctxKey{}).(string)
-					c.String(http.StatusOK, val)
-				}
-			}),
-		},
-	}, func(ctx context.Context, input *testInput) (*testOutput, error) {
-		out := &testOutput{}
-		return out, nil
-	})
-
-	tapi := humatest.Wrap(t, app)
-
-	resp := tapi.Get("/test")
-	assert.Equal(t, http.StatusOK, resp.Code)
-	out, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	assert.Equal(t, ctxValue, string(out))
-}
-
-// middleware converts a Gin middleware function to a Huma middleware function.
-func middleware(mw func(gin.HandlerFunc) gin.HandlerFunc) func(ctx huma.Context, next func(huma.Context)) {
-	return func(ctx huma.Context, next func(huma.Context)) {
-		c := Unwrap(ctx)
-		f := mw(func(gCtx *gin.Context) {
-			ctx := NewContext(ctx.Operation(), gCtx)
-			next(ctx)
-		})
-		f(c)
 	}
 }

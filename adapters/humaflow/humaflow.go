@@ -169,7 +169,7 @@ func (a *goAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	path = strings.ReplaceAll(path, "{", ":")
 	path = strings.ReplaceAll(path, "}", "")
 	a.HandleFunc(a.prefix+path, func(w http.ResponseWriter, r *http.Request) {
-		handler(&goContext{op: op, r: r, w: w})
+		handler(NewContext(op, r, w))
 	}, op.Method)
 }
 

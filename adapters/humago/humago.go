@@ -164,7 +164,7 @@ type goAdapter struct {
 
 func (a *goAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	a.HandleFunc(strings.ToUpper(op.Method)+" "+a.prefix+op.Path, func(w http.ResponseWriter, r *http.Request) {
-		handler(&goContext{op: op, r: r, w: w})
+		handler(NewContext(op, r, w))
 	})
 }
 

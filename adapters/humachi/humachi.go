@@ -166,7 +166,7 @@ type chiAdapter struct {
 
 func (a *chiAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	a.router.MethodFunc(op.Method, op.Path, func(w http.ResponseWriter, r *http.Request) {
-		handler(&chiContext{op: op, r: r, w: w})
+		handler(NewContext(op, r, w))
 	})
 }
 

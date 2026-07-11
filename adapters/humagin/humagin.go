@@ -171,8 +171,7 @@ func (a *ginAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	path = strings.ReplaceAll(path, "{", ":")
 	path = strings.ReplaceAll(path, "}", "")
 	a.router.Handle(op.Method, path, func(c *gin.Context) {
-		ctx := &ginCtx{op: op, orig: c}
-		handler(ctx)
+		handler(NewContext(op, c))
 	})
 }
 

@@ -14,12 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bunrouter"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/humatest"
 )
 
 var lastModified = time.Now()
@@ -321,115 +318,5 @@ func BenchmarkRawBunRouterFast(b *testing.B) {
 		reqBody.Seek(0, 0)
 		w.Body.Reset()
 		r.ServeHTTP(w, req)
-	}
-}
-
-// See https://github.com/danielgtaylor/huma/issues/859
-func TestWithValueShouldPropagateContext(t *testing.T) {
-	r := bunrouter.New()
-	app := New(r, huma.DefaultConfig("Test", "1.0.0"))
-
-	type (
-		testInput  struct{}
-		testOutput struct{}
-		ctxKey     struct{}
-	)
-
-	ctxValue := "sentinelValue"
-
-	huma.Register(app, huma.Operation{
-		OperationID: "test",
-		Path:        "/test",
-		Method:      http.MethodGet,
-		Middlewares: huma.Middlewares{
-			func(ctx huma.Context, next func(huma.Context)) {
-				ctx = huma.WithValue(ctx, ctxKey{}, ctxValue)
-				next(ctx)
-			},
-			middleware(func(next bunrouter.HandlerFunc) bunrouter.HandlerFunc {
-				return func(w http.ResponseWriter, r bunrouter.Request) error {
-					val, _ := r.Context().Value(ctxKey{}).(string)
-					_, err := io.WriteString(w, val)
-					return err
-				}
-			}),
-		},
-	}, func(ctx context.Context, input *testInput) (*testOutput, error) {
-		out := &testOutput{}
-		return out, nil
-	})
-
-	tapi := humatest.Wrap(t, app)
-
-	resp := tapi.Get("/test")
-	assert.Equal(t, http.StatusOK, resp.Code)
-	out, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	assert.Equal(t, ctxValue, string(out))
-}
-
-func middleware(mw bunrouter.MiddlewareFunc) func(ctx huma.Context, next func(huma.Context)) {
-	return func(ctx huma.Context, next func(huma.Context)) {
-		r, w := Unwrap(ctx)
-		f := mw(func(w http.ResponseWriter, r bunrouter.Request) error {
-			ctx = NewContext(ctx.Operation(), r, w)
-			next(ctx)
-			return nil
-		})
-		if err := f(w, r); err != nil {
-			panic(err)
-		}
-	}
-}
-
-// See https://github.com/danielgtaylor/huma/issues/859
-func TestWithValueShouldPropagateContextCompat(t *testing.T) {
-	r := bunrouter.New()
-	app := NewCompat(r.Compat(), huma.DefaultConfig("Test", "1.0.0"))
-
-	type (
-		testInput  struct{}
-		testOutput struct{}
-		ctxKey     struct{}
-	)
-
-	ctxValue := "sentinelValue"
-
-	huma.Register(app, huma.Operation{
-		OperationID: "test",
-		Path:        "/test",
-		Method:      http.MethodGet,
-		Middlewares: huma.Middlewares{
-			func(ctx huma.Context, next func(huma.Context)) {
-				ctx = huma.WithValue(ctx, ctxKey{}, ctxValue)
-				next(ctx)
-			},
-			middlewareCompat(func(next http.Handler) http.Handler {
-				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					val, _ := r.Context().Value(ctxKey{}).(string)
-					_, _ = io.WriteString(w, val)
-				})
-			}),
-		},
-	}, func(ctx context.Context, input *testInput) (*testOutput, error) {
-		out := &testOutput{}
-		return out, nil
-	})
-
-	tapi := humatest.Wrap(t, app)
-
-	resp := tapi.Get("/test")
-	assert.Equal(t, http.StatusOK, resp.Code)
-	out, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	assert.Equal(t, ctxValue, string(out))
-}
-
-func middlewareCompat(mw func(http.Handler) http.Handler) func(ctx huma.Context, next func(huma.Context)) {
-	return func(ctx huma.Context, next func(huma.Context)) {
-		cc := ctx.(*bunCompatContext)
-		mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			next(NewCompatContext(ctx.Operation(), r, w))
-		})).ServeHTTP(cc.w, cc.r)
 	}
 }

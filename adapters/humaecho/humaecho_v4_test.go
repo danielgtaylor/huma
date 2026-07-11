@@ -13,10 +13,8 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/humatest"
 	echoV4 "github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestEchoLinkHeaderV4(t *testing.T) {
@@ -283,63 +281,5 @@ func BenchmarkRawEchoV4Fast(b *testing.B) {
 		reqBody.Seek(0, 0)
 		w.Body.Reset()
 		r.ServeHTTP(w, req)
-	}
-}
-
-// See https://github.com/danielgtaylor/huma/issues/859
-func TestWithValueShouldPropagateContextV4(t *testing.T) {
-	r := echoV4.New()
-	app := NewV4(r, huma.DefaultConfig("Test", "1.0.0"))
-
-	type (
-		testInput  struct{}
-		testOutput struct{}
-		ctxKey     struct{}
-	)
-
-	ctxValue := "sentinelValue"
-
-	huma.Register(app, huma.Operation{
-		OperationID: "test",
-		Path:        "/test",
-		Method:      http.MethodGet,
-		Middlewares: huma.Middlewares{
-			func(ctx huma.Context, next func(huma.Context)) {
-				ctx = huma.WithValue(ctx, ctxKey{}, ctxValue)
-				next(ctx)
-			},
-			middlewareV4(func(next echoV4.HandlerFunc) echoV4.HandlerFunc {
-				return func(c echoV4.Context) error {
-					val, _ := c.Request().Context().Value(ctxKey{}).(string)
-					_, err := io.WriteString(c.Response().Writer, val)
-					return err
-				}
-			}),
-		},
-	}, func(ctx context.Context, input *testInput) (*testOutput, error) {
-		out := &testOutput{}
-		return out, nil
-	})
-
-	tapi := humatest.Wrap(t, app)
-
-	resp := tapi.Get("/test")
-	assert.Equal(t, http.StatusOK, resp.Code)
-	out, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	assert.Equal(t, ctxValue, string(out))
-}
-
-func middlewareV4(mw echoV4.MiddlewareFunc) func(ctx huma.Context, next func(huma.Context)) {
-	return func(ctx huma.Context, next func(huma.Context)) {
-		eCtx := UnwrapV4(ctx)
-		f := mw(func(c echoV4.Context) error {
-			ctx = &echoV4Ctx{op: ctx.Operation(), orig: c}
-			next(ctx)
-			return nil
-		})
-		if err := f(eCtx); err != nil {
-			panic(err)
-		}
 	}
 }

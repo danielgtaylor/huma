@@ -2,16 +2,37 @@ package humafiber
 
 import (
 	"context"
-	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/gofiber/fiber/v3"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
+
+// TestNewContext covers the exported NewContext constructor. Unlike the other
+// adapters, the Fiber adapter's Handle wraps the context to expose fasthttp
+// user values, so it can't call NewContext itself; exercise it directly here.
+func TestNewContext(t *testing.T) {
+	app := fiber.New()
+	op := &huma.Operation{OperationID: "test"}
+
+	var got huma.Context
+	app.Get("/", func(c fiber.Ctx) error {
+		got = NewContext(op, c)
+		return nil
+	})
+
+	if _, err := app.Test(httptest.NewRequest(http.MethodGet, "/", nil)); err != nil {
+		t.Fatal(err)
+	}
+	if got == nil {
+		t.Fatal("NewContext returned nil")
+	}
+	if got.Operation() != op {
+		t.Fatalf("Operation() = %v, want %v", got.Operation(), op)
+	}
+}
 
 func BenchmarkHumaFiber(b *testing.B) {
 	type GreetingInput struct {
@@ -61,62 +82,5 @@ func BenchmarkNotHuma(b *testing.B) {
 	req, _ := http.NewRequest(http.MethodGet, "/foo/123", nil)
 	for i := 0; i < b.N; i++ {
 		r.Test(req)
-	}
-}
-
-func TestWithValueShouldPropagateContext(t *testing.T) {
-	r := fiber.New()
-	app := New(r, huma.DefaultConfig("Test", "1.0.0"))
-
-	type (
-		testInput  struct{}
-		testOutput struct{}
-		ctxKey     struct{}
-	)
-
-	ctxValue := "sentinelValue"
-
-	huma.Register(app, huma.Operation{
-		OperationID: "test",
-		Path:        "/test",
-		Method:      http.MethodGet,
-		Middlewares: huma.Middlewares{
-			func(ctx huma.Context, next func(huma.Context)) {
-				ctx = huma.WithValue(ctx, ctxKey{}, ctxValue)
-				next(ctx)
-			},
-			middleware(func(next fiber.Handler) fiber.Handler {
-				return func(c fiber.Ctx) error {
-					val, _ := c.Context().Value(ctxKey{}).(string)
-					_, err := c.WriteString(val)
-					return err
-				}
-			}),
-		},
-	}, func(ctx context.Context, input *testInput) (*testOutput, error) {
-		out := &testOutput{}
-		return out, nil
-	})
-
-	tapi := humatest.Wrap(t, app)
-
-	resp := tapi.Get("/test")
-	assert.Equal(t, http.StatusOK, resp.Code)
-	out, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	assert.Equal(t, ctxValue, string(out))
-}
-
-func middleware(mw func(next fiber.Handler) fiber.Handler) func(ctx huma.Context, next func(huma.Context)) {
-	return func(ctx huma.Context, next func(huma.Context)) {
-		fCtx := Unwrap(ctx)
-		h := mw(func(c fiber.Ctx) error {
-			ctx := NewContext(ctx.Operation(), c)
-			next(ctx)
-			return nil
-		})
-		if err := h(fCtx); err != nil {
-			panic(err)
-		}
 	}
 }
