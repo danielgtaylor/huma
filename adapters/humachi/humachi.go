@@ -146,6 +146,15 @@ func (c *chiContext) Version() huma.ProtoVersion {
 	}
 }
 
+func (c *chiContext) WithContext(ctx context.Context) huma.Context {
+	return &chiContext{
+		op:     c.op,
+		r:      c.r.WithContext(ctx),
+		w:      c.w,
+		status: c.status,
+	}
+}
+
 // NewContext creates a new Huma context from an HTTP request and response.
 func NewContext(op *huma.Operation, r *http.Request, w http.ResponseWriter) huma.Context {
 	return &chiContext{op: op, r: r, w: w}
@@ -157,7 +166,7 @@ type chiAdapter struct {
 
 func (a *chiAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	a.router.MethodFunc(op.Method, op.Path, func(w http.ResponseWriter, r *http.Request) {
-		handler(&chiContext{op: op, r: r, w: w})
+		handler(NewContext(op, r, w))
 	})
 }
 

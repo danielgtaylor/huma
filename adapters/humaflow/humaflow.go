@@ -139,6 +139,15 @@ func (c *goContext) Version() huma.ProtoVersion {
 	}
 }
 
+func (c *goContext) WithContext(ctx context.Context) huma.Context {
+	return &goContext{
+		op:     c.op,
+		r:      c.r.WithContext(ctx),
+		w:      c.w,
+		status: c.status,
+	}
+}
+
 // NewContext creates a new Huma context from an HTTP request and response.
 func NewContext(op *huma.Operation, r *http.Request, w http.ResponseWriter) huma.Context {
 	return &goContext{op: op, r: r, w: w}
@@ -160,7 +169,7 @@ func (a *goAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	path = strings.ReplaceAll(path, "{", ":")
 	path = strings.ReplaceAll(path, "}", "")
 	a.HandleFunc(a.prefix+path, func(w http.ResponseWriter, r *http.Request) {
-		handler(&goContext{op: op, r: r, w: w})
+		handler(NewContext(op, r, w))
 	}, op.Method)
 }
 

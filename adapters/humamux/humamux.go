@@ -96,6 +96,15 @@ func (c *gmuxContext) Version() huma.ProtoVersion {
 	}
 }
 
+func (c *gmuxContext) WithContext(ctx context.Context) huma.Context {
+	return &gmuxContext{
+		op:     c.op,
+		r:      c.r.WithContext(ctx),
+		w:      c.w,
+		status: c.status,
+	}
+}
+
 func (c *gmuxContext) EachHeader(cb func(name, value string)) {
 	for name, values := range c.r.Header {
 		for _, value := range values {

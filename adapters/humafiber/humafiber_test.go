@@ -3,11 +3,36 @@ package humafiber
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gofiber/fiber/v3"
 )
+
+// TestNewContext covers the exported NewContext constructor. Unlike the other
+// adapters, the Fiber adapter's Handle wraps the context to expose fasthttp
+// user values, so it can't call NewContext itself; exercise it directly here.
+func TestNewContext(t *testing.T) {
+	app := fiber.New()
+	op := &huma.Operation{OperationID: "test"}
+
+	var got huma.Context
+	app.Get("/", func(c fiber.Ctx) error {
+		got = NewContext(op, c)
+		return nil
+	})
+
+	if _, err := app.Test(httptest.NewRequest(http.MethodGet, "/", nil)); err != nil {
+		t.Fatal(err)
+	}
+	if got == nil {
+		t.Fatal("NewContext returned nil")
+	}
+	if got.Operation() != op {
+		t.Fatalf("Operation() = %v, want %v", got.Operation(), op)
+	}
+}
 
 func BenchmarkHumaFiber(b *testing.B) {
 	type GreetingInput struct {

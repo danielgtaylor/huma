@@ -155,6 +155,24 @@ func (c *fiberWrapper) Version() huma.ProtoVersion {
 	}
 }
 
+// WithContext replaces the underlying context. Fiber stores a single context
+// per request, so this mutates it in place (rather than returning an isolated
+// copy) so that native Fiber middleware observe values set via huma.WithValue.
+func (c *fiberWrapper) WithContext(ctx context.Context) huma.Context {
+	c.orig.SetContext(ctx)
+	return &fiberWrapper{
+		op:     c.op,
+		status: c.status,
+		orig:   c.orig,
+		ctx:    ctx,
+	}
+}
+
+// NewContext creates a new Huma context from a fiber context
+func NewContext(op *huma.Operation, c fiber.Ctx) huma.Context {
+	return &fiberWrapper{op: op, orig: c, ctx: c.Context()}
+}
+
 type router interface {
 	Add(methods []string, path string, handler any, handlers ...any) fiber.Router
 }

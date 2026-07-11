@@ -138,6 +138,15 @@ func (c *goContext) Version() huma.ProtoVersion {
 	}
 }
 
+func (c *goContext) WithContext(ctx context.Context) huma.Context {
+	return &goContext{
+		op:     c.op,
+		r:      c.r.WithContext(ctx),
+		w:      c.w,
+		status: c.status,
+	}
+}
+
 // NewContext creates a new Huma context from an HTTP request and response.
 func NewContext(op *huma.Operation, r *http.Request, w http.ResponseWriter) huma.Context {
 	return &goContext{op: op, r: r, w: w}
@@ -155,7 +164,7 @@ type goAdapter struct {
 
 func (a *goAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	a.HandleFunc(strings.ToUpper(op.Method)+" "+a.prefix+op.Path, func(w http.ResponseWriter, r *http.Request) {
-		handler(&goContext{op: op, r: r, w: w})
+		handler(NewContext(op, r, w))
 	})
 }
 

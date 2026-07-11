@@ -137,6 +137,19 @@ func (c *ginCtx) Version() huma.ProtoVersion {
 	}
 }
 
+// WithContext replaces the underlying context. Gin exposes only the request's
+// context, so this mutates the request in place (rather than returning an
+// isolated copy) so that native Gin middleware observe values set via
+// huma.WithValue.
+func (c *ginCtx) WithContext(ctx context.Context) huma.Context {
+	c.orig.Request = c.orig.Request.WithContext(ctx)
+	return &ginCtx{
+		op:     c.op,
+		orig:   c.orig,
+		status: c.status,
+	}
+}
+
 // NewContext creates a new Huma context from a Gin context
 func NewContext(op *huma.Operation, c *gin.Context) huma.Context {
 	return &ginCtx{op: op, orig: c}
@@ -158,8 +171,7 @@ func (a *ginAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	path = strings.ReplaceAll(path, "{", ":")
 	path = strings.ReplaceAll(path, "}", "")
 	a.router.Handle(op.Method, path, func(c *gin.Context) {
-		ctx := &ginCtx{op: op, orig: c}
-		handler(ctx)
+		handler(NewContext(op, c))
 	})
 }
 
