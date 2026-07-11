@@ -1,6 +1,7 @@
 package humafiber
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
@@ -142,6 +143,16 @@ func (c *fiberV2Wrapper) SetHeader(name string, value string) {
 
 func (c *fiberV2Wrapper) BodyWriter() io.Writer {
 	return c.orig.Context()
+}
+
+// StreamBody streams the response body via Fiber/fasthttp's stream writer. It
+// is the optional streaming hook huma's SSE support uses because fasthttp can't
+// flush the response writer synchronously from within the handler.
+func (c *fiberV2Wrapper) StreamBody(fn func(io.Writer)) {
+	rc := c.orig.Context()
+	rc.SetBodyStreamWriter(func(bw *bufio.Writer) {
+		fn(&fiberStreamWriter{bw: bw, conn: rc.Conn()})
+	})
 }
 
 func (c *fiberV2Wrapper) TLS() *tls.ConnectionState {

@@ -9,9 +9,44 @@ import (
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/sse"
 	fiberV2 "github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
 )
+
+// TestSSEV2 exercises the Fiber v2 streaming path (the StreamBody hook /
+// fasthttp SetBodyStreamWriter) so Server-Sent Events flush to the client.
+// Regression test for #888.
+func TestSSEV2(t *testing.T) {
+	app := fiberV2.New()
+	api := NewV2(app, huma.DefaultConfig("Test", "1.0.0"))
+
+	type Message struct {
+		Text string `json:"text"`
+	}
+
+	sse.Register(api, huma.Operation{
+		OperationID: "sse",
+		Method:      http.MethodGet,
+		Path:        "/sse",
+	}, map[string]any{
+		"message": Message{},
+	}, func(ctx context.Context, input *struct{}, send sse.Sender) {
+		_ = send.Data(Message{Text: "hello"})
+		_ = send.Comment("heartbeat")
+	})
+
+	req, _ := http.NewRequest(http.MethodGet, "http://example.com/sse", nil)
+	resp, err := app.Test(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, "text/event-stream", resp.Header.Get("Content-Type"))
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, "data: {\"text\":\"hello\"}\n\n: heartbeat\n\n", string(body))
+}
 
 // TestFiberV2EachHeaderAndCookie ensures EachHeader yields one callback per
 // header value (not one per byte) so header-based helpers like huma.ReadCookie
