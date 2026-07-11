@@ -117,3 +117,15 @@ func TestWithValueShouldPropagateContext(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, ctxValue, string(out))
 }
+
+// middleware converts a Gin middleware function to a Huma middleware function.
+func middleware(mw func(gin.HandlerFunc) gin.HandlerFunc) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		c := Unwrap(ctx)
+		f := mw(func(gCtx *gin.Context) {
+			ctx := NewContext(ctx.Operation(), gCtx)
+			next(ctx)
+		})
+		f(c)
+	}
+}

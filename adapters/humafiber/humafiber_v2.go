@@ -156,6 +156,19 @@ func (c *fiberV2Wrapper) Version() huma.ProtoVersion {
 	}
 }
 
+// WithContext replaces the underlying context. Note that Fiber stores a single
+// user context per request, so this mutates the underlying context in place
+// rather than returning a fully isolated copy.
+func (c *fiberV2Wrapper) WithContext(ctx context.Context) huma.Context {
+	c.orig.SetUserContext(ctx)
+	return &fiberV2Wrapper{
+		op:     c.op,
+		status: c.status,
+		orig:   c.orig,
+		ctx:    ctx,
+	}
+}
+
 type routerV2 interface {
 	Add(method, path string, handlers ...fiberV2.Handler) fiberV2.Router
 }

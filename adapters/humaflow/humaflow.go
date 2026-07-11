@@ -199,13 +199,3 @@ func New(m Mux, config huma.Config) huma.API {
 func NewWithPrefix(m Mux, prefix string, config huma.Config) huma.API {
 	return huma.NewAPI(config, &goAdapter{m, prefix})
 }
-
-func middleware(mw func(http.Handler) http.Handler) func(ctx huma.Context, next func(huma.Context)) {
-	return func(ctx huma.Context, next func(huma.Context)) {
-		r, w := Unwrap(ctx)
-		mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx = NewContext(ctx.Operation(), r, w)
-			next(ctx)
-		})).ServeHTTP(w, r)
-	}
-}

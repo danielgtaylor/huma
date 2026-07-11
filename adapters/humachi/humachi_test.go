@@ -481,3 +481,14 @@ func TestWithValueShouldPropagateContext(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, ctxValue, string(out))
 }
+
+// middleware converts a chi middleware function to a Huma middleware function.
+func middleware(mw func(http.Handler) http.Handler) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		r, w := Unwrap(ctx)
+		mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx = NewContext(ctx.Operation(), r, w)
+			next(ctx)
+		})).ServeHTTP(w, r)
+	}
+}

@@ -328,17 +328,3 @@ func NewCompat(r *bunrouter.CompatRouter, config huma.Config) huma.API {
 func New(r *bunrouter.Router, config huma.Config) huma.API {
 	return huma.NewAPI(config, NewAdapter(r))
 }
-
-func middleware(mw bunrouter.MiddlewareFunc) func(ctx huma.Context, next func(huma.Context)) {
-	return func(ctx huma.Context, next func(huma.Context)) {
-		r, w := Unwrap(ctx)
-		f := mw(func(w http.ResponseWriter, r bunrouter.Request) error {
-			ctx = NewContext(ctx.Operation(), r, w)
-			next(ctx)
-			return nil
-		})
-		if err := f(w, r); err != nil {
-			panic(err)
-		}
-	}
-}

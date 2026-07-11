@@ -116,3 +116,22 @@ func TestWithValueShouldPropagateContext(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, ctxValue, string(out))
 }
+
+// middleware adapts a Httprouter middleware to huma's middleware type for testing
+func middleware(mw func(next httprouter.Handle) httprouter.Handle) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		// Unwrap the context to get the httprouter params
+		r, w, ps := Unwrap(ctx)
+		h := mw(func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+			ctx = &httprouterContext{
+				op:     ctx.Operation(),
+				r:      r,
+				w:      w,
+				ps:     p,
+				status: ctx.Status(),
+			}
+			next(ctx)
+		})
+		h(w, r, ps)
+	}
+}

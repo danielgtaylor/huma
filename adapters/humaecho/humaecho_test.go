@@ -363,3 +363,17 @@ func TestWithValueShouldPropagateContext(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, ctxValue, string(out))
 }
+
+func middleware(mw echo.MiddlewareFunc) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		eCtx := Unwrap(ctx)
+		f := mw(func(c *echo.Context) error {
+			ctx = &echoCtx{op: ctx.Operation(), orig: c}
+			next(ctx)
+			return nil
+		})
+		if err := f(eCtx); err != nil {
+			panic(err)
+		}
+	}
+}

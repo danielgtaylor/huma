@@ -182,18 +182,3 @@ func NewAdapter(r *mux.Router, options ...Option) huma.Adapter {
 func New(r *mux.Router, config huma.Config, options ...Option) huma.API {
 	return huma.NewAPI(config, NewAdapter(r, options...))
 }
-
-// middleware converts a Gorilla middleware function to a Huma middleware function.
-func middleware(mw func(next http.Handler) http.Handler) func(ctx huma.Context, next func(huma.Context)) {
-	return func(ctx huma.Context, next func(huma.Context)) {
-		r, w := Unwrap(ctx)
-		mw(http.HandlerFunc(func(gw http.ResponseWriter, gr *http.Request) {
-			ctx = &gmuxContext{
-				op: ctx.Operation(),
-				r:  gr,
-				w:  gw,
-			}
-			next(ctx)
-		})).ServeHTTP(w, r)
-	}
-}

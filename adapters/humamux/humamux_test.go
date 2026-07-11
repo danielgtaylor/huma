@@ -177,3 +177,18 @@ func TestWithValueShouldPropagateContext(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, ctxValue, string(out))
 }
+
+// middleware converts a Gorilla middleware function to a Huma middleware function.
+func middleware(mw func(next http.Handler) http.Handler) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		r, w := Unwrap(ctx)
+		mw(http.HandlerFunc(func(gw http.ResponseWriter, gr *http.Request) {
+			ctx = &gmuxContext{
+				op: ctx.Operation(),
+				r:  gr,
+				w:  gw,
+			}
+			next(ctx)
+		})).ServeHTTP(w, r)
+	}
+}

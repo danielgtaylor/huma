@@ -208,13 +208,3 @@ func NewAdapter(r chi.Router) huma.Adapter {
 func New(r chi.Router, config huma.Config) huma.API {
 	return huma.NewAPI(config, &chiAdapter{router: r})
 }
-
-func middleware(mw func(http.Handler) http.Handler) func(ctx huma.Context, next func(huma.Context)) {
-	return func(ctx huma.Context, next func(huma.Context)) {
-		r, w := Unwrap(ctx)
-		mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx = NewContext(ctx.Operation(), r, w)
-			next(ctx)
-		})).ServeHTTP(w, r)
-	}
-}

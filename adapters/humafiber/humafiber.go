@@ -155,6 +155,9 @@ func (c *fiberWrapper) Version() huma.ProtoVersion {
 	}
 }
 
+// WithContext replaces the underlying context. Note that Fiber stores a single
+// context per request, so this mutates the underlying context in place rather
+// than returning a fully isolated copy.
 func (c *fiberWrapper) WithContext(ctx context.Context) huma.Context {
 	c.orig.SetContext(ctx)
 	return &fiberWrapper{
@@ -258,18 +261,4 @@ func New(r *fiber.App, config huma.Config) huma.API {
 // NewWithGroup creates a new Huma API using the Fiber adapter with a route group.
 func NewWithGroup(r *fiber.App, g fiber.Router, config huma.Config) huma.API {
 	return huma.NewAPI(config, &fiberAdapter{tester: r, router: g})
-}
-
-func middleware(mw func(next fiber.Handler) fiber.Handler) func(ctx huma.Context, next func(huma.Context)) {
-	return func(ctx huma.Context, next func(huma.Context)) {
-		fCtx := Unwrap(ctx)
-		h := mw(func(c fiber.Ctx) error {
-			ctx := NewContext(ctx.Operation(), c)
-			next(ctx)
-			return nil
-		})
-		if err := h(fCtx); err != nil {
-			panic(err)
-		}
-	}
 }

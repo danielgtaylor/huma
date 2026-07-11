@@ -138,6 +138,9 @@ func (c *echoCtx) Version() huma.ProtoVersion {
 	}
 }
 
+// WithContext replaces the underlying context. Note that Echo exposes only the
+// request's context, so this mutates the underlying request in place rather
+// than returning a fully isolated copy.
 func (c *echoCtx) WithContext(ctx context.Context) huma.Context {
 	c.orig.SetRequest(c.orig.Request().WithContext(ctx))
 	return &echoCtx{
@@ -178,18 +181,4 @@ func New(r *echo.Echo, config huma.Config) huma.API {
 // / schemas / etc.
 func NewWithGroup(r *echo.Echo, g *echo.Group, config huma.Config) huma.API {
 	return huma.NewAPI(config, &echoAdapter{Handler: r, router: g})
-}
-
-func middleware(mw echo.MiddlewareFunc) func(ctx huma.Context, next func(huma.Context)) {
-	return func(ctx huma.Context, next func(huma.Context)) {
-		eCtx := Unwrap(ctx)
-		f := mw(func(c *echo.Context) error {
-			ctx = &echoCtx{op: ctx.Operation(), orig: c}
-			next(ctx)
-			return nil
-		})
-		if err := f(eCtx); err != nil {
-			panic(err)
-		}
-	}
 }
