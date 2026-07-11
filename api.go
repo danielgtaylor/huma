@@ -156,7 +156,9 @@ func (c subContext) Unwrap() Context {
 
 // WithContext returns a new `huma.Context` with the underlying `context.Context`
 // replaced with the given one. This is useful for middleware that needs to
-// modify the request context.
+// modify the request context. Adapters propagate the new context to the
+// underlying request, so the value is also visible to later middleware that
+// unwrap the context (e.g. `humachi.Unwrap`) or to native router middleware.
 func WithContext(ctx Context, override context.Context) Context {
 	if sub, ok := ctx.(interface{ WithContext(context.Context) Context }); ok {
 		return sub.WithContext(override)
@@ -166,7 +168,8 @@ func WithContext(ctx Context, override context.Context) Context {
 
 // WithValue returns a new `huma.Context` with the given key and value set in
 // the underlying `context.Context`. This is useful for middleware that needs to
-// set request-scoped values.
+// set request-scoped values. Like `WithContext`, the value propagates to the
+// underlying request context.
 func WithValue(ctx Context, key, value any) Context {
 	return WithContext(ctx, context.WithValue(ctx.Context(), key, value))
 }
