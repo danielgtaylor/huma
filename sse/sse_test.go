@@ -192,6 +192,34 @@ data: {"message":"Hello, world!"}
 		},
 	},
 	{
+		Title: "sse comment normalizes line breaks",
+		TestFunc: func(t *testing.T) {
+			_, api := humatest.New(t)
+			sse.Register(api, huma.Operation{
+				OperationID: "sse",
+				Method:      http.MethodGet,
+				Path:        "/sse",
+			}, map[string]any{
+				"message": &DefaultMessage{},
+			}, func(ctx context.Context, input *struct{}, send sse.Sender) {
+				// CR, CRLF, and LF are all SSE line terminators. Each line must
+				// be re-prefixed with a colon so an embedded line break can't
+				// inject another SSE field (here a stray "data:" line).
+				send.Comment("a\rb\r\nc\ndata: not-injected")
+			})
+
+			resp := api.Get("/sse")
+
+			assert.Equal(t, http.StatusOK, resp.Code)
+			assert.Equal(t, `: a
+: b
+: c
+: data: not-injected
+
+`, resp.Body.String())
+		},
+	},
+	{
 		Title: "sse flushes headers before first event",
 		TestFunc: func(t *testing.T) {
 			_, api := humatest.New(t)

@@ -41,7 +41,10 @@ type Message struct {
 	ID    int
 	Data  any
 	Retry int
-	// Comment is sent with a message that has only a comment set (nil `Data`).
+	// Comment, if set, is written as one or more SSE comment lines (each line
+	// prefixed with a colon and ignored by clients). It may accompany an event
+	// or, when `Data` is nil, form a comment-only message such as a heartbeat
+	// used to keep the connection alive.
 	Comment string
 }
 
@@ -206,7 +209,12 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 					}
 
 					if msg.Comment != "" {
-						for line := range strings.SplitSeq(msg.Comment, "\n") {
+						// CR, LF, and CRLF are all SSE line terminators. Normalize
+						// them to LF so every line of the comment is re-emitted as
+						// its own ": " comment line and can't inject other fields.
+						comment := strings.ReplaceAll(msg.Comment, "\r\n", "\n")
+						comment = strings.ReplaceAll(comment, "\r", "\n")
+						for line := range strings.SplitSeq(comment, "\n") {
 							bw.Write(fmt.Appendf(nil, ": %s\n", line))
 						}
 					}
