@@ -95,10 +95,8 @@ func (c *fiberV2Wrapper) Header(name string) string {
 }
 
 func (c *fiberV2Wrapper) EachHeader(cb func(name, value string)) {
-	for name, values := range c.orig.Request().Header.All() {
-		for _, value := range values {
-			cb(string(name), string(value))
-		}
+	for name, value := range c.orig.Request().Header.All() {
+		cb(string(name), string(value))
 	}
 }
 
@@ -108,7 +106,7 @@ func (c *fiberV2Wrapper) BodyReader() io.Reader {
 		// Streaming is enabled, so send the reader.
 		return orig.Request().BodyStream()
 	}
-	return bytes.NewReader(orig.BodyRaw())
+	return bytes.NewReader(orig.Body())
 }
 
 func (c *fiberV2Wrapper) GetMultipartForm() (*multipart.Form, error) {
