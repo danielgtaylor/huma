@@ -1,11 +1,13 @@
 package humafiber
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -145,6 +147,16 @@ func (c *fiberWrapper) BodyWriter() io.Writer {
 	return c.orig.RequestCtx()
 }
 
+// StreamBody streams the response body via Fiber/fasthttp's stream writer. It
+// is the optional streaming hook huma's SSE support uses because fasthttp can't
+// flush the response writer synchronously from within the handler.
+func (c *fiberWrapper) StreamBody(fn func(io.Writer)) {
+	rc := c.orig.RequestCtx()
+	rc.SetBodyStreamWriter(func(bw *bufio.Writer) {
+		fn(&fiberStreamWriter{bw: bw, conn: rc.Conn()})
+	})
+}
+
 func (c *fiberWrapper) TLS() *tls.ConnectionState {
 	return c.orig.RequestCtx().TLSConnectionState()
 }
@@ -261,4 +273,27 @@ func New(r *fiber.App, config huma.Config) huma.API {
 // NewWithGroup creates a new Huma API using the Fiber adapter with a route group.
 func NewWithGroup(r *fiber.App, g fiber.Router, config huma.Config) huma.API {
 	return huma.NewAPI(config, &fiberAdapter{tester: r, router: g})
+}
+
+// fiberStreamWriter adapts fasthttp's buffered stream writer to the io.Writer,
+// http.Flusher, and write-deadline interfaces the streaming code expects. It is
+// shared by the Fiber v2 and v3 adapters.
+type fiberStreamWriter struct {
+	bw   *bufio.Writer
+	conn net.Conn
+}
+
+func (w *fiberStreamWriter) Write(p []byte) (int, error) {
+	return w.bw.Write(p)
+}
+
+func (w *fiberStreamWriter) Flush() {
+	_ = w.bw.Flush()
+}
+
+func (w *fiberStreamWriter) SetWriteDeadline(t time.Time) error {
+	if w.conn == nil {
+		return nil
+	}
+	return w.conn.SetWriteDeadline(t)
 }
