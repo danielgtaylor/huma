@@ -608,41 +608,48 @@ func handleArray[T any](r Registry, s *Schema, path *PathBuffer, mode ValidateMo
 	}
 
 	if s.UniqueItems {
-		// uniqueItemsContains reports whether item already appears in seen.
-		// It uses a map[any]struct{} for O(1) lookups but falls back to a
-		// reflect.DeepEqual linear scan when item is a non-hashable type
-		// (e.g. map[string]interface{} from malformed JSON like [{}]).
-		// Without this guard, inserting an unhashable key panics with
-		// "hash of unhashable type" and crashes the server (issue #1042).
-		uniqueItemsContains := func(seen []any, item any) (found bool) {
-			defer func() {
-				if recover() != nil {
-					// item is unhashable (e.g. a map or slice): fall back to
-					// deep equality so we still catch genuine duplicates.
-					for _, s := range seen {
-						if reflect.DeepEqual(s, item) {
-							found = true
-							return
-						}
+		// Hashable items are tracked in a map for O(1) lookups. Non-hashable
+		// items (e.g. map[string]interface{} from malformed JSON like [{}])
+		// can't be used as map keys and would panic with "hash of unhashable
+		// type" (issue #1042), so they are recorded separately and compared
+		// with reflect.DeepEqual. This keeps the common all-hashable case
+		// linear while still detecting duplicates among unhashable items.
+		seen := make(map[any]struct{}, len(arr))
+		var unhashable []any
+
+		// contains reports whether item was already seen, recording it if not.
+		contains := func(item any) (dup bool) {
+			hashable := true
+			func() {
+				defer func() {
+					if recover() != nil {
+						hashable = false
 					}
+				}()
+				if _, ok := seen[item]; ok {
+					dup = true
+				} else {
+					seen[item] = struct{}{}
 				}
 			}()
-			// Fast path: attempt a map lookup. This will panic for unhashable
-			// types, which the deferred recover above will catch.
-			m := make(map[any]struct{}, len(seen)+1)
-			for _, s := range seen {
-				m[s] = struct{}{}
+			if hashable {
+				return dup
 			}
-			_, found = m[item]
-			return
+
+			// Slow path for unhashable items only.
+			for _, u := range unhashable {
+				if reflect.DeepEqual(u, item) {
+					return true
+				}
+			}
+			unhashable = append(unhashable, item)
+			return false
 		}
 
-		seen := make([]any, 0, len(arr))
 		for _, item := range arr {
-			if uniqueItemsContains(seen, item) {
+			if contains(item) {
 				res.Add(path, arr, validation.MsgExpectedArrayItemsUnique)
 			}
-			seen = append(seen, item)
 		}
 	}
 
