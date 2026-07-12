@@ -635,12 +635,48 @@ func handleArray[T any](r Registry, s *Schema, path *PathBuffer, mode ValidateMo
 	}
 
 	if s.UniqueItems {
+		// Hashable items are tracked in a map for O(1) lookups. Non-hashable
+		// items (e.g. map[string]interface{} from malformed JSON like [{}])
+		// can't be used as map keys and would panic with "hash of unhashable
+		// type" (issue #1042), so they are recorded separately and compared
+		// with reflect.DeepEqual. This keeps the common all-hashable case
+		// linear while still detecting duplicates among unhashable items.
 		seen := make(map[any]struct{}, len(arr))
+		var unhashable []any
+
+		// contains reports whether item was already seen, recording it if not.
+		contains := func(item any) (dup bool) {
+			hashable := true
+			func() {
+				defer func() {
+					if recover() != nil {
+						hashable = false
+					}
+				}()
+				if _, ok := seen[item]; ok {
+					dup = true
+				} else {
+					seen[item] = struct{}{}
+				}
+			}()
+			if hashable {
+				return dup
+			}
+
+			// Slow path for unhashable items only.
+			for _, u := range unhashable {
+				if reflect.DeepEqual(u, item) {
+					return true
+				}
+			}
+			unhashable = append(unhashable, item)
+			return false
+		}
+
 		for _, item := range arr {
-			if _, ok := seen[item]; ok {
+			if contains(item) {
 				res.Add(path, arr, validation.MsgExpectedArrayItemsUnique)
 			}
-			seen[item] = struct{}{}
 		}
 	}
 
