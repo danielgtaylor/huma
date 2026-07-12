@@ -173,6 +173,9 @@ huma.Register(api, huma.Operation{
 		MyGreeting                string          `form:"greeting", minLength:"6"`
 		SomeNumbers               []int           `form:"numbers"`
 		NonTaggedValuesAreIgnored string  // ignored
+		// Field content is unmarshalled and validated
+		MyStruct 				  SomeStruct      `form:"my_struct" contentType:"application/json"`
+		MyStructSlice 			  []SomeStruct    `form:"my_struct_slice" contentType:"application/json"`
 	}]
 }) (*struct{}, error) {
 	// The raw multipart.Form body is again available under input.RawBody.Form.
@@ -212,6 +215,9 @@ huma.Register(api, huma.Operation{
 ```
 
 The files are decoded according to the specified contentType. If no contentType is provided, it defaults to `application/octet-stream`.
+
+Non-file fields in multipart form data can be unmarshalled from JSON and validated, by setting their content-type to `application/json`. Field content in the request must be valid JSON.
+
 
 ## Request Example
 

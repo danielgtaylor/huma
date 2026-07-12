@@ -100,15 +100,16 @@ type StreamResponse struct {
 const styleDeepObject = "deepObject"
 
 type paramFieldInfo struct {
-	Type       reflect.Type
-	Name       string
-	Loc        string
-	Required   bool
-	Default    string
-	TimeFormat string
-	Explode    bool
-	Style      string
-	Schema     *Schema
+	Type        reflect.Type
+	Name        string
+	Loc         string
+	Required    bool
+	Default     string
+	TimeFormat  string
+	Explode     bool
+	Style       string
+	ContentType string
+	Schema      *Schema
 }
 
 // paramLocation holds the result of parsing a struct field's parameter location tags.
@@ -246,6 +247,10 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		// OpenAPI 3.x spec and are forced back to true below.
 		if _, ok = f.Tag.Lookup("required"); ok {
 			pfi.Required = boolTag(f, "required", false)
+		}
+
+		if _, ok = f.Tag.Lookup("contentType"); ok {
+			pfi.ContentType = f.Tag.Get("contentType")
 		}
 
 		// Per OpenAPI 3.x spec, path parameters MUST always be required.
@@ -925,6 +930,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			if rbt.isMultipart() {
 				// Read form
 				form, err := readForm(ctx)
+				jsonUnmarshaler := func(data []byte, v any) error { return api.Unmarshal("application/json", data, v) }
 
 				if err != nil {
 					res.Errors = append(res.Errors, err)
@@ -968,6 +974,44 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 									res.Add(pb, value, "expected at most one value, but received multiple values")
 									return
 								}
+
+								// JSON fields
+								if p.ContentType == "application/json" {
+									fieldSchema := op.RequestBody.Content["multipart/form-data"].Schema.Properties[p.Name]
+									jsonValidator := func(data any, res *ValidateResult) {
+										Validate(api.OpenAPI().Components.Schemas, fieldSchema, pb, ModeWriteToServer, data, res)
+									}
+
+									var (
+										parsed                 any
+										errorsBeforeValidation = len(res.Errors)
+									)
+									if err := jsonUnmarshaler([]byte(value[0]), &parsed); err != nil {
+										res.Add(pb, value, "invalid JSON: "+err.Error())
+									} else {
+										jsonValidator(parsed, res)
+									}
+									if errorsBeforeValidation == len(res.Errors) {
+										if err := jsonUnmarshaler([]byte(value[0]), f.Addr().Interface()); err != nil {
+											// Should have been caught by the validator above
+											res.Add(pb, value, "invalid JSON: "+err.Error())
+										}
+										// Set defaults
+										fieldDefaults := findDefaults(api.OpenAPI().Components.Schemas, f.Type())
+										fieldDefaults.Every(f, func(item reflect.Value, def any) {
+											if item.IsZero() {
+												if item.Kind() == reflect.Pointer {
+													item.Set(reflect.New(item.Type().Elem()))
+													item = item.Elem()
+												}
+												item.Set(reflect.Indirect(reflect.ValueOf(def)))
+											}
+										})
+									}
+									return
+								}
+
+								// Regular fields
 								pv, err := parseInto(ctx, f, value[0], value, *p)
 								if err != nil {
 									res.Add(pb, value, err.Error())
