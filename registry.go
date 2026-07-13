@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -14,7 +15,6 @@ import (
 // schemas to exist while being flexible enough to support other use cases
 // like only inline objects (no refs) or always using refs for structs.
 type Registry interface {
-	NameExistsInSchema(t reflect.Type, hint string) bool
 	Schema(t reflect.Type, allowRef bool, hint string) *Schema
 	SchemaFromRef(ref string) *Schema
 	TypeFromRef(ref string) reflect.Type
@@ -125,17 +125,30 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 
 	if getsRef {
 		if s, ok := r.schemas[name]; ok {
-			if _, ok = r.seen[t]; !ok {
-				// The name matches but the type is different, so we have a dupe.
+			if _, seen := r.seen[t]; seen {
+				// The name and type both match, so reuse the existing schema.
+				if allowRef {
+					return &Schema{Ref: r.prefix + name}
+				}
 
+				return s
+			}
+
+			// The name matches but the type is different. Named types are a
+			// genuine duplicate the caller must resolve (e.g. with a custom
+			// namer), but unnamed inline types share a hint-derived name by
+			// design, so disambiguate them with an incrementing numeric suffix.
+			if t.Name() != "" {
 				panic(fmt.Errorf("duplicate name: %s, new type: %s, existing type: %s", name, t, r.types[name]))
 			}
 
-			if allowRef {
-				return &Schema{Ref: r.prefix + name}
+			base := name
+			for i := 1; ; i++ {
+				name = base + strconv.Itoa(i)
+				if _, exists := r.schemas[name]; !exists {
+					break
+				}
 			}
-
-			return s
 		}
 	}
 
@@ -183,11 +196,6 @@ func (r *mapRegistry) MarshalYAML() (any, error) {
 // RegisterTypeAlias makes the schema generator use the `alias` type instead of `t`.
 func (r *mapRegistry) RegisterTypeAlias(t reflect.Type, alias reflect.Type) {
 	r.aliases[t] = alias
-}
-
-func (r *mapRegistry) NameExistsInSchema(t reflect.Type, hint string) bool {
-	_, ok := r.schemas[r.namer(t, hint)]
-	return ok
 }
 
 func (r *mapRegistry) Config() registryConfig {
