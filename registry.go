@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -124,17 +125,30 @@ func (r *mapRegistry) Schema(t reflect.Type, allowRef bool, hint string) *Schema
 
 	if getsRef {
 		if s, ok := r.schemas[name]; ok {
-			if _, ok = r.seen[t]; !ok {
-				// The name matches but the type is different, so we have a dupe.
+			if _, seen := r.seen[t]; seen {
+				// The name and type both match, so reuse the existing schema.
+				if allowRef {
+					return &Schema{Ref: r.prefix + name}
+				}
 
+				return s
+			}
+
+			// The name matches but the type is different. Named types are a
+			// genuine duplicate the caller must resolve (e.g. with a custom
+			// namer), but unnamed inline types share a hint-derived name by
+			// design, so disambiguate them with an incrementing numeric suffix.
+			if t.Name() != "" {
 				panic(fmt.Errorf("duplicate name: %s, new type: %s, existing type: %s", name, t, r.types[name]))
 			}
 
-			if allowRef {
-				return &Schema{Ref: r.prefix + name}
+			base := name
+			for i := 1; ; i++ {
+				name = base + strconv.Itoa(i)
+				if _, exists := r.schemas[name]; !exists {
+					break
+				}
 			}
-
-			return s
 		}
 	}
 

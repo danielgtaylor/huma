@@ -98,6 +98,53 @@ func TestAllowAdditionalPropertiesByDefault(t *testing.T) {
 	})
 }
 
+func TestInlineTypeDisambiguation(t *testing.T) {
+	// Distinct inline (unnamed) structs share the same hint-derived name and
+	// must be disambiguated rather than panic. See issue reproduced in #893.
+	r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+
+	first := r.Schema(reflect.TypeOf(struct {
+		Field1 string `json:"field1"`
+	}{}), true, "Request")
+	second := r.Schema(reflect.TypeOf(struct {
+		Field2 string `json:"field2"`
+	}{}), true, "Request")
+
+	assert.Equal(t, "#/components/schemas/Request", first.Ref)
+	assert.Equal(t, "#/components/schemas/Request1", second.Ref)
+	assert.Len(t, r.Map(), 2)
+}
+
+func TestInlineTypeDeduplication(t *testing.T) {
+	// Identical inline structs are the same reflect.Type and must still
+	// deduplicate to a single schema.
+	r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+
+	first := r.Schema(reflect.TypeOf(struct {
+		Field string `json:"field"`
+	}{}), true, "Request")
+	second := r.Schema(reflect.TypeOf(struct {
+		Field string `json:"field"`
+	}{}), true, "Request")
+
+	assert.Equal(t, "#/components/schemas/Request", first.Ref)
+	assert.Equal(t, first.Ref, second.Ref)
+	assert.Len(t, r.Map(), 1)
+}
+
+func TestDuplicateNamedTypePanics(t *testing.T) {
+	// Genuinely different named types that collide on a name remain a hard
+	// error, directing the caller to a custom namer.
+	r := NewMapRegistry("#/components/schemas/", func(reflect.Type, string) string {
+		return "Collision"
+	})
+
+	r.Schema(reflect.TypeFor[S](), true, "")
+	assert.Panics(t, func() {
+		r.Schema(reflect.TypeFor[Output[int]](), true, "")
+	})
+}
+
 func TestRegistryConfigValue(t *testing.T) {
 	r := NewMapRegistry("/schemas", DefaultSchemaNamer)
 
