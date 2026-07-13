@@ -22,7 +22,7 @@ If the `GET` returns an `ETag` or `Last-Modified` header, then these will be use
 The following formats are supported out of the box, selected via the `Content-Type` header:
 
 -   [JSON Merge Patch](https://datatracker.ietf.org/doc/html/rfc7386) `application/merge-patch+json`
--   [Shorthand Merge Patch](https://rest.sh/#/shorthand?id=patch-partial-update) `application/merge-patch+shorthand`
+-   [Shorthand Merge Patch](https://rest.sh/docs/reference/shorthand/) `application/merge-patch+shorthand`
 -   [JSON Patch](https://www.rfc-editor.org/rfc/rfc6902.html) `application/json-patch+json`
 
 !!! info "Merge on Steroids"
@@ -63,5 +63,5 @@ huma.Register(api, huma.Operation{
 -   External Links
     -   [HTTP PATCH Method](https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods/PATCH)
     -   [RFC7386 JSON Merge Patch](https://datatracker.ietf.org/doc/html/rfc7386)
-    -   [Shorthand Merge Patch](https://rest.sh/#/shorthand?id=patch-partial-update)
+    -   [Shorthand Merge Patch](https://rest.sh/docs/reference/shorthand/)
     -   [RFC6902 JSON Patch](https://www.rfc-editor.org/rfc/rfc6902.html)

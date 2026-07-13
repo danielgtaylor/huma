@@ -140,6 +140,16 @@ func (c *httprouterContext) Version() huma.ProtoVersion {
 	}
 }
 
+func (c *httprouterContext) WithContext(ctx context.Context) huma.Context {
+	return &httprouterContext{
+		op:     c.op,
+		r:      c.r.WithContext(ctx),
+		w:      c.w,
+		ps:     c.ps,
+		status: c.status,
+	}
+}
+
 type httprouterAdapter struct {
 	router *httprouter.Router
 }

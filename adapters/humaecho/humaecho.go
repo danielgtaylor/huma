@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 )
 
 // MultipartMaxMemory is the maximum memory to use when parsing multipart
@@ -20,7 +20,7 @@ var MultipartMaxMemory int64 = 8 * 1024
 
 // Unwrap extracts the underlying Echo context from a Huma context. If passed a
 // context from a different adapter it will panic.
-func Unwrap(ctx huma.Context) echo.Context {
+func Unwrap(ctx huma.Context) *echo.Context {
 	for {
 		if c, ok := ctx.(interface{ Unwrap() huma.Context }); ok {
 			ctx = c.Unwrap()
@@ -36,14 +36,14 @@ func Unwrap(ctx huma.Context) echo.Context {
 
 type echoCtx struct {
 	op     *huma.Operation
-	orig   echo.Context
+	orig   *echo.Context
 	status int
 }
 
 // check that echoCtx implements huma.Context
 var _ huma.Context = &echoCtx{}
 
-func (c *echoCtx) Unwrap() echo.Context {
+func (c *echoCtx) Unwrap() *echo.Context {
 	return c.orig
 }
 
@@ -138,8 +138,21 @@ func (c *echoCtx) Version() huma.ProtoVersion {
 	}
 }
 
+// WithContext replaces the underlying context. Echo exposes only the request's
+// context, so this mutates the request in place (rather than returning an
+// isolated copy) so that native Echo middleware observe values set via
+// huma.WithValue.
+func (c *echoCtx) WithContext(ctx context.Context) huma.Context {
+	c.orig.SetRequest(c.orig.Request().WithContext(ctx))
+	return &echoCtx{
+		op:     c.op,
+		orig:   c.orig,
+		status: c.status,
+	}
+}
+
 type router interface {
-	Add(method, path string, handler echo.HandlerFunc, middlewares ...echo.MiddlewareFunc) *echo.Route
+	Add(method, path string, handler echo.HandlerFunc, middlewares ...echo.MiddlewareFunc) echo.RouteInfo
 }
 
 type echoAdapter struct {
@@ -152,7 +165,7 @@ func (a *echoAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	path := op.Path
 	path = strings.ReplaceAll(path, "{", ":")
 	path = strings.ReplaceAll(path, "}", "")
-	a.router.Add(op.Method, path, func(c echo.Context) error {
+	a.router.Add(op.Method, path, func(c *echo.Context) error {
 		ctx := &echoCtx{op: op, orig: c}
 		handler(ctx)
 		return nil

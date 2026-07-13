@@ -131,6 +131,8 @@ huma.Get(api, "/greeting/{name}", func(ctx context.Context, input *struct{
 	})
 ```
 
+Values set via `huma.WithValue` (or a custom `huma.WithContext`) propagate to the underlying request context, so they are also visible to later middleware that [unwraps](#unwrapping) the context or to native router middleware reading the request `context.Context`.
+
 ### Cookies
 
 You can use the `huma.Context` interface along with [`huma.ReadCookie`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ReadCookie) or [`huma.ReadCookies`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ReadCookies) to access cookies from middleware, and can also write cookies by adding `Set-Cookie` headers in the response:

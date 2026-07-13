@@ -416,6 +416,34 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-const-string",
+			input: struct {
+				StrValue  string `json:"strValue" const:"fixed"`
+				IntValue  int    `json:"intValue" const:"5"`
+				BoolValue bool   `json:"boolValue" const:"true"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"strValue": {
+						"type": "string",
+						"const": "fixed"
+					},
+					"intValue": {
+						"type": "integer",
+						"format": "int64",
+						"const": 5
+					},
+					"boolValue": {
+						"type": "boolean",
+						"const": true
+					}
+				},
+				"required": ["strValue", "intValue", "boolValue"],
+				"additionalProperties": false
+			}`,
+		},
+		{
 			name: "field-readonly",
 			input: struct {
 				Value string `json:"value" readOnly:"true" writeOnly:"false"`
@@ -783,6 +811,51 @@ func TestSchema(t *testing.T) {
 				"required": ["meta", "value2"],
 				"properties": {
 					"meta": {
+						"$ref": "#/components/schemas/Embedded"
+					},
+					"value2": {
+						"type": "string"
+					}
+				}
+			}`,
+		},
+		{
+			name: "field-embed-inline",
+			input: struct {
+				Embedded `json:",inline"`
+				Value2   string `json:"value2"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["value2", "value"],
+				"properties": {
+					"value": {
+						"type": "string",
+						"description": "new doc"
+					},
+					"value2": {
+						"type": "string"
+					}
+				}
+			}`,
+		},
+		{
+			// A *named* (non-anonymous) field is never inlined by the standard
+			// encoding/json marshaler that huma uses by default; the `,inline`
+			// option is ignored and the field is nested under its Go name. The
+			// schema must match that wire behavior.
+			name: "field-named-inline",
+			input: struct {
+				Field  Embedded `json:",inline"`
+				Value2 string   `json:"value2"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["Field", "value2"],
+				"properties": {
+					"Field": {
 						"$ref": "#/components/schemas/Embedded"
 					},
 					"value2": {

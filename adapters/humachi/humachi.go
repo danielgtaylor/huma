@@ -146,6 +146,15 @@ func (c *chiContext) Version() huma.ProtoVersion {
 	}
 }
 
+func (c *chiContext) WithContext(ctx context.Context) huma.Context {
+	return &chiContext{
+		op:     c.op,
+		r:      c.r.WithContext(ctx),
+		w:      c.w,
+		status: c.status,
+	}
+}
+
 // NewContext creates a new Huma context from an HTTP request and response.
 func NewContext(op *huma.Operation, r *http.Request, w http.ResponseWriter) huma.Context {
 	return &chiContext{op: op, r: r, w: w}
@@ -157,12 +166,37 @@ type chiAdapter struct {
 
 func (a *chiAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	a.router.MethodFunc(op.Method, op.Path, func(w http.ResponseWriter, r *http.Request) {
-		handler(&chiContext{op: op, r: r, w: w})
+		handler(NewContext(op, r, w))
 	})
 }
 
 func (a *chiAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a.router.ServeHTTP(w, r)
+}
+
+// noRouteContext shadows chi's route-context key so a request re-dispatched
+// through this adapter is routed afresh. chi's Mux.ServeHTTP reuses an existing
+// *chi.Context found under chi.RouteCtxKey instead of matching again, so a
+// context propagated from an in-flight request (e.g. huma's autopatch internal
+// GET/PUT) would otherwise inherit the caller's matched route and recurse into
+// the same handler.
+type noRouteContext struct {
+	context.Context
+}
+
+func (c noRouteContext) Value(key any) any {
+	if key == chi.RouteCtxKey {
+		return nil
+	}
+	return c.Context.Value(key)
+}
+
+// SanitizeInternalContext implements the optional interface used by huma's
+// autopatch feature: it strips chi's matched-route state so an internal
+// sub-request re-dispatched through this adapter is routed fresh. All other
+// context values, deadlines, and cancellation are preserved.
+func (a *chiAdapter) SanitizeInternalContext(ctx context.Context) context.Context {
+	return noRouteContext{Context: ctx}
 }
 
 // NewAdapter creates a new adapter for the given chi router.

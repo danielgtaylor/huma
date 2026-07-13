@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"reflect"
@@ -35,12 +36,27 @@ type writeDeadliner interface {
 	SetWriteDeadline(time.Time) error
 }
 
+// bodyStreamer is an optional interface an adapter's context may implement when
+// its response writer can't be flushed synchronously from within the handler
+// (e.g. fasthttp/Fiber). StreamBody is called with a writer used to stream the
+// response body; the response stays open until the callback returns. The writer
+// flushes on demand when it implements http.Flusher and honors write deadlines
+// when it implements writeDeadliner.
+type bodyStreamer interface {
+	StreamBody(func(io.Writer))
+}
+
 // Message is a single SSE message. There is no `event` field as this is
 // handled by the `eventTypeMap` when registering the operation.
 type Message struct {
 	ID    int
 	Data  any
 	Retry int
+	// Comment, if set, is written as one or more SSE comment lines (each line
+	// prefixed with a colon and ignored by clients). It may accompany an event
+	// or, when `Data` is nil, form a comment-only message such as a heartbeat
+	// used to keep the connection alive.
+	Comment string
 }
 
 // Sender is a send function for sending SSE messages to the client. It is
@@ -52,6 +68,13 @@ type Sender func(Message) error
 // to calling `sender(Message{Data: data})`.
 func (s Sender) Data(data any) error {
 	return s(Message{Data: data})
+}
+
+// Comment sends an SSE comment to the client. Comments are ignored by clients
+// and are commonly used as heartbeats to keep the connection alive. This is
+// equivalent to calling `sender(Message{Comment: comment})`.
+func (s Sender) Comment(comment string) error {
+	return s(Message{Comment: comment})
 }
 
 // Register a new SSE operation. The `eventTypeMap` maps from event name to
@@ -132,88 +155,136 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 		return &huma.StreamResponse{
 			Body: func(ctx huma.Context) {
 				ctx.SetHeader("Content-Type", "text/event-stream")
-				bw := ctx.BodyWriter()
-				encoder := json.NewEncoder(bw)
+				// Commit response headers immediately so the client's
+				// EventSource.onopen fires without waiting for the first event.
+				ctx.SetStatus(http.StatusOK)
 
-				// Get the flusher/deadliner from the response writer if possible.
-				var flusher http.Flusher
-				flushCheck := bw
-				for {
-					if f, ok := flushCheck.(http.Flusher); ok {
-						flusher = f
-						break
-					}
-					if u, ok := flushCheck.(unwrapper); ok {
-						flushCheck = u.Unwrap()
-					} else {
-						break
-					}
+				// Adapters whose response writer can't be flushed synchronously
+				// (e.g. Fiber/fasthttp) implement bodyStreamer and stream through
+				// a callback; everything else writes to BodyWriter directly.
+				if bs, ok := ctx.(bodyStreamer); ok {
+					bs.StreamBody(func(w io.Writer) {
+						stream(ctx.Context(), w, typeToEvent, input, f)
+					})
+
+					return
 				}
 
-				var deadliner writeDeadliner
-				deadlineCheck := bw
-				for {
-					if d, ok := deadlineCheck.(writeDeadliner); ok {
-						deadliner = d
-						break
-					}
-					if u, ok := deadlineCheck.(unwrapper); ok {
-						deadlineCheck = u.Unwrap()
-					} else {
-						break
-					}
-				}
-
-				send := func(msg Message) error {
-					if deadliner != nil {
-						if err := deadliner.SetWriteDeadline(time.Now().Add(WriteTimeout)); err != nil {
-							fmt.Fprintf(os.Stderr, "warning: unable to set write deadline: %v\n", err)
-						}
-					} else {
-						fmt.Fprintln(os.Stderr, "write deadline not supported by underlying writer")
-					}
-
-					// Write optional fields
-					if msg.ID > 0 {
-						bw.Write(fmt.Appendf(nil, "id: %d\n", msg.ID))
-					}
-					if msg.Retry > 0 {
-						bw.Write(fmt.Appendf(nil, "retry: %d\n", msg.Retry))
-					}
-
-					event, ok := typeToEvent[deref(reflect.TypeOf(msg.Data))]
-					if !ok {
-						fmt.Fprintf(os.Stderr, "error: unknown event type %v\n", reflect.TypeOf(msg.Data))
-						debug.PrintStack()
-					}
-					if event != "" && event != "message" {
-						// `message` is the default, so no need to transmit it.
-						bw.Write([]byte("event: " + event + "\n"))
-					}
-
-					// Write the message data.
-					if _, err := bw.Write([]byte("data: ")); err != nil {
-						return err
-					}
-					if err := encoder.Encode(msg.Data); err != nil {
-						bw.Write([]byte(`{"error": "encode error: `))
-						bw.Write([]byte(err.Error()))
-						bw.Write([]byte("\"}\n\n"))
-						return err
-					}
-					bw.Write([]byte("\n"))
-					if flusher != nil {
-						flusher.Flush()
-					} else {
-						fmt.Fprintln(os.Stderr, "error: unable to flush")
-						return fmt.Errorf("unable to flush: %w", http.ErrNotSupported)
-					}
-					return nil
-				}
-
-				// Call the user-provided SSE handler.
-				f(ctx.Context(), input, send)
+				stream(ctx.Context(), ctx.BodyWriter(), typeToEvent, input, f)
 			},
 		}, nil
 	})
+}
+
+// stream runs the SSE send loop against a single writer: it discovers the
+// writer's flush and write-deadline support, builds the send function, and
+// invokes the user handler. It is shared by the direct-write path and the
+// bodyStreamer callback path.
+func stream[I any](reqCtx context.Context, w io.Writer, typeToEvent map[reflect.Type]string, input *I, f func(ctx context.Context, input *I, send Sender)) {
+	encoder := json.NewEncoder(w)
+
+	// Get the flusher/deadliner from the writer if possible.
+	var flusher http.Flusher
+	flushCheck := w
+
+	for {
+		if fl, ok := flushCheck.(http.Flusher); ok {
+			flusher = fl
+			break
+		}
+		if u, ok := flushCheck.(unwrapper); ok {
+			flushCheck = u.Unwrap()
+		} else {
+			break
+		}
+	}
+	if flusher != nil {
+		flusher.Flush()
+	}
+
+	var deadliner writeDeadliner
+	deadlineCheck := w
+
+	for {
+		if d, ok := deadlineCheck.(writeDeadliner); ok {
+			deadliner = d
+			break
+		}
+		if u, ok := deadlineCheck.(unwrapper); ok {
+			deadlineCheck = u.Unwrap()
+		} else {
+			break
+		}
+	}
+
+	flush := func() error {
+		if flusher == nil {
+			fmt.Fprintln(os.Stderr, "error: unable to flush")
+			return fmt.Errorf("unable to flush: %w", http.ErrNotSupported)
+		}
+
+		flusher.Flush()
+
+		return nil
+	}
+
+	send := func(msg Message) error {
+		if deadliner != nil {
+			if err := deadliner.SetWriteDeadline(time.Now().Add(WriteTimeout)); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: unable to set write deadline: %v\n", err)
+			}
+		} else {
+			fmt.Fprintln(os.Stderr, "write deadline not supported by underlying writer")
+		}
+
+		// Write optional fields.
+		if msg.ID > 0 {
+			w.Write(fmt.Appendf(nil, "id: %d\n", msg.ID))
+		}
+		if msg.Retry > 0 {
+			w.Write(fmt.Appendf(nil, "retry: %d\n", msg.Retry))
+		}
+
+		if msg.Comment != "" {
+			// CR, LF, and CRLF are all SSE line terminators. Normalize them to
+			// LF so every line of the comment is re-emitted as its own ": "
+			// comment line and can't inject other fields.
+			comment := strings.ReplaceAll(msg.Comment, "\r\n", "\n")
+			comment = strings.ReplaceAll(comment, "\r", "\n")
+			for line := range strings.SplitSeq(comment, "\n") {
+				w.Write(fmt.Appendf(nil, ": %s\n", line))
+			}
+		}
+
+		if msg.Data == nil {
+			w.Write([]byte("\n"))
+			return flush()
+		}
+
+		event, ok := typeToEvent[deref(reflect.TypeOf(msg.Data))]
+		if !ok {
+			fmt.Fprintf(os.Stderr, "error: unknown event type %v\n", reflect.TypeOf(msg.Data))
+			debug.PrintStack()
+		}
+		if event != "" && event != "message" {
+			// `message` is the default, so no need to transmit it.
+			w.Write([]byte("event: " + event + "\n"))
+		}
+
+		// Write the message data.
+		if _, err := w.Write([]byte("data: ")); err != nil {
+			return err
+		}
+		if err := encoder.Encode(msg.Data); err != nil {
+			w.Write([]byte(`{"error": "encode error: `))
+			w.Write([]byte(err.Error()))
+			w.Write([]byte("\"}\n\n"))
+			return err
+		}
+		w.Write([]byte("\n"))
+		return flush()
+	}
+
+	// Call the user-provided SSE handler.
+	f(reqCtx, input, send)
 }

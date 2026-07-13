@@ -1,6 +1,7 @@
 package huma
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -47,7 +48,7 @@ var rxHostname = regexp.MustCompile(`^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61
 var rxURITemplate = regexp.MustCompile("^([^{]*({[^}]*})?)*$")
 var rxJSONPointer = regexp.MustCompile("^(?:/(?:[^~/]|~0|~1)*)*$")
 var rxRelJSONPointer = regexp.MustCompile("^(?:0|[1-9][0-9]*)(?:#|(?:/(?:[^~/]|~0|~1)*)*)$")
-var rxBase64 = regexp.MustCompile(`^[a-zA-Z0-9+/_-]+=*$`)
+var rxBase64 = regexp.MustCompile(`^[a-zA-Z0-9+/_-]*=*$`)
 
 func mapTo[A, B any](s []A, f func(A) B) []B {
 	r := make([]B, len(s))
@@ -373,6 +374,44 @@ func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode Validat
 	Validate(r, r.SchemaFromRef(ref), path, mode, v, res)
 }
 
+// toFloat64 normalizes any supported numeric Go type to a float64. The second
+// return value is false when v is not a numeric type. This lets numeric
+// validation treat values uniformly regardless of whether they came from a
+// JSON body (float64), a query/path parameter (int64), or a custom schema.
+func toFloat64(v any) (float64, bool) {
+	switch v := v.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int8:
+		return float64(v), true
+	case int16:
+		return float64(v), true
+	case int32:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case uint:
+		return float64(v), true
+	case uint8:
+		return float64(v), true
+	case uint16:
+		return float64(v), true
+	case uint32:
+		return float64(v), true
+	case uint64:
+		return float64(v), true
+	case json.Number:
+		f, err := v.Float64()
+		return f, err == nil
+	default:
+		return 0, false
+	}
+}
+
 // Validate an input value against a schema, collecting errors in the validation
 // result object. If successful, `res.Errors` will be empty. It is suggested
 // to use a `sync.Pool` to reuse the PathBuffer and ValidateResult objects,
@@ -432,34 +471,8 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 			return
 		}
 	case TypeNumber, TypeInteger:
-		var num float64
-
-		switch v := v.(type) {
-		case float64:
-			num = v
-		case float32:
-			num = float64(v)
-		case int:
-			num = float64(v)
-		case int8:
-			num = float64(v)
-		case int16:
-			num = float64(v)
-		case int32:
-			num = float64(v)
-		case int64:
-			num = float64(v)
-		case uint:
-			num = float64(v)
-		case uint8:
-			num = float64(v)
-		case uint16:
-			num = float64(v)
-		case uint32:
-			num = float64(v)
-		case uint64:
-			num = float64(v)
-		default:
+		num, ok := toFloat64(v)
+		if !ok {
 			if s.Type == TypeInteger {
 				res.Add(path, v, validation.MsgExpectedInteger)
 			} else {
@@ -582,8 +595,29 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 
 	if len(s.Enum) > 0 {
 		found := slices.Contains(s.Enum, v)
+		if !found && (s.Type == TypeInteger || s.Type == TypeNumber) {
+			// Numeric enums may be stored with a different Go type than the
+			// parsed value (e.g. float64 from JSON bodies vs int64 from query
+			// or path params), so a strict type comparison is not enough.
+			// Compare numerically instead. Note this uses float64 like the rest
+			// of the numeric validation above, so integer values beyond 2^53
+			// are subject to the same precision limits.
+			if num, ok := toFloat64(v); ok {
+				found = slices.ContainsFunc(s.Enum, func(e any) bool {
+					ev, ok := toFloat64(e)
+					return ok && ev == num
+				})
+			}
+		}
 		if !found {
 			res.Add(path, v, s.msgEnum)
+		}
+	}
+
+	if s.Const != nil {
+		// Deep equality check for const validation
+		if !reflect.DeepEqual(s.Const, v) {
+			res.Add(path, v, s.msgConst)
 		}
 	}
 }
@@ -601,12 +635,48 @@ func handleArray[T any](r Registry, s *Schema, path *PathBuffer, mode ValidateMo
 	}
 
 	if s.UniqueItems {
+		// Hashable items are tracked in a map for O(1) lookups. Non-hashable
+		// items (e.g. map[string]interface{} from malformed JSON like [{}])
+		// can't be used as map keys and would panic with "hash of unhashable
+		// type" (issue #1042), so they are recorded separately and compared
+		// with reflect.DeepEqual. This keeps the common all-hashable case
+		// linear while still detecting duplicates among unhashable items.
 		seen := make(map[any]struct{}, len(arr))
+		var unhashable []any
+
+		// contains reports whether item was already seen, recording it if not.
+		contains := func(item any) (dup bool) {
+			hashable := true
+			func() {
+				defer func() {
+					if recover() != nil {
+						hashable = false
+					}
+				}()
+				if _, ok := seen[item]; ok {
+					dup = true
+				} else {
+					seen[item] = struct{}{}
+				}
+			}()
+			if hashable {
+				return dup
+			}
+
+			// Slow path for unhashable items only.
+			for _, u := range unhashable {
+				if reflect.DeepEqual(u, item) {
+					return true
+				}
+			}
+			unhashable = append(unhashable, item)
+			return false
+		}
+
 		for _, item := range arr {
-			if _, ok := seen[item]; ok {
+			if contains(item) {
 				res.Add(path, arr, validation.MsgExpectedArrayItemsUnique)
 			}
-			seen[item] = struct{}{}
 		}
 	}
 

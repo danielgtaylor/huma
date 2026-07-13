@@ -13,6 +13,8 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/danielgtaylor/huma/v2/adapters/humaecho"
 	"github.com/danielgtaylor/huma/v2/adapters/humafiber"
+	"github.com/danielgtaylor/huma/v2/adapters/humaflow"
+	"github.com/danielgtaylor/huma/v2/adapters/humaflow/flow"
 	"github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 	"github.com/danielgtaylor/huma/v2/adapters/humahttprouter"
@@ -20,10 +22,12 @@ import (
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/gin-gonic/gin"
 	"github.com/go-chi/chi/v5"
-	"github.com/gofiber/fiber/v2"
+	fiberV2 "github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/gorilla/mux"
 	"github.com/julienschmidt/httprouter"
-	"github.com/labstack/echo/v4"
+	echoV4 "github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/uptrace/bunrouter"
 )
@@ -93,7 +97,11 @@ func TestAdapters(t *testing.T) {
 		return huma.DefaultConfig("Test", "1.0.0")
 	}
 
-	wrap := func(h huma.API, isFiber bool, unwrapper func(ctx huma.Context)) huma.API {
+	// nativeContext returns the underlying request context for an adapter, or nil
+	// if the adapter can't be unwrapped. It is used to assert that a value set via
+	// huma.WithValue propagates into the native request context that framework
+	// middleware read. See https://github.com/danielgtaylor/huma/issues/859
+	wrap := func(h huma.API, isFiber bool, nativeContext func(ctx huma.Context) context.Context) huma.API {
 		h.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
 			assert.Nil(t, ctx.TLS())
 			v := ctx.Version()
@@ -103,16 +111,24 @@ func TestAdapters(t *testing.T) {
 				assert.Equal(t, 1, v.ProtoMajor)
 				assert.Equal(t, 1, v.ProtoMinor)
 			} else {
-				assert.Equal(t, "http", v.Proto)
+				// Fiber adapters (both v2 and v3) don't populate ProtoMajor/ProtoMinor
+				assert.Contains(t, []string{"http", "HTTP/1.1"}, v.Proto)
 			}
 
-			// Make sure huma.WithValue works correctly
-			ctx = huma.WithContext(ctx, context.WithValue(ctx.Context(), key{}, "value"))
+			// Set a request-scoped value that downstream native middleware must be
+			// able to read from the underlying request context.
+			ctx = huma.WithValue(ctx, key{}, "value")
 
 			next(ctx)
 		}, func(ctx huma.Context, next func(huma.Context)) {
-			// Make sure the Unwrap func does not panic even when the context is wrapped by WithContext
-			assert.NotPanics(t, func() { unwrapper(ctx) })
+			// Unwrapping must not panic even after the context was replaced via
+			// WithValue, and the value must have propagated into the native
+			// request context.
+			var native context.Context
+			assert.NotPanics(t, func() { native = nativeContext(ctx) })
+			if native != nil {
+				assert.Equal(t, "value", native.Value(key{}))
+			}
 			next(ctx)
 		})
 		return h
@@ -123,32 +139,71 @@ func TestAdapters(t *testing.T) {
 		new  func() huma.API
 	}{
 		{"chi", func() huma.API {
-			return wrap(humachi.New(chi.NewMux(), config()), false, func(ctx huma.Context) { humachi.Unwrap(ctx) })
+			return wrap(humachi.New(chi.NewMux(), config()), false, func(ctx huma.Context) context.Context {
+				r, _ := humachi.Unwrap(ctx)
+				return r.Context()
+			})
 		}},
 		{"echo", func() huma.API {
-			return wrap(humaecho.New(echo.New(), config()), false, func(ctx huma.Context) { humaecho.Unwrap(ctx) })
+			return wrap(humaecho.New(echo.New(), config()), false, func(ctx huma.Context) context.Context {
+				return humaecho.Unwrap(ctx).Request().Context()
+			})
+		}},
+		{"echo-v4", func() huma.API {
+			return wrap(humaecho.NewV4(echoV4.New(), config()), false, func(ctx huma.Context) context.Context {
+				return humaecho.UnwrapV4(ctx).Request().Context()
+			})
 		}},
 		{"fiber", func() huma.API {
-			return wrap(humafiber.New(fiber.New(), config()), true, func(ctx huma.Context) { humafiber.Unwrap(ctx) })
+			return wrap(humafiber.New(fiber.New(), config()), true, func(ctx huma.Context) context.Context {
+				return humafiber.Unwrap(ctx).Context()
+			})
+		}},
+		{"fiber-v2", func() huma.API {
+			return wrap(humafiber.NewV2(fiberV2.New(), config()), true, func(ctx huma.Context) context.Context {
+				return humafiber.UnwrapV2(ctx).UserContext()
+			})
 		}},
 		{"go", func() huma.API {
-			return wrap(humago.New(http.NewServeMux(), config()), false, func(ctx huma.Context) { humago.Unwrap(ctx) })
+			return wrap(humago.New(http.NewServeMux(), config()), false, func(ctx huma.Context) context.Context {
+				r, _ := humago.Unwrap(ctx)
+				return r.Context()
+			})
+		}},
+		{"humaflow", func() huma.API {
+			return wrap(humaflow.New(flow.New(), config()), false, func(ctx huma.Context) context.Context {
+				r, _ := humaflow.Unwrap(ctx)
+				return r.Context()
+			})
 		}},
 		{"gin", func() huma.API {
-			return wrap(humagin.New(gin.New(), config()), false, func(ctx huma.Context) { humagin.Unwrap(ctx) })
+			return wrap(humagin.New(gin.New(), config()), false, func(ctx huma.Context) context.Context {
+				return humagin.Unwrap(ctx).Request.Context()
+			})
 		}},
 		{"httprouter", func() huma.API {
-			return wrap(humahttprouter.New(httprouter.New(), config()), false, func(ctx huma.Context) { humahttprouter.Unwrap(ctx) })
+			return wrap(humahttprouter.New(httprouter.New(), config()), false, func(ctx huma.Context) context.Context {
+				r, _, _ := humahttprouter.Unwrap(ctx)
+				return r.Context()
+			})
 		}},
 		{"mux", func() huma.API {
-			return wrap(humamux.New(mux.NewRouter(), config()), false, func(ctx huma.Context) { humamux.Unwrap(ctx) })
+			return wrap(humamux.New(mux.NewRouter(), config()), false, func(ctx huma.Context) context.Context {
+				r, _ := humamux.Unwrap(ctx)
+				return r.Context()
+			})
 		}},
 		{"bunrouter", func() huma.API {
-			return wrap(humabunrouter.New(bunrouter.New(), config()), false, func(ctx huma.Context) { humabunrouter.Unwrap(ctx) })
+			return wrap(humabunrouter.New(bunrouter.New(), config()), false, func(ctx huma.Context) context.Context {
+				r, _ := humabunrouter.Unwrap(ctx)
+				return r.Context()
+			})
 		}},
 		{"bunroutercompat", func() huma.API {
-			return wrap(humabunrouter.NewCompat(bunrouter.New().Compat(), config()), false, func(ctx huma.Context) {
-				// FIXME: humabunrouter.Unwrap(ctx) doesn't work with compat mode
+			return wrap(humabunrouter.NewCompat(bunrouter.New().Compat(), config()), false, func(ctx huma.Context) context.Context {
+				// FIXME: humabunrouter.Unwrap doesn't work with compat mode, so the
+				// native context can't be read here to assert propagation.
+				return nil
 			})
 		}},
 	} {

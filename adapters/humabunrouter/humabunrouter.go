@@ -140,6 +140,15 @@ func (c *bunContext) Version() huma.ProtoVersion {
 	}
 }
 
+func (c *bunContext) WithContext(ctx context.Context) huma.Context {
+	return &bunContext{
+		op:     c.op,
+		r:      c.r.WithContext(ctx),
+		w:      c.w,
+		status: c.status,
+	}
+}
+
 // NewContext creates a new Huma context from an HTTP request and response.
 func NewContext(op *huma.Operation, r bunrouter.Request, w http.ResponseWriter) huma.Context {
 	return &bunContext{op: op, r: r, w: w}
@@ -240,6 +249,15 @@ func (c *bunCompatContext) Version() huma.ProtoVersion {
 		Proto:      c.r.Proto,
 		ProtoMajor: c.r.ProtoMajor,
 		ProtoMinor: c.r.ProtoMinor,
+	}
+}
+
+func (c *bunCompatContext) WithContext(ctx context.Context) huma.Context {
+	return &bunCompatContext{
+		op:     c.op,
+		r:      c.r.WithContext(ctx),
+		w:      c.w,
+		status: c.status,
 	}
 }
 

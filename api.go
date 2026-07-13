@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -19,7 +20,10 @@ import (
 	"github.com/danielgtaylor/huma/v2/negotiation"
 )
 
-var rxSchema = regexp.MustCompile(`#/components/schemas/([^"]+)`)
+var (
+	rxSchema       = regexp.MustCompile(`#/components/schemas/([^"]+)`)
+	rxServerURLVar = regexp.MustCompile(`(?i){([a-z0-9._~-]+)}`)
+)
 
 var ErrUnknownContentType = errors.New("unknown content type")
 
@@ -152,14 +156,20 @@ func (c subContext) Unwrap() Context {
 
 // WithContext returns a new `huma.Context` with the underlying `context.Context`
 // replaced with the given one. This is useful for middleware that needs to
-// modify the request context.
+// modify the request context. Adapters propagate the new context to the
+// underlying request, so the value is also visible to later middleware that
+// unwrap the context (e.g. `humachi.Unwrap`) or to native router middleware.
 func WithContext(ctx Context, override context.Context) Context {
+	if sub, ok := ctx.(interface{ WithContext(context.Context) Context }); ok {
+		return sub.WithContext(override)
+	}
 	return subContext{humaContext: ctx, override: override}
 }
 
 // WithValue returns a new `huma.Context` with the given key and value set in
 // the underlying `context.Context`. This is useful for middleware that needs to
-// set request-scoped values.
+// set request-scoped values. Like `WithContext`, the value propagates to the
+// underlying request context.
 func WithValue(ctx Context, key, value any) Context {
 	return WithContext(ctx, context.WithValue(ctx.Context(), key, value))
 }
@@ -201,6 +211,20 @@ type Config struct {
 	// Alternatively, you can set DocsPath to empty to disable the built-in docs
 	// route altogether.
 	DocsRenderer string
+
+	// DocsRendererConfig is an optional renderer-specific config. When set, it is
+	// JSON-marshaled into the docs HTML. Scalar and SwaggerUI use it, Stoplight
+	// Elements ignores it.
+	//
+	// Scalar reads it from the `data-configuration` attribute. See
+	// https://github.com/scalar/scalar/blob/main/documentation/configuration.md
+	// for the options.
+	//
+	// SwaggerUI merges its fields into the SwaggerUIBundle config object. See
+	// https://swagger.io/docs/open-source-tools/swagger-ui/usage/configuration/
+	// for the options. Huma owns the `url` and `dom_id` fields, so setting
+	// them here does nothing.
+	DocsRendererConfig any
 
 	// SchemasPath is the path to the API schemas. If set to `/schemas` it will
 	// allow clients to get `/schemas/{schema}` to view the schema in a browser
@@ -334,7 +358,7 @@ func (a *api) Unmarshal(contentType string, data []byte, v any) error {
 		return err
 	}
 
-	ct := contentType[start:end]
+	ct := strings.ToLower(contentType[start:end])
 	if ct == "" {
 		// Default to assume JSON since this is an API.
 		ct = "application/json"
@@ -378,14 +402,15 @@ func (a *api) Transform(ctx Context, status string, v any) (any, error) {
 }
 
 func (a *api) Marshal(w io.Writer, ct string, v any) error {
-	f, ok := a.formats[ct]
+	lower := strings.ToLower(ct)
+	f, ok := a.formats[lower]
 	if !ok {
-		start, end, err := parseContentType(ct)
+		start, end, err := parseContentType(lower)
 		if err != nil {
 			return err
 		}
 
-		f, ok = a.formats[ct[start:end]]
+		f, ok = a.formats[lower[start:end]]
 	}
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrUnknownContentType, ct)
@@ -405,13 +430,52 @@ func (a *api) Middlewares() Middlewares {
 // spec. If no server URL is set, then an empty string is returned.
 func getAPIPrefix(oapi *OpenAPI) string {
 	for _, server := range oapi.Servers {
-		if u, err := url.Parse(server.URL); err == nil && u.Path != "" {
-			if u.Scheme != "" || strings.HasPrefix(server.URL, "/") {
-				return u.Path
-			}
+		if server.URL == "" {
+			continue
+		}
+
+		urlWithVars := getServerURLWithDefaultVars(*server)
+
+		serverURL, err := url.Parse(urlWithVars)
+		if err != nil {
+			panic("invalid server URL: " + urlWithVars + " (" + server.URL + "): " + err.Error())
+		}
+
+		if serverURL.Path == "" {
+			continue
+		}
+
+		if strings.HasPrefix(server.URL, "/") || serverURL.Host != "" {
+			return serverURL.Path
 		}
 	}
+
 	return ""
+}
+
+func getServerURLWithDefaultVars(s Server) string {
+	if s.URL == "" || len(s.Variables) == 0 {
+		return s.URL
+	}
+
+	res := s.URL
+	matches := rxServerURLVar.FindAllStringSubmatch(s.URL, -1)
+
+	for _, m := range matches {
+		v, ok := s.Variables[m[1]]
+		if !ok {
+			continue
+		}
+
+		val := v.Default
+		if val == "" && len(v.Enum) > 0 {
+			val = v.Enum[0]
+		}
+
+		res = strings.ReplaceAll(res, m[0], val)
+	}
+
+	return res
 }
 
 func parseContentType(contentType string) (int, int, error) {
@@ -593,9 +657,18 @@ func (a *api) registerDocsRoute() {
 			"connect-src 'self'",
 			"form-action 'none'",
 			"frame-ancestors 'none'",
-			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox",
+			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads",
 			"script-src 'unsafe-eval' https://unpkg.com/@scalar/api-reference@1.44.20/dist/browser/standalone.js", // TODO: Somehow drop 'unsafe-eval'
 			"style-src 'unsafe-inline'", // TODO: Somehow drop 'unsafe-inline'
+		}
+
+		var configAttr string
+		if a.config.DocsRendererConfig != nil {
+			b, err := json.Marshal(a.config.DocsRendererConfig)
+			if err != nil {
+				panic("failed to marshal DocsRendererConfig: " + err.Error())
+			}
+			configAttr = ` data-configuration="` + html.EscapeString(string(b)) + `"`
 		}
 
 		body = []byte(`<!doctype html>
@@ -607,7 +680,7 @@ func (a *api) registerDocsRoute() {
     <title>` + title + `</title>
   </head>
   <body>
-    <script id="api-reference" data-url="` + openAPIPath + `.json"></script>
+    <script id="api-reference" data-url="` + openAPIPath + `.json"` + configAttr + `></script>
     <script src="https://unpkg.com/@scalar/api-reference@1.44.20/dist/browser/standalone.js" crossorigin integrity="sha384-tMz7GAo6dMy55x9tLFtH+sHtogji6Scmb+feBR31TAHmvSPRUTboK9H3M5NFaP4R"></script>
   </body>
 </html>`)
@@ -622,7 +695,7 @@ func (a *api) registerDocsRoute() {
 			"connect-src 'self'",
 			"form-action 'none'",
 			"frame-ancestors 'none'",
-			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox",
+			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads",
 			"script-src https://unpkg.com/@stoplight/elements@9.0.15/web-components.min.js",
 			"style-src 'unsafe-inline' https://unpkg.com/@stoplight/elements@9.0.15/styles.min.css",
 		}
@@ -657,9 +730,18 @@ func (a *api) registerDocsRoute() {
 			"connect-src 'self'",
 			"form-action 'none'",
 			"frame-ancestors 'none'",
-			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox",
-			"script-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js 'sha256-loGQL86SKUDRkBgfqt+XGmcml9Plihleifquht4CLYE='",
+			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-downloads",
+			"script-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js 'sha256-gRya58TMnKTH/Tne/zBInjBwFUxL66aMDYvPuAX0lNY='",
 			"style-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui.css",
+		}
+
+		var configAttr string
+		if a.config.DocsRendererConfig != nil {
+			b, err := json.Marshal(a.config.DocsRendererConfig)
+			if err != nil {
+				panic("failed to marshal DocsRendererConfig: " + err.Error())
+			}
+			configAttr = ` data-config="` + html.EscapeString(string(b)) + `"`
 		}
 
 		body = []byte(`<!doctype html>
@@ -674,10 +756,13 @@ func (a *api) registerDocsRoute() {
   <body>
     <div id="swagger-ui"></div>
     <script src="https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js" crossorigin integrity="sha384-o9idN8HE6/V6SAewgnr6/5nz7+Npt5J0Cb4tNyXK8pycsVmgl1ZNbRS7tlEGxd+J"></script>
-    <script data-url="` + openAPIPath + `.json">
-      const url = document.currentScript.dataset.url;
+    <script data-url="` + openAPIPath + `.json"` + configAttr + `>
+      const script = document.currentScript;
+      const url = script.dataset.url;
+      const config = script.dataset.config ? JSON.parse(script.dataset.config) : {};
       window.onload = () => {
         window.ui = SwaggerUIBundle({
+          ...config,
           url: url,
           dom_id: '#swagger-ui',
         });

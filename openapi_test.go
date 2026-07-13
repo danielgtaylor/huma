@@ -1,10 +1,12 @@
 package huma_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -293,4 +295,80 @@ func TestAddOperationNormalizeOperationIDs(t *testing.T) {
 	})
 
 	assert.Equal(t, "test-with-spaces", oapi.Paths["/test"].Get.OperationID)
+}
+
+// TestHiddenOperationSchemasOmitted verifies that schemas which are only used by
+// `Hidden` operations are pruned from the exported OpenAPI document, while
+// schemas reachable from visible operations (including transitively-referenced
+// and shared types) are kept. The underlying registry is left intact so request
+// validation for hidden routes continues to work.
+func TestHiddenOperationSchemasOmitted(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	// Shared is used by both a visible and a hidden operation, so it must be
+	// kept. Nested is only referenced transitively by the visible response.
+	type Shared struct {
+		Value string `json:"value"`
+	}
+	type Nested struct {
+		Count int `json:"count"`
+	}
+	type VisibleResponse struct {
+		Shared Shared `json:"shared"`
+		Nested Nested `json:"nested"`
+	}
+	type VisibleResp struct {
+		Body VisibleResponse
+	}
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-visible",
+		Method:      http.MethodGet,
+		Path:        "/visible",
+	}, func(ctx context.Context, _ *struct{}) (*VisibleResp, error) {
+		return &VisibleResp{}, nil
+	})
+
+	// SecretAdmin is used only by the hidden operation and must be omitted from
+	// the exported document.
+	type SecretAdmin struct {
+		Token  string `json:"token" minLength:"5"`
+		Shared Shared `json:"shared"`
+	}
+	type HiddenInput struct {
+		Body SecretAdmin
+	}
+
+	huma.Register(api, huma.Operation{
+		OperationID: "admin-only",
+		Method:      http.MethodPost,
+		Path:        "/admin",
+		Hidden:      true,
+	}, func(ctx context.Context, _ *HiddenInput) (*struct{}, error) {
+		return nil, nil
+	})
+
+	b, err := api.OpenAPI().YAML()
+	require.NoError(t, err)
+	spec := string(b)
+
+	// The hidden operation's path is not documented...
+	assert.NotContains(t, spec, "/admin")
+	// ...and neither is the schema used only by it.
+	assert.NotContains(t, spec, "SecretAdmin")
+
+	// Schemas reachable from the visible operation remain, including
+	// transitively-referenced and shared types.
+	assert.Contains(t, spec, "VisibleResponse")
+	assert.Contains(t, spec, "Nested")
+	assert.Contains(t, spec, "Shared")
+
+	// The underlying registry is untouched, so validation for the hidden route
+	// still resolves its schema: an invalid body is rejected...
+	resp := api.Post("/admin", map[string]any{"token": "x", "shared": map[string]any{"value": "y"}})
+	assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+
+	// ...and a valid body is accepted.
+	resp = api.Post("/admin", map[string]any{"token": "longenough", "shared": map[string]any{"value": "y"}})
+	assert.Less(t, resp.Code, 300)
 }

@@ -622,11 +622,25 @@ var validateTests = []struct {
 		input: map[string]any{"value": []byte("ABCD")},
 	},
 	{
+		name: "base64 empty byte success",
+		typ: reflect.TypeFor[struct {
+			Value []byte "json:\"value\""
+		}](),
+		input: map[string]any{"value": []byte("")},
+	},
+	{
 		name: "base64 string success",
 		typ: reflect.TypeFor[struct {
 			Value string "json:\"value\" encoding:\"base64\""
 		}](),
 		input: map[string]any{"value": "ABCD"},
+	},
+	{
+		name: "base64 empty string success",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" encoding:\"base64\""
+		}](),
+		input: map[string]any{"value": ""},
 	},
 	{
 		name: "base64 fail",
@@ -747,6 +761,41 @@ var validateTests = []struct {
 		input: map[string]any{"value": []any{1, 2, 1, 3}},
 		errs:  []string{"expected array items to be unique"},
 	},
+	{
+		// Regression test for issue #1042:
+		// uniqueItems validation must NOT panic when array items are
+		// non-hashable types (e.g. objects decoded from JSON like [{}]).
+		// Expected: a 422 type-validation error, not a server crash.
+		name: "uniqueItems with unhashable object element must not panic",
+		typ: reflect.TypeFor[struct {
+			Value []string "json:\"value\" uniqueItems:\"true\""
+		}](),
+		input: map[string]any{"value": []any{map[string]any{"key": "val"}}},
+		errs:  []string{"expected string"},
+	},
+	{
+		// Regression test for issue #1042:
+		// Duplicate unhashable objects should still be detected as non-unique.
+		name: "uniqueItems detects duplicate unhashable objects",
+		typ: reflect.TypeFor[struct {
+			Value []any "json:\"value\" uniqueItems:\"true\""
+		}](),
+		input: map[string]any{"value": []any{
+			map[string]any{"a": 1},
+			map[string]any{"a": 1},
+		}},
+		errs: []string{"expected array items to be unique"},
+	},
+	{
+		// Regression test for issue #1042:
+		// Mixed arrays (some hashable, some not) must not panic.
+		name: "uniqueItems with mixed hashable and unhashable elements must not panic",
+		typ: reflect.TypeFor[struct {
+			Value []any "json:\"value\" uniqueItems:\"true\""
+		}](),
+		input: map[string]any{"value": []any{"ok", map[string]any{"k": "v"}}},
+	},
+
 	{
 		name:  "map success",
 		typ:   reflect.TypeFor[map[string]int](),
@@ -1078,12 +1127,88 @@ var validateTests = []struct {
 		input: map[string]any{"value": []any{1.0}},
 	},
 	{
+		// Regression for #1044: enum tag values are stored as float64 while
+		// query/path params are parsed as int64; the two must compare equal.
+		name: "enum int success int64 value",
+		typ: reflect.TypeFor[struct {
+			Value int "json:\"value\" enum:\"1,5,9\""
+		}](),
+		input: map[string]any{"value": int64(5)},
+	},
+	{
+		name: "enum int int64 value not in enum",
+		typ: reflect.TypeFor[struct {
+			Value int "json:\"value\" enum:\"1,5,9\""
+		}](),
+		input: map[string]any{"value": int64(2)},
+		errs:  []string{"expected value to be one of \"1, 5, 9\""},
+	},
+	{
+		// Custom Schema() emitting float64 enum values, validated against an
+		// int64 value (the query/path parameter path from #1044).
+		name: "enum integer float64 stored int64 value",
+		s: &huma.Schema{
+			Type: huma.TypeInteger,
+			Enum: []any{float64(1), float64(2)},
+		},
+		input: int64(2),
+	},
+	{
+		// json.Number is produced by decoders configured with UseNumber().
+		name:  "number json.Number success",
+		s:     &huma.Schema{Type: huma.TypeNumber},
+		input: json.Number("5.5"),
+	},
+	{
+		name: "enum integer json.Number value",
+		s: &huma.Schema{
+			Type: huma.TypeInteger,
+			Enum: []any{float64(1), float64(2)},
+		},
+		input: json.Number("2"),
+	},
+	{
+		name:  "number invalid json.Number",
+		s:     &huma.Schema{Type: huma.TypeNumber},
+		input: json.Number("not-a-number"),
+		errs:  []string{"expected number"},
+	},
+	{
 		name: "expected enum",
 		typ: reflect.TypeFor[struct {
 			Value string "json:\"value\" enum:\"one,two\""
 		}](),
 		input: map[string]any{"value": "three"},
 		errs:  []string{"expected value to be one of \"one, two\""},
+	},
+	{
+		name: "const string success",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" const:\"fixed\""
+		}](),
+		input: map[string]any{"value": "fixed"},
+	},
+	{
+		name: "const int success",
+		typ: reflect.TypeFor[struct {
+			Value int "json:\"value\" const:\"42\""
+		}](),
+		input: map[string]any{"value": 42.0},
+	},
+	{
+		name: "const bool success",
+		typ: reflect.TypeFor[struct {
+			Value bool "json:\"value\" const:\"true\""
+		}](),
+		input: map[string]any{"value": true},
+	},
+	{
+		name: "expected const",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" const:\"fixed\""
+		}](),
+		input: map[string]any{"value": "not fixed"},
+		errs:  []string{"expected value to be fixed"},
 	},
 	{
 		name: "optional success",

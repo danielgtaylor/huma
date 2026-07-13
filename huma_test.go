@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -84,8 +85,25 @@ type MyTextUnmarshaler struct {
 	value string
 }
 
+// MyCustomUnmarshaler is a custom type that imitates performing
+// operations on integers
+type MyCustomUnmarshaler struct {
+	value int
+	raw   string
+}
+
 func (m *MyTextUnmarshaler) UnmarshalText(text []byte) error {
 	m.value = "Hello, World!"
+	return nil
+}
+
+func (m *MyCustomUnmarshaler) UnmarshalText(text []byte) error {
+	var err error
+	m.value, err = strconv.Atoi(string(text)[1:])
+	if err != nil {
+		return err
+	}
+	m.raw = string(text)
 	return nil
 }
 
@@ -242,6 +260,40 @@ func TestFeatures(t *testing.T) {
 			},
 			Method: http.MethodGet,
 			URL:    "/middleware",
+		},
+		{
+			Name: "openapi-relative-server",
+			Config: func() huma.Config {
+				c := huma.DefaultConfig("Test API", "1.0.0")
+				c.Servers = []*huma.Server{
+					{URL: "/v1"},
+				}
+				return c
+			}(),
+			Register: func(t *testing.T, api huma.API) {},
+			Method:   http.MethodGet,
+			URL:      "/openapi.json",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, 200, resp.Code)
+				assert.Contains(t, resp.Body.String(), `"url":"/v1"`)
+			},
+		},
+		{
+			Name: "openapi-relative-server-dot",
+			Config: func() huma.Config {
+				c := huma.DefaultConfig("Test API", "1.0.0")
+				c.Servers = []*huma.Server{
+					{URL: "./v1"},
+				}
+				return c
+			}(),
+			Register: func(t *testing.T, api huma.API) {},
+			Method:   http.MethodGet,
+			URL:      "/openapi.json",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, 200, resp.Code)
+				assert.Contains(t, resp.Body.String(), `"url":"./v1"`)
+			},
 		},
 		{
 			Name: "middleware-cookie-invalid-name",
@@ -548,7 +600,7 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
-			Name: "param-unsupported-500",
+			Name: "param-unsupported-type",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
@@ -562,8 +614,31 @@ func TestFeatures(t *testing.T) {
 			Method: http.MethodGet,
 			URL:    "/test-params/255.255.0.0",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-				assert.Equal(t, http.StatusInternalServerError, resp.Code)
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "unsupported param type: net.IPNet")
 			},
+		},
+		{
+			Name: "path-param-required-overrides-tag",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/items/{id}",
+				}, func(ctx context.Context, input *struct {
+					ID string `path:"id" required:"false"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+
+				// Per OpenAPI 3.x spec, path parameters must always be required,
+				// even if the struct tag says otherwise. Regression test for #1009.
+				param := api.OpenAPI().Paths["/items/{id}"].Get.Parameters[0]
+				assert.Equal(t, "id", param.Name)
+				assert.Equal(t, "path", param.In)
+				assert.True(t, param.Required)
+			},
+			Method: http.MethodGet,
+			URL:    "/items/abc",
 		},
 		{
 			Name: "param-bypass-validation",
@@ -600,6 +675,82 @@ func TestFeatures(t *testing.T) {
 			},
 			Method: http.MethodGet,
 			URL:    "/test",
+		},
+		{
+			Name: "parse-uuid-slice",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					MyUUIDs []uuid.UUID `query:"myuuid"`
+				}) (*struct{}, error) {
+					assert.Equal(t, uuid.MustParse("9993a7ca-4c0f-4f22-b388-2677e0ec91ab"), i.MyUUIDs[0])
+					assert.Equal(t, uuid.MustParse("46cfcb8b-473f-4c0a-9eef-2cdcbc68c2bc"), i.MyUUIDs[1])
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?myuuid=9993a7ca-4c0f-4f22-b388-2677e0ec91ab,46cfcb8b-473f-4c0a-9eef-2cdcbc68c2bc",
+		},
+		{
+			Name: "parse-custom-type-slice",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					MyInts []MyCustomUnmarshaler `query:"mynumber"`
+				}) (*struct{}, error) {
+					assert.Equal(t, 50, i.MyInts[0].value)
+					assert.Equal(t, ">50", i.MyInts[0].raw)
+					assert.Equal(t, 100, i.MyInts[1].value)
+					assert.Equal(t, "<100", i.MyInts[1].raw)
+
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?mynumber=>50,<100",
+		},
+		{
+			Name: "parseSliceInto-unmarshal-error",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					MyInts []MyCustomUnmarshaler `query:"mynumber"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?mynumber=!fail",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "invalid value")
+			},
+		},
+		{
+			Name: "parseSliceInto-unsupported-type",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					// []struct{} represents a struct that does not implement TextUnmarshaler
+					MyInts []struct{} `query:"mynumber"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?mynumber=fail",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "unsupported param type: []struct {}")
+			},
 		},
 		{
 			Name: "parse-with-param-receiver",
@@ -771,6 +922,32 @@ func TestFeatures(t *testing.T) {
 			URL:    "/body",
 			// Headers: map[string]string{"Content-Type": "application/json"},
 			Body: `{"name":"foo"}`,
+		},
+		{
+			// Media types are case-insensitive (RFC 9110 §8.3.1). A client sending
+			// e.g. `Application/Json` must still be matched to the registered
+			// `application/json` format rather than rejected with 415.
+			Name: "request-body-content-type-case-insensitive",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name string `json:"name"`
+					}
+				}) (*struct{}, error) {
+					assert.Equal(t, "foo", input.Body.Name)
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPut,
+			URL:     "/body",
+			Headers: map[string]string{"Content-Type": "Application/Json; charset=UTF-8"},
+			Body:    `{"name":"foo"}`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
+			},
 		},
 		{
 			Name: "request-body-embed",
@@ -2701,6 +2878,44 @@ Content-Type: text/plain
 			},
 		},
 		{
+			Name: "schema-url-relative-openapi-server",
+			Register: func(t *testing.T, api huma.API) {
+				api.OpenAPI().Servers = []*huma.Server{
+					{URL: "/base"},
+				}
+				huma.Get(api, "/test", func(ctx context.Context, i *struct{}) (*struct {
+					Body struct {
+						Field string `json:"field"`
+					}
+				}, error) {
+					return &struct {
+						Body struct {
+							Field string `json:"field"`
+						}
+					}{Body: struct {
+						Field string `json:"field"`
+					}{Field: "value"}}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+
+				// Verify the OpenAPI spec reflects the expected example URL
+				// This triggers the `addSchemaField` logic in `transforms.go`
+				// We can check this on the API object if we have access to it,
+				// but here we can just verify the Link header or the body.
+				assert.Contains(t, resp.Header().Get("Link"), "/base/schemas/Get-testResponse.json")
+
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &body))
+				// Note: at runtime the $schema field in the body depends on the request host.
+				// By default in tests it's http://localhost
+				assert.Contains(t, body["$schema"], "/base/schemas/Get-testResponse.json")
+			},
+		},
+		{
 			Name: "response-marshal-error",
 			Register: func(t *testing.T, api huma.API) {
 				type Resp struct {
@@ -4117,4 +4332,51 @@ func TestBodyFallbackContentType(t *testing.T) {
 	mux.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusNoContent, w.Code)
+}
+
+func TestWriteResponseTransformErrorStatus(t *testing.T) {
+	// This test verifies that if a transformer fails, the client still receives
+	// a 500 Internal Server Error status code.
+	config := huma.DefaultConfig("Test API", "1.0.0")
+	config.Transformers = append(config.Transformers, func(ctx huma.Context, status string, v any) (any, error) {
+		return nil, errors.New("transform error")
+	})
+
+	mux := http.NewServeMux()
+	api := humago.New(mux, config)
+
+	huma.Get(api, "/test", func(ctx context.Context, input *struct{}) (*struct {
+		Status int
+		Body   string
+	}, error) {
+		return &struct {
+			Status int
+			Body   string
+		}{Status: http.StatusInternalServerError, Body: "hello"}, nil
+	})
+
+	// Use a custom adapter that doesn't call WriteHeader twice if we can.
+	// Actually, just let it panic and recover.
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rvr := recover(); rvr != nil {
+				// We don't want to call WriteHeader here if it was already called.
+				// But we can't easily check if it was called on a raw http.ResponseWriter.
+				return
+			}
+		}()
+		mux.ServeHTTP(w, r)
+	})
+
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	res, err := http.Get(ts.URL + "/test")
+	require.NoError(t, err)
+	defer res.Body.Close()
+
+	body, _ := io.ReadAll(res.Body)
+
+	assert.Equal(t, http.StatusInternalServerError, res.StatusCode)
+	assert.Contains(t, string(body), "error transforming response")
 }
