@@ -1434,6 +1434,12 @@ func TestFeatures(t *testing.T) {
 
 					return nil, nil
 				})
+
+				// The generated encoding must advertise the JSON content type so
+				// the published spec matches how the field is actually parsed.
+				mpContent := api.OpenAPI().Paths["/upload"].Post.RequestBody.Content["multipart/form-data"]
+				assert.Equal(t, "application/json", mpContent.Encoding["user"].ContentType)
+				assert.Equal(t, "text/plain", mpContent.Encoding["file"].ContentType)
 			},
 			Method:  http.MethodPost,
 			URL:     "/upload",
@@ -3558,6 +3564,77 @@ Content-Type: text/plain
 			}
 		})
 	}
+}
+
+// TestMultipartJSONContentTypeMatching ensures the `contentType` tag is matched
+// as a media type: parameters like `charset` and structured `+json` suffixes
+// still select JSON handling.
+func TestMultipartJSONContentTypeMatching(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test", "1.0.0"))
+
+	type Meta struct {
+		Name string `json:"name"`
+	}
+
+	huma.Register(api, huma.Operation{
+		Method: http.MethodPost,
+		Path:   "/upload",
+	}, func(ctx context.Context, input *struct {
+		RawBody huma.MultipartFormFiles[struct {
+			Charset Meta `form:"charset" contentType:"application/json; charset=utf-8"`
+			Vendor  Meta `form:"vendor" contentType:"application/vnd.api+json"`
+		}]
+	}) (*struct{}, error) {
+		data := input.RawBody.Data()
+		assert.Equal(t, "a", data.Charset.Name)
+		assert.Equal(t, "b", data.Vendor.Name)
+		return nil, nil
+	})
+
+	body := "--B\r\n" +
+		"Content-Disposition: form-data; name=\"charset\"\r\n\r\n" +
+		`{"name":"a"}` + "\r\n" +
+		"--B\r\n" +
+		"Content-Disposition: form-data; name=\"vendor\"\r\n\r\n" +
+		`{"name":"b"}` + "\r\n" +
+		"--B--\r\n"
+
+	r := httptest.NewRequest(http.MethodPost, "/upload", strings.NewReader(body))
+	r.Header.Set("Content-Type", "multipart/form-data; boundary=B")
+	w := httptest.NewRecorder()
+	api.Adapter().ServeHTTP(w, r)
+	assert.Less(t, w.Code, 300, w.Body.String())
+
+	// The generated encoding must reflect the tagged content types.
+	enc := api.OpenAPI().Paths["/upload"].Post.RequestBody.Content["multipart/form-data"].Encoding
+	assert.Equal(t, "application/json; charset=utf-8", enc["charset"].ContentType)
+	assert.Equal(t, "application/vnd.api+json", enc["vendor"].ContentType)
+}
+
+// TestMultipartStructFieldRequiresJSONTag ensures a non-parseable struct form
+// field without a JSON content type fails fast at registration with actionable
+// guidance instead of a confusing request-time error.
+func TestMultipartStructFieldRequiresJSONTag(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test", "1.0.0"))
+
+	type Meta struct {
+		Name string `json:"name"`
+	}
+
+	assert.PanicsWithError(t,
+		`multipart form field 'meta' of type 'huma_test.Meta' requires contentType:"application/json" to be unmarshalled as JSON`,
+		func() {
+			huma.Register(api, huma.Operation{
+				Method: http.MethodPost,
+				Path:   "/upload",
+			}, func(ctx context.Context, input *struct {
+				RawBody huma.MultipartFormFiles[struct {
+					Meta Meta `form:"meta"`
+				}]
+			}) (*struct{}, error) {
+				return nil, nil
+			})
+		})
 }
 
 func TestOpenAPI(t *testing.T) {
