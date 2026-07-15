@@ -181,6 +181,51 @@ type ComplexOutput struct {
 	}
 }
 
+func BenchmarkMultipartJSONField(b *testing.B) {
+	_, api := humatest.New(b, huma.DefaultConfig("Test API", "1.0.0"))
+
+	type Metadata struct {
+		Name   string `json:"name" default:"anon"`
+		Email  string `json:"email" format:"email"`
+		Age    int    `json:"age" default:"18"`
+		Client string `json:"client"`
+	}
+
+	huma.Register(api, huma.Operation{
+		Method: http.MethodPost,
+		Path:   "/upload",
+	}, func(ctx context.Context, input *struct {
+		RawBody huma.MultipartFormFiles[struct {
+			Metadata Metadata      `form:"metadata" contentType:"application/json" required:"true"`
+			File     huma.FormFile `form:"file" contentType:"text/plain"`
+		}]
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	body := "--SimpleBoundary\r\n" +
+		"Content-Disposition: form-data; name=\"metadata\"\r\n" +
+		"Content-Type: application/json\r\n\r\n" +
+		`{"name":"John Doe","email":"john@example.com","age":30,"client":"bench"}` + "\r\n" +
+		"--SimpleBoundary\r\n" +
+		"Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n" +
+		"Content-Type: text/plain\r\n\r\n" +
+		"Hello World\r\n" +
+		"--SimpleBoundary--\r\n"
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		r := httptest.NewRequest(http.MethodPost, "/upload", strings.NewReader(body))
+		r.Header.Set("Content-Type", "multipart/form-data; boundary=SimpleBoundary")
+		w := httptest.NewRecorder()
+		api.Adapter().ServeHTTP(w, r)
+		if w.Code < 200 || w.Code >= 300 {
+			b.Fatalf("unexpected status %d: %s", w.Code, w.Body.String())
+		}
+	}
+}
+
 func BenchmarkFullRequest_Complex(b *testing.B) {
 	_, api := humatest.New(b, huma.DefaultConfig("Test API", "1.0.0"))
 

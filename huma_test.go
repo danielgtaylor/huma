@@ -1402,6 +1402,242 @@ func TestFeatures(t *testing.T) {
 			Body:    `some-data`,
 		},
 		{
+			Name: "request-body-multipart-json-struct",
+			Register: func(t *testing.T, api huma.API) {
+				type User struct {
+					Name  string `json:"name"`
+					Email string `json:"email"`
+					Age   int    `json:"age"`
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						UserData User          `form:"user" contentType:"application/json" required:"true"`
+						File     huma.FormFile `form:"file" contentType:"text/plain"`
+					}]
+				}) (*struct{}, error) {
+					data := input.RawBody.Data()
+
+					// Verify the struct was correctly deserialized from JSON
+					assert.Equal(t, "John Doe", data.UserData.Name)
+					assert.Equal(t, "john@example.com", data.UserData.Email)
+					assert.Equal(t, 30, data.UserData.Age)
+
+					// Verify the file was also processed correctly
+					assert.Equal(t, "test.txt", data.File.Filename)
+					content, err := io.ReadAll(data.File)
+					require.NoError(t, err)
+					assert.Equal(t, "Hello World", string(content))
+
+					return nil, nil
+				})
+
+				// The generated encoding must advertise the JSON content type so
+				// the published spec matches how the field is actually parsed.
+				mpContent := api.OpenAPI().Paths["/upload"].Post.RequestBody.Content["multipart/form-data"]
+				assert.Equal(t, "application/json", mpContent.Encoding["user"].ContentType)
+				assert.Equal(t, "text/plain", mpContent.Encoding["file"].ContentType)
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="user"
+Content-Type: application/json
+
+{"name": "John Doe", "email": "john@example.com", "age": 30}
+--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+Hello World
+--SimpleBoundary--`,
+		},
+		{
+			Name: "request-body-multipart-json-struct-invalid-json",
+			Register: func(t *testing.T, api huma.API) {
+				type User struct {
+					Name  string `json:"name"`
+					Email string `json:"email" format:"email"`
+					Age   int    `json:"age"`
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						UserData User          `form:"user" contentType:"application/json" required:"true"`
+						File     huma.FormFile `form:"file" contentType:"text/plain"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="user"
+Content-Type: application/json
+
+this is not valid json
+--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+Hello World
+--SimpleBoundary--`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				if ok := assert.Equal(t, http.StatusUnprocessableEntity, resp.Code); ok {
+					var errors huma.ErrorModel
+					err := json.Unmarshal(resp.Body.Bytes(), &errors)
+					require.NoError(t, err)
+					assert.Equal(t, "form.user", errors.Errors[0].Location)
+				}
+			},
+		},
+		{
+			Name: "request-body-multipart-json-struct-invalid-data",
+			Register: func(t *testing.T, api huma.API) {
+				type User struct {
+					Name  string `json:"name"`
+					Email string `json:"email" format:"email"`
+					Age   int    `json:"age"`
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						UserData User          `form:"user" contentType:"application/json" required:"true"`
+						File     huma.FormFile `form:"file" contentType:"text/plain"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="user"
+Content-Type: application/json
+
+{"name": "John Doe", "email": "SOME INVALID EMAIL", "age": 30}
+--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+Hello World
+--SimpleBoundary--`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				if ok := assert.Equal(t, http.StatusUnprocessableEntity, resp.Code); ok {
+					var errors huma.ErrorModel
+					err := json.Unmarshal(resp.Body.Bytes(), &errors)
+					require.NoError(t, err)
+					assert.Equal(t, "form.user.email", errors.Errors[0].Location)
+				}
+			},
+		},
+		{
+			Name: "request-body-multipart-json-struct-default-set",
+			Register: func(t *testing.T, api huma.API) {
+				type User struct {
+					Name  string `json:"name,omitempty" default:"Default Name"`
+					Email string `json:"email,omitempty" format:"email"`
+					Age   *int   `json:"age,omitempty" default:"25"`
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						UserData User          `form:"user" contentType:"application/json" required:"true"`
+						File     huma.FormFile `form:"file" contentType:"text/plain"`
+					}]
+				}) (*struct{}, error) {
+					data := input.RawBody.Data()
+
+					// Verify the struct was correctly deserialized from JSON
+					assert.Equal(t, "Default Name", data.UserData.Name)
+					assert.Equal(t, 25, *data.UserData.Age)
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="user"
+Content-Type: application/json
+
+{}
+--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+Hello World
+--SimpleBoundary--`,
+		},
+		{
+			Name: "request-body-multipart-json-array",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						Numbers []int    `form:"numbers" contentType:"application/json"`
+						Tags    []string `form:"tags" contentType:"application/json"`
+						Count   int      `form:"count" contentType:"application/json"`
+						Active  bool     `form:"active" contentType:"application/json"`
+					}]
+				}) (*struct{}, error) {
+					data := input.RawBody.Data()
+
+					// Verify arrays were correctly deserialized from JSON
+					assert.Equal(t, []int{1, 2, 3, 4, 5}, data.Numbers)
+					assert.Equal(t, []string{"tag1", "tag2", "tag3"}, data.Tags)
+
+					// Verify scalar types were correctly deserialized from JSON
+					assert.Equal(t, 42, data.Count)
+					assert.True(t, data.Active)
+
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="numbers"
+Content-Type: application/json
+
+[1, 2, 3, 4, 5]
+--SimpleBoundary
+Content-Disposition: form-data; name="tags"
+Content-Type: application/json
+
+["tag1", "tag2", "tag3"]
+--SimpleBoundary
+Content-Disposition: form-data; name="count"
+Content-Type: application/json
+
+42
+--SimpleBoundary
+Content-Disposition: form-data; name="active"
+Content-Type: application/json
+
+true
+--SimpleBoundary--`,
+		},
+		{
 			Name: "request-body-multipart-file-decoded",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
@@ -3328,6 +3564,77 @@ Content-Type: text/plain
 			}
 		})
 	}
+}
+
+// TestMultipartJSONContentTypeMatching ensures the `contentType` tag is matched
+// as a media type: parameters like `charset` and structured `+json` suffixes
+// still select JSON handling.
+func TestMultipartJSONContentTypeMatching(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test", "1.0.0"))
+
+	type Meta struct {
+		Name string `json:"name"`
+	}
+
+	huma.Register(api, huma.Operation{
+		Method: http.MethodPost,
+		Path:   "/upload",
+	}, func(ctx context.Context, input *struct {
+		RawBody huma.MultipartFormFiles[struct {
+			Charset Meta `form:"charset" contentType:"application/json; charset=utf-8"`
+			Vendor  Meta `form:"vendor" contentType:"application/vnd.api+json"`
+		}]
+	}) (*struct{}, error) {
+		data := input.RawBody.Data()
+		assert.Equal(t, "a", data.Charset.Name)
+		assert.Equal(t, "b", data.Vendor.Name)
+		return nil, nil
+	})
+
+	body := "--B\r\n" +
+		"Content-Disposition: form-data; name=\"charset\"\r\n\r\n" +
+		`{"name":"a"}` + "\r\n" +
+		"--B\r\n" +
+		"Content-Disposition: form-data; name=\"vendor\"\r\n\r\n" +
+		`{"name":"b"}` + "\r\n" +
+		"--B--\r\n"
+
+	r := httptest.NewRequest(http.MethodPost, "/upload", strings.NewReader(body))
+	r.Header.Set("Content-Type", "multipart/form-data; boundary=B")
+	w := httptest.NewRecorder()
+	api.Adapter().ServeHTTP(w, r)
+	assert.Less(t, w.Code, 300, w.Body.String())
+
+	// The generated encoding must reflect the tagged content types.
+	enc := api.OpenAPI().Paths["/upload"].Post.RequestBody.Content["multipart/form-data"].Encoding
+	assert.Equal(t, "application/json; charset=utf-8", enc["charset"].ContentType)
+	assert.Equal(t, "application/vnd.api+json", enc["vendor"].ContentType)
+}
+
+// TestMultipartStructFieldRequiresJSONTag ensures a non-parseable struct form
+// field without a JSON content type fails fast at registration with actionable
+// guidance instead of a confusing request-time error.
+func TestMultipartStructFieldRequiresJSONTag(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test", "1.0.0"))
+
+	type Meta struct {
+		Name string `json:"name"`
+	}
+
+	assert.PanicsWithError(t,
+		`multipart form field 'meta' of type 'huma_test.Meta' requires contentType:"application/json" to be unmarshalled as JSON`,
+		func() {
+			huma.Register(api, huma.Operation{
+				Method: http.MethodPost,
+				Path:   "/upload",
+			}, func(ctx context.Context, input *struct {
+				RawBody huma.MultipartFormFiles[struct {
+					Meta Meta `form:"meta"`
+				}]
+			}) (*struct{}, error) {
+				return nil, nil
+			})
+		})
 }
 
 func TestOpenAPI(t *testing.T) {

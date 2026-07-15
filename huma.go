@@ -100,15 +100,47 @@ type StreamResponse struct {
 const styleDeepObject = "deepObject"
 
 type paramFieldInfo struct {
-	Type       reflect.Type
-	Name       string
-	Loc        string
-	Required   bool
-	Default    string
-	TimeFormat string
-	Explode    bool
-	Style      string
-	Schema     *Schema
+	Type        reflect.Type
+	Name        string
+	Loc         string
+	Required    bool
+	Default     string
+	TimeFormat  string
+	Explode     bool
+	Style       string
+	ContentType string
+	Schema      *Schema
+}
+
+// jsonFormFieldInfo holds precomputed metadata for a multipart form field that
+// is unmarshalled and validated as JSON (via `contentType:"application/json"`).
+// It is computed once at registration time to keep request handling cheap.
+type jsonFormFieldInfo struct {
+	schema   *Schema
+	defaults *findResult[any]
+}
+
+// multipartFieldNeedsJSONTag reports whether a multipart form field of type t
+// can only be handled by unmarshalling it as JSON, i.e. it cannot be parsed
+// from a plain-text form value by parseInto. Such fields must be tagged
+// `contentType:"application/json"`.
+//
+// It is intentionally conservative: it flags only struct and map types that are
+// not otherwise scalar-parseable, so it never reports a field that parseInto
+// would have handled successfully.
+func multipartFieldNeedsJSONTag(t reflect.Type) bool {
+	switch t.Kind() {
+	case reflect.Struct, reflect.Map:
+		if t == timeType || t == urlType {
+			return false
+		}
+		if reflect.PointerTo(t).Implements(paramWrapperType) ||
+			reflect.PointerTo(t).Implements(textUnmarshalerType) {
+			return false
+		}
+		return true
+	}
+	return false
 }
 
 // paramLocation holds the result of parsing a struct field's parameter location tags.
@@ -246,6 +278,10 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 		// OpenAPI 3.x spec and are forced back to true below.
 		if _, ok = f.Tag.Lookup("required"); ok {
 			pfi.Required = boolTag(f, "required", false)
+		}
+
+		if _, ok = f.Tag.Lookup("contentType"); ok {
+			pfi.ContentType = f.Tag.Get("contentType")
 		}
 
 		// Per OpenAPI 3.x spec, path parameters MUST always be required.
@@ -779,8 +815,44 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 	a := api.Adapter()
 	var rawBodyInputParams *findResult[*paramFieldInfo]
+	// jsonFormFields holds precomputed metadata for multipart form fields that
+	// carry `contentType:"application/json"`, so the per-request handler avoids
+	// repeating schema lookups and reflection-based default discovery.
+	var jsonFormFields map[*paramFieldInfo]*jsonFormFieldInfo
 	if rawBodyDataT != nil {
 		rawBodyInputParams = findParams(registry, &op, rawBodyDataT)
+		for i := range rawBodyInputParams.Paths {
+			p := rawBodyInputParams.Paths[i].Value
+			if p.Loc != "form" || p.Type == formFileType || p.Type == formFilesType {
+				continue
+			}
+			// Resolve the field's content type the same way body codecs do (via
+			// parseContentType), so `+json` suffixes and `;charset` parameters
+			// are handled consistently.
+			ct := ""
+			if start, end, err := parseContentType(p.ContentType); err == nil {
+				ct = strings.ToLower(p.ContentType[start:end])
+			}
+			if ct != "application/json" && ct != "json" {
+				// Fail fast at registration with actionable guidance rather than
+				// a confusing "unsupported param type" error at request time.
+				if multipartFieldNeedsJSONTag(p.Type) {
+					panic(fmt.Errorf(`multipart form field '%s' of type '%s' requires contentType:"application/json" to be unmarshalled as JSON`, p.Name, p.Type))
+				}
+				continue
+			}
+			if jsonFormFields == nil {
+				jsonFormFields = map[*paramFieldInfo]*jsonFormFieldInfo{}
+			}
+			var schema *Schema
+			if mt := op.RequestBody.Content["multipart/form-data"]; mt != nil && mt.Schema != nil {
+				schema = mt.Schema.Properties[p.Name]
+			}
+			jsonFormFields[p] = &jsonFormFieldInfo{
+				schema:   schema,
+				defaults: findDefaults(registry, p.Type),
+			}
+		}
 	}
 	a.Handle(&op, api.Middlewares().Handler(op.Middlewares.Handler(func(ctx Context) {
 		var input I
@@ -925,6 +997,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			if rbt.isMultipart() {
 				// Read form
 				form, err := readForm(ctx)
+				jsonUnmarshaler := func(data []byte, v any) error { return api.Unmarshal("application/json", data, v) }
 
 				if err != nil {
 					res.Errors = append(res.Errors, err)
@@ -968,6 +1041,30 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 									res.Add(pb, value, "expected at most one value, but received multiple values")
 									return
 								}
+
+								// JSON fields
+								if jf := jsonFormFields[p]; jf != nil {
+									errorsBeforeValidation := len(res.Errors)
+
+									var parsed any
+									if err := jsonUnmarshaler([]byte(value[0]), &parsed); err != nil {
+										res.Add(pb, value, "invalid JSON: "+err.Error())
+									} else if !op.SkipValidateParams {
+										Validate(oapi.Components.Schemas, jf.schema, pb, ModeWriteToServer, parsed, res)
+									}
+
+									if errorsBeforeValidation == len(res.Errors) {
+										if err := jsonUnmarshaler([]byte(value[0]), f.Addr().Interface()); err != nil {
+											// Should have been caught by the validation above.
+											res.Add(pb, value, "invalid JSON: "+err.Error())
+										}
+										// Set defaults on the unmarshalled value.
+										setDefaults(f, jf.defaults)
+									}
+									return
+								}
+
+								// Regular fields
 								pv, err := parseInto(ctx, f, value[0], value, *p)
 								if err != nil {
 									res.Add(pb, value, err.Error())
@@ -2173,6 +2270,14 @@ func parseBodyInto(v reflect.Value, bodyIndex []int, u intoUnmarshaler, body []b
 		}
 	}
 	// Set defaults for any fields that were not in the input.
+	setDefaults(v, defaults)
+	return nil
+}
+
+// setDefaults sets default values on every field reachable from v that was left
+// at its zero value. It is shared by the request body and multipart JSON form
+// field decoding paths.
+func setDefaults(v reflect.Value, defaults *findResult[any]) {
 	defaults.Every(v, func(item reflect.Value, def any) {
 		if item.IsZero() {
 			if item.Kind() == reflect.Pointer {
@@ -2182,7 +2287,6 @@ func parseBodyInto(v reflect.Value, bodyIndex []int, u intoUnmarshaler, body []b
 			item.Set(reflect.Indirect(reflect.ValueOf(def)))
 		}
 	})
-	return nil
 }
 
 // readBody reads the message body from ctx into buf, respecting the
