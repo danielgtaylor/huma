@@ -371,7 +371,12 @@ func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode Validat
 		return
 	}
 
-	Validate(r, r.SchemaFromRef(ref), path, mode, v, res)
+	resolved := r.SchemaFromRef(ref)
+	if resolved == nil {
+		res.Addf(path, v, validation.MsgExpectedResolvableSchemaRef, ref)
+		return
+	}
+	Validate(r, resolved, path, mode, v, res)
 }
 
 // toFloat64 normalizes any supported numeric Go type to a float64. The second
@@ -430,8 +435,17 @@ func toFloat64(v any) (float64, bool) {
 //	}
 func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any, res *ValidateResult) {
 	// Get the actual schema if this is a reference.
-	for s.Ref != "" {
-		s = r.SchemaFromRef(s.Ref)
+	for s != nil && s.Ref != "" {
+		ref := s.Ref
+		s = r.SchemaFromRef(ref)
+		if s == nil {
+			res.Addf(path, v, validation.MsgExpectedResolvableSchemaRef, ref)
+			return
+		}
+	}
+	if s == nil {
+		res.Addf(path, v, validation.MsgExpectedResolvableSchemaRef, "")
+		return
 	}
 
 	if s.OneOf != nil {
@@ -708,8 +722,18 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		// the `for` loop never runs.
 		readOnly := v.ReadOnly
 		writeOnly := v.WriteOnly
-		for v.Ref != "" {
-			v = r.SchemaFromRef(v.Ref)
+		for v != nil && v.Ref != "" {
+			ref := v.Ref
+			v = r.SchemaFromRef(ref)
+			if v == nil {
+				path.Push(k)
+				res.Addf(path, m[k], validation.MsgExpectedResolvableSchemaRef, ref)
+				path.Pop()
+				break
+			}
+		}
+		if v == nil {
+			continue
 		}
 
 		// We should be permissive by default to enable easy round-trips for the
@@ -825,8 +849,18 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 		// the `for` loop never runs.
 		readOnly := v.ReadOnly
 		writeOnly := v.WriteOnly
-		for v.Ref != "" {
-			v = r.SchemaFromRef(v.Ref)
+		for v != nil && v.Ref != "" {
+			ref := v.Ref
+			v = r.SchemaFromRef(ref)
+			if v == nil {
+				path.Push(k)
+				res.Addf(path, m[k], validation.MsgExpectedResolvableSchemaRef, ref)
+				path.Pop()
+				break
+			}
+		}
+		if v == nil {
+			continue
 		}
 
 		// We should be permissive by default to enable easy round-trips for the
