@@ -478,6 +478,51 @@ var validateTests = []struct {
 		errs:  []string{"expected string to be RFC 3986 uri: parse \":\": missing protocol scheme"},
 	},
 	{
+		name: "uri success non-http scheme",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"uri\""
+		}](),
+		input: map[string]any{"value": "mailto:someone@example.com"},
+	},
+	{
+		name: "expected uri not absolute",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"uri\""
+		}](),
+		input: map[string]any{"value": "/relative/path"},
+		errs:  []string{"expected string to be RFC 3986 uri: missing protocol scheme"},
+	},
+	{
+		name: "expected uri empty",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"uri\""
+		}](),
+		input: map[string]any{"value": ""},
+		errs:  []string{"expected string to be RFC 3986 uri: missing protocol scheme"},
+	},
+	{
+		name: "expected iri not absolute",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"iri\""
+		}](),
+		input: map[string]any{"value": "/relative/path"},
+		errs:  []string{"expected string to be RFC 3986 uri: missing protocol scheme"},
+	},
+	{
+		name: "uri-reference success relative",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"uri-reference\""
+		}](),
+		input: map[string]any{"value": "/path/to/resource"},
+	},
+	{
+		name: "iri-reference success relative",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"iri-reference\""
+		}](),
+		input: map[string]any{"value": "/path/to/resource"},
+	},
+	{
 		name: "uuid success",
 		typ: reflect.TypeFor[struct {
 			Value string "json:\"value\" format:\"uuid\""

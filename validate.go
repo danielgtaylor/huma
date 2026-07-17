@@ -268,11 +268,19 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 	// 	if _, err := idnaProfile.ToASCII(str); err != nil {
 	// 		res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
 	// 	}
-	case "uri", "uri-reference", "iri", "iri-reference":
+	case "uri", "iri":
+		// A URI (unlike a URI reference) must be absolute, i.e. include a
+		// scheme. Bare url.Parse accepts relative paths and the empty string,
+		// which the docs list only under uri-reference.
+		if u, err := url.Parse(str); err != nil {
+			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
+		} else if !u.IsAbs() {
+			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC3986URI, fmt.Errorf("missing protocol scheme")))
+		}
+	case "uri-reference", "iri-reference":
 		if _, err := url.Parse(str); err != nil {
 			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
 		}
-		// TODO: check if it's actually a reference?
 	case "uri-template":
 		u, err := url.Parse(str)
 		if err != nil {

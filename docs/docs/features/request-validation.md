@@ -152,7 +152,7 @@ Built-in string formats include:
 | `ip`                              | IPv4 or IPv6 address            | `127.0.0.1` or `::1`                   |
 | `ipv4`                            | IPv4 address                    | `127.0.0.1`                            |
 | `ipv6`                            | IPv6 address                    | `::1`                                  |
-| `uri` / `iri`                     | URI                             | `https://example.com`                  |
+| `uri` / `iri`                     | Absolute URI (must have scheme) | `https://example.com`                  |
 | `uri-reference` / `iri-reference` | URI reference                   | `/path/to/resource`                    |
 | `uri-template`                    | URI template                    | `/path/{id}`                           |
 | `json-pointer`                    | JSON Pointer                    | `/path/to/field`                       |
