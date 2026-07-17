@@ -435,17 +435,18 @@ func toFloat64(v any) (float64, bool) {
 //	}
 func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any, res *ValidateResult) {
 	// Get the actual schema if this is a reference.
-	for s != nil && s.Ref != "" {
+	if s == nil {
+		res.Addf(path, v, validation.MsgExpectedResolvableSchemaRef, "")
+		return
+	}
+
+	for s.Ref != "" {
 		ref := s.Ref
 		s = r.SchemaFromRef(ref)
 		if s == nil {
 			res.Addf(path, v, validation.MsgExpectedResolvableSchemaRef, ref)
 			return
 		}
-	}
-	if s == nil {
-		res.Addf(path, v, validation.MsgExpectedResolvableSchemaRef, "")
-		return
 	}
 
 	if s.OneOf != nil {
@@ -722,7 +723,7 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		// the `for` loop never runs.
 		readOnly := v.ReadOnly
 		writeOnly := v.WriteOnly
-		for v != nil && v.Ref != "" {
+		for v.Ref != "" {
 			ref := v.Ref
 			v = r.SchemaFromRef(ref)
 			if v == nil {
@@ -849,7 +850,7 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 		// the `for` loop never runs.
 		readOnly := v.ReadOnly
 		writeOnly := v.WriteOnly
-		for v != nil && v.Ref != "" {
+		for v.Ref != "" {
 			ref := v.Ref
 			v = r.SchemaFromRef(ref)
 			if v == nil {
