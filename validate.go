@@ -239,8 +239,16 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 			res.Add(path, str, validation.MsgExpectedRFC3339Time)
 		}
 	case "email", "idn-email":
-		if _, err := mail.ParseAddress(str); err != nil {
-			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC5322Email, err))
+		// mail.ParseAddress accepts full mailbox forms ("Name <addr>"). OpenAPI
+		// format "email" is documented as an addr-spec; require a bare address
+		// with no display name so validation matches the RFC-oriented error text.
+		addr, err := mail.ParseAddress(str)
+		if err != nil || addr.Name != "" || addr.Address == "" || strings.TrimSpace(str) != addr.Address {
+			msg := validation.MsgExpectedRFC5322EmailBare
+			if err != nil {
+				msg = ErrorFormatter(validation.MsgExpectedRFC5322Email, err)
+			}
+			res.Add(path, str, msg)
 		}
 	case "idn-hostname", "hostname":
 		if len(str) >= 256 || !rxHostname.MatchString(str) {
@@ -268,11 +276,20 @@ func validateFormat(path *PathBuffer, str string, s *Schema, res *ValidateResult
 	// 	if _, err := idnaProfile.ToASCII(str); err != nil {
 	// 		res.Add(path, str, validation.MsgExpectedRFC5890Hostname)
 	// 	}
-	case "uri", "uri-reference", "iri", "iri-reference":
+	case "uri", "iri":
+		// format "uri"/"iri" require an absolute URI (non-empty scheme). Bare
+		// url.Parse accepts empty strings, path-only values, and other relative
+		// references that are only valid for uri-reference / iri-reference.
+		u, err := url.Parse(str)
+		if err != nil {
+			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
+		} else if str == "" || u.Scheme == "" {
+			res.Add(path, str, validation.MsgExpectedRFC3986AbsoluteURI)
+		}
+	case "uri-reference", "iri-reference":
 		if _, err := url.Parse(str); err != nil {
 			res.Add(path, str, ErrorFormatter(validation.MsgExpectedRFC3986URI, err))
 		}
-		// TODO: check if it's actually a reference?
 	case "uri-template":
 		u, err := url.Parse(str)
 		if err != nil {
