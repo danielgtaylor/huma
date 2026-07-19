@@ -396,6 +396,22 @@ var validateTests = []struct {
 		errs:  []string{"expected string to be RFC 5322 email: mail: missing '@' or angle-addr"},
 	},
 	{
+		name: "expected email bare addr-spec rejects mailbox with display name",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"email\""
+		}](),
+		input: map[string]any{"value": "Alice <alice@example.com>"},
+		errs:  []string{"expected string to be RFC 5322 email (addr-spec only, no display name)"},
+	},
+	{
+		name: "expected idn-email bare addr-spec rejects mailbox with display name",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"idn-email\""
+		}](),
+		input: map[string]any{"value": "Name <user@example.com>"},
+		errs:  []string{"expected string to be RFC 5322 email (addr-spec only, no display name)"},
+	},
+	{
 		name: "hostname success",
 		typ: reflect.TypeFor[struct {
 			Value string "json:\"value\" format:\"hostname\""
@@ -476,6 +492,37 @@ var validateTests = []struct {
 		}](),
 		input: map[string]any{"value": ":"},
 		errs:  []string{"expected string to be RFC 3986 uri: parse \":\": missing protocol scheme"},
+	},
+	{
+		name: "expected uri absolute rejects empty string",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"uri\""
+		}](),
+		input: map[string]any{"value": ""},
+		errs:  []string{"expected string to be RFC 3986 absolute uri (non-empty scheme)"},
+	},
+	{
+		name: "expected uri absolute rejects path-only reference",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"uri\""
+		}](),
+		input: map[string]any{"value": "/relative"},
+		errs:  []string{"expected string to be RFC 3986 absolute uri (non-empty scheme)"},
+	},
+	{
+		name: "expected uri absolute rejects scheme-less token",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"uri\""
+		}](),
+		input: map[string]any{"value": "foo"},
+		errs:  []string{"expected string to be RFC 3986 absolute uri (non-empty scheme)"},
+	},
+	{
+		name: "uri-reference allows relative path",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"uri-reference\""
+		}](),
+		input: map[string]any{"value": "/relative"},
 	},
 	{
 		name: "uuid success",
