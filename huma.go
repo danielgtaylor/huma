@@ -681,20 +681,6 @@ func transformAndWrite(api API, ctx Context, status int, ct string, body any) er
 	return nil
 }
 
-func parseArrElement[T any](values []string, parse func(string) (T, error)) ([]T, error) {
-	result := make([]T, 0, len(values))
-
-	for i := range values {
-		v, err := parse(values[i])
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, v)
-	}
-
-	return result, nil
-}
-
 // writeHeader is a utility function to write a header value to the response.
 // the `write` function should be either `ctx.SetHeader` or `ctx.AppendHeader`.
 func writeHeader(write func(string, string), info *headerInfo, f reflect.Value) {
@@ -1895,7 +1881,8 @@ func parseInto(ctx Context, f reflect.Value, value string, preSplit []string, p 
 // parseSliceInto converts a slice of string values into the expected type of f
 // and sets the result on f.
 func parseSliceInto(f reflect.Value, values []string) (any, error) {
-	switch f.Type().Elem().Kind() {
+	elemType := f.Type().Elem()
+	switch elemType.Kind() {
 	case reflect.String:
 		if f.Type() == stringSliceType {
 			f.Set(reflect.ValueOf(values))
@@ -1912,198 +1899,45 @@ func parseSliceInto(f reflect.Value, values []string) (any, error) {
 		}
 
 		return values, nil
-	case reflect.Int:
-		vs, err := parseArrElement(values, func(s string) (int, error) {
-			val, err := strconv.ParseInt(s, 10, strconv.IntSize)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		vs := reflect.MakeSlice(reflect.SliceOf(elemType), len(values), len(values))
+		for i, s := range values {
+			v, err := strconv.ParseInt(s, 10, elemType.Bits())
 			if err != nil {
-				return 0, err
+				return nil, errors.New("invalid integer")
 			}
-
-			return int(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
+			vs.Index(i).SetInt(v)
 		}
 
-		f.Set(reflect.ValueOf(vs))
+		f.Set(vs)
 
-		return vs, nil
-	case reflect.Int8:
-		vs, err := parseArrElement(values, func(s string) (int8, error) {
-			val, err := strconv.ParseInt(s, 10, 8)
+		return vs.Interface(), nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		vs := reflect.MakeSlice(reflect.SliceOf(elemType), len(values), len(values))
+		for i, s := range values {
+			v, err := strconv.ParseUint(s, 10, elemType.Bits())
 			if err != nil {
-				return 0, err
+				return nil, errors.New("invalid integer")
 			}
-
-			return int8(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
+			vs.Index(i).SetUint(v)
 		}
 
-		f.Set(reflect.ValueOf(vs))
+		f.Set(vs)
 
-		return vs, nil
-	case reflect.Int16:
-		vs, err := parseArrElement(values, func(s string) (int16, error) {
-			val, err := strconv.ParseInt(s, 10, 16)
+		return vs.Interface(), nil
+	case reflect.Float32, reflect.Float64:
+		vs := reflect.MakeSlice(reflect.SliceOf(elemType), len(values), len(values))
+		for i, s := range values {
+			v, err := strconv.ParseFloat(s, elemType.Bits())
 			if err != nil {
-				return 0, err
+				return nil, errors.New("invalid floating value")
 			}
-
-			return int16(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
+			vs.Index(i).SetFloat(v)
 		}
 
-		f.Set(reflect.ValueOf(vs))
+		f.Set(vs)
 
-		return vs, nil
-	case reflect.Int32:
-		vs, err := parseArrElement(values, func(s string) (int32, error) {
-			val, err := strconv.ParseInt(s, 10, 32)
-			if err != nil {
-				return 0, err
-			}
-
-			return int32(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
-	case reflect.Int64:
-		vs, err := parseArrElement(values, func(s string) (int64, error) {
-			val, err := strconv.ParseInt(s, 10, 64)
-			if err != nil {
-				return 0, err
-			}
-
-			return val, nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
-	case reflect.Uint:
-		vs, err := parseArrElement(values, func(s string) (uint, error) {
-			val, err := strconv.ParseUint(s, 10, strconv.IntSize)
-			if err != nil {
-				return 0, err
-			}
-
-			return uint(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
-	case reflect.Uint8:
-		vs, err := parseArrElement(values, func(s string) (uint8, error) {
-			val, err := strconv.ParseUint(s, 10, 8)
-			if err != nil {
-				return 0, err
-			}
-
-			return uint8(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
-	case reflect.Uint16:
-		vs, err := parseArrElement(values, func(s string) (uint16, error) {
-			val, err := strconv.ParseUint(s, 10, 16)
-			if err != nil {
-				return 0, err
-			}
-
-			return uint16(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
-	case reflect.Uint32:
-		vs, err := parseArrElement(values, func(s string) (uint32, error) {
-			val, err := strconv.ParseUint(s, 10, 32)
-			if err != nil {
-				return 0, err
-			}
-
-			return uint32(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
-	case reflect.Uint64:
-		vs, err := parseArrElement(values, func(s string) (uint64, error) {
-			val, err := strconv.ParseUint(s, 10, 64)
-			if err != nil {
-				return 0, err
-			}
-
-			return val, nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
-	case reflect.Float32:
-		vs, err := parseArrElement(values, func(s string) (float32, error) {
-			val, err := strconv.ParseFloat(s, 32)
-			if err != nil {
-				return 0, err
-			}
-
-			return float32(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid floating value")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
-	case reflect.Float64:
-		vs, err := parseArrElement(values, func(s string) (float64, error) {
-			val, err := strconv.ParseFloat(s, 64)
-			if err != nil {
-				return 0, err
-			}
-
-			return val, nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid floating value")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
+		return vs.Interface(), nil
 	}
 
 	// Last resort: use the `encoding.TextUnmarshaler` interface.
