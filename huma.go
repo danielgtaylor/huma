@@ -1197,14 +1197,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			// Resolver errors may be wrapped and may each carry response metadata,
 			// so preserve headers from every error, matching the handler path below.
 			for _, err := range res.Errors {
-				var he HeadersError
-				if errors.As(err, &he) {
-					for k, values := range he.GetHeaders() {
-						for _, v := range values {
-							ctx.AppendHeader(k, v)
-						}
-					}
-				}
+				appendErrorHeaders(ctx, err)
 			}
 			WriteErr(api, ctx, errStatus, "validation failed", res.Errors...)
 			return
@@ -1212,14 +1205,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 		output, err := handler(ctx.Context(), &input)
 		if err != nil {
-			var he HeadersError
-			if errors.As(err, &he) {
-				for k, values := range he.GetHeaders() {
-					for _, v := range values {
-						ctx.AppendHeader(k, v)
-					}
-				}
-			}
+			appendErrorHeaders(ctx, err)
 
 			status := http.StatusInternalServerError
 

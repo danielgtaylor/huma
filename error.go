@@ -176,6 +176,20 @@ func (e *errWithHeaders) GetHeaders() http.Header {
 	return e.headers
 }
 
+// appendErrorHeaders appends any headers carried by err (if it is or wraps a
+// HeadersError) onto the response, preserving multi-value headers such as
+// Set-Cookie.
+func appendErrorHeaders(ctx Context, err error) {
+	var he HeadersError
+	if errors.As(err, &he) {
+		for k, values := range he.GetHeaders() {
+			for _, v := range values {
+				ctx.AppendHeader(k, v)
+			}
+		}
+	}
+}
+
 // ErrorWithHeaders wraps an error with additional headers to be sent to the
 // client. This is useful for e.g. caching, rate limiting, or other metadata.
 func ErrorWithHeaders(err error, headers http.Header) error {
