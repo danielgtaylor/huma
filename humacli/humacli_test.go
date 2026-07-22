@@ -112,6 +112,24 @@ func TestCLIEnv(t *testing.T) {
 	cli.Run()
 }
 
+func TestCLIEnvTag(t *testing.T) {
+	type Options struct {
+		Port int `env:"CUSTOM_PORT_VAR"`
+	}
+
+	t.Setenv("CUSTOM_PORT_VAR", "9999")
+
+	cli := humacli.New(func(hooks humacli.Hooks, options *Options) {
+		assert.Equal(t, 9999, options.Port)
+		hooks.OnStart(func() {
+			// Do nothing
+		})
+	})
+
+	cli.Root().SetArgs([]string{})
+	cli.Run()
+}
+
 func TestCLIAdvanced(t *testing.T) {
 	type DebugOption struct {
 		Debug bool `doc:"Enable debug mode." default:"false"`
@@ -296,24 +314,28 @@ func TestCLINestedOptions(t *testing.T) {
 
 func TestCLIPriority(t *testing.T) {
 	type Options struct {
-		WithEnv  int `name:"with-env"`
-		WithFlag int `name:"with-flag"`
-		WithBoth int `name:"with-both"`
+		WithEnv    int `name:"with-env"`
+		WithFlag   int `name:"with-flag"`
+		WithBoth   int `name:"with-both"`
+		WithEnvTag int `name:"with-env-tag" env:"CUSTOM_PRIORITY"`
 	}
 
 	cli := humacli.New(func(hooks humacli.Hooks, options *Options) {
 		assert.Equal(t, 1, options.WithEnv)
 		assert.Equal(t, 20, options.WithFlag)
 		assert.Equal(t, 30, options.WithBoth)
+		assert.Equal(t, 40, options.WithEnvTag)
 		hooks.OnStart(func() {})
 	})
 
 	t.Setenv("SERVICE_WITH_ENV", "1")
 	t.Setenv("SERVICE_WITH_BOTH", "3")
+	t.Setenv("CUSTOM_PRIORITY", "4")
 
 	cli.Root().SetArgs([]string{
 		"--with-flag", "20",
 		"--with-both", "30",
+		"--with-env-tag", "40",
 	})
 	cli.Run()
 }
