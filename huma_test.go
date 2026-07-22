@@ -2851,6 +2851,26 @@ Content-Type: text/plain
 			},
 		},
 		{
+			Name: "response-transform-nil-interface-body",
+			Transformers: []huma.Transformer{
+				huma.NewSchemaLinkTransformer("/", "/").Transform,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				huma.Get(api, "/transform", func(ctx context.Context, i *struct{}) (*struct {
+					Body any
+				}, error) {
+					return &struct {
+						Body any
+					}{Body: nil}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/transform",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+			},
+		},
+		{
 			Name: "schema-url-from-x-forwarded-host",
 			Transformers: []huma.Transformer{
 				huma.NewSchemaLinkTransformer("/", "/").Transform,
