@@ -430,7 +430,17 @@ func toFloat64(v any) (float64, bool) {
 		f, err := v.Float64()
 		return f, err == nil
 	default:
-		return 0, false
+		value := reflect.ValueOf(v)
+		switch value.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			return float64(value.Int()), true
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			return float64(value.Uint()), true
+		case reflect.Float32, reflect.Float64:
+			return value.Float(), true
+		default:
+			return 0, false
+		}
 	}
 }
 
@@ -610,8 +620,25 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		case []float64:
 			handleArray(r, s, path, mode, res, arr)
 		default:
-			res.Add(path, v, validation.MsgExpectedArray)
-			return
+			value := reflect.ValueOf(v)
+			if value.Kind() != reflect.Slice {
+				res.Add(path, v, validation.MsgExpectedArray)
+				return
+			}
+			switch value.Type().Elem().Kind() {
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+				reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+				reflect.Float32, reflect.Float64:
+			default:
+				res.Add(path, v, validation.MsgExpectedArray)
+				return
+			}
+
+			items := make([]any, value.Len())
+			for i := range items {
+				items[i] = value.Index(i).Interface()
+			}
+			handleArray(r, s, path, mode, res, items)
 		}
 	case TypeObject:
 		switch vv := v.(type) {

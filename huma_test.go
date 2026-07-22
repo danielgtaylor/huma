@@ -529,6 +529,59 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
+			Name: "params-named-numeric-slices",
+			Register: func(t *testing.T, api huma.API) {
+				type ID int
+				type IDs []ID
+				type Numbers []int
+				type Count uint16
+				type Counts []Count
+				type Ratio float32
+				type Ratios []Ratio
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/named-numeric-slices",
+				}, func(ctx context.Context, input *struct {
+					IDs     IDs     `query:"ids"`
+					Numbers Numbers `query:"numbers"`
+					Counts  Counts  `query:"counts"`
+					Ratios  Ratios  `query:"ratios"`
+				}) (*struct{}, error) {
+					assert.Equal(t, IDs{1, 2}, input.IDs)
+					assert.Equal(t, Numbers{5, 6}, input.Numbers)
+					assert.Equal(t, Counts{3, 4}, input.Counts)
+					assert.Equal(t, Ratios{1.5, 2.5}, input.Ratios)
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/named-numeric-slices?ids=1,2&numbers=5,6&counts=3,4&ratios=1.5,2.5",
+		},
+		{
+			Name: "params-named-numeric-slices-validation",
+			Register: func(t *testing.T, api huma.API) {
+				type ID int
+				type IDs []ID
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/named-numeric-slices",
+				}, func(ctx context.Context, input *struct {
+					IDs IDs `query:"ids" minimum:"1" uniqueItems:"true"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/named-numeric-slices?ids=0,0",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "expected number >= 1")
+				assert.Contains(t, resp.Body.String(), "expected array items to be unique")
+			},
+		},
+		{
 			Name: "params-error",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
