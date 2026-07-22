@@ -2866,9 +2866,10 @@ Content-Type: text/plain
 			},
 			Method: http.MethodGet,
 			URL:    "/transform",
-			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-				assert.Equal(t, http.StatusOK, resp.Code)
-			},
+Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+	assert.Equal(t, http.StatusOK, resp.Code)
+	assert.JSONEq(t, `null`, resp.Body.String())
+},
 		},
 		{
 			Name: "schema-url-from-x-forwarded-host",
