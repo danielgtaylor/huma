@@ -1188,10 +1188,16 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				// If there are errors, and they provide a status, then update the
 				// response status code to match. Otherwise, use the default status
 				// code is used. Since these run in order, the last error code wins.
-				if s, ok := res.Errors[i].(StatusError); ok {
+				var s StatusError
+				if errors.As(res.Errors[i], &s) {
 					errStatus = s.GetStatus()
 					break
 				}
+			}
+			// Resolver errors may be wrapped and may each carry response metadata,
+			// so preserve headers from every error, matching the handler path below.
+			for _, err := range res.Errors {
+				appendErrorHeaders(ctx, err)
 			}
 			WriteErr(api, ctx, errStatus, "validation failed", res.Errors...)
 			return
@@ -1199,14 +1205,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 		output, err := handler(ctx.Context(), &input)
 		if err != nil {
-			var he HeadersError
-			if errors.As(err, &he) {
-				for k, values := range he.GetHeaders() {
-					for _, v := range values {
-						ctx.AppendHeader(k, v)
-					}
-				}
-			}
+			appendErrorHeaders(ctx, err)
 
 			status := http.StatusInternalServerError
 

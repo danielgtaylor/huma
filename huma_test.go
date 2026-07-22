@@ -3819,6 +3819,36 @@ func TestExhaustiveErrors(t *testing.T) {
 	}`, w.Body.String())
 }
 
+type WrappedResolverErrorInput struct{}
+
+func (*WrappedResolverErrorInput) Resolve(huma.Context) []error {
+	err := huma.ErrorWithHeaders(
+		huma.Error401Unauthorized("credentials required"),
+		http.Header{
+			"WWW-Authenticate": {"Bearer realm=\"protected\""},
+			"Set-Cookie":       {"session=; Max-Age=0", "refresh=; Max-Age=0"},
+		},
+	)
+	return []error{fmt.Errorf("resolver failed: %w", err)}
+}
+
+func TestWrappedResolverErrorStatusAndHeaders(t *testing.T) {
+	router, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	handlerCalled := false
+	huma.Get(api, "/resolver-error", func(context.Context, *WrappedResolverErrorInput) (*struct{}, error) {
+		handlerCalled = true
+		return nil, nil
+	})
+
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/resolver-error", nil))
+
+	assert.Equal(t, http.StatusUnauthorized, resp.Code)
+	assert.Equal(t, "Bearer realm=\"protected\"", resp.Header().Get("WWW-Authenticate"))
+	assert.Equal(t, []string{"session=; Max-Age=0", "refresh=; Max-Age=0"}, resp.Header().Values("Set-Cookie"))
+	assert.False(t, handlerCalled)
+}
+
 type MyError struct {
 	status  int
 	Message string   `json:"message"`
