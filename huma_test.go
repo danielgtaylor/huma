@@ -4041,6 +4041,45 @@ func TestNestedResolverWithPath(t *testing.T) {
 	assert.Contains(t, w.Body.String(), `"location":"body.field1.foo[0].field2"`)
 }
 
+type FixedArrayResolverItem struct {
+	Value    string `json:"value,omitempty" default:"default"`
+	Resolved bool   `json:"-"`
+	Path     string `json:"-"`
+}
+
+func (i *FixedArrayResolverItem) Resolve(_ huma.Context, prefix *huma.PathBuffer) []error {
+	i.Resolved = true
+	i.Path = prefix.String()
+	return nil
+}
+
+func TestResolverInFixedArray(t *testing.T) {
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	var got FixedArrayResolverItem
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodPost,
+		Path:        "/test",
+	}, func(ctx context.Context, input *struct {
+		Body struct {
+			Items [1]FixedArrayResolverItem `json:"items"`
+		}
+	}) (*struct{}, error) {
+		got = input.Body.Items[0]
+		return nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(`{"items":[{}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	assert.Equal(t, "default", got.Value)
+	assert.True(t, got.Resolved)
+	assert.Equal(t, "body.items[0]", got.Path)
+}
+
 type ResolverCustomStatus struct{}
 
 func (r *ResolverCustomStatus) Resolve(ctx huma.Context) []error {
