@@ -2438,6 +2438,28 @@ Content-Type: text/plain
 		{
 			Name: "response-headers",
 			Register: func(t *testing.T, api huma.API) {
+				type NestedHeaders struct {
+					NestedWithTag    string `header:"X-Nested-With-Tag"`
+					NestedWithoutTag string // No header tag - should NOT be set as a header.
+				}
+
+				type NestedPtrHeaders struct {
+					NestedPtrWithTag    string `header:"X-Nested-Ptr-With-Tag"`
+					NestedPtrWithoutTag string // No header tag - should NOT be set as a header.
+				}
+
+				// Slice element types must use unique header names so they don't
+				// overwrite the non-slice headers at runtime.
+				type NestedHeadersSliceElem struct {
+					NestedWithTag    string `header:"X-Nested-With-Tag-Slice"`
+					NestedWithoutTag string
+				}
+
+				type NestedPtrHeadersSliceElem struct {
+					NestedPtrWithTag    string `header:"X-Nested-Ptr-With-Tag-Slice"`
+					NestedPtrWithoutTag string
+				}
+
 				type Resp struct {
 					Str          string    `header:"str"`
 					Int          int       `header:"int"`
@@ -2449,6 +2471,12 @@ Content-Type: text/plain
 					CustomTime   time.Time `header:"custom-time" timeFormat:"2006-01-02"`
 					WithoutTag   string    // No header tag - SHOULD be set as a header using field name.
 					LastModified time.Time // No header tag - SHOULD be set as a header using field name.
+					Nested       NestedHeaders
+					NestedPtr    *NestedPtrHeaders // Pointer to nested struct.
+
+					// Slice paths to cover slice/map element-type unwrapping.
+					NestedSlice    []NestedHeadersSliceElem
+					NestedPtrSlice []*NestedPtrHeadersSliceElem
 				}
 
 				huma.Register(api, huma.Operation{
@@ -2465,6 +2493,28 @@ Content-Type: text/plain
 						CustomTime:   time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC),
 						WithoutTag:   "without-tag-value",
 						LastModified: time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC),
+						Nested: NestedHeaders{
+							NestedWithTag:    "nested-with-tag-value",
+							NestedWithoutTag: "should-not-be-header",
+						},
+						NestedPtr: &NestedPtrHeaders{
+							NestedPtrWithTag:    "nested-ptr-with-tag-value",
+							NestedPtrWithoutTag: "should-not-be-header-ptr",
+						},
+
+						// One element each for deterministic runtime assertions
+						NestedSlice: []NestedHeadersSliceElem{
+							{
+								NestedWithTag:    "nested-slice-with-tag-value",
+								NestedWithoutTag: "should-not-be-header-slice",
+							},
+						},
+						NestedPtrSlice: []*NestedPtrHeadersSliceElem{
+							{
+								NestedPtrWithTag:    "nested-ptr-slice-with-tag-value",
+								NestedPtrWithoutTag: "should-not-be-header-ptr-slice",
+							},
+						},
 					}, nil
 				})
 
@@ -2483,6 +2533,28 @@ Content-Type: text/plain
 				// Surface-level fields without tags should be documented using field name.
 				assert.NotNil(t, headers["WithoutTag"])
 				assert.NotNil(t, headers["LastModified"])
+
+				// Nested fields with explicit header tag should be documented.
+				assert.NotNil(t, headers["X-Nested-With-Tag"])
+
+				// Pointer nested fields with explicit header tag should be documented.
+				assert.NotNil(t, headers["X-Nested-Ptr-With-Tag"])
+
+				// Nested fields without header tag should NOT be documented.
+				assert.Nil(t, headers["NestedWithoutTag"])
+				assert.Nil(t, headers["NestedPtrWithoutTag"])
+
+				// The nested struct itself should NOT be documented as a header.
+				assert.Nil(t, headers["Nested"])
+				assert.Nil(t, headers["NestedPtr"])
+
+				// Slice element fields with explicit header tags should be documented.
+				assert.NotNil(t, headers["X-Nested-With-Tag-Slice"])
+				assert.NotNil(t, headers["X-Nested-Ptr-With-Tag-Slice"])
+
+				// Slice element fields without header tags should NOT be documented.
+				assert.Nil(t, headers["NestedWithoutTag"])
+				assert.Nil(t, headers["NestedPtrWithoutTag"])
 			},
 			Method: http.MethodGet,
 			URL:    "/response-headers",
@@ -2502,6 +2574,20 @@ Content-Type: text/plain
 				// Surface-level fields without tags should be set using field name.
 				assert.Equal(t, "without-tag-value", resp.Header().Get("WithoutTag"))
 				assert.Equal(t, "Thu, 15 Jun 2023 10:30:00 GMT", resp.Header().Get("LastModified"))
+
+				// Nested fields with explicit header tag should be set.
+				assert.Equal(t, "nested-with-tag-value", resp.Header().Get("X-Nested-With-Tag"))
+
+				// Pointer nested fields with explicit header tag should be set.
+				assert.Equal(t, "nested-ptr-with-tag-value", resp.Header().Get("X-Nested-Ptr-With-Tag"))
+
+				// Nested fields without header tag should NOT be set.
+				assert.Empty(t, resp.Header().Values("NestedWithoutTag"))
+				assert.Empty(t, resp.Header().Values("NestedPtrWithoutTag"))
+
+				// Slice element fields should be set (unique header names).
+				assert.Equal(t, "nested-slice-with-tag-value", resp.Header().Get("X-Nested-With-Tag-Slice"))
+				assert.Equal(t, "nested-ptr-slice-with-tag-value", resp.Header().Get("X-Nested-Ptr-With-Tag-Slice"))
 			},
 		},
 		{
@@ -2509,11 +2595,20 @@ Content-Type: text/plain
 			Register: func(t *testing.T, api huma.API) {
 				type HiddenHeaders struct {
 					HiddenWithTag    string `header:"X-Hidden-With-Tag"`
-					HiddenWithoutTag string // No header tag - should be set as header using field name.
+					HiddenWithoutTag string // No header tag - promoted via embedding, so set using field name.
+				}
+
+				// Slice element type w/ unique header name so assertions remain stable.
+				type HiddenHeadersSliceElem struct {
+					HiddenWithTag    string `header:"X-Hidden-With-Tag-Slice"`
+					HiddenWithoutTag string // No header tag - nested (not promoted), so NOT set as a header.
 				}
 
 				type Resp struct {
 					*HiddenHeaders `hidden:"true"`
+
+					// Hidden slice field to exercise hidden-walk across slice -> elem.
+					HiddenSlice []HiddenHeadersSliceElem `hidden:"true"`
 
 					VisibleWithTag    string    `header:"X-Visible-With-Tag"`
 					VisibleWithoutTag string    // No header tag - SHOULD be set as a header using field name.
@@ -2532,6 +2627,12 @@ Content-Type: text/plain
 							HiddenWithTag:    "hidden-with-tag-value",
 							HiddenWithoutTag: "should-be-header",
 						},
+						HiddenSlice: []HiddenHeadersSliceElem{
+							{
+								HiddenWithTag:    "hidden-slice-with-tag-value",
+								HiddenWithoutTag: "should-not-be-header-slice",
+							},
+						},
 						VisibleWithTag:    "visible-with-tag-value",
 						VisibleWithoutTag: "visible-without-tag-value",
 						LastModified:      time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC),
@@ -2549,6 +2650,9 @@ Content-Type: text/plain
 				assert.Nil(t, headers["X-Hidden-With-Tag"], "hidden header with tag should not appear in OpenAPI docs")
 				assert.Nil(t, headers["HiddenWithoutTag"], "hidden header without tag should not appear in OpenAPI docs")
 
+				// Hidden slice element header should NOT appear in OpenAPI docs.
+				assert.Nil(t, headers["X-Hidden-With-Tag-Slice"], "hidden slice header with tag should not appear in OpenAPI docs")
+
 				// Visible surface-level fields should appear in OpenAPI documentation.
 				assert.NotNil(t, headers["X-Visible-With-Tag"], "visible header with tag should appear in OpenAPI docs")
 				assert.NotNil(t, headers["VisibleWithoutTag"], "visible header without tag should appear in OpenAPI docs")
@@ -2562,8 +2666,13 @@ Content-Type: text/plain
 				// Hidden headers with explicit tag SHOULD still be sent at runtime.
 				assert.Equal(t, "hidden-with-tag-value", resp.Header().Get("X-Hidden-With-Tag"))
 
-				// Hidden headers without tag SHOULD still be sent at runtime using field name.
+				// Hidden headers without tag are promoted via embedding, so they
+				// are still sent at runtime using the field name (but stay out of
+				// the OpenAPI docs above because the embedded struct is hidden).
 				assert.Equal(t, "should-be-header", resp.Header().Get("HiddenWithoutTag"))
+
+				// Hidden slice element header with explicit tag SHOULD still be sent at runtime.
+				assert.Equal(t, "hidden-slice-with-tag-value", resp.Header().Get("X-Hidden-With-Tag-Slice"))
 
 				// Visible surface-level fields should be sent at runtime.
 				assert.Equal(t, "visible-with-tag-value", resp.Header().Get("X-Visible-With-Tag"))
@@ -4566,6 +4675,118 @@ func TestGenerateFuncsPanicWithDescriptiveMessage(t *testing.T) {
 		huma.GenerateSummary("GET", "/foo", resp)
 	})
 
+}
+
+// TestResponseHeaderPromotion locks in the rule that a response field without
+// an explicit `header` tag is auto-named as a header from its field name only
+// when it is "surface level": a literal top-level field or a field promoted via
+// an embedded struct. Genuinely nested (named) struct fields must opt in with an
+// explicit `header` tag. This mirrors Go's field-promotion semantics so embedded
+// fields behave identically to top-level fields.
+func TestResponseHeaderPromotion(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	type Promoted struct {
+		PromotedNoTag string // promoted via embedding -> header "PromotedNoTag"
+	}
+	type Nested struct {
+		NestedNoTag  string // named nested, no tag -> NOT a header
+		NestedTagged string `header:"X-Nested-Tagged"`
+	}
+	type Resp struct {
+		Promoted              // embedded
+		TopNoTag string       // top-level -> header "TopNoTag"
+		Inner    Nested       // named nested struct
+		Body     struct{ OK bool }
+	}
+
+	huma.Get(api, "/promotion", func(ctx context.Context, input *struct{}) (*Resp, error) {
+		resp := &Resp{TopNoTag: "top"}
+		resp.PromotedNoTag = "promoted"
+		resp.Inner = Nested{NestedNoTag: "nested", NestedTagged: "tagged"}
+		return resp, nil
+	})
+
+	headers := api.OpenAPI().Paths["/promotion"].Get.Responses["200"].Headers
+	assert.NotNil(t, headers["TopNoTag"], "top-level untagged field should be a header")
+	assert.NotNil(t, headers["PromotedNoTag"], "embedded (promoted) untagged field should be a header")
+	assert.NotNil(t, headers["X-Nested-Tagged"], "named nested field with tag should be a header")
+	assert.Nil(t, headers["NestedNoTag"], "named nested field without tag should NOT be a header")
+	assert.Nil(t, headers["Inner"], "a struct we recurse into should not be a header named after itself")
+
+	resp := api.Get("/promotion")
+	assert.Equal(t, "top", resp.Header().Get("TopNoTag"))
+	assert.Equal(t, "promoted", resp.Header().Get("PromotedNoTag"))
+	assert.Equal(t, "tagged", resp.Header().Get("X-Nested-Tagged"))
+	assert.Empty(t, resp.Header().Values("NestedNoTag"))
+}
+
+// TestNestedInputParamPopulation verifies that params declared on nested input
+// structs are populated at request time, including pointer-nested structs (the
+// pointer is allocated as needed). An optional pointer group that receives no
+// values is left nil rather than being allocated as an empty struct.
+func TestNestedInputParamPopulation(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test", "1.0.0"))
+
+	type ValueGroup struct {
+		Foo string `query:"foo"`
+		Bar string `header:"X-Bar"`
+	}
+	type PtrGroup struct {
+		Baz string `query:"baz"`
+	}
+	type Input struct {
+		Top   string `query:"top"`
+		Value ValueGroup
+		Ptr   *PtrGroup
+	}
+
+	var got Input
+	huma.Register(api, huma.Operation{
+		OperationID: "nested",
+		Method:      http.MethodGet,
+		Path:        "/nested",
+	}, func(ctx context.Context, in *Input) (*struct{}, error) {
+		got = *in
+		return &struct{}{}, nil
+	})
+
+	// Nested params (value and pointer) should be documented.
+	params := api.OpenAPI().Paths["/nested"].Get.Parameters
+	names := map[string]bool{}
+	for _, p := range params {
+		names[p.In+":"+p.Name] = true
+	}
+	assert.True(t, names["query:foo"], "value-nested query param should be documented")
+	assert.True(t, names["header:X-Bar"], "value-nested header param should be documented")
+	assert.True(t, names["query:baz"], "pointer-nested query param should be documented")
+
+	t.Run("populated", func(t *testing.T) {
+		got = Input{}
+		req := httptest.NewRequest(http.MethodGet, "/nested?top=T&foo=F&baz=B", nil)
+		req.Header.Set("X-Bar", "BAR")
+		w := httptest.NewRecorder()
+		api.Adapter().ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Equal(t, "T", got.Top)
+		assert.Equal(t, "F", got.Value.Foo)
+		assert.Equal(t, "BAR", got.Value.Bar)
+		if assert.NotNil(t, got.Ptr, "pointer-nested group should be allocated and populated") {
+			assert.Equal(t, "B", got.Ptr.Baz)
+		}
+	})
+
+	t.Run("absent pointer group stays nil", func(t *testing.T) {
+		got = Input{}
+		req := httptest.NewRequest(http.MethodGet, "/nested?top=T", nil)
+		w := httptest.NewRecorder()
+		api.Adapter().ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Equal(t, "T", got.Top)
+		assert.Nil(t, got.Ptr, "absent optional pointer group should remain nil")
+	})
 }
 
 func TestNonJSONValidation(t *testing.T) {
