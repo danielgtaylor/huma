@@ -82,6 +82,8 @@ func (s Sender) Comment(comment string) error {
 // the context, input, and a `send` function that can be used to send messages
 // to the client. Flushing is handled automatically as long as the adapter's
 // `BodyWriter` implements `http.Flusher`.
+// The default response schema can be overridden by setting the
+// `op.Responses["200"].Content["text/event-stream"]` field before calling this function.
 func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]any, f func(ctx context.Context, input *I, send Sender)) {
 	// Start by defining the SSE schema & operation response.
 	if op.Responses == nil {
@@ -144,8 +146,15 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 			},
 		},
 	}
-	op.Responses["200"].Content["text/event-stream"] = &huma.MediaType{
-		Schema: schema,
+
+	opMediaType := op.Responses["200"].Content["text/event-stream"]
+
+	if opMediaType == nil {
+		op.Responses["200"].Content["text/event-stream"] = &huma.MediaType{
+			Schema: schema,
+		}
+	} else if opMediaType.Schema == nil {
+		opMediaType.Schema = schema
 	}
 
 	// Register the operation with the API, using the built-in streaming
