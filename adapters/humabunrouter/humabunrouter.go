@@ -40,7 +40,7 @@ type bunContext struct {
 	op     *huma.Operation
 	r      bunrouter.Request
 	w      http.ResponseWriter
-	status int
+	status *int // shared by every WithContext copy so ancestors see the final status
 }
 
 // check that bunContext implements huma.Context
@@ -108,12 +108,12 @@ func (c *bunContext) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *bunContext) SetStatus(code int) {
-	c.status = code
+	*c.status = code
 	c.w.WriteHeader(code)
 }
 
 func (c *bunContext) Status() int {
-	return c.status
+	return *c.status
 }
 
 func (c *bunContext) AppendHeader(name string, value string) {
@@ -151,14 +151,14 @@ func (c *bunContext) WithContext(ctx context.Context) huma.Context {
 
 // NewContext creates a new Huma context from an HTTP request and response.
 func NewContext(op *huma.Operation, r bunrouter.Request, w http.ResponseWriter) huma.Context {
-	return &bunContext{op: op, r: r, w: w}
+	return &bunContext{op: op, r: r, w: w, status: new(int)}
 }
 
 type bunCompatContext struct {
 	op     *huma.Operation
 	r      *http.Request
 	w      http.ResponseWriter
-	status int
+	status *int // shared by every WithContext copy so ancestors see the final status
 }
 
 func (c *bunCompatContext) Operation() *huma.Operation {
@@ -220,12 +220,12 @@ func (c *bunCompatContext) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *bunCompatContext) SetStatus(code int) {
-	c.status = code
+	*c.status = code
 	c.w.WriteHeader(code)
 }
 
 func (c *bunCompatContext) Status() int {
-	return c.status
+	return *c.status
 }
 
 func (c *bunCompatContext) AppendHeader(name string, value string) {
@@ -263,7 +263,7 @@ func (c *bunCompatContext) WithContext(ctx context.Context) huma.Context {
 
 // NewCompatContext creates a new Huma context from an HTTP request and response.
 func NewCompatContext(op *huma.Operation, r *http.Request, w http.ResponseWriter) huma.Context {
-	return &bunCompatContext{op: op, r: r, w: w}
+	return &bunCompatContext{op: op, r: r, w: w, status: new(int)}
 }
 
 type bunCompatAdapter struct {

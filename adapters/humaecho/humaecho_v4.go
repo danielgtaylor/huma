@@ -37,7 +37,7 @@ func UnwrapV4(ctx huma.Context) echoV4.Context {
 type echoV4Ctx struct {
 	op     *huma.Operation
 	orig   echoV4.Context
-	status int
+	status *int // shared by every WithContext copy so ancestors see the final status
 }
 
 // check that echoV4Ctx implements huma.Context
@@ -105,12 +105,12 @@ func (c *echoV4Ctx) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *echoV4Ctx) SetStatus(code int) {
-	c.status = code
+	*c.status = code
 	c.orig.Response().WriteHeader(code)
 }
 
 func (c *echoV4Ctx) Status() int {
-	return c.status
+	return *c.status
 }
 
 func (c *echoV4Ctx) AppendHeader(name, value string) {
@@ -166,7 +166,7 @@ func (a *echoV4Adapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	path = strings.ReplaceAll(path, "{", ":")
 	path = strings.ReplaceAll(path, "}", "")
 	a.router.Add(op.Method, path, func(c echoV4.Context) error {
-		ctx := &echoV4Ctx{op: op, orig: c}
+		ctx := &echoV4Ctx{op: op, orig: c, status: new(int)}
 		handler(ctx)
 		return nil
 	})

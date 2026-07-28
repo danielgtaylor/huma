@@ -38,7 +38,7 @@ type chiContext struct {
 	op     *huma.Operation
 	r      *http.Request
 	w      http.ResponseWriter
-	status int
+	status *int // shared by every WithContext copy so ancestors see the final status
 }
 
 // check that chiContext implements huma.Context
@@ -114,12 +114,12 @@ func (c *chiContext) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *chiContext) SetStatus(code int) {
-	c.status = code
+	*c.status = code
 	c.w.WriteHeader(code)
 }
 
 func (c *chiContext) Status() int {
-	return c.status
+	return *c.status
 }
 
 func (c *chiContext) AppendHeader(name string, value string) {
@@ -157,7 +157,7 @@ func (c *chiContext) WithContext(ctx context.Context) huma.Context {
 
 // NewContext creates a new Huma context from an HTTP request and response.
 func NewContext(op *huma.Operation, r *http.Request, w http.ResponseWriter) huma.Context {
-	return &chiContext{op: op, r: r, w: w}
+	return &chiContext{op: op, r: r, w: w, status: new(int)}
 }
 
 type chiAdapter struct {

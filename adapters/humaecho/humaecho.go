@@ -37,7 +37,7 @@ func Unwrap(ctx huma.Context) *echo.Context {
 type echoCtx struct {
 	op     *huma.Operation
 	orig   *echo.Context
-	status int
+	status *int // shared by every WithContext copy so ancestors see the final status
 }
 
 // check that echoCtx implements huma.Context
@@ -105,12 +105,12 @@ func (c *echoCtx) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *echoCtx) SetStatus(code int) {
-	c.status = code
+	*c.status = code
 	c.orig.Response().WriteHeader(code)
 }
 
 func (c *echoCtx) Status() int {
-	return c.status
+	return *c.status
 }
 
 func (c *echoCtx) AppendHeader(name, value string) {
@@ -166,7 +166,7 @@ func (a *echoAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	path = strings.ReplaceAll(path, "{", ":")
 	path = strings.ReplaceAll(path, "}", "")
 	a.router.Add(op.Method, path, func(c *echo.Context) error {
-		ctx := &echoCtx{op: op, orig: c}
+		ctx := &echoCtx{op: op, orig: c, status: new(int)}
 		handler(ctx)
 		return nil
 	})
