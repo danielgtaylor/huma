@@ -40,7 +40,7 @@ type httprouterContext struct {
 	r      *http.Request
 	w      http.ResponseWriter
 	ps     httprouter.Params
-	status int
+	status *int // shared by every WithContext copy so ancestors see the final status
 }
 
 // check that httprouterContext implements huma.Context
@@ -108,12 +108,12 @@ func (c *httprouterContext) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *httprouterContext) SetStatus(code int) {
-	c.status = code
+	*c.status = code
 	c.w.WriteHeader(code)
 }
 
 func (c *httprouterContext) Status() int {
-	return c.status
+	return *c.status
 }
 
 func (c *httprouterContext) AppendHeader(name string, value string) {
@@ -160,7 +160,7 @@ func (a *httprouterAdapter) Handle(op *huma.Operation, handler func(huma.Context
 	path = strings.ReplaceAll(path, "{", ":")
 	path = strings.ReplaceAll(path, "}", "")
 	a.router.Handle(op.Method, path, func(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-		handler(&httprouterContext{op: op, r: r, w: w, ps: ps})
+		handler(&httprouterContext{op: op, r: r, w: w, ps: ps, status: new(int)})
 	})
 }
 

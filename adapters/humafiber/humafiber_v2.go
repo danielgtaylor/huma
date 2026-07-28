@@ -42,7 +42,7 @@ type fiberV2Adapter struct {
 
 type fiberV2Wrapper struct {
 	op     *huma.Operation
-	status int
+	status *int // shared by every WithContext copy so ancestors see the final status
 	orig   *fiberV2.Ctx
 	ctx    context.Context
 }
@@ -125,12 +125,12 @@ func (c *fiberV2Wrapper) SetReadDeadline(deadline time.Time) error {
 
 func (c *fiberV2Wrapper) SetStatus(code int) {
 	var orig = c.orig
-	c.status = code
+	*c.status = code
 	orig.Status(code)
 }
 
 func (c *fiberV2Wrapper) Status() int {
-	return c.status
+	return *c.status
 }
 
 func (c *fiberV2Wrapper) AppendHeader(name string, value string) {
@@ -228,8 +228,9 @@ func (a *fiberV2Adapter) Handle(op *huma.Operation, handler func(huma.Context)) 
 			})
 		})
 		handler(&fiberV2Wrapper{
-			op:   op,
-			orig: c,
+			op:     op,
+			orig:   c,
+			status: new(int),
 			ctx: &contextV2Wrapper{
 				values:  values,
 				Context: c.UserContext(),

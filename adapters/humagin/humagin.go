@@ -37,7 +37,7 @@ func Unwrap(ctx huma.Context) *gin.Context {
 type ginCtx struct {
 	op     *huma.Operation
 	orig   *gin.Context
-	status int
+	status *int // shared by every WithContext copy so ancestors see the final status
 }
 
 // check that ginCtx implements huma.Context
@@ -105,12 +105,12 @@ func (c *ginCtx) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *ginCtx) SetStatus(code int) {
-	c.status = code
+	*c.status = code
 	c.orig.Status(code)
 }
 
 func (c *ginCtx) Status() int {
-	return c.status
+	return *c.status
 }
 
 func (c *ginCtx) AppendHeader(name string, value string) {
@@ -152,7 +152,7 @@ func (c *ginCtx) WithContext(ctx context.Context) huma.Context {
 
 // NewContext creates a new Huma context from a Gin context
 func NewContext(op *huma.Operation, c *gin.Context) huma.Context {
-	return &ginCtx{op: op, orig: c}
+	return &ginCtx{op: op, orig: c, status: new(int)}
 }
 
 // Router is an interface that wraps the Gin router's Handle method.

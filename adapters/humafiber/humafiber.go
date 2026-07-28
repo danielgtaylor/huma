@@ -43,7 +43,7 @@ type fiberAdapter struct {
 
 type fiberWrapper struct {
 	op     *huma.Operation
-	status int
+	status *int // shared by every WithContext copy so ancestors see the final status
 	orig   fiber.Ctx
 	ctx    context.Context
 }
@@ -127,12 +127,12 @@ func (c *fiberWrapper) SetReadDeadline(deadline time.Time) error {
 
 func (c *fiberWrapper) SetStatus(code int) {
 	var orig = c.orig
-	c.status = code
+	*c.status = code
 	orig.Status(code)
 }
 
 func (c *fiberWrapper) Status() int {
-	return c.status
+	return *c.status
 }
 
 func (c *fiberWrapper) AppendHeader(name string, value string) {
@@ -182,7 +182,7 @@ func (c *fiberWrapper) WithContext(ctx context.Context) huma.Context {
 
 // NewContext creates a new Huma context from a fiber context
 func NewContext(op *huma.Operation, c fiber.Ctx) huma.Context {
-	return &fiberWrapper{op: op, orig: c, ctx: c.Context()}
+	return &fiberWrapper{op: op, orig: c, ctx: c.Context(), status: new(int)}
 }
 
 type router interface {
@@ -234,8 +234,9 @@ func (a *fiberAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 			})
 		})
 		handler(&fiberWrapper{
-			op:   op,
-			orig: c,
+			op:     op,
+			orig:   c,
+			status: new(int),
 			ctx: &contextWrapper{
 				values:  values,
 				Context: c.Context(),

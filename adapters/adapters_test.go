@@ -115,11 +115,18 @@ func TestAdapters(t *testing.T) {
 				assert.Contains(t, []string{"http", "HTTP/1.1"}, v.Proto)
 			}
 
+			orig := ctx
+
 			// Set a request-scoped value that downstream native middleware must be
 			// able to read from the underlying request context.
 			ctx = huma.WithValue(ctx, key{}, "value")
 
 			next(ctx)
+
+			// The status set by the handler must be observable from the context
+			// this middleware started with, not just from the forked one.
+			assert.Equal(t, http.StatusOK, orig.Status())
+			assert.Equal(t, http.StatusOK, ctx.Status())
 		}, func(ctx huma.Context, next func(huma.Context)) {
 			// Unwrapping must not panic even after the context was replaced via
 			// WithValue, and the value must have propagated into the native
