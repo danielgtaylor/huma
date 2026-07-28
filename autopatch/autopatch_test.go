@@ -635,3 +635,65 @@ func TestFindRelativeResourcePath(t *testing.T) {
 		assert.Equal(t, test.expected, findRelativeResourcePath(test.requestPath, test.putPath))
 	}
 }
+
+func TestSortedMapIterator(t *testing.T) {
+	tests := []struct {
+		name string
+		m    map[string]int
+		want []struct {
+			key   string
+			value int
+		}
+	}{
+		{
+			name: "empty map",
+			m:    map[string]int{},
+			want: nil,
+		},
+		{
+			name: "nil map",
+			m:    nil,
+			want: nil,
+		},
+		{
+			name: "single entry",
+			m:    map[string]int{"one": 1},
+			want: []struct {
+				key   string
+				value int
+			}{{key: "one", value: 1}},
+		},
+		{
+			name: "sorted key order",
+			m: map[string]int{
+				"zebra": 3,
+				"alpha": 1,
+				"mango": 2,
+			},
+			want: []struct {
+				key   string
+				value int
+			}{
+				{key: "alpha", value: 1},
+				{key: "mango", value: 2},
+				{key: "zebra", value: 3},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var got []struct {
+				key   string
+				value int
+			}
+			for k, v := range sortedMapIterator(test.m) {
+				got = append(got, struct {
+					key   string
+					value int
+				}{key: k, value: v})
+			}
+			assert.Equal(t, test.want, got)
+		})
+	}
+}

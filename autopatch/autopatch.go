@@ -10,14 +10,17 @@ package autopatch
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"iter"
 	"maps"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -496,7 +499,7 @@ func makeOptionalSchema(s *huma.Schema) *huma.Schema {
 
 	if s.Properties != nil {
 		optionalSchema.Properties = make(map[string]*huma.Schema)
-		for k, v := range s.Properties {
+		for k, v := range sortedMapIterator(s.Properties) {
 			optionalSchema.Properties[k] = makeOptionalSchema(v)
 		}
 	}
@@ -559,4 +562,16 @@ func findRelativeResourcePath(requestPath string, putPath string) string {
 		}
 	}
 	return "/" + workingPath
+}
+
+// sortedMapIterator returns a deterministic iterator over m, yielding keys in sorted order.
+func sortedMapIterator[K cmp.Ordered, V any](m map[K]V) iter.Seq2[K, V] {
+	sortedKeys := slices.Sorted(maps.Keys(m))
+	return func(yield func(K, V) bool) {
+		for _, k := range sortedKeys {
+			if !yield(k, m[k]) {
+				return
+			}
+		}
+	}
 }
