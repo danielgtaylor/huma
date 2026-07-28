@@ -697,3 +697,43 @@ func TestSortedMapIterator(t *testing.T) {
 		})
 	}
 }
+
+func TestSortedMapIterator_EarlyExit(t *testing.T) {
+	inputMap := map[string]int{
+		"5": 5,
+		"4": 4,
+		"3": 3,
+		"2": 2,
+		"1": 1,
+	}
+
+	want := []struct {
+		key   string
+		value int
+	}{
+		{key: "1", value: 1},
+		{key: "2", value: 2},
+		{key: "3", value: 3},
+	}
+
+	elementsToProcess := 3
+	elementsProcessed := 0
+
+	var got []struct {
+		key   string
+		value int
+	}
+
+	for k, v := range sortedMapIterator(inputMap) {
+		got = append(got, struct {
+			key   string
+			value int
+		}{key: k, value: v})
+
+		elementsProcessed++
+		if elementsProcessed == elementsToProcess {
+			break
+		}
+	}
+	assert.Equal(t, want, got)
+}
