@@ -453,6 +453,21 @@ func TestMakeOptionalSchemaAnyOf(t *testing.T) {
 	assert.Equal(t, "number", optionalSchema.AnyOf[1].Type)
 }
 
+func TestMakeOptionalSchemaOneOf(t *testing.T) {
+	originalSchema := &huma.Schema{
+		OneOf: []*huma.Schema{
+			{Type: "string"},
+			{Type: "number"},
+		},
+	}
+
+	optionalSchema := makeOptionalSchema(testRegistry(), originalSchema)
+
+	assert.Len(t, optionalSchema.OneOf, 2)
+	assert.Equal(t, "string", optionalSchema.OneOf[0].Type)
+	assert.Equal(t, "number", optionalSchema.OneOf[1].Type)
+}
+
 func TestMakeOptionalSchemaAllOf(t *testing.T) {
 	minLength := 1
 	maxLength := 100
