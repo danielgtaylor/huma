@@ -234,12 +234,9 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 
 	// Get the schema from the PUT operation
 	putSchema := put.RequestBody.Content["application/json"].Schema
-	if putSchema.Ref != "" {
-		putSchema = oapi.Components.Schemas.SchemaFromRef(putSchema.Ref)
-	}
 
 	// Create an optional version of the PUT schema
-	optionalPutSchema := makeOptionalSchema(putSchema)
+	optionalPutSchema := makeOptionalSchema(api.OpenAPI().Components.Schemas, putSchema)
 
 	// Manually register the operation so it shows up in the generated OpenAPI.
 	op := &huma.Operation{
@@ -453,9 +450,13 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 	})
 }
 
-func makeOptionalSchema(s *huma.Schema) *huma.Schema {
+func makeOptionalSchema(registry huma.Registry, s *huma.Schema) *huma.Schema {
 	if s == nil {
 		return nil
+	}
+
+	if s.Ref != "" {
+		s = registry.SchemaFromRef(s.Ref)
 	}
 
 	optionalSchema := &huma.Schema{
@@ -491,39 +492,39 @@ func makeOptionalSchema(s *huma.Schema) *huma.Schema {
 	}
 
 	if s.Items != nil {
-		optionalSchema.Items = makeOptionalSchema(s.Items)
+		optionalSchema.Items = makeOptionalSchema(registry, s.Items)
 	}
 
 	if s.Properties != nil {
 		optionalSchema.Properties = make(map[string]*huma.Schema)
 		for k, v := range s.Properties {
-			optionalSchema.Properties[k] = makeOptionalSchema(v)
+			optionalSchema.Properties[k] = makeOptionalSchema(registry, v)
 		}
 	}
 
 	if s.OneOf != nil {
 		optionalSchema.OneOf = make([]*huma.Schema, len(s.OneOf))
 		for i, schema := range s.OneOf {
-			optionalSchema.OneOf[i] = makeOptionalSchema(schema)
+			optionalSchema.OneOf[i] = makeOptionalSchema(registry, schema)
 		}
 	}
 
 	if s.AnyOf != nil {
 		optionalSchema.AnyOf = make([]*huma.Schema, len(s.AnyOf))
 		for i, schema := range s.AnyOf {
-			optionalSchema.AnyOf[i] = makeOptionalSchema(schema)
+			optionalSchema.AnyOf[i] = makeOptionalSchema(registry, schema)
 		}
 	}
 
 	if s.AllOf != nil {
 		optionalSchema.AllOf = make([]*huma.Schema, len(s.AllOf))
 		for i, schema := range s.AllOf {
-			optionalSchema.AllOf[i] = makeOptionalSchema(schema)
+			optionalSchema.AllOf[i] = makeOptionalSchema(registry, schema)
 		}
 	}
 
 	if s.Not != nil {
-		optionalSchema.Not = makeOptionalSchema(s.Not)
+		optionalSchema.Not = makeOptionalSchema(registry, s.Not)
 	}
 
 	// Make all properties optional

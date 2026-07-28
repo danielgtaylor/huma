@@ -416,6 +416,10 @@ func TestNullabilityExtension(t *testing.T) {
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
 }
 
+func testRegistry() huma.Registry {
+	return huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+}
+
 func TestMakeOptionalSchemaBasicProperties(t *testing.T) {
 	originalSchema := &huma.Schema{
 		Type: "object",
@@ -426,7 +430,7 @@ func TestMakeOptionalSchemaBasicProperties(t *testing.T) {
 		Required: []string{"id", "name"},
 	}
 
-	optionalSchema := makeOptionalSchema(originalSchema)
+	optionalSchema := makeOptionalSchema(testRegistry(), originalSchema)
 
 	assert.Equal(t, "object", optionalSchema.Type)
 	assert.Contains(t, optionalSchema.Properties, "id")
@@ -442,7 +446,7 @@ func TestMakeOptionalSchemaAnyOf(t *testing.T) {
 		},
 	}
 
-	optionalSchema := makeOptionalSchema(originalSchema)
+	optionalSchema := makeOptionalSchema(testRegistry(), originalSchema)
 
 	assert.Len(t, optionalSchema.AnyOf, 2)
 	assert.Equal(t, "string", optionalSchema.AnyOf[0].Type)
@@ -459,7 +463,7 @@ func TestMakeOptionalSchemaAllOf(t *testing.T) {
 		},
 	}
 
-	optionalSchema := makeOptionalSchema(originalSchema)
+	optionalSchema := makeOptionalSchema(testRegistry(), originalSchema)
 
 	assert.Len(t, optionalSchema.AllOf, 2)
 	assert.Equal(t, 1, *optionalSchema.AllOf[0].MinLength)
@@ -473,14 +477,14 @@ func TestMakeOptionalSchemaNot(t *testing.T) {
 		},
 	}
 
-	optionalSchema := makeOptionalSchema(originalSchema)
+	optionalSchema := makeOptionalSchema(testRegistry(), originalSchema)
 
 	assert.NotNil(t, optionalSchema.Not)
 	assert.Equal(t, "null", optionalSchema.Not.Type)
 }
 
 func TestMakeOptionalSchemaNilInput(t *testing.T) {
-	assert.Nil(t, makeOptionalSchema(nil))
+	assert.Nil(t, makeOptionalSchema(testRegistry(), nil))
 }
 
 func TestReplaceNulls(t *testing.T) {
@@ -590,10 +594,69 @@ func TestMakeOptionalSchemaNestedSchemas(t *testing.T) {
 		Required: []string{"nested"},
 	}
 
-	optionalNestedSchema := makeOptionalSchema(nestedSchema)
+	optionalNestedSchema := makeOptionalSchema(testRegistry(), nestedSchema)
 
 	assert.Empty(t, optionalNestedSchema.Required)
 	assert.Empty(t, optionalNestedSchema.Properties["nested"].Required)
+}
+
+func TestMakeOptionalSchemaRefs(t *testing.T) {
+	const addressRef = "#/components/schemas/Address"
+	const tagRef = "#/components/schemas/Tag"
+
+	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	registry.Map()["Address"] = &huma.Schema{
+		Type: "object",
+		Properties: map[string]*huma.Schema{
+			"street": {Type: "string"},
+			"city":   {Type: "string"},
+		},
+		Required: []string{"street", "city"},
+	}
+	registry.Map()["Tag"] = &huma.Schema{Type: "string"}
+
+	t.Run("top-level ref", func(t *testing.T) {
+		optional := makeOptionalSchema(registry, &huma.Schema{Ref: addressRef})
+
+		assert.Empty(t, optional.Ref)
+		assert.Equal(t, "object", optional.Type)
+		assert.Empty(t, optional.Required)
+		assert.Len(t, optional.Properties, 2)
+		assert.Equal(t, "string", optional.Properties["street"].Type)
+		assert.Equal(t, "string", optional.Properties["city"].Type)
+	})
+
+	t.Run("property ref", func(t *testing.T) {
+		parent := &huma.Schema{
+			Type: "object",
+			Properties: map[string]*huma.Schema{
+				"address": {Ref: addressRef},
+			},
+			Required: []string{"address"},
+		}
+
+		optional := makeOptionalSchema(registry, parent)
+
+		assert.Empty(t, optional.Required)
+		address := optional.Properties["address"]
+		require.NotNil(t, address)
+		assert.Empty(t, address.Ref)
+		assert.Equal(t, "object", address.Type)
+		assert.Empty(t, address.Required)
+	})
+
+	t.Run("items ref", func(t *testing.T) {
+		parent := &huma.Schema{
+			Type:  "array",
+			Items: &huma.Schema{Ref: tagRef},
+		}
+
+		optional := makeOptionalSchema(registry, parent)
+
+		require.NotNil(t, optional.Items)
+		assert.Empty(t, optional.Items.Ref)
+		assert.Equal(t, "string", optional.Items.Type)
+	})
 }
 
 type findRelativeResourcePathTest struct {
