@@ -774,6 +774,115 @@ func TestMakeOptionalSchemaRefs(t *testing.T) {
 	})
 }
 
+func TestMakeOptionalSchemaAdditionalProperties(t *testing.T) {
+	t.Run("boolean additionalProperties", func(t *testing.T) {
+		for _, val := range []bool{true, false} {
+			original := &huma.Schema{
+				Type: "object",
+				Properties: map[string]*huma.Schema{
+					"name": {Type: "string"},
+				},
+				Required:             []string{"name"},
+				AdditionalProperties: val,
+			}
+
+			optional := testMakeOptionalSchema(testRegistry(), original)
+
+			assert.Equal(t, val, optional.AdditionalProperties)
+			assert.Empty(t, optional.Required)
+		}
+	})
+
+	t.Run("inline schema additionalProperties", func(t *testing.T) {
+		original := &huma.Schema{
+			Type: "object",
+			AdditionalProperties: &huma.Schema{
+				Type: "object",
+				Properties: map[string]*huma.Schema{
+					"value": {Type: "string"},
+				},
+				Required: []string{"value"},
+			},
+		}
+
+		optional := testMakeOptionalSchema(testRegistry(), original)
+
+		addl, ok := optional.AdditionalProperties.(*huma.Schema)
+		require.True(t, ok)
+		assert.Equal(t, "object", addl.Type)
+		assert.Empty(t, addl.Required)
+		assert.Equal(t, "string", addl.Properties["value"].Type)
+	})
+
+	t.Run("ref additionalProperties", func(t *testing.T) {
+		const tagRef = "#/components/schemas/Tag"
+
+		registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+		registry.Map()["Tag"] = &huma.Schema{
+			Type: "object",
+			Properties: map[string]*huma.Schema{
+				"label": {Type: "string"},
+			},
+			Required: []string{"label"},
+		}
+
+		original := &huma.Schema{
+			Type:                 "object",
+			AdditionalProperties: &huma.Schema{Ref: tagRef},
+		}
+
+		optional := testMakeOptionalSchema(registry, original)
+
+		addl, ok := optional.AdditionalProperties.(*huma.Schema)
+		require.True(t, ok)
+		assert.Empty(t, addl.Ref)
+		assert.Equal(t, "object", addl.Type)
+		assert.Empty(t, addl.Required)
+		assert.Equal(t, "string", addl.Properties["label"].Type)
+	})
+
+	t.Run("recursive ref additionalProperties", func(t *testing.T) {
+		const nodeRef = "#/components/schemas/Node"
+
+		registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+		registry.Map()["Node"] = &huma.Schema{
+			Type: "object",
+			Properties: map[string]*huma.Schema{
+				"name": {Type: "string"},
+				"named": {
+					Type: "object",
+					AdditionalProperties: &huma.Schema{Ref: nodeRef},
+				},
+			},
+			Required: []string{"name"},
+		}
+
+		optional := testMakeOptionalSchema(registry, &huma.Schema{Ref: nodeRef})
+
+		assert.Empty(t, optional.Required)
+		named := optional.Properties["named"]
+		require.NotNil(t, named)
+		addl, ok := named.AdditionalProperties.(*huma.Schema)
+		require.True(t, ok)
+		assert.Equal(t, nodeRef, addl.Ref)
+	})
+
+	t.Run("unresolvable ref additionalProperties", func(t *testing.T) {
+		const externalRef = "https://example.com/schemas/Thing.json"
+
+		original := &huma.Schema{
+			Type:                 "object",
+			AdditionalProperties: &huma.Schema{Ref: externalRef},
+		}
+
+		optional := testMakeOptionalSchema(testRegistry(), original)
+
+		addl, ok := optional.AdditionalProperties.(*huma.Schema)
+		require.True(t, ok)
+		assert.Equal(t, externalRef, addl.Ref)
+	})
+}
+
 type findRelativeResourcePathTest struct {
 	requestPath string
 	putPath     string

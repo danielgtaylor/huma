@@ -469,35 +469,34 @@ func makeOptionalSchema(registry huma.Registry, s *huma.Schema, visited map[stri
 	}
 
 	optionalSchema := &huma.Schema{
-		Type:                 s.Type,
-		Title:                s.Title,
-		Description:          s.Description,
-		Format:               s.Format,
-		ContentEncoding:      s.ContentEncoding,
-		Default:              s.Default,
-		Examples:             s.Examples,
-		AdditionalProperties: s.AdditionalProperties,
-		Enum:                 s.Enum,
-		Minimum:              s.Minimum,
-		ExclusiveMinimum:     s.ExclusiveMinimum,
-		Maximum:              s.Maximum,
-		ExclusiveMaximum:     s.ExclusiveMaximum,
-		MultipleOf:           s.MultipleOf,
-		MinLength:            s.MinLength,
-		MaxLength:            s.MaxLength,
-		Pattern:              s.Pattern,
-		PatternDescription:   s.PatternDescription,
-		MinItems:             s.MinItems,
-		MaxItems:             s.MaxItems,
-		UniqueItems:          s.UniqueItems,
-		MinProperties:        s.MinProperties,
-		MaxProperties:        s.MaxProperties,
-		ReadOnly:             s.ReadOnly,
-		WriteOnly:            s.WriteOnly,
-		Deprecated:           s.Deprecated,
-		Extensions:           s.Extensions,
-		DependentRequired:    s.DependentRequired,
-		Discriminator:        s.Discriminator,
+		Type:               s.Type,
+		Title:              s.Title,
+		Description:        s.Description,
+		Format:             s.Format,
+		ContentEncoding:    s.ContentEncoding,
+		Default:            s.Default,
+		Examples:           s.Examples,
+		Enum:               s.Enum,
+		Minimum:            s.Minimum,
+		ExclusiveMinimum:   s.ExclusiveMinimum,
+		Maximum:            s.Maximum,
+		ExclusiveMaximum:   s.ExclusiveMaximum,
+		MultipleOf:         s.MultipleOf,
+		MinLength:          s.MinLength,
+		MaxLength:          s.MaxLength,
+		Pattern:            s.Pattern,
+		PatternDescription: s.PatternDescription,
+		MinItems:           s.MinItems,
+		MaxItems:           s.MaxItems,
+		UniqueItems:        s.UniqueItems,
+		MinProperties:      s.MinProperties,
+		MaxProperties:      s.MaxProperties,
+		ReadOnly:           s.ReadOnly,
+		WriteOnly:          s.WriteOnly,
+		Deprecated:         s.Deprecated,
+		Extensions:         s.Extensions,
+		DependentRequired:  s.DependentRequired,
+		Discriminator:      s.Discriminator,
 	}
 
 	if s.Items != nil {
@@ -508,6 +507,14 @@ func makeOptionalSchema(registry huma.Registry, s *huma.Schema, visited map[stri
 		optionalSchema.Properties = make(map[string]*huma.Schema)
 		for k, v := range s.Properties {
 			optionalSchema.Properties[k] = makeOptionalSchema(registry, v, visited)
+		}
+	}
+
+	if s.AdditionalProperties != nil {
+		if additionalPropertiesSchema, ok := s.AdditionalProperties.(*huma.Schema); ok {
+			optionalSchema.AdditionalProperties = makeOptionalSchema(registry, additionalPropertiesSchema, visited)
+		} else {
+			optionalSchema.AdditionalProperties = s.AdditionalProperties
 		}
 	}
 
