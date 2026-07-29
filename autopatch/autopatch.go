@@ -450,7 +450,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 	})
 }
 
-func makeOptionalSchema(registry huma.Registry, s *huma.Schema, visited map[string]struct{}) *huma.Schema {
+func makeOptionalSchema(registry huma.Registry, s *huma.Schema, visitedRefs map[string]struct{}) *huma.Schema {
 	if s == nil {
 		return nil
 	}
@@ -458,13 +458,13 @@ func makeOptionalSchema(registry huma.Registry, s *huma.Schema, visited map[stri
 	// If this schema has a ref, try to resolve it and leverage the referenced schema
 	if s.Ref != "" {
 		resolved := registry.SchemaFromRef(s.Ref)
-		if _, cycle := visited[s.Ref]; cycle || resolved == nil {
+		if _, cycle := visitedRefs[s.Ref]; cycle || resolved == nil {
 			// Unresolvable or self-referential: leave the ref in place.
 			return &huma.Schema{Ref: s.Ref}
 		}
 
-		visited[s.Ref] = struct{}{}
-		defer delete(visited, s.Ref)
+		visitedRefs[s.Ref] = struct{}{}
+		defer delete(visitedRefs, s.Ref)
 		s = resolved
 	}
 
@@ -500,19 +500,19 @@ func makeOptionalSchema(registry huma.Registry, s *huma.Schema, visited map[stri
 	}
 
 	if s.Items != nil {
-		optionalSchema.Items = makeOptionalSchema(registry, s.Items, visited)
+		optionalSchema.Items = makeOptionalSchema(registry, s.Items, visitedRefs)
 	}
 
 	if s.Properties != nil {
 		optionalSchema.Properties = make(map[string]*huma.Schema)
 		for k, v := range s.Properties {
-			optionalSchema.Properties[k] = makeOptionalSchema(registry, v, visited)
+			optionalSchema.Properties[k] = makeOptionalSchema(registry, v, visitedRefs)
 		}
 	}
 
 	if s.AdditionalProperties != nil {
 		if additionalPropertiesSchema, ok := s.AdditionalProperties.(*huma.Schema); ok {
-			optionalSchema.AdditionalProperties = makeOptionalSchema(registry, additionalPropertiesSchema, visited)
+			optionalSchema.AdditionalProperties = makeOptionalSchema(registry, additionalPropertiesSchema, visitedRefs)
 		} else {
 			optionalSchema.AdditionalProperties = s.AdditionalProperties
 		}
@@ -521,26 +521,26 @@ func makeOptionalSchema(registry huma.Registry, s *huma.Schema, visited map[stri
 	if s.OneOf != nil {
 		optionalSchema.OneOf = make([]*huma.Schema, len(s.OneOf))
 		for i, schema := range s.OneOf {
-			optionalSchema.OneOf[i] = makeOptionalSchema(registry, schema, visited)
+			optionalSchema.OneOf[i] = makeOptionalSchema(registry, schema, visitedRefs)
 		}
 	}
 
 	if s.AnyOf != nil {
 		optionalSchema.AnyOf = make([]*huma.Schema, len(s.AnyOf))
 		for i, schema := range s.AnyOf {
-			optionalSchema.AnyOf[i] = makeOptionalSchema(registry, schema, visited)
+			optionalSchema.AnyOf[i] = makeOptionalSchema(registry, schema, visitedRefs)
 		}
 	}
 
 	if s.AllOf != nil {
 		optionalSchema.AllOf = make([]*huma.Schema, len(s.AllOf))
 		for i, schema := range s.AllOf {
-			optionalSchema.AllOf[i] = makeOptionalSchema(registry, schema, visited)
+			optionalSchema.AllOf[i] = makeOptionalSchema(registry, schema, visitedRefs)
 		}
 	}
 
 	if s.Not != nil {
-		optionalSchema.Not = makeOptionalSchema(registry, s.Not, visited)
+		optionalSchema.Not = makeOptionalSchema(registry, s.Not, visitedRefs)
 	}
 
 	// Make all properties optional
