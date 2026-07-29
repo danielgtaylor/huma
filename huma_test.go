@@ -4080,6 +4080,151 @@ func TestResolverInFixedArray(t *testing.T) {
 	assert.Equal(t, "body.items[0]", got.Path)
 }
 
+// CollectionResolverArray and CollectionResolverSlice have resolvers on the
+// collection type itself rather than on an element type.
+type CollectionResolverArray [2]float64
+
+func (c *CollectionResolverArray) Resolve(_ huma.Context) []error {
+	*c = CollectionResolverArray{1, 2}
+	return nil
+}
+
+type CollectionResolverSlice []float64
+
+func (c *CollectionResolverSlice) Resolve(_ huma.Context) []error {
+	*c = CollectionResolverSlice{3, 4}
+	return nil
+}
+
+func TestResolverOnCollectionType(t *testing.T) {
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	var got struct {
+		Array  CollectionResolverArray
+		Slice  CollectionResolverSlice
+		Nested []CollectionResolverArray
+	}
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodPost,
+		Path:        "/test",
+	}, func(ctx context.Context, input *struct {
+		Body struct {
+			Array  CollectionResolverArray   `json:"array"`
+			Slice  CollectionResolverSlice   `json:"slice"`
+			Nested []CollectionResolverArray `json:"nested"`
+		}
+	}) (*struct{}, error) {
+		got.Array = input.Body.Array
+		got.Slice = input.Body.Slice
+		got.Nested = input.Body.Nested
+		return nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(`{"array":[0,0],"slice":[0],"nested":[[0,0],[0,0]]}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	assert.Equal(t, CollectionResolverArray{1, 2}, got.Array)
+	assert.Equal(t, CollectionResolverSlice{3, 4}, got.Slice)
+	// Each element of the outer slice is itself the match, so the resolver runs
+	// on the elements rather than on the slice.
+	assert.Equal(t, []CollectionResolverArray{{1, 2}, {1, 2}}, got.Nested)
+}
+
+// BothResolverItems and BothResolverItem both have a resolver, so both the
+// collection and its elements must be resolved, each exactly once.
+type BothResolverItem struct {
+	Name  string `json:"name"`
+	Count int    `json:"count,omitempty"`
+}
+
+func (i *BothResolverItem) Resolve(_ huma.Context) []error {
+	i.Count++
+	return nil
+}
+
+type BothResolverItems []BothResolverItem
+
+func (i *BothResolverItems) Resolve(_ huma.Context) []error {
+	*i = append(*i, BothResolverItem{Name: "appended"})
+	return nil
+}
+
+func TestResolverOnCollectionAndElement(t *testing.T) {
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	var got BothResolverItems
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodPost,
+		Path:        "/test",
+	}, func(ctx context.Context, input *struct {
+		Body struct {
+			Items BothResolverItems `json:"items"`
+		}
+	}) (*struct{}, error) {
+		got = input.Body.Items
+		return nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(`{"items":[{"name":"a"}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	require.Len(t, got, 2, "the collection resolver should run exactly once")
+	assert.Equal(t, "a", got[0].Name)
+	assert.Equal(t, 1, got[0].Count, "the element resolver should run exactly once")
+}
+
+type MapValueResolverItem struct {
+	Value    string `json:"value,omitempty" default:"default"`
+	Resolved string `json:"resolved,omitempty"`
+}
+
+func (i *MapValueResolverItem) Resolve(_ huma.Context) []error {
+	i.Resolved = "yes"
+	return nil
+}
+
+// TestDefaultsInMapValue covers defaults and resolver mutations on values only
+// reachable through a map. Map values are copies, so they are written back to
+// the map after being visited, otherwise the changes would be lost.
+func TestDefaultsInMapValue(t *testing.T) {
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	var got struct {
+		Structs map[string]MapValueResolverItem
+		Arrays  map[string][1]MapValueResolverItem
+	}
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodPost,
+		Path:        "/test",
+	}, func(ctx context.Context, input *struct {
+		Body struct {
+			Structs map[string]MapValueResolverItem    `json:"structs"`
+			Arrays  map[string][1]MapValueResolverItem `json:"arrays"`
+		}
+	}) (*struct{}, error) {
+		got.Structs = input.Body.Structs
+		got.Arrays = input.Body.Arrays
+		return nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(`{"structs":{"a":{}},"arrays":{"a":[{}]}}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	assert.NotPanics(t, func() { r.ServeHTTP(w, req) })
+	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	assert.Equal(t, "default", got.Structs["a"].Value)
+	assert.Equal(t, "yes", got.Structs["a"].Resolved)
+	assert.Equal(t, "default", got.Arrays["a"][0].Value)
+	assert.Equal(t, "yes", got.Arrays["a"][0].Resolved)
+}
+
 type ResolverCustomStatus struct{}
 
 func (r *ResolverCustomStatus) Resolve(ctx huma.Context) []error {

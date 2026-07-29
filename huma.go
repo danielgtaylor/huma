@@ -371,8 +371,28 @@ func findHeaders(t reflect.Type) *findResult[*headerInfo] {
 }
 
 type findResultPath[T comparable] struct {
+	// Path is a sequence of struct field indices to walk, where `collectionElem`
+	// means "step into the elements of this slice, array, or map".
 	Path  []int
 	Value T
+}
+
+// collectionElem is a path step meaning "into the elements of this slice, array
+// or map". Field indices are never negative, so it can't collide with one. A
+// path that stops at a collection instead of stepping into it means the
+// collection's own type is the match.
+const collectionElem = -1
+
+// collectionPath returns the rest of the path after the step into a
+// collection's elements. Arriving at a collection without that step means the
+// path was recorded wrong, e.g. a new kind was added to `_findInType` without
+// marking its elements.
+func collectionPath(path []int) []int {
+	if len(path) == 0 || path[0] != collectionElem {
+		panic("expected a collection element path step, please file a bug")
+	}
+
+	return path[1:]
 }
 
 type findResult[T comparable] struct {
@@ -398,16 +418,30 @@ func (r *findResult[T]) every(current reflect.Value, path []int, v T, f func(ref
 	case reflect.Struct:
 		r.every(current.Field(path[0]), path[1:], v, f)
 	case reflect.Slice, reflect.Array:
+		elem := collectionPath(path)
 		for j := 0; j < current.Len(); j++ {
-			r.every(current.Index(j), path, v, f)
+			r.every(current.Index(j), elem, v, f)
 		}
 	case reflect.Map:
+		elem := collectionPath(path)
 		for _, k := range current.MapKeys() {
-			r.every(current.MapIndex(k), path, v, f)
+			item := addressableMapValue(current, k)
+			r.every(item, elem, v, f)
+			current.SetMapIndex(k, item)
 		}
 	default:
 		panic("unsupported")
 	}
+}
+
+// addressableMapValue returns a settable copy of the value stored at the given
+// key. Map values are never addressable, so callers must work on a copy and
+// write it back via `SetMapIndex` for changes like defaults or resolver
+// mutations to survive.
+func addressableMapValue(m reflect.Value, key reflect.Value) reflect.Value {
+	item := reflect.New(m.Type().Elem()).Elem()
+	item.Set(m.MapIndex(key))
+	return item
 }
 
 // Every iterates over all paths in the result, applying the provided function
@@ -429,16 +463,13 @@ func jsonName(field reflect.StructField) string {
 }
 
 // everyPB traverses and processes a value using a path, building paths with
-// PathBuffer, and applying a function to leaf nodes.
+// PathBuffer, and applying a function to leaf nodes. A path stopping at a
+// collection means the collection itself is the match; a `collectionElem` step
+// means the match is inside it.
 func (r *findResult[T]) everyPB(current reflect.Value, path []int, pb *PathBuffer, v T, f func(reflect.Value, T)) {
-	switch reflect.Indirect(current).Kind() {
-	case reflect.Slice, reflect.Array, reflect.Map:
-		// Ignore these. We only care about the leaf nodes.
-	default:
-		if len(path) == 0 {
-			f(current, v)
-			return
-		}
+	if len(path) == 0 {
+		f(current, v)
+		return
 	}
 
 	current = reflect.Indirect(current)
@@ -481,19 +512,23 @@ func (r *findResult[T]) everyPB(current reflect.Value, path []int, pb *PathBuffe
 			pb.Pop()
 		}
 	case reflect.Slice, reflect.Array:
+		elem := collectionPath(path)
 		for j := 0; j < current.Len(); j++ {
 			pb.PushIndex(j)
-			r.everyPB(current.Index(j), path, pb, v, f)
+			r.everyPB(current.Index(j), elem, pb, v, f)
 			pb.Pop()
 		}
 	case reflect.Map:
+		elem := collectionPath(path)
 		for _, k := range current.MapKeys() {
 			if k.Kind() == reflect.String {
 				pb.Push(k.String())
 			} else {
 				pb.Push(fmt.Sprintf("%v", k.Interface()))
 			}
-			r.everyPB(current.MapIndex(k), path, pb, v, f)
+			item := addressableMapValue(current, k)
+			r.everyPB(item, elem, pb, v, f)
+			current.SetMapIndex(k, item)
 			pb.Pop()
 		}
 	default:
@@ -566,10 +601,13 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 				delete(visited, t)
 			}
 		}
-	case reflect.Slice, reflect.Array:
-		_findInType[T](t.Elem(), path, result, onType, onField, recurseFields, visited, ignore...)
-	case reflect.Map:
-		_findInType[T](t.Elem(), path, result, onType, onField, recurseFields, visited, ignore...)
+	case reflect.Slice, reflect.Array, reflect.Map:
+		// Record that the match is inside the collection rather than on the
+		// collection's own type, so the walkers know to descend into elements.
+		// Both can match, e.g. `type Items []Item` where each has a resolver, in
+		// which case two paths are recorded and both run.
+		elem := append(append([]int{}, path...), collectionElem)
+		_findInType[T](t.Elem(), elem, result, onType, onField, recurseFields, visited, ignore...)
 	}
 }
 
