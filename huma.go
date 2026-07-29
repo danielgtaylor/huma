@@ -397,7 +397,7 @@ func (r *findResult[T]) every(current reflect.Value, path []int, v T, f func(ref
 	switch current.Kind() {
 	case reflect.Struct:
 		r.every(current.Field(path[0]), path[1:], v, f)
-	case reflect.Slice:
+	case reflect.Slice, reflect.Array:
 		for j := 0; j < current.Len(); j++ {
 			r.every(current.Index(j), path, v, f)
 		}
@@ -432,7 +432,7 @@ func jsonName(field reflect.StructField) string {
 // PathBuffer, and applying a function to leaf nodes.
 func (r *findResult[T]) everyPB(current reflect.Value, path []int, pb *PathBuffer, v T, f func(reflect.Value, T)) {
 	switch reflect.Indirect(current).Kind() {
-	case reflect.Slice, reflect.Map:
+	case reflect.Slice, reflect.Array, reflect.Map:
 		// Ignore these. We only care about the leaf nodes.
 	default:
 		if len(path) == 0 {
@@ -480,7 +480,7 @@ func (r *findResult[T]) everyPB(current reflect.Value, path []int, pb *PathBuffe
 		for i := 0; i < pops; i++ {
 			pb.Pop()
 		}
-	case reflect.Slice:
+	case reflect.Slice, reflect.Array:
 		for j := 0; j < current.Len(); j++ {
 			pb.PushIndex(j)
 			r.everyPB(current.Index(j), path, pb, v, f)
@@ -566,7 +566,7 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 				delete(visited, t)
 			}
 		}
-	case reflect.Slice:
+	case reflect.Slice, reflect.Array:
 		_findInType[T](t.Elem(), path, result, onType, onField, recurseFields, visited, ignore...)
 	case reflect.Map:
 		_findInType[T](t.Elem(), path, result, onType, onField, recurseFields, visited, ignore...)
