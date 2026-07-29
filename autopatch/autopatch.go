@@ -236,7 +236,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 	putSchema := put.RequestBody.Content["application/json"].Schema
 
 	// Create an optional version of the PUT schema
-	optionalPutSchema := makeOptionalSchema(api.OpenAPI().Components.Schemas, putSchema, map[string]struct{}{})
+	optionalPutSchema := makeOptionalSchema(oapi.Components.Schemas, putSchema, map[string]struct{}{})
 
 	// Manually register the operation so it shows up in the generated OpenAPI.
 	op := &huma.Operation{
