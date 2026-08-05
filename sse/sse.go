@@ -49,8 +49,17 @@ type bodyStreamer interface {
 // Message is a single SSE message. There is no `event` field as this is
 // handled by the `eventTypeMap` when registering the operation.
 type Message struct {
-	ID    int
-	Data  any
+	// IDString, when set, is written to the SSE `id:` field and takes
+	// precedence over [Message.ID]. Unlike the numeric [Message.ID] it can
+	// carry opaque identifiers such as UUIDs, cursor tokens, composite keys,
+	// or the value "0" as the SSE specification allows.
+	IDString string
+	// ID is the numeric event ID written to the `id:` field when
+	// [Message.IDString] is empty. Deprecated: use [Message.IDString] instead.
+	ID int
+	// Data is the JSON-encoded payload of the message.
+	Data any
+	// Retry, if set, is the client reconnection delay in milliseconds.
 	Retry int
 	// Comment, if set, is written as one or more SSE comment lines (each line
 	// prefixed with a colon and ignored by clients). It may accompany an event
@@ -108,8 +117,11 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 			Type:  huma.TypeObject,
 			Properties: map[string]*huma.Schema{
 				"id": {
-					Type:        huma.TypeInteger,
 					Description: "The event ID.",
+					OneOf: []*huma.Schema{
+						{Type: huma.TypeInteger},
+						{Type: huma.TypeString},
+					},
 				},
 				"event": {
 					Type:        huma.TypeString,
@@ -238,7 +250,14 @@ func stream[I any](reqCtx context.Context, w io.Writer, typeToEvent map[reflect.
 		}
 
 		// Write optional fields.
-		if msg.ID > 0 {
+		if msg.IDString != "" {
+			// CR, LF, and CRLF are all SSE line terminators. Strip them so an
+			// embedded line break can't inject other fields into the stream.
+			id := strings.ReplaceAll(msg.IDString, "\r\n", "")
+			id = strings.ReplaceAll(id, "\r", "")
+			id = strings.ReplaceAll(id, "\n", "")
+			w.Write([]byte("id: " + id + "\n"))
+		} else if msg.ID > 0 {
 			w.Write(fmt.Appendf(nil, "id: %d\n", msg.ID))
 		}
 		if msg.Retry > 0 {
