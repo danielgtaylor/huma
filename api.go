@@ -305,10 +305,12 @@ type API interface {
 
 	// UseMiddleware appends a middleware handler to the API middleware stack.
 	//
-	// The middleware stack for any API will execute before searching for a matching
-	// route to a specific handler, which provides opportunity to respond early,
-	// change the course of the request execution, or set request-scoped values for
-	// the next Middleware.
+	// The middleware stack runs after the adapter's router has matched the
+	// request to a registered operation and before the operation handler
+	// executes. Requests that do not match any registered operation are
+	// handled by the router itself (for example with a 404 response) and do
+	// not pass through this middleware; use router-specific middleware for
+	// pre-routing logic.
 	UseMiddleware(middlewares ...func(ctx Context, next func(Context)))
 
 	// Middlewares returns a slice of middleware handler functions that will be
