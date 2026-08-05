@@ -1869,6 +1869,13 @@ func parseInto(ctx Context, f reflect.Value, value string, preSplit []string, p 
 				values = (&u).Query()[p.Name]
 			} else {
 				values = strings.Split(value, ",")
+				// RFC 9110 §5.6.1 list grammar allows optional whitespace
+				// (OWS) around each comma, e.g. `If-None-Match: "a", "b"`.
+				// Strip it so later elements are not compared with a leading
+				// space (e.g. `conditional.Params` ETag matching).
+				for i, v := range values {
+					values[i] = strings.Trim(v, " \t")
+				}
 			}
 		}
 
