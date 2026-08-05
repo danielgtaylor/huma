@@ -4975,3 +4975,40 @@ func TestWriteResponseTransformErrorStatus(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, res.StatusCode)
 	assert.Contains(t, string(body), "error transforming response")
 }
+
+func TestGroupModifierErrorsDocumented(t *testing.T) {
+	// Error codes appended by a group modifier must be reflected in the
+	// generated OpenAPI document (issue #878).
+	_, api := humatest.New(t)
+	group := huma.NewGroup(api, "/internal")
+	group.UseSimpleModifier(func(op *huma.Operation) {
+		op.Tags = append(op.Tags, "Internal")
+		op.Errors = append(op.Errors, http.StatusUnauthorized)
+	})
+	huma.Register(group, huma.Operation{
+		OperationID: "get-thing",
+		Method:      http.MethodGet,
+		Path:        "/thing/{id}",
+	}, func(ctx context.Context, input *struct {
+		ID string `path:"id"`
+	}) (*struct {
+		Body struct {
+			ID string `json:"id"`
+		}
+	}, error) {
+		return &struct {
+			Body struct {
+				ID string `json:"id"`
+			}
+		}{Body: struct {
+			ID string `json:"id"`
+		}{ID: input.ID}}, nil
+	})
+
+	op := api.OpenAPI().Paths["/internal/thing/{id}"].Get
+	require.NotNil(t, op)
+	assert.Contains(t, op.Tags, "Internal")
+	require.Contains(t, op.Responses, "401", "modifier-added Errors must be documented")
+	require.Contains(t, op.Responses, "422")
+	require.Contains(t, op.Responses, "500")
+}

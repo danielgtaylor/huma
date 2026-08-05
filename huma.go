@@ -802,18 +802,13 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	}
 	outHeaders, outStatusIndex, outBodyIndex, outBodyFunc := processOutputType(outputType, &op, registry)
 
-	if len(op.Errors) > 0 {
-		if len(inputParams.Paths) > 0 || hasInputBody {
-			op.Errors = append(op.Errors, http.StatusUnprocessableEntity)
-		}
-		op.Errors = append(op.Errors, http.StatusInternalServerError)
-	}
-	defineErrors(&op, registry)
-
 	if documenter, ok := api.(OperationDocumenter); ok {
-		// Enables customization of OpenAPI documentation behavior for operations.
+		// Group modifiers run inside the documenter chain; operation errors
+		// are defined by the innermost documenter right before the operation
+		// is added to the document, so codes added by modifiers are included.
 		documenter.DocumentOperation(&op)
 	} else if !op.Hidden {
+		defineOperationErrors(&op, registry)
 		oapi.AddOperation(&op)
 	}
 
@@ -1755,6 +1750,20 @@ func processOutputType(outputType reflect.Type, op *Operation, registry Registry
 		}
 	}
 	return outHeaders, outStatusIndex, outBodyIndex, outBodyFunc
+}
+
+// defineOperationErrors appends the standard 422 validation and 500 error
+// codes when the operation declares error responses, then defines the error
+// response schemas. It runs after operation modifiers so codes added by
+// modifiers are also documented.
+func defineOperationErrors(op *Operation, registry Registry) {
+	if len(op.Errors) > 0 {
+		if op.RequestBody != nil || len(op.Parameters) > 0 {
+			op.Errors = append(op.Errors, http.StatusUnprocessableEntity)
+		}
+		op.Errors = append(op.Errors, http.StatusInternalServerError)
+	}
+	defineErrors(op, registry)
 }
 
 // defineErrors extracts possible error responses and defines them on the
