@@ -1639,6 +1639,50 @@ Hello World
 --SimpleBoundary--`,
 		},
 		{
+			Name: "request-body-multipart-json-explode-false",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						Numbers []int `form:"numbers" explode:"false" contentType:"application/json"`
+						// Multipart form-data are exploded by default, so we don't need to set explode:"true" here.
+						Tags []string `form:"tags" contentType:"application/json"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+				explode := api.OpenAPI().Paths["/upload"].Post.RequestBody.Content["multipart/form-data"].Encoding["numbers"].Explode
+				assert.NotNil(t, explode)
+				assert.False(t, *explode)
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="numbers"
+Content-Type: application/json
+
+[1, 2, 3, 4, 5]
+--SimpleBoundary
+Content-Disposition: form-data; name="tags"
+Content-Type: application/json
+
+"tag1"
+--SimpleBoundary
+Content-Disposition: form-data; name="tags"
+Content-Type: application/json
+
+"tag2"
+--SimpleBoundary
+Content-Disposition: form-data; name="tags"
+Content-Type: application/json
+
+"tag3"
+--SimpleBoundary--`,
+		},
+		{
 			Name: "request-body-multipart-json-array",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
@@ -1646,10 +1690,11 @@ Hello World
 					Path:   "/upload",
 				}, func(ctx context.Context, input *struct {
 					RawBody huma.MultipartFormFiles[struct {
-						Numbers []int    `form:"numbers" contentType:"application/json"`
-						Tags    []string `form:"tags" contentType:"application/json"`
-						Count   int      `form:"count" contentType:"application/json"`
-						Active  bool     `form:"active" contentType:"application/json"`
+						Numbers []int `form:"numbers" explode:"false" contentType:"application/json"`
+						// Multipart form-data are exploded by default, so we don't need to set explode:"true" here.
+						Tags   []string `form:"tags" contentType:"application/json"`
+						Count  int      `form:"count" contentType:"application/json"`
+						Active bool     `form:"active" contentType:"application/json"`
 					}]
 				}) (*struct{}, error) {
 					data := input.RawBody.Data()
@@ -1677,7 +1722,17 @@ Content-Type: application/json
 Content-Disposition: form-data; name="tags"
 Content-Type: application/json
 
-["tag1", "tag2", "tag3"]
+"tag1"
+--SimpleBoundary
+Content-Disposition: form-data; name="tags"
+Content-Type: application/json
+
+"tag2"
+--SimpleBoundary
+Content-Disposition: form-data; name="tags"
+Content-Type: application/json
+
+"tag3"
 --SimpleBoundary
 Content-Disposition: form-data; name="count"
 Content-Type: application/json
@@ -1688,6 +1743,127 @@ Content-Disposition: form-data; name="active"
 Content-Type: application/json
 
 true
+--SimpleBoundary--`,
+		},
+		{
+			Name: "request-body-multipart-json-array-one-invalid-part",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						Tags []string `form:"tags" contentType:"application/json"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				if ok := assert.Equal(t, http.StatusUnprocessableEntity, resp.Code); ok {
+					var errors huma.ErrorModel
+					err := json.Unmarshal(resp.Body.Bytes(), &errors)
+					require.NoError(t, err)
+					assert.Equal(t, "form.tags[2]", errors.Errors[0].Location)
+				}
+			},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="tags"
+Content-Type: application/json
+
+"tag1"
+--SimpleBoundary
+Content-Disposition: form-data; name="tags"
+Content-Type: application/json
+
+"tag2"
+--SimpleBoundary
+Content-Disposition: form-data; name="tags"
+Content-Type: application/json
+
+not valid json
+--SimpleBoundary--`,
+		},
+		{
+			Name: "request-body-multipart-json-single-value-no-multiple-parts",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						Active bool `form:"active" contentType:"application/json"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				if ok := assert.Equal(t, http.StatusUnprocessableEntity, resp.Code); ok {
+					var errors huma.ErrorModel
+					err := json.Unmarshal(resp.Body.Bytes(), &errors)
+					require.NoError(t, err)
+					assert.Equal(t, "form.active", errors.Errors[0].Location)
+				}
+			},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="active"
+Content-Type: application/json
+
+false
+--SimpleBoundary
+Content-Disposition: form-data; name="active"
+Content-Type: application/json
+
+true
+--SimpleBoundary--`,
+		},
+		{
+			Name: "request-body-multipart-json-array-explode-false-multiple-parts-error",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						Tags []string `form:"tags" contentType:"application/json" explode:"false"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				if ok := assert.Equal(t, http.StatusUnprocessableEntity, resp.Code); ok {
+					var errors huma.ErrorModel
+					err := json.Unmarshal(resp.Body.Bytes(), &errors)
+					require.NoError(t, err)
+					assert.Equal(t, "form.tags", errors.Errors[0].Location)
+				}
+			},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="tags"
+Content-Type: application/json
+
+"tag1"
+--SimpleBoundary
+Content-Disposition: form-data; name="tags"
+Content-Type: application/json
+
+"tag2"
+--SimpleBoundary
+Content-Disposition: form-data; name="tags"
+Content-Type: application/json
+
+"tag3"
 --SimpleBoundary--`,
 		},
 		{
@@ -2919,10 +3095,10 @@ Content-Type: text/plain
 			},
 			Method: http.MethodGet,
 			URL:    "/transform",
-Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-	assert.Equal(t, http.StatusOK, resp.Code)
-	assert.JSONEq(t, `null`, resp.Body.String())
-},
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				assert.JSONEq(t, `null`, resp.Body.String())
+			},
 		},
 		{
 			Name: "schema-url-from-x-forwarded-host",

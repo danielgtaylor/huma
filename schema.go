@@ -353,16 +353,25 @@ func (s *Schema) PrecomputeMessages() {
 	}
 }
 
-func boolTag(f reflect.StructField, tag string, def bool) bool {
+func maybeBoolTag(f reflect.StructField, tag string) *bool {
 	if v := f.Tag.Get(tag); v != "" {
+		value := new(bool)
 		switch v {
 		case "true":
-			return true
+			*value = true
 		case "false":
-			return false
+			*value = false
 		default:
 			panic(fmt.Errorf("invalid bool tag '%s' for field '%s': %v", tag, f.Name, v))
 		}
+		return value
+	}
+	return nil
+}
+
+func boolTag(f reflect.StructField, tag string, def bool) bool {
+	if v := maybeBoolTag(f, tag); v != nil {
+		return *v
 	}
 	return def
 }

@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -199,6 +200,7 @@ func parseParamLocation(f reflect.StructField, registry Registry) (*paramLocatio
 	case f.Tag.Get("form") != "":
 		pfi.Loc = "form"
 		pfi.Name = f.Tag.Get("form")
+		pfi.Explode = boolTag(f, "explode", true)
 		pfi.Required = !getConfig[registryConfig](registry).FieldsOptionalByDefault
 	case f.Tag.Get("cookie") != "":
 		pfi.Loc = "cookie"
@@ -1059,32 +1061,73 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 									return
 								}
 
-								// Validation should fail if multiple values are
-								// provided but the type of f is not a slice.
-								if len(value) > 1 && f.Type().Kind() != reflect.Slice {
-									res.Add(pb, value, "expected at most one value, but received multiple values")
-									return
-								}
-
 								// JSON fields
 								if jf := jsonFormFields[p]; jf != nil {
 									errorsBeforeValidation := len(res.Errors)
 
+									var toParse []byte
+
+									if jf.schema != nil && jf.schema.Type == "array" {
+										if !p.Explode {
+											if len(value) > 1 {
+												res.Add(pb, value, "expected a single JSON array value (encoding.explode=false), got multiple parts")
+												return
+											}
+
+											// explode=false means the multipart part already contains the JSON array.
+											toParse = []byte(value[0])
+										} else {
+											// Each multipart part is expected to contain one valid JSON value.
+											items := make([]json.RawMessage, len(value))
+
+											for i, v := range value {
+												var raw json.RawMessage
+												if err := jsonUnmarshaler([]byte(v), &raw); err != nil {
+													pb.PushIndex(i)
+													res.Add(pb, value, "invalid JSON: "+err.Error())
+													return
+												}
+												items[i] = raw
+											}
+
+											var err error
+											toParse, err = json.Marshal(items)
+											if err != nil {
+												res.Add(pb, value, "invalid JSON: "+err.Error())
+												return
+											}
+										}
+									} else {
+										// Non-array JSON fields must be represented by a single multipart part.
+										if len(value) > 1 {
+											res.Add(pb, value, "expected a single JSON value, got multiple parts")
+											return
+										}
+										toParse = []byte(value[0])
+									}
+
 									var parsed any
-									if err := jsonUnmarshaler([]byte(value[0]), &parsed); err != nil {
+									if err := jsonUnmarshaler(toParse, &parsed); err != nil {
 										res.Add(pb, value, "invalid JSON: "+err.Error())
 									} else if !op.SkipValidateParams {
 										Validate(oapi.Components.Schemas, jf.schema, pb, ModeWriteToServer, parsed, res)
 									}
 
 									if errorsBeforeValidation == len(res.Errors) {
-										if err := jsonUnmarshaler([]byte(value[0]), f.Addr().Interface()); err != nil {
+										if err := jsonUnmarshaler(toParse, f.Addr().Interface()); err != nil {
 											// Should have been caught by the validation above.
 											res.Add(pb, value, "invalid JSON: "+err.Error())
 										}
 										// Set defaults on the unmarshalled value.
 										setDefaults(f, jf.defaults)
 									}
+									return
+								}
+
+								// Validation should fail if multiple values are
+								// provided but the type of f is not a slice.
+								if len(value) > 1 && f.Type().Kind() != reflect.Slice {
+									res.Add(pb, value, "expected at most one value, but received multiple values")
 									return
 								}
 

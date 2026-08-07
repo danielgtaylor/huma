@@ -216,8 +216,54 @@ huma.Register(api, huma.Operation{
 
 The files are decoded according to the specified contentType. If no contentType is provided, it defaults to `application/octet-stream`.
 
-Non-file fields in multipart form data can be unmarshalled from JSON and validated, by setting their content-type to `application/json`. Field content in the request must be valid JSON.
+Non-file fields in multipart form data can be unmarshalled from JSON and validated, by setting their content-type to `application/json`. Field content in the request **must** be valid JSON.
 
+For JSON fields, Huma also supports the OpenAPI `encoding.explode` setting. This can be configured with the `explode` struct tag.
+
+For example:
+
+```go
+huma.Register(api, huma.Operation{
+	OperationID: "upload-json-fields",
+	Method:      http.MethodPost,
+	Path:        "/upload",
+}, func(ctx context.Context, input *struct {
+	RawBody huma.MultipartFormFiles[struct {
+		Numbers []int      `form:"numbers" contentType:"application/json" explode:"false"`
+		Tags    []string   `form:"tags" contentType:"application/json" explode:"true"`
+		Config  MyStruct   `form:"config" contentType:"application/json"`
+		Value   string     `form:"value" contentType:"application/json"`
+	}]
+}) (*struct{}, error) {
+	// Process input.RawBody.Data()
+	return nil, nil
+})
+```
+
+For multipart form data, explode defaults to true according to the OpenAPI specification. When explode:"true" is used, each multipart part represents one JSON array item:
+
+```
+Content-Disposition: form-data; name="tags"
+Content-Type: application/json
+
+"tag1"
+
+Content-Disposition: form-data; name="tags"
+Content-Type: application/json
+
+"tag2"
+```
+
+When `explode:"false"` is used, array values must be sent as a single JSON value:
+
+```
+Content-Disposition: form-data; name="numbers"
+Content-Type: application/json
+
+[1, 2, 3]
+```
+
+Regardless of the `explode` setting, each multipart part with `contentType:"application/json"` must contain valid JSON.
 
 ## Request Example
 
