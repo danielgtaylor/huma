@@ -1468,6 +1468,8 @@ func processInputType(inputType reflect.Type, op *Operation, registry Registry) 
 		rawBodyIndex = f.Index
 		initRequestBody(op, setRequestBodyRequired)
 		rbt = setRequestBodyFromRawBody(op, registry, f)
+		ensureBodyReadTimeout(op)
+		ensureMaxBodyBytes(op)
 
 		if rbt == rbtMultipartDecoded {
 			dataField, ok := f.Type.FieldByName("data")
