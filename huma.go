@@ -2061,7 +2061,7 @@ func readForm(ctx Context, maxBytes int64) (*multipart.Form, error) {
 		return nil, &ErrorDetail{Location: "body", Message: "cannot read multipart form: " + err.Error()}
 	}
 
-	r := &io.LimitedReader{R: ctx.BodyReader(), N: maxBytes + 1}
+	r := &io.LimitedReader{R: ctx.BodyReader(), N: maxBytes}
 	form, err := multipart.NewReader(r, params["boundary"]).ReadForm(8 << 10)
 	if err == nil {
 		_, err = io.Copy(io.Discard, r)
@@ -2070,7 +2070,7 @@ func readForm(ctx Context, maxBytes int64) (*multipart.Form, error) {
 		if form != nil {
 			_ = form.RemoveAll()
 		}
-		return nil, Error413RequestEntityTooLarge(fmt.Sprintf("request body is too large, limit=%d bytes", maxBytes))
+		return nil, Error413RequestEntityTooLarge(fmt.Sprintf("request body is too large limit=%d bytes", maxBytes))
 	}
 	if err != nil {
 		return form, &ErrorDetail{Location: "body", Message: "cannot read multipart form: " + err.Error()}
