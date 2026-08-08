@@ -1361,7 +1361,12 @@ func setDeepObjectValue(pb *PathBuffer, res *ValidateResult, f reflect.Value, da
 				}
 			} else {
 				if val := field.Tag.Get("default"); val != "" {
-					setFieldValue(fv, val)
+					if err := setFieldValue(fv, val); err != nil {
+						pb.Push(fieldName)
+						res.Add(pb, val, err.Error())
+						pb.Pop()
+						continue
+					}
 					result[fieldName] = fv.Interface()
 				}
 			}

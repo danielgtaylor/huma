@@ -871,6 +871,28 @@ func TestFeatures(t *testing.T) {
 			URL:    "/test?test[int]=1&test[uint]=12&test[float]=123.0&test[bool]=true&test[string]=foo&test[any]=foo&test2[foo]=a",
 		},
 		{
+			Name: "param-deepObject-default-overflow",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Test struct {
+						Name  string `json:"name"`
+						Value int8   `json:"value" default:"128"`
+					} `query:"test,deepObject"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?test[name]=foo",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "invalid integer")
+			},
+		},
+		{
 			Name: "param-deepObject-map-required",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
