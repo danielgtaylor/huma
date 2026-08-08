@@ -5005,7 +5005,7 @@ func TestInputOverflowIsRejected(t *testing.T) {
 		t.Fatalf("handler was called with value=%d, 128 is not representable as int8", gotVal)
 	}
 
-	if got := res.Code; got < 400 {
+	if got := res.Code; got < 400 || got >= 500 {
 		t.Fatalf("expected a 4xx response status, got %d", got)
 	}
 }
