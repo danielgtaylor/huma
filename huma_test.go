@@ -2919,10 +2919,10 @@ Content-Type: text/plain
 			},
 			Method: http.MethodGet,
 			URL:    "/transform",
-Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-	assert.Equal(t, http.StatusOK, resp.Code)
-	assert.JSONEq(t, `null`, resp.Body.String())
-},
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				assert.JSONEq(t, `null`, resp.Body.String())
+			},
 		},
 		{
 			Name: "schema-url-from-x-forwarded-host",
@@ -4974,4 +4974,38 @@ func TestWriteResponseTransformErrorStatus(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, res.StatusCode)
 	assert.Contains(t, string(body), "error transforming response")
+}
+
+func TestInputOverflowIsRejected(t *testing.T) {
+	mux, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	var handlerCalled bool
+	var gotVal int8
+
+	huma.Register(api, huma.Operation{
+		Method: http.MethodGet,
+		Path:   "/number",
+	}, func(_ context.Context, input *struct {
+		Value int8 `query:"value"`
+	}) (*struct{}, error) {
+		handlerCalled = true
+		gotVal = input.Value
+		return &struct{}{}, nil
+	})
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/number?value=128",
+		nil,
+	)
+	res := httptest.NewRecorder()
+	mux.ServeHTTP(res, req)
+
+	if handlerCalled {
+		t.Fatalf("handler was called with value=%d, 128 is not representable as int8", gotVal)
+	}
+
+	if got := res.Code; got < 400 {
+		t.Fatalf("expected a 4xx response status, got %d", got)
+	}
 }
