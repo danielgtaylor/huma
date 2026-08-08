@@ -4502,6 +4502,44 @@ func TestCustomSchemaErrors(t *testing.T) {
 	assert.Contains(t, resp.Body.String(), `expected number >= 10`)
 }
 
+func TestRawBodyHasDefaultSizeLimit(t *testing.T) {
+	mux, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	var handlerCalled bool
+	var receivedLen int
+
+	huma.Register(api, huma.Operation{
+		Method: http.MethodPost,
+		Path:   "/raw",
+		// MaxBodyBytes intentionally omitted
+		// Default is 1 MB set by "ensureMaxBodyBytes"
+	}, func(ctx context.Context, input *struct {
+		RawBody []byte `contentType:"application/octet-stream"`
+	}) (*struct{}, error) {
+		handlerCalled = true
+		receivedLen = len(input.RawBody)
+		return &struct{}{}, nil
+	})
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/raw",
+		bytes.NewReader(bytes.Repeat([]byte("a"), 2*1024*1024)),
+	)
+	req.Header.Set("Content-Type", "application/octet-stream")
+
+	res := httptest.NewRecorder()
+	mux.ServeHTTP(res, req)
+
+	if handlerCalled {
+		t.Fatalf("handler received %d bytes, expected default body limit (1 MB) to reject request", receivedLen)
+	}
+
+	if got, want := res.Code, http.StatusRequestEntityTooLarge; got != want {
+		t.Fatalf("invalid status code: got %d, want %d", got, want)
+	}
+}
+
 func TestBodyRace(t *testing.T) {
 	// Run with the following:
 	// go test -run=TestBodyRace -race -parallel=100
