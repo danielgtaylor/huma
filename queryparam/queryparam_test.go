@@ -126,6 +126,10 @@ func TestQuery(t *testing.T) {
 		{"foo=bar&baz=123", "baz", "123"},
 		{"foo=bar&baz=123", "missing", ""},
 		{"foo=bar&baz=123&bool&another", "bool", "true"},
+		{"bool", "bool", "true"},
+		{"bool&foo=bar", "bool", "true"},
+		{"foo=bar&bool", "bool", "true"},
+		{"foo=bar&bool&baz=123", "bool", "true"},
 	} {
 		t.Run(item.query+"/"+item.name, func(t *testing.T) {
 			assert.Equal(t, item.expected, Get(item.query, item.name))
