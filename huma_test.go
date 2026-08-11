@@ -4975,3 +4975,22 @@ func TestWriteResponseTransformErrorStatus(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, res.StatusCode)
 	assert.Contains(t, string(body), "error transforming response")
 }
+
+func TestMiddlewareDoesNotRunForUnmatchedRoute(t *testing.T) {
+	// Router-agnostic middleware runs after the adapter's router resolves the
+	// route: an unmatched route is answered by the router (404) without
+	// entering the middleware chain (issue #933).
+	_, api := humatest.New(t)
+	ran := false
+	api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+		ran = true
+		next(ctx)
+	})
+	huma.Get(api, "/matched", func(ctx context.Context, input *struct{}) (*struct{}, error) {
+		return &struct{}{}, nil
+	})
+
+	res := api.Get("/unmatched")
+	assert.Equal(t, http.StatusNotFound, res.Code)
+	assert.False(t, ran, "middleware should not run for an unmatched route")
+}
