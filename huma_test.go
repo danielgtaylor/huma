@@ -4975,3 +4975,29 @@ func TestWriteResponseTransformErrorStatus(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, res.StatusCode)
 	assert.Contains(t, string(body), "error transforming response")
 }
+func TestGroupModifierMiddlewareRuns(t *testing.T) {
+	// Middleware appended to op.Middlewares by a group modifier must run at
+	// request time, not only appear in the OpenAPI document (issue #804).
+	_, api := humatest.New(t)
+	group := huma.NewGroup(api, "/v1")
+	group.UseSimpleModifier(func(o *huma.Operation) {
+		o.Middlewares = append(o.Middlewares, func(ctx huma.Context, next func(huma.Context)) {
+			ctx.SetHeader("X-Modifier-Middleware", "ran")
+			next(ctx)
+		})
+	})
+	huma.Register(group, huma.Operation{
+		Method: http.MethodGet,
+		Path:   "/thing",
+	}, func(ctx context.Context, input *struct{}) (*struct {
+		Body string `json:"body"`
+	}, error) {
+		return &struct {
+			Body string `json:"body"`
+		}{Body: "ok"}, nil
+	})
+
+	res := api.Get("/v1/thing")
+	assert.Equal(t, http.StatusOK, res.Code)
+	assert.Equal(t, "ran", res.Header().Get("X-Modifier-Middleware"))
+}
