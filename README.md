@@ -216,10 +216,10 @@ Huma is used by many companies and open-source projects. See the [Who is using H
 
 Be sure to star the project if you find it useful!
 
-<a href="https://star-history.com/#danielgtaylor/huma&Date">
+<a href="https://star-history.dera.page/#danielgtaylor/huma&Date">
 	<picture>
-		<source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=danielgtaylor/huma&type=Date&theme=dark" />
-		<source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=danielgtaylor/huma&type=Date" />
-		<img alt="Star History Chart" src="https://api.star-history.com/svg?repos=danielgtaylor/huma&type=Date" />
+		<source media="(prefers-color-scheme: dark)" srcset="https://star-history.dera.page/svg?repos=danielgtaylor/huma&type=Date&theme=dark" />
+		<source media="(prefers-color-scheme: light)" srcset="https://star-history.dera.page/svg?repos=danielgtaylor/huma&type=Date" />
+		<img alt="Star History Chart" src="https://star-history.dera.page/svg?repos=danielgtaylor/huma&type=Date" />
 	</picture>
 </a>
