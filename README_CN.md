@@ -190,10 +190,10 @@ Huma 被许多公司和开源项目所使用。请参阅 [谁在使用 Huma？](
 
 如果您觉得该项目有用，请务必为该项目加注星标！
 
-<a href="https://star-history.com/#danielgtaylor/huma&Date">
+<a href="https://star-history.dera.page/#danielgtaylor/huma&Date">
 	<picture>
-		<source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=danielgtaylor/huma&type=Date&theme=dark" />
-		<source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=danielgtaylor/huma&type=Date" />
-		<img alt="Star History Chart" src="https://api.star-history.com/svg?repos=danielgtaylor/huma&type=Date" />
+		<source media="(prefers-color-scheme: dark)" srcset="https://star-history.dera.page/svg?repos=danielgtaylor/huma&type=Date&theme=dark" />
+		<source media="(prefers-color-scheme: light)" srcset="https://star-history.dera.page/svg?repos=danielgtaylor/huma&type=Date" />
+		<img alt="Star History Chart" src="https://star-history.dera.page/svg?repos=danielgtaylor/huma&type=Date" />
 	</picture>
 </a>

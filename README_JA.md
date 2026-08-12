@@ -243,10 +243,10 @@ Humaは多くの企業やオープンソースプロジェクトで使用され�
 
 プロジェクトが役に立った場合はぜひスターをお願いします！
 
-<a href="https://star-history.com/#danielgtaylor/huma&Date">
+<a href="https://star-history.dera.page/#danielgtaylor/huma&Date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=danielgtaylor/huma&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=danielgtaylor/huma&type=Date" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=danielgtaylor/huma&type=Date" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://star-history.dera.page/svg?repos=danielgtaylor/huma&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://star-history.dera.page/svg?repos=danielgtaylor/huma&type=Date" />
+    <img alt="Star History Chart" src="https://star-history.dera.page/svg?repos=danielgtaylor/huma&type=Date" />
   </picture>
 </a>
