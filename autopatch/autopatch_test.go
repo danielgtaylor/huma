@@ -587,6 +587,10 @@ func TestMakeOptionalSchemaNestedSchemas(t *testing.T) {
 				Required: []string{"deeplyNested"},
 			},
 		},
+		PropertyNames: &huma.Schema{
+			Type:    "string",
+			Pattern: "^[a-z][a-z0-9-]{1,10}$",
+		},
 		Required: []string{"nested"},
 	}
 
@@ -594,6 +598,9 @@ func TestMakeOptionalSchemaNestedSchemas(t *testing.T) {
 
 	assert.Empty(t, optionalNestedSchema.Required)
 	assert.Empty(t, optionalNestedSchema.Properties["nested"].Required)
+	require.NotNil(t, optionalNestedSchema.PropertyNames)
+	assert.Equal(t, "string", optionalNestedSchema.PropertyNames.Type)
+	assert.Equal(t, "^[a-z][a-z0-9-]{1,10}$", optionalNestedSchema.PropertyNames.Pattern)
 }
 
 type findRelativeResourcePathTest struct {

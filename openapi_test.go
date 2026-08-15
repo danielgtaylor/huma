@@ -204,6 +204,10 @@ func TestDowngrade(t *testing.T) {
 												ContentEncoding: "base64",
 											},
 										},
+										PropertyNames: &huma.Schema{
+											Type:    huma.TypeString,
+											Pattern: "^[a-z][a-z0-9-]{1,10}$",
+										},
 									},
 								},
 								"application/octet-stream": {},
