@@ -1544,6 +1544,12 @@ func setRequestBodyFromBody(op *Operation, registry Registry, fBody reflect.Stru
 		}
 		s := SchemaFromField(registry, fBody, hint)
 		op.RequestBody.Content[contentType].Schema = s
+
+		// Surface the `example` tag from the Body field on the media type, as
+		// examples set alongside a schema `$ref` are ignored by many tools.
+		if s != nil && len(s.Examples) > 0 && op.RequestBody.Content[contentType].Example == nil && len(op.RequestBody.Content[contentType].Examples) == 0 {
+			op.RequestBody.Content[contentType].Example = s.Examples[0]
+		}
 	}
 }
 
