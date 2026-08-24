@@ -231,23 +231,9 @@ type Config struct {
 	// them here does nothing.
 	DocsRendererConfig any
 
-	// DocsScriptURL overrides the docs renderer script URL when using the
-	// Scalar renderer, for example to use a newer `@scalar/api-reference`
-	// version than the built-in default without waiting for a Huma release.
-	// Other renderers ignore it.
-	DocsScriptURL string
-
-	// DocsScriptIntegrity is the Subresource Integrity hash (e.g.
-	// `sha384-...`) for the script at DocsScriptURL. It is only used when
-	// DocsScriptURL is set. If left empty, the script tag is emitted without
-	// an `integrity` attribute, disabling integrity verification.
-	DocsScriptIntegrity string
-
-	// DocsFontSrc overrides the CSP `font-src` source list when using the
-	// Scalar renderer, for example `'self' data:` or another font host if a
-	// custom DocsScriptURL bundle loads fonts from somewhere other than the
-	// default `https://fonts.scalar.com`. Other renderers ignore it.
-	DocsFontSrc string
+	// DocsScalar configures the Scalar docs renderer script and CSP. The zero
+	// value uses the built-in defaults. Other renderers ignore it.
+	DocsScalar ScalarDocsConfig
 
 	// SchemasPath is the path to the API schemas. If set to `/schemas` it will
 	// allow clients to get `/schemas/{schema}` to view the schema in a browser
@@ -280,6 +266,27 @@ type Config struct {
 	// for example, if you need access to the path settings that may be changed
 	// by the user after the defaults have been set.
 	CreateHooks []func(Config) Config
+}
+
+// ScalarDocsConfig customizes the Scalar docs renderer. The zero value uses
+// the built-in pinned `@scalar/api-reference` script with its integrity hash
+// and the default `https://fonts.scalar.com` font source.
+type ScalarDocsConfig struct {
+	// ScriptURL overrides the docs renderer script URL, for example to use a
+	// newer `@scalar/api-reference` version than the built-in default without
+	// waiting for a Huma release.
+	ScriptURL string
+
+	// ScriptIntegrity is the Subresource Integrity hash (e.g. `sha384-...`)
+	// for the script at ScriptURL. It is only used when ScriptURL is set. If
+	// left empty, the script tag is emitted without an `integrity` attribute,
+	// disabling integrity verification.
+	ScriptIntegrity string
+
+	// FontSrc overrides the CSP `font-src` source list, for example
+	// `'self' data:` or another font host if a custom ScriptURL bundle loads
+	// fonts from somewhere other than the default `https://fonts.scalar.com`.
+	FontSrc string
 }
 
 // configProvider is an internal interface to get the configuration from an
@@ -651,8 +658,8 @@ func NewAPI(config Config, a Adapter) API {
 }
 
 func validateDocsScriptValue(name, value string) {
-	if strings.ContainsAny(value, ";'\" \t\r\n<>") {
-		panic("invalid " + name + ": must not contain whitespace, quotes, ';', '<', or '>'")
+	if strings.ContainsAny(value, ";,'\" \t\r\n<>") {
+		panic("invalid " + name + ": must not contain whitespace, quotes, ';', ',', '<', or '>'")
 	}
 }
 
@@ -660,25 +667,30 @@ const scalarDefaultScriptURL = "https://unpkg.com/@scalar/api-reference@1.66.1/d
 const scalarDefaultScriptIntegrity = "sha384-RkhHYpdjsrJH9sH8RmczPchxNiHEhmW300QwMB/8yg6feduTZu9FBN4W0DJnp50Z"
 const scalarDefaultFontSrc = "https://fonts.scalar.com"
 
-func scalarScriptURL(config Config) (string, string) {
-	if config.DocsScriptURL == "" {
-		return scalarDefaultScriptURL, scalarDefaultScriptIntegrity
-	}
-	validateDocsScriptValue("DocsScriptURL", config.DocsScriptURL)
-	if config.DocsScriptIntegrity != "" {
-		validateDocsScriptValue("DocsScriptIntegrity", config.DocsScriptIntegrity)
-	}
-	return config.DocsScriptURL, config.DocsScriptIntegrity
+type scalarScript struct {
+	url       string
+	integrity string
 }
 
-func scalarFontSrc(config Config) string {
-	if config.DocsFontSrc == "" {
+func scalarScriptFor(config ScalarDocsConfig) scalarScript {
+	if config.ScriptURL == "" {
+		return scalarScript{url: scalarDefaultScriptURL, integrity: scalarDefaultScriptIntegrity}
+	}
+	validateDocsScriptValue("DocsScalar.ScriptURL", config.ScriptURL)
+	if config.ScriptIntegrity != "" {
+		validateDocsScriptValue("DocsScalar.ScriptIntegrity", config.ScriptIntegrity)
+	}
+	return scalarScript{url: config.ScriptURL, integrity: config.ScriptIntegrity}
+}
+
+func scalarFontSrc(config ScalarDocsConfig) string {
+	if config.FontSrc == "" {
 		return scalarDefaultFontSrc
 	}
-	if strings.ContainsAny(config.DocsFontSrc, ";<>\r\n") {
-		panic("invalid DocsFontSrc: must not contain ';', '<', '>', or newlines")
+	if strings.ContainsAny(config.FontSrc, ";,<>\r\n") {
+		panic("invalid DocsScalar.FontSrc: must not contain ';', ',', '<', '>', or newlines")
 	}
-	return config.DocsFontSrc
+	return config.FontSrc
 }
 
 // scalarConfigJSON builds the object passed to `Scalar.createApiReference`
@@ -714,7 +726,7 @@ func scalarConfigJSON(config Config, openAPIPath string) []byte {
 	return out
 }
 
-func scalarCSP(config Config, scriptURL string, initScript string) []string {
+func scalarCSP(config ScalarDocsConfig, script scalarScript, initScript string) []string {
 	initHash := sha256.Sum256([]byte(initScript))
 	return []string{
 		"default-src 'none'",
@@ -724,15 +736,15 @@ func scalarCSP(config Config, scriptURL string, initScript string) []string {
 		"form-action 'none'",
 		"frame-ancestors 'none'",
 		"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads",
-		"script-src " + scriptURL + " 'sha256-" + base64.StdEncoding.EncodeToString(initHash[:]) + "'",
+		"script-src " + script.url + " 'sha256-" + base64.StdEncoding.EncodeToString(initHash[:]) + "'",
 		"style-src 'unsafe-inline'", // TODO: Somehow drop 'unsafe-inline'
 	}
 }
 
-func scalarPage(title string, scriptURL string, scriptIntegrity string, initScript string) []byte {
+func scalarPage(title string, script scalarScript, initScript string) []byte {
 	integrityAttr := ""
-	if scriptIntegrity != "" {
-		integrityAttr = ` integrity="` + scriptIntegrity + `"`
+	if script.integrity != "" {
+		integrityAttr = ` integrity="` + script.integrity + `"`
 	}
 
 	return []byte(`<!doctype html>
@@ -741,20 +753,14 @@ func scalarPage(title string, scriptURL string, scriptIntegrity string, initScri
     <meta charset="utf-8">
     <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>` + title + `</title>
+    <title>` + html.EscapeString(title) + `</title>
   </head>
   <body>
     <div id="app"></div>
-    <script src="` + scriptURL + `" crossorigin` + integrityAttr + `></script>
+    <script src="` + script.url + `" crossorigin` + integrityAttr + `></script>
     <script>` + initScript + `</script>
   </body>
 </html>`)
-}
-
-func scalarDocs(config Config, openAPIPath string, title string) ([]string, []byte) {
-	scriptURL, scriptIntegrity := scalarScriptURL(config)
-	initScript := "Scalar.createApiReference('#app', " + string(scalarConfigJSON(config, openAPIPath)) + ")"
-	return scalarCSP(config, scriptURL, initScript), scalarPage(title, scriptURL, scriptIntegrity, initScript)
 }
 
 func (a *api) registerDocsRoute() {
@@ -780,7 +786,10 @@ func (a *api) registerDocsRoute() {
 		if title == "" {
 			title = "Scalar in HTML"
 		}
-		csp, body = scalarDocs(a.config, openAPIPath, title)
+		script := scalarScriptFor(a.config.DocsScalar)
+		initScript := "Scalar.createApiReference('#app', " + string(scalarConfigJSON(a.config, openAPIPath)) + ")"
+		csp = scalarCSP(a.config.DocsScalar, script, initScript)
+		body = scalarPage(title, script, initScript)
 	case DocsRendererStoplightElements:
 		if title == "" {
 			title = "Elements in HTML"
