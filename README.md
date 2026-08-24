@@ -67,7 +67,6 @@ This project was inspired by [FastAPI](https://fastapi.tiangolo.com/). Logo & br
 A big thank you to our current & former sponsors!
 
 <div>
-	<img width="1000" height="0" />
 	<a href="https://serpapi.com/?utm_source=huma">
 		<img src="docs/docs/serpapi-banner.png" alt="SerpApi" width="260" align="right">
 	</a>

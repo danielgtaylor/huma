@@ -77,15 +77,14 @@
 ご支援いただいたスポンサーの皆様に心より感謝いたします！
 
 <div>
-  <img width="1000" height="0" />
   <a href="https://serpapi.com/?utm_source=huma">
     <img src="docs/docs/serpapi-banner.png" alt="SerpApi" width="260" align="right">
   </a>
   <h3>SerpApi: Web Search API</h3>
   <p>
-    Access Google Search, Maps, Shopping, and other search engine data with a simple API by SerpApi.
+    SerpApi のシンプルな API を使って、Google 検索、マップ、ショッピング、その他の検索エンジンのデータにアクセスできます。
   </p>
-  <a href="https://serpapi.com/?utm_source=huma">Learn more</a>
+  <a href="https://serpapi.com/?utm_source=huma">詳しく見る</a>
 </div>
 <hr/>
 
