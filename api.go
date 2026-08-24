@@ -2,7 +2,9 @@ package huma
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -216,7 +218,10 @@ type Config struct {
 	// JSON-marshaled into the docs HTML. Scalar and SwaggerUI use it, Stoplight
 	// Elements ignores it.
 	//
-	// Scalar reads it from the `data-configuration` attribute. See
+	// Scalar receives it via `Scalar.createApiReference`, so all options
+	// including multi-document `sources` are supported; it must marshal to a
+	// JSON object. Huma sets the `url` field to the OpenAPI spec unless
+	// `url`, `sources`, or `content` is set here. See
 	// https://github.com/scalar/scalar/blob/main/documentation/configuration.md
 	// for the options.
 	//
@@ -225,6 +230,24 @@ type Config struct {
 	// for the options. Huma owns the `url` and `dom_id` fields, so setting
 	// them here does nothing.
 	DocsRendererConfig any
+
+	// DocsScriptURL overrides the docs renderer script URL when using the
+	// Scalar renderer, for example to use a newer `@scalar/api-reference`
+	// version than the built-in default without waiting for a Huma release.
+	// Other renderers ignore it.
+	DocsScriptURL string
+
+	// DocsScriptIntegrity is the Subresource Integrity hash (e.g.
+	// `sha384-...`) for the script at DocsScriptURL. It is only used when
+	// DocsScriptURL is set. If left empty, the script tag is emitted without
+	// an `integrity` attribute, disabling integrity verification.
+	DocsScriptIntegrity string
+
+	// DocsFontSrc overrides the CSP `font-src` source list when using the
+	// Scalar renderer, for example `'self' data:` or another font host if a
+	// custom DocsScriptURL bundle loads fonts from somewhere other than the
+	// default `https://fonts.scalar.com`. Other renderers ignore it.
+	DocsFontSrc string
 
 	// SchemasPath is the path to the API schemas. If set to `/schemas` it will
 	// allow clients to get `/schemas/{schema}` to view the schema in a browser
@@ -627,6 +650,113 @@ func NewAPI(config Config, a Adapter) API {
 	return newAPI
 }
 
+func validateDocsScriptValue(name, value string) {
+	if strings.ContainsAny(value, ";'\" \t\r\n<>") {
+		panic("invalid " + name + ": must not contain whitespace, quotes, ';', '<', or '>'")
+	}
+}
+
+const scalarDefaultScriptURL = "https://unpkg.com/@scalar/api-reference@1.66.1/dist/browser/standalone.js"
+const scalarDefaultScriptIntegrity = "sha384-RkhHYpdjsrJH9sH8RmczPchxNiHEhmW300QwMB/8yg6feduTZu9FBN4W0DJnp50Z"
+const scalarDefaultFontSrc = "https://fonts.scalar.com"
+
+func scalarScriptURL(config Config) (string, string) {
+	if config.DocsScriptURL == "" {
+		return scalarDefaultScriptURL, scalarDefaultScriptIntegrity
+	}
+	validateDocsScriptValue("DocsScriptURL", config.DocsScriptURL)
+	if config.DocsScriptIntegrity != "" {
+		validateDocsScriptValue("DocsScriptIntegrity", config.DocsScriptIntegrity)
+	}
+	return config.DocsScriptURL, config.DocsScriptIntegrity
+}
+
+func scalarFontSrc(config Config) string {
+	if config.DocsFontSrc == "" {
+		return scalarDefaultFontSrc
+	}
+	if strings.ContainsAny(config.DocsFontSrc, ";<>\r\n") {
+		panic("invalid DocsFontSrc: must not contain ';', '<', '>', or newlines")
+	}
+	return config.DocsFontSrc
+}
+
+// scalarConfigJSON builds the object passed to `Scalar.createApiReference`
+// from DocsRendererConfig, pointing `url` at the OpenAPI spec unless the
+// config already declares a document via `url`, `sources`, or `content`.
+func scalarConfigJSON(config Config, openAPIPath string) []byte {
+	docsConfig := map[string]json.RawMessage{}
+	if config.DocsRendererConfig != nil {
+		b, err := json.Marshal(config.DocsRendererConfig)
+		if err != nil {
+			panic("failed to marshal DocsRendererConfig: " + err.Error())
+		}
+		if err := json.Unmarshal(b, &docsConfig); err != nil {
+			panic("DocsRendererConfig must be a JSON object: " + err.Error())
+		}
+	}
+
+	_, hasURL := docsConfig["url"]
+	_, hasSources := docsConfig["sources"]
+	_, hasContent := docsConfig["content"]
+	if !hasURL && !hasSources && !hasContent {
+		u, err := json.Marshal(openAPIPath + ".json")
+		if err != nil {
+			panic("failed to marshal OpenAPI path: " + err.Error())
+		}
+		docsConfig["url"] = u
+	}
+
+	out, err := json.Marshal(docsConfig)
+	if err != nil {
+		panic("failed to marshal DocsRendererConfig: " + err.Error())
+	}
+	return out
+}
+
+func scalarCSP(config Config, scriptURL string, initScript string) []string {
+	initHash := sha256.Sum256([]byte(initScript))
+	return []string{
+		"default-src 'none'",
+		"base-uri 'none'",
+		"connect-src 'self'",
+		"font-src " + scalarFontSrc(config),
+		"form-action 'none'",
+		"frame-ancestors 'none'",
+		"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads",
+		"script-src " + scriptURL + " 'sha256-" + base64.StdEncoding.EncodeToString(initHash[:]) + "'",
+		"style-src 'unsafe-inline'", // TODO: Somehow drop 'unsafe-inline'
+	}
+}
+
+func scalarPage(title string, scriptURL string, scriptIntegrity string, initScript string) []byte {
+	integrityAttr := ""
+	if scriptIntegrity != "" {
+		integrityAttr = ` integrity="` + scriptIntegrity + `"`
+	}
+
+	return []byte(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="referrer" content="no-referrer">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>` + title + `</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script src="` + scriptURL + `" crossorigin` + integrityAttr + `></script>
+    <script>` + initScript + `</script>
+  </body>
+</html>`)
+}
+
+func scalarDocs(config Config, openAPIPath string, title string) ([]string, []byte) {
+	scriptURL, scriptIntegrity := scalarScriptURL(config)
+	initScript := "Scalar.createApiReference('#app', " + string(scalarConfigJSON(config, openAPIPath)) + ")"
+	return scalarCSP(config, scriptURL, initScript), scalarPage(title, scriptURL, scriptIntegrity, initScript)
+}
+
 func (a *api) registerDocsRoute() {
 	openAPIPath := a.config.OpenAPIPath
 	if prefix := getAPIPrefix(a.OpenAPI()); prefix != "" {
@@ -650,40 +780,7 @@ func (a *api) registerDocsRoute() {
 		if title == "" {
 			title = "Scalar in HTML"
 		}
-
-		csp = []string{
-			"default-src 'none'",
-			"base-uri 'none'",
-			"connect-src 'self'",
-			"form-action 'none'",
-			"frame-ancestors 'none'",
-			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads",
-			"script-src 'unsafe-eval' https://unpkg.com/@scalar/api-reference@1.44.20/dist/browser/standalone.js", // TODO: Somehow drop 'unsafe-eval'
-			"style-src 'unsafe-inline'", // TODO: Somehow drop 'unsafe-inline'
-		}
-
-		var configAttr string
-		if a.config.DocsRendererConfig != nil {
-			b, err := json.Marshal(a.config.DocsRendererConfig)
-			if err != nil {
-				panic("failed to marshal DocsRendererConfig: " + err.Error())
-			}
-			configAttr = ` data-configuration="` + html.EscapeString(string(b)) + `"`
-		}
-
-		body = []byte(`<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="referrer" content="no-referrer">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>` + title + `</title>
-  </head>
-  <body>
-    <script id="api-reference" data-url="` + openAPIPath + `.json"` + configAttr + `></script>
-    <script src="https://unpkg.com/@scalar/api-reference@1.44.20/dist/browser/standalone.js" crossorigin integrity="sha384-tMz7GAo6dMy55x9tLFtH+sHtogji6Scmb+feBR31TAHmvSPRUTboK9H3M5NFaP4R"></script>
-  </body>
-</html>`)
+		csp, body = scalarDocs(a.config, openAPIPath, title)
 	case DocsRendererStoplightElements:
 		if title == "" {
 			title = "Elements in HTML"
@@ -778,11 +875,13 @@ func (a *api) registerDocsRoute() {
 		panic("missing CSP for docs renderer: " + a.config.DocsRenderer)
 	}
 
+	cspHeader := strings.Join(csp, "; ")
+
 	a.adapter.Handle(&Operation{
 		Method: http.MethodGet,
 		Path:   a.config.DocsPath,
 	}, func(ctx Context) {
-		ctx.SetHeader("Content-Security-Policy", strings.Join(csp, "; "))
+		ctx.SetHeader("Content-Security-Policy", cspHeader)
 		ctx.SetHeader("Content-Type", "text/html")
 		ctx.BodyWriter().Write(body)
 	})
