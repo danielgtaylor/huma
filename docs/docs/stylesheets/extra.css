@@ -7,6 +7,77 @@
 	--md-accent-fg-color--dark: #8d0143;
 }
 
+.sponsor-banner {
+	display: flex;
+	align-items: center;
+	gap: 0.8rem;
+	max-width: 70rem;
+	min-height: 2.5rem;
+	margin: 0 auto;
+	color: inherit;
+	text-align: left;
+	text-decoration: none;
+}
+
+.sponsor-banner:hover,
+.sponsor-banner:focus {
+	color: inherit;
+}
+
+.sponsor-banner__label {
+	flex: 0 0 auto;
+	padding: 0.15rem 0.35rem;
+	border: 1px solid currentColor;
+	border-radius: 999px;
+	font-size: 0.55rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	line-height: 1;
+	text-transform: uppercase;
+}
+
+.sponsor-banner__logo {
+	flex: 0 0 auto;
+	width: 5.5rem;
+	height: auto;
+}
+
+.sponsor-banner__copy {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-width: 0;
+	font-size: 0.58rem;
+	line-height: 1.3;
+}
+
+.sponsor-banner__copy strong {
+	font-size: 0.68rem;
+}
+
+.sponsor-banner__cta {
+	flex: 0 0 auto;
+	font-size: 0.62rem;
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+@media screen and (max-width: 44.984375em) {
+	.sponsor-banner {
+		justify-content: center;
+	}
+
+	.sponsor-banner__label,
+	.sponsor-banner__copy > span,
+	.sponsor-banner__cta {
+		display: none;
+	}
+
+	.sponsor-banner__copy {
+		flex: 0 1 auto;
+	}
+}
+
 code {
 	tab-size: 2
 }

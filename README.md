@@ -67,18 +67,15 @@ This project was inspired by [FastAPI](https://fastapi.tiangolo.com/). Logo & br
 A big thank you to our current & former sponsors!
 
 <div>
-					<img width="1000" height="0" />
-					<a href="https://zuplo.link/huma-gh ">
-					<picture>
-							<!-- <source media="(prefers-color-scheme: dark)" srcset="docs/zuplo-dark.png"> -->
-							<img src="https://github.com/user-attachments/assets/aace5aa7-32bd-45cf-a8f8-2e352feaf017" alt="Zuplo" width="260" align="right">
-					</picture>
-					</a>
-					<h3>Zuplo: Scale, Protect, and Productize your Huma API</h3>
-					<p>
-							Our API Gateway allows you to secure your API, scale it globally, generate documentation from your OpenAPI, and monetize your users.
-					</p>
-					<a href="https://zuplo.link/huma-gh ">Start for Free</a>
+	<img width="1000" height="0" />
+	<a href="https://serpapi.com/?utm_source=huma">
+		<img src="docs/docs/serpapi-banner.png" alt="SerpApi" width="260" align="right">
+	</a>
+	<h3>SerpApi: Web Search API</h3>
+	<p>
+		Access Google Search, Maps, Shopping, and other search engine data with a simple API by SerpApi.
+	</p>
+	<a href="https://serpapi.com/?utm_source=huma">Learn more</a>
 </div>
 <hr/>
 
