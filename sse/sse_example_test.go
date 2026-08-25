@@ -52,6 +52,13 @@ func ExampleRegister_sse() {
 			Data:  UserCreatedEvent{UserID: 1, Username: "foo"},
 		})
 
+		// Use `IDString` for opaque identifiers such as UUIDs or cursor tokens;
+		// it takes precedence over `ID`.
+		send(sse.Message{
+			IDString: "cursor-42",
+			Data:     UserCreatedEvent{UserID: 1, Username: "foo"},
+		})
+
 		// Example "userDelete" event type.
 		send.Data(UserDeletedEvent{UserID: 2, Username: "bar"})
 
