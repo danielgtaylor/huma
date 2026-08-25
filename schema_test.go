@@ -572,6 +572,22 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-default-custom-unmarshaler",
+			input: struct {
+				Value OmittableNullable[string] `json:"value,omitzero" default:"foo"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": ["string", "null"],
+						"default": "foo"
+					}
+				},
+				"additionalProperties": false
+			}`,
+		},
+		{
 			name: "field-optional-without-name",
 			input: struct {
 				Value string `json:",omitempty"`
@@ -1063,6 +1079,13 @@ func TestSchema(t *testing.T) {
 			name: "panic-json-int",
 			input: struct {
 				Value int `json:"value" default:"true"`
+			}{},
+			panics: `invalid number tag value 'true' for field 'Value': schema is invalid`,
+		},
+		{
+			name: "panic-json-custom-unmarshaler",
+			input: struct {
+				Value OmittableNullable[int] `json:"value,omitzero" default:"true"`
 			}{},
 			panics: `invalid number tag value 'true' for field 'Value': schema is invalid`,
 		},
