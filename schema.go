@@ -243,6 +243,90 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 	}, s.Extensions)
 }
 
+// knownSchemaFields is the set of JSON keys that map to explicit Schema struct
+// fields (as written by MarshalJSON). Any other key is an extension and is
+// collected into Extensions during UnmarshalJSON, mirroring how MarshalJSON
+// writes the Extensions map inline.
+var knownSchemaFields = map[string]struct{}{
+	"type": {}, "title": {}, "description": {}, "$ref": {}, "format": {},
+	"contentMediaType": {}, "contentEncoding": {}, "default": {}, "examples": {},
+	"items": {}, "additionalProperties": {}, "properties": {}, "enum": {},
+	"const": {}, "minimum": {}, "exclusiveMinimum": {}, "maximum": {},
+	"exclusiveMaximum": {}, "multipleOf": {}, "minLength": {}, "maxLength": {},
+	"pattern": {}, "patternDescription": {}, "minItems": {}, "maxItems": {},
+	"uniqueItems": {}, "required": {}, "dependentRequired": {},
+	"minProperties": {}, "maxProperties": {}, "readOnly": {}, "writeOnly": {},
+	"deprecated": {}, "oneOf": {}, "anyOf": {}, "allOf": {}, "not": {},
+	"discriminator": {},
+}
+
+// UnmarshalJSON unmarshals JSON into the schema. It is the inverse of
+// MarshalJSON so a schema produced by MarshalJSON round-trips back into an
+// equivalent Schema: the `type` keyword may be a plain string or the nullable
+// `[type, "null"]` array form, `$ref` is read into Ref, and any unknown keys
+// (e.g. `x-` extensions) are collected into Extensions.
+func (s *Schema) UnmarshalJSON(data []byte) error {
+	if strings.TrimSpace(string(data)) == "null" {
+		return nil
+	}
+
+	// Alias avoids recursing into this method. `type` and `$ref` are pulled out
+	// separately: `type` because it may be a string or an array, and `$ref`
+	// because the struct field has no matching JSON tag.
+	type alias Schema
+	aux := struct {
+		Type json.RawMessage `json:"type"`
+		Ref  string          `json:"$ref"`
+		*alias
+	}{alias: (*alias)(s)}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	s.Ref = aux.Ref
+
+	if len(aux.Type) > 0 {
+		var single string
+		if err := json.Unmarshal(aux.Type, &single); err == nil {
+			s.Type = single
+		} else {
+			var multi []string
+			if err := json.Unmarshal(aux.Type, &multi); err != nil {
+				return err
+			}
+			s.Type = ""
+			for _, t := range multi {
+				if t == "null" {
+					s.Nullable = true
+				} else {
+					s.Type = t
+				}
+			}
+		}
+	}
+
+	// Collect extension keys that don't map to a struct field.
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	for k, rv := range raw {
+		if _, ok := knownSchemaFields[k]; ok {
+			continue
+		}
+		var v any
+		if err := json.Unmarshal(rv, &v); err != nil {
+			return err
+		}
+		if s.Extensions == nil {
+			s.Extensions = map[string]any{}
+		}
+		s.Extensions[k] = v
+	}
+
+	s.PrecomputeMessages()
+	return nil
+}
+
 // PrecomputeMessages tries to precompute as many validation error messages
 // as possible so that new strings aren't allocated during request validation.
 func (s *Schema) PrecomputeMessages() {

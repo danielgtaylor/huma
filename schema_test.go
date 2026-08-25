@@ -1721,3 +1721,72 @@ func TestSchemaTransformer(t *testing.T) {
 	updateSchema2 := huma.SchemaFromType(r, reflect.TypeFor[ExampleUpdateStruct]())
 	validateSchema(updateSchema2)
 }
+
+func TestSchemaUnmarshalJSON(t *testing.T) {
+	t.Run("nullable type round-trips", func(t *testing.T) {
+		minLen := 1
+		orig := &huma.Schema{
+			Type:      huma.TypeString,
+			Nullable:  true,
+			MinLength: &minLen,
+		}
+		data, err := json.Marshal(orig)
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"type":["string","null"],"minLength":1}`, string(data))
+
+		var back huma.Schema
+		require.NoError(t, json.Unmarshal(data, &back))
+		assert.Equal(t, huma.TypeString, back.Type)
+		assert.True(t, back.Nullable)
+		require.NotNil(t, back.MinLength)
+		assert.Equal(t, 1, *back.MinLength)
+	})
+
+	t.Run("plain string type", func(t *testing.T) {
+		var s huma.Schema
+		require.NoError(t, json.Unmarshal([]byte(`{"type":"integer"}`), &s))
+		assert.Equal(t, huma.TypeInteger, s.Type)
+		assert.False(t, s.Nullable)
+	})
+
+	t.Run("ref and extensions", func(t *testing.T) {
+		data := []byte(`{"$ref":"#/components/schemas/Foo","description":"a foo","x-custom":42}`)
+		var s huma.Schema
+		require.NoError(t, json.Unmarshal(data, &s))
+		assert.Equal(t, "#/components/schemas/Foo", s.Ref)
+		assert.Equal(t, "a foo", s.Description)
+		require.Contains(t, s.Extensions, "x-custom")
+		assert.EqualValues(t, 42, s.Extensions["x-custom"])
+	})
+
+	t.Run("nested object round-trips", func(t *testing.T) {
+		orig := &huma.Schema{
+			Type: huma.TypeObject,
+			Properties: map[string]*huma.Schema{
+				"name": {Type: huma.TypeString, Nullable: true},
+			},
+			Required: []string{"name"},
+		}
+		data, err := json.Marshal(orig)
+		require.NoError(t, err)
+
+		var back huma.Schema
+		require.NoError(t, json.Unmarshal(data, &back))
+		assert.Equal(t, huma.TypeObject, back.Type)
+		require.Contains(t, back.Properties, "name")
+		assert.Equal(t, huma.TypeString, back.Properties["name"].Type)
+		assert.True(t, back.Properties["name"].Nullable)
+		assert.Equal(t, []string{"name"}, back.Required)
+	})
+
+	t.Run("null literal is a no-op", func(t *testing.T) {
+		s := huma.Schema{Type: huma.TypeString}
+		require.NoError(t, json.Unmarshal([]byte(`null`), &s))
+		assert.Equal(t, huma.TypeString, s.Type)
+	})
+
+	t.Run("invalid type value errors", func(t *testing.T) {
+		var s huma.Schema
+		assert.Error(t, json.Unmarshal([]byte(`{"type":123}`), &s))
+	})
+}
