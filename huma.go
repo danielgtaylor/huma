@@ -1361,7 +1361,12 @@ func setDeepObjectValue(pb *PathBuffer, res *ValidateResult, f reflect.Value, da
 				}
 			} else {
 				if val := field.Tag.Get("default"); val != "" {
-					setFieldValue(fv, val)
+					if err := setFieldValue(fv, val); err != nil {
+						pb.Push(fieldName)
+						res.Add(pb, val, err.Error())
+						pb.Pop()
+						continue
+					}
 					result[fieldName] = fv.Interface()
 				}
 			}
@@ -1377,19 +1382,19 @@ func setFieldValue(f reflect.Value, value string) error {
 	case reflect.Interface:
 		f.Set(reflect.ValueOf(value))
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		v, err := strconv.ParseInt(value, 10, 64)
+		v, err := strconv.ParseInt(value, 10, f.Type().Bits())
 		if err != nil {
 			return errors.New("invalid integer")
 		}
 		f.SetInt(v)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		v, err := strconv.ParseUint(value, 10, 64)
+		v, err := strconv.ParseUint(value, 10, f.Type().Bits())
 		if err != nil {
 			return errors.New("invalid integer")
 		}
 		f.SetUint(v)
 	case reflect.Float32, reflect.Float64:
-		v, err := strconv.ParseFloat(value, 64)
+		v, err := strconv.ParseFloat(value, f.Type().Bits())
 		if err != nil {
 			return errors.New("invalid float")
 		}
@@ -1824,7 +1829,7 @@ func parseInto(ctx Context, f reflect.Value, value string, preSplit []string, p 
 		f.SetString(value)
 		return value, nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		v, err := strconv.ParseInt(value, 10, 64)
+		v, err := strconv.ParseInt(value, 10, p.Type.Bits())
 		if err != nil {
 			return nil, errors.New("invalid integer")
 		}
@@ -1833,7 +1838,7 @@ func parseInto(ctx Context, f reflect.Value, value string, preSplit []string, p 
 
 		return v, nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		v, err := strconv.ParseUint(value, 10, 64)
+		v, err := strconv.ParseUint(value, 10, p.Type.Bits())
 		if err != nil {
 			return nil, errors.New("invalid integer")
 		}
@@ -1842,7 +1847,7 @@ func parseInto(ctx Context, f reflect.Value, value string, preSplit []string, p 
 
 		return v, nil
 	case reflect.Float32, reflect.Float64:
-		v, err := strconv.ParseFloat(value, 64)
+		v, err := strconv.ParseFloat(value, p.Type.Bits())
 		if err != nil {
 			return nil, errors.New("invalid float")
 		}
