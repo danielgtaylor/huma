@@ -124,6 +124,61 @@ func (o *OptionalParam[T]) OnParamSet(isSet bool, parsed any) {
 	o.IsSet = isSet
 }
 
+// wrappableInt64 is parsed through a separate wrapper type (see issue #958):
+// the value type itself only implements the Schema interface, while request
+// parsing is delegated to wrappableInt64Wrapper via ParamWrapper.Receiver.
+type wrappableInt64 int64
+
+func (w wrappableInt64) String() string {
+	return strconv.FormatInt(int64(w), 10)
+}
+
+func (w *wrappableInt64) UnmarshalJSON(data []byte) error {
+	s := strings.Trim(string(data), `"`)
+	if s == "" {
+		*w = 0
+		return nil
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return err
+	}
+	*w = wrappableInt64(n)
+	return nil
+}
+
+func (w wrappableInt64) MarshalJSON() ([]byte, error) {
+	return fmt.Appendf(nil, `"%d"`, w), nil
+}
+
+func (w wrappableInt64) Schema(r huma.Registry) *huma.Schema {
+	return huma.SchemaFromType(r, reflect.TypeFor[string]())
+}
+
+type wrappableInt64Wrapper struct {
+	b *wrappableInt64
+}
+
+func (w *wrappableInt64Wrapper) UnmarshalText(text []byte) error {
+	s := strings.Trim(string(text), `"`)
+	if s == "" {
+		*w.b = 0
+		return nil
+	}
+	n, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return err
+	}
+	*w.b = wrappableInt64(n)
+	return nil
+}
+
+func (w *wrappableInt64) Receiver() reflect.Value {
+	a := new(wrappableInt64Wrapper)
+	a.b = w
+	return reflect.ValueOf(a).Elem()
+}
+
 // CountingInner is used to verify resolver traversal skips nil optional fields.
 type CountingInner struct{}
 
@@ -4974,4 +5029,46 @@ func TestWriteResponseTransformErrorStatus(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, res.StatusCode)
 	assert.Contains(t, string(body), "error transforming response")
+}
+
+func TestMultipartFormFileWrapperParam(t *testing.T) {
+	// A ParamWrapper-based type must work as a multipart form value field,
+	// the same way it works for query/header params (issue #958).
+	_, api := humatest.New(t)
+	huma.Register(api, huma.Operation{
+		Method: http.MethodPost,
+		Path:   "/upload",
+	}, func(ctx context.Context, input *struct {
+		RawBody huma.MultipartFormFiles[struct {
+			File   huma.FormFile  `form:"file" contentType:"text/plain" required:"true" hidden:"true"`
+			StepID wrappableInt64 `form:"step_id" required:"true" hidden:"true"`
+		}]
+	}) (*struct {
+		Body struct {
+			StepID string `json:"step_id"`
+		}
+	}, error) {
+		data := input.RawBody.Data()
+		return &struct {
+			Body struct {
+				StepID string `json:"step_id"`
+			}
+		}{Body: struct {
+			StepID string `json:"step_id"`
+		}{StepID: data.StepID.String()}}, nil
+	})
+
+	res := api.Post("/upload", "Content-Type: multipart/form-data; boundary=SimpleBoundary", strings.NewReader(`--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+Hello, World!
+--SimpleBoundary
+Content-Disposition: form-data; name="step_id"
+
+12345
+--SimpleBoundary--`))
+
+	require.Equal(t, http.StatusOK, res.Code, res.Body.String())
+	require.JSONEq(t, `{"step_id": "12345"}`, res.Body.String())
 }
