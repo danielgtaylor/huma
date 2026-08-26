@@ -1096,6 +1096,94 @@ var validateTests = []struct {
 		errs:  []string{"unexpected property"},
 	},
 	{
+		name: "patternProperties success",
+		s: &huma.Schema{
+			Type: huma.TypeObject,
+			PatternProperties: map[string]*huma.Schema{
+				"^S_": {Type: huma.TypeString},
+				"^I_": {Type: huma.TypeInteger},
+			},
+		},
+		input: map[string]any{"S_name": "hello", "I_count": 1},
+	},
+	{
+		name: "patternProperties value type fail",
+		s: &huma.Schema{
+			Type: huma.TypeObject,
+			PatternProperties: map[string]*huma.Schema{
+				"^S_": {Type: huma.TypeString},
+			},
+		},
+		input: map[string]any{"S_name": 123},
+		errs:  []string{"expected string"},
+	},
+	{
+		name: "patternProperties value constraint fail",
+		s: &huma.Schema{
+			Type: huma.TypeObject,
+			PatternProperties: map[string]*huma.Schema{
+				"^S_": {Type: huma.TypeString, MinLength: Ptr(3)},
+			},
+		},
+		input: map[string]any{"S_name": "ab"},
+		errs:  []string{"expected length >= 3"},
+	},
+	{
+		name: "patternProperties allows matching additional property",
+		s: &huma.Schema{
+			Type:                 huma.TypeObject,
+			AdditionalProperties: false,
+			PatternProperties: map[string]*huma.Schema{
+				"^x-": {Type: huma.TypeString},
+			},
+		},
+		input: map[string]any{"x-trace": "abc"},
+	},
+	{
+		name: "patternProperties non-matching additional property fails",
+		s: &huma.Schema{
+			Type:                 huma.TypeObject,
+			AdditionalProperties: false,
+			PatternProperties: map[string]*huma.Schema{
+				"^x-": {Type: huma.TypeString},
+			},
+		},
+		input: map[string]any{"other": "abc"},
+		errs:  []string{"unexpected property"},
+	},
+	{
+		name: "patternProperties schema additionalProperties skips matches",
+		s: &huma.Schema{
+			Type:                 huma.TypeObject,
+			AdditionalProperties: &huma.Schema{Type: huma.TypeInteger},
+			PatternProperties: map[string]*huma.Schema{
+				"^s_": {Type: huma.TypeString},
+			},
+		},
+		input: map[string]any{"s_name": "hello", "count": 1},
+	},
+	{
+		name: "patternProperties map any success",
+		s: &huma.Schema{
+			Type: huma.TypeObject,
+			PatternProperties: map[string]*huma.Schema{
+				"^S_": {Type: huma.TypeString},
+			},
+		},
+		input: map[any]any{"S_name": "hello"},
+	},
+	{
+		name: "patternProperties map any fail",
+		s: &huma.Schema{
+			Type: huma.TypeObject,
+			PatternProperties: map[string]*huma.Schema{
+				"^S_": {Type: huma.TypeString},
+			},
+		},
+		input: map[any]any{"S_name": 123},
+		errs:  []string{"expected string"},
+	},
+	{
 		name: "nested success",
 		typ: reflect.TypeFor[struct {
 			Items []struct {

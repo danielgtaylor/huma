@@ -838,11 +838,27 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		path.Pop()
 	}
 
+	for i := range s.patternProperties {
+		pp := &s.patternProperties[i]
+		for k, v := range m {
+			if !pp.re.MatchString(k) {
+				continue
+			}
+			path.Push(k)
+			Validate(r, pp.schema, path, mode, v, res)
+			path.Pop()
+		}
+	}
+
 	if addl, ok := s.AdditionalProperties.(bool); ok && !addl {
 	addlPropLoop:
 		for k := range m {
 			// No additional properties allowed.
 			if _, ok := s.Properties[k]; !ok {
+				if s.matchesPatternProperty(k) {
+					// Matched a `patternProperties` entry, so not additional.
+					continue addlPropLoop
+				}
 				if !ValidateStrictCasing {
 					for propName := range s.Properties {
 						if strings.EqualFold(propName, k) {
@@ -863,6 +879,9 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		// Additional properties are allowed, but must match the given schema.
 		for k, v := range m {
 			if _, ok := s.Properties[k]; ok {
+				continue
+			}
+			if s.matchesPatternProperty(k) {
 				continue
 			}
 
@@ -952,6 +971,24 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 		path.Pop()
 	}
 
+	for i := range s.patternProperties {
+		pp := &s.patternProperties[i]
+		for k, v := range m {
+			var kStr string
+			if ks, ok := k.(string); ok {
+				kStr = ks
+			} else {
+				kStr = fmt.Sprint(k)
+			}
+			if !pp.re.MatchString(kStr) {
+				continue
+			}
+			path.Push(kStr)
+			Validate(r, pp.schema, path, mode, v, res)
+			path.Pop()
+		}
+	}
+
 	if addl, ok := s.AdditionalProperties.(bool); ok && !addl {
 		for k := range m {
 			// No additional properties allowed.
@@ -962,6 +999,10 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 				kStr = fmt.Sprint(k)
 			}
 			if _, ok := s.Properties[kStr]; !ok {
+				if s.matchesPatternProperty(kStr) {
+					// Matched a `patternProperties` entry, so not additional.
+					continue
+				}
 				path.Push(kStr)
 				res.Add(path, m, validation.MsgUnexpectedProperty)
 				path.Pop()
@@ -977,6 +1018,9 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 				kStr = s
 			} else {
 				kStr = fmt.Sprint(k)
+			}
+			if s.matchesPatternProperty(kStr) {
+				continue
 			}
 			path.Push(kStr)
 			Validate(r, addl, path, mode, v, res)
