@@ -28,16 +28,39 @@ Requests can have parameters and/or a body as input to the handler function. Inp
 
 The following parameter types are supported out of the box:
 
-| Type                | Example Inputs         |
-| ------------------- | ---------------------- |
-| `bool`              | `true`, `false`        |
-| `[u]int[16/32/64]`  | `1234`, `5`, `-1`      |
-| `float32/64`        | `1.234`, `1.0`         |
-| `string`            | `hello`, `t`           |
-| `time.Time`         | `2020-01-01T12:00:00Z` |
-| slice, e.g. `[]int` | `1,2,3`, `tag1,tag2`   |
+| Type                        | Example Inputs         |
+| --------------------------- | ---------------------- |
+| `bool`                      | `true`, `false`        |
+| `[u]int[16/32/64]`          | `1234`, `5`, `-1`      |
+| `float32/64`                | `1.234`, `1.0`         |
+| `string`                    | `hello`, `t`           |
+| `time.Time`                 | `2020-01-01T12:00:00Z` |
+| slice, e.g. `[]int`         | `1,2,3`, `tag1,tag2`   |
+| pointer, e.g. `*int`        | `1234`, or `nil`       |
 
 For example, if the parameter is a query param and the type is `[]string` it might look like `?tags=tag1,tag2` in the URI. Query parameters also support specifying the same parameter multiple times by setting the `explode` tag, e.g. `query:"tags,explode"` would parse a query string like `?tags=tag1&tags=tag2` instead of a comma separated list. The comma separated list is faster and recommended for most use cases.
+
+### Optional parameters
+
+Any of the types above can be a pointer, in which case `nil` means the parameter was not provided in the request. This is useful when the zero value has meaning to your application, e.g. telling "the client did not filter" apart from "the client filtered on `false`":
+
+```go title="code.go"
+type MyInput struct {
+	// nil, or a pointer to true/false.
+	Active *bool `query:"active"`
+	// nil, or a pointer to the tags that were sent.
+	Tags *[]string `query:"tags"`
+}
+```
+
+A few things to be aware of:
+
+- Pointers work for path, query, header, and cookie parameters. Multipart form fields do not support them yet and panic at registration.
+- **Pointers do not make a parameter optional.** Query, header, and cookie params are already optional by default; path params are always required. See [Optional / Required](./request-validation.md#optional-required).
+- A parameter that is present but empty, e.g. `?tags=`, counts as **not provided** and leaves the pointer `nil`.
+- A `default` tag always wins over `nil`, so a parameter with a default is never `nil`.
+- Pointer parameters are documented as [nullable](./request-validation.md#nullable). Add `nullable:"false"` if you would rather the generated schema say e.g. `type: string` instead of `type: [string, "null"]`, since a parameter can never actually carry a literal `null` over the wire.
+- Slices of pointers (`[]*string`) and multiple levels of indirection (`**string`) are not supported.
 
 For cookies, the default behavior is to read the cookie _value_ from the request and convert it to one of the types above. If you want to access the entire cookie, you can use `http.Cookie` as the type instead:
 
@@ -47,44 +70,61 @@ type MyInput struct {
 }
 ```
 
-Then you can access e.g. `input.Session.Name` or `input.Session.Value`.
+Then you can access e.g. `input.Session.Name` or `input.Session.Value`. Use `*http.Cookie` if you want `nil` when the cookie is absent.
 
 ### Custom wrapper types
 
-Request parameters can be parsed into custom wrapper types, by implementing the [`ParamWrapper`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ParamWrapper) interface, which should give access to the wrapper field as a [`reflect.Value`](https://pkg.go.dev/reflect#Value).
+Request parameters can be parsed into custom wrapper types, by implementing the [`ParamWrapper`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ParamWrapper) interface, which should give access to the wrapper field as a [`reflect.Value`](https://pkg.go.dev/reflect#Value). Huma parses that inner field exactly as if it were the parameter itself, so comma-separated lists, `explode`, time formats and validation all keep working.
 
-Interface [`ParamReactor`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ParamReactor) may optionally be implemented to define a callback to execute after a request parameter was parsed.
+Interface [`ParamReactor`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ParamReactor) may optionally be implemented to define a callback to execute after a request parameter was parsed, which is where a wrapper can derive its own state from the parsed value.
 
-Example usage with a custom wrapper to handle null query parameters:
+To simply tell "not provided" apart from a zero value, reach for a [pointer](#optional-parameters) instead.
+Wrapper types earn their keep when you want to compute something from the parsed value. For example, a set that de-duplicates a repeated parameter and answers membership in constant time:
 
 ```go
-type OptionalParam[T any] struct {
-	Value T
-	IsSet bool
+type Set[T comparable] struct {
+	Values []T
+	index  map[T]struct{}
 }
 
-// Define schema to use wrapped type
-func (o OptionalParam[T]) Schema(r huma.Registry) *huma.Schema {
-	return huma.SchemaFromType(r, reflect.TypeOf(o.Value))
+// Document the parameter as the wrapped slice type.
+func (s Set[T]) Schema(r huma.Registry) *huma.Schema {
+	return huma.SchemaFromType(r, reflect.TypeFor[[]T]())
 }
 
-// Expose wrapped value to receive parsed value from Huma
-// MUST have pointer receiver
-func (o *OptionalParam[T]) Receiver() reflect.Value {
-	return reflect.ValueOf(o).Elem().Field(0)
+// Expose the slice for Huma to parse into.
+// MUST have pointer receiver, and the field MUST be exported.
+func (s *Set[T]) Receiver() reflect.Value {
+	return reflect.ValueOf(s).Elem().Field(0)
 }
 
-// React to request param being parsed to update internal state
-// MUST have pointer receiver
-func (o *OptionalParam[T]) OnParamSet(isSet bool, parsed any) {
-	o.IsSet = isSet
+// Once Huma has filled in Values, drop duplicates and build the index.
+// MUST have pointer receiver.
+func (s *Set[T]) OnParamSet(isSet bool, parsed any) {
+	s.index = make(map[T]struct{}, len(s.Values))
+	unique := s.Values[:0]
+	for _, v := range s.Values {
+		if _, ok := s.index[v]; ok {
+			continue
+		}
+		s.index[v] = struct{}{}
+		unique = append(unique, v)
+	}
+	s.Values = unique
+}
+
+func (s Set[T]) Has(v T) bool {
+	_, ok := s.index[v]
+	return ok
 }
 
 // Define request input with the wrapper type
 type MyRequestInput struct {
-    MaybeText OptionalParam[string] `query:"text"`
+	Tags Set[string] `query:"tags"`
 }
 ```
+
+The parameter is still documented as a plain array of strings, and for `?tags=b,a,b` the handler sees `Tags.Values` of `["b", "a"]` with `Tags.Has("a")` reporting true.
 
 ## Request Body
 
@@ -215,6 +255,8 @@ huma.Register(api, huma.Operation{
 ```
 
 The files are decoded according to the specified contentType. If no contentType is provided, it defaults to `application/octet-stream`.
+
+Unlike other [parameters](#optional-parameters), form fields cannot be pointers — registering one panics. Use `huma.FormFile` and check its `IsSet` field for optional files, and a meaningful zero value for other fields.
 
 Non-file fields in multipart form data can be unmarshalled from JSON and validated, by setting their content-type to `application/json`. Field content in the request must be valid JSON.
 

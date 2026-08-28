@@ -104,6 +104,7 @@ type paramFieldInfo struct {
 	Name        string
 	Loc         string
 	Required    bool
+	IsPointer   bool // IsPointer reports that the struct field is a `*T`
 	Default     string
 	TimeFormat  string
 	Explode     bool
@@ -159,13 +160,22 @@ type paramLocation struct {
 // Returns a paramLocation and true if f carries a recognised parameter tag, or
 // nil and false if no tag is found (i.e. the field is not a parameter).
 //
-// Panics if the field type is a pointer, which is not currently supported for
-// any parameter location.
+// A pointer field means the parameter is optional, with `nil` standing for "not
+// provided". Panics for pointer forms that are not supported, i.e. multiple
+// levels of indirection or a multipart form parameter.
 func parseParamLocation(f reflect.StructField, registry Registry) (*paramLocation, bool) {
-	pfi := &paramFieldInfo{Type: f.Type}
+	// Work with the element type from here on, so that the rest of the param
+	// machinery (schema hints, parsing) sees the type the value is parsed into.
+	t := f.Type
+	isPointer := t.Kind() == reflect.Pointer
+	if isPointer {
+		t = t.Elem()
+	}
 
-	if reflect.PointerTo(f.Type).Implements(paramWrapperType) {
-		pfi.Type = reflect.New(f.Type).Interface().(ParamWrapper).Receiver().Type()
+	pfi := &paramFieldInfo{Type: t, IsPointer: isPointer}
+
+	if reflect.PointerTo(t).Implements(paramWrapperType) {
+		pfi.Type = reflect.New(t).Interface().(ParamWrapper).Receiver().Type()
 	}
 
 	if def := f.Tag.Get("default"); def != "" {
@@ -203,7 +213,7 @@ func parseParamLocation(f reflect.StructField, registry Registry) (*paramLocatio
 	case f.Tag.Get("cookie") != "":
 		pfi.Loc = "cookie"
 		pfi.Name = f.Tag.Get("cookie")
-		if f.Type == cookieType {
+		if t == cookieType {
 			// Special case: parsed from a string input to an `http.Cookie` struct.
 			pfi.Type = stringType
 		}
@@ -211,14 +221,16 @@ func parseParamLocation(f reflect.StructField, registry Registry) (*paramLocatio
 		return nil, false
 	}
 
-	// Pointer check comes after tag detection — untagged pointer fields are fine.
-	if f.Type.Kind() == reflect.Pointer {
-		// TODO: support pointers? The problem is that when we dynamically
-		// create an instance of the input struct the `params.Every(...)`
-		// call cannot set them as the value is `reflect.Invalid` unless
-		// dynamically allocated, but we don't know when to allocate until
-		// after the `Every` callback has run. Doable, but a bigger change.
-		panic("pointers are not supported for form/header/path/query parameters")
+	// Pointer checks come after tag detection — untagged pointer fields are fine.
+	if isPointer {
+		if t.Kind() == reflect.Pointer {
+			panic(fmt.Errorf("multiple levels of pointer indirection are not supported for %s parameter '%s' (field '%s' of type '%s')", pfi.Loc, pfi.Name, f.Name, f.Type))
+		}
+		if pfi.Loc == "form" {
+			// The multipart form binding path does not allocate pointers yet, so
+			// such a field would silently stay nil. Fail fast until it does.
+			panic(fmt.Errorf("pointers are not supported for form parameter '%s' (field '%s' of type '%s')", pfi.Name, f.Name, f.Type))
+		}
 	}
 
 	return result, true
@@ -819,6 +831,19 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 	resolvers := findResolvers(resolverType, inputType)
 	defaults := findDefaults(registry, inputType)
+	// Parameter defaults are applied while the parameters themselves are
+	// parsed (a missing value falls back to the tag in `getParamValue`), so
+	// drop params from the body-time default pass: re-applying a default
+	// there would re-inflate a pointer that a parse failure deliberately left
+	// nil, and would overwrite an explicitly provided zero value.
+	defaults.Paths = slices.DeleteFunc(defaults.Paths, func(d findResultPath[any]) bool {
+		for _, p := range inputParams.Paths {
+			if slices.Equal(p.Path, d.Path) {
+				return true
+			}
+		}
+		return false
+	})
 
 	// Pre-compute query parameter validation data to reduce per-request allocations.
 	knownParams := make(map[string]struct{})
@@ -847,6 +872,13 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		rawBodyInputParams = findParams(registry, &op, rawBodyDataT)
 		for i := range rawBodyInputParams.Paths {
 			p := rawBodyInputParams.Paths[i].Value
+			if p.IsPointer {
+				// Every param-tagged field of a multipart data struct is bound
+				// from the form values whatever its tag says, and that path
+				// does not allocate pointers yet. Only `form`-tagged pointers
+				// panic in parseParamLocation, so catch the rest here.
+				panic(fmt.Errorf("pointers are not supported for %s parameter '%s' in a multipart form data struct (type '*%s')", p.Loc, p.Name, p.Type))
+			}
 			if p.Loc != "form" || p.Type == formFileType || p.Type == formFilesType {
 				continue
 			}
@@ -935,14 +967,22 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		}
 
 		inputParams.Every(v, func(f reflect.Value, p *paramFieldInfo) {
-			f = reflect.Indirect(f)
-			if f.Kind() == reflect.Invalid {
+			if !f.IsValid() {
 				return
 			}
 
 			pb.Reset()
 			pb.Push(p.Loc)
 			pb.Push(p.Name)
+
+			// Pointer params are parsed into a temporary value which is only
+			// assigned to the field once parsing succeeds, so a `nil` field
+			// always means "not provided". Resolvers run even when parameter
+			// validation fails, so they must never see a half-parsed value.
+			target := f
+			if p.IsPointer {
+				target = reflect.New(f.Type().Elem()).Elem()
+			}
 
 			if p.Loc == "cookie" {
 				if cookies == nil {
@@ -952,17 +992,20 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 						cookies[c.Name] = c
 					}
 				}
-				if c, ok := cookies[p.Name]; ok && f.Type() == cookieType {
+				if c, ok := cookies[p.Name]; ok && target.Type() == cookieType {
 					// Special case: http.Cookie type, meaning we want the entire parsed
 					// cookie struct, not just the value.
-					f.Set(reflect.ValueOf(c).Elem())
+					target.Set(reflect.ValueOf(c).Elem())
+					if p.IsPointer {
+						f.Set(target.Addr())
+					}
 					return
 				}
 			}
 
-			var receiver = f
-			if f.Addr().Type().Implements(paramWrapperType) {
-				receiver = f.Addr().Interface().(ParamWrapper).Receiver()
+			var receiver = target
+			if target.Addr().Type().Implements(paramWrapperType) {
+				receiver = target.Addr().Interface().(ParamWrapper).Receiver()
 			}
 
 			var pv any
@@ -981,7 +1024,14 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 					}
 					return
 				}
+				errsBefore := len(res.Errors)
 				pv = setDeepObjectValue(pb, res, receiver, value)
+				if p.IsPointer && len(res.Errors) > errsBefore {
+					// A subfield failed to parse; return before the pointer is
+					// published so a half-parsed struct is never visible, just
+					// like the plain parse-error path below.
+					return
+				}
 			} else {
 				value := getParamValue(*p, ctx, cookies)
 				isSet = value != ""
@@ -1000,8 +1050,12 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				}
 			}
 
-			if f.Addr().Type().Implements(paramReactorType) {
-				f.Addr().Interface().(ParamReactor).OnParamSet(isSet, pv)
+			if target.Addr().Type().Implements(paramReactorType) {
+				target.Addr().Interface().(ParamReactor).OnParamSet(isSet, pv)
+			}
+
+			if p.IsPointer {
+				f.Set(target.Addr())
 			}
 
 			if !op.SkipValidateParams {
