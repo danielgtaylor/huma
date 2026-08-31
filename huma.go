@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -1020,7 +1021,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 			if rbt.isMultipart() {
 				// Read form
-				form, err := readForm(ctx)
+				form, err := readForm(ctx, op.MaxBodyBytes)
 				jsonUnmarshaler := func(data []byte, v any) error { return api.Unmarshal("application/json", data, v) }
 
 				if err != nil {
@@ -2043,13 +2044,36 @@ func processMultipartMsgBody(form *multipart.Form, op Operation, v reflect.Value
 	return nil
 }
 
-func readForm(ctx Context) (*multipart.Form, *ErrorDetail) {
-	form, err := ctx.GetMultipartForm()
-	if err != nil {
-		return form, &ErrorDetail{
-			Location: "body",
-			Message:  "cannot read multipart form: " + err.Error(),
+func readForm(ctx Context, maxBytes int64) (*multipart.Form, error) {
+	if maxBytes <= 0 {
+		form, err := ctx.GetMultipartForm()
+		if err != nil {
+			return form, &ErrorDetail{
+				Location: "body",
+				Message:  "cannot read multipart form: " + err.Error(),
+			}
 		}
+		return form, nil
+	}
+
+	_, params, err := mime.ParseMediaType(ctx.Header("Content-Type"))
+	if err != nil {
+		return nil, &ErrorDetail{Location: "body", Message: "cannot read multipart form: " + err.Error()}
+	}
+
+	r := &io.LimitedReader{R: ctx.BodyReader(), N: maxBytes}
+	form, err := multipart.NewReader(r, params["boundary"]).ReadForm(8 << 10)
+	if err == nil {
+		_, err = io.Copy(io.Discard, r)
+	}
+	if r.N == 0 {
+		if form != nil {
+			_ = form.RemoveAll()
+		}
+		return nil, Error413RequestEntityTooLarge(fmt.Sprintf("request body is too large limit=%d bytes", maxBytes))
+	}
+	if err != nil {
+		return form, &ErrorDetail{Location: "body", Message: "cannot read multipart form: " + err.Error()}
 	}
 	return form, nil
 }

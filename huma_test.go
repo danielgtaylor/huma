@@ -2919,10 +2919,10 @@ Content-Type: text/plain
 			},
 			Method: http.MethodGet,
 			URL:    "/transform",
-Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-	assert.Equal(t, http.StatusOK, resp.Code)
-	assert.JSONEq(t, `null`, resp.Body.String())
-},
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				assert.JSONEq(t, `null`, resp.Body.String())
+			},
 		},
 		{
 			Name: "schema-url-from-x-forwarded-host",
@@ -3709,6 +3709,52 @@ func TestMultipartStructFieldRequiresJSONTag(t *testing.T) {
 				return nil, nil
 			})
 		})
+}
+
+func TestMultipartMaxBodyBytesEnforced(t *testing.T) {
+	const maxBodyBytes = 1024
+
+	mux, api := humatest.New(t, huma.DefaultConfig("Test", "1.0.0"))
+
+	var handlerCalled bool
+	huma.Register(api, huma.Operation{
+		Method:       http.MethodPost,
+		Path:         "/upload",
+		MaxBodyBytes: maxBodyBytes,
+	}, func(_ context.Context, _ *struct {
+		RawBody multipart.Form
+	}) (*struct{}, error) {
+		handlerCalled = true
+		return &struct{}{}, nil
+	})
+
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	part, err := mw.CreateFormField("large")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Much larger than MaxBodyBytes
+	if _, err := part.Write([]byte(strings.Repeat("a", maxBodyBytes+1))); err != nil {
+		t.Fatal(err)
+	}
+	if err := mw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	mpbodylen := body.Len()
+
+	req := httptest.NewRequest(http.MethodPost, "/upload", &body)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	res := httptest.NewRecorder()
+	mux.ServeHTTP(res, req)
+
+	if handlerCalled {
+		t.Fatalf("handler was called even though multipart body (%d bytes) exceeds MaxBodyBytes (%d bytes)", mpbodylen, maxBodyBytes)
+	}
+
+	if got, want := res.Code, http.StatusRequestEntityTooLarge; got != want {
+		t.Fatalf("invalid status code: got %d, want %d", got, want)
+	}
 }
 
 func TestOpenAPI(t *testing.T) {
