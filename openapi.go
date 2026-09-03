@@ -1528,10 +1528,15 @@ func (o *OpenAPI) AddOperation(op *Operation) {
 		}
 	}
 
-	item := o.Paths[op.Path]
+	// Router-specific path parameter patterns (e.g. chi's `{id:[0-9]+}`) are
+	// not valid OpenAPI paths, so document the operation under the normalized
+	// path while leaving op.Path untouched for the router.
+	docPath := normalizeOpenAPIPath(op.Path)
+
+	item := o.Paths[docPath]
 	if item == nil {
 		item = &PathItem{}
-		o.Paths[op.Path] = item
+		o.Paths[docPath] = item
 	}
 
 	switch op.Method {
@@ -1558,6 +1563,47 @@ func (o *OpenAPI) AddOperation(op *Operation) {
 	for _, f := range o.OnAddOperation {
 		f(o, op)
 	}
+}
+
+// normalizeOpenAPIPath strips router-specific path parameter patterns (e.g.
+// chi's `{id:[0-9]+}`) so the documented OpenAPI path contains only the
+// parameter name (`{id}`). Brace-aware scanning keeps quantifiers such as
+// `{3}` inside the pattern from terminating the segment early.
+func normalizeOpenAPIPath(path string) string {
+	var b strings.Builder
+	b.Grow(len(path))
+	start := -1 // index of an open '{' whose segment has not been copied yet
+	depth := 0
+	for i := 0; i < len(path); i++ {
+		switch path[i] {
+		case '{':
+			if start < 0 {
+				start = i
+			}
+			depth++
+		case '}':
+			depth--
+			if start >= 0 && depth == 0 {
+				seg := path[start : i+1]
+				if k := strings.IndexByte(seg, ':'); k >= 0 {
+					b.WriteString(seg[:k])
+					b.WriteByte('}')
+				} else {
+					b.WriteString(seg)
+				}
+				start = -1
+			}
+		default:
+			if start < 0 {
+				b.WriteByte(path[i])
+			}
+		}
+	}
+	if start >= 0 {
+		// Unbalanced '{': copy the remainder verbatim.
+		b.WriteString(path[start:])
+	}
+	return b.String()
 }
 
 // MarshalJSON serializes the OpenAPI object into JSON with custom handling for unused schemas in components.

@@ -25,9 +25,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
 	_ "github.com/danielgtaylor/huma/v2/formats/cbor"
 	"github.com/danielgtaylor/huma/v2/humatest"
+	"github.com/go-chi/chi/v5"
 )
 
 var NewExampleAdapter = humatest.NewAdapter
@@ -4974,4 +4976,34 @@ func TestWriteResponseTransformErrorStatus(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, res.StatusCode)
 	assert.Contains(t, string(body), "error transforming response")
+}
+
+func TestRegexPathParamNormalizedInOpenAPI(t *testing.T) {
+	// Chi-style `{id:[0-9]+}` patterns route fine but are not valid OpenAPI
+	// paths; the documented path must keep only the parameter name (issue #922).
+	router := chi.NewMux()
+	api := humachi.New(router, huma.DefaultConfig("Test", "1.0.0"))
+	huma.Register(api, huma.Operation{
+		OperationID: "get-user",
+		Method:      http.MethodGet,
+		Path:        "/users/{id:[0-9]+}",
+	}, func(ctx context.Context, input *struct {
+		ID string `path:"id"`
+	}) (*struct {
+		Body string `json:"body"`
+	}, error) {
+		return &struct {
+			Body string `json:"body"`
+		}{Body: input.ID}, nil
+	})
+
+	paths := api.OpenAPI().Paths
+	require.Contains(t, paths, "/users/{id}", "regex must be stripped from the documented path")
+	require.NotContains(t, paths, "/users/{id:[0-9]+}")
+
+	// The router still matches the regex route end to end.
+	req, _ := http.NewRequest(http.MethodGet, "/users/123", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
 }
