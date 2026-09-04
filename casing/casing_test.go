@@ -89,6 +89,23 @@ func TestRemovePart(t *testing.T) {
 	}))
 }
 
+func TestRemovePartWithMultipleTransforms(t *testing.T) {
+	drop := func(part string) string {
+		if part == "and" {
+			return ""
+		}
+
+		return part
+	}
+
+	// Camel always appends strings.Title, so a removing transform in first
+	// position leaves two transforms for the shifted index.
+	assert.Equal(t, "OneTwo", casing.Camel("and-one-two", drop))
+
+	suffix := func(part string) string { return part + "x" }
+	assert.Equal(t, "onex_twox", casing.Join([]string{"one", "and", "two"}, "_", drop, suffix))
+}
+
 func TestRightAlign(t *testing.T) {
 	assert.Equal(t, "stream_1080p", casing.Snake("Stream1080P"))
 
