@@ -38,7 +38,7 @@ type gmuxContext struct {
 	op     *huma.Operation
 	r      *http.Request
 	w      http.ResponseWriter
-	status int
+	status *int // shared by every WithContext copy so ancestors see the final status
 }
 
 // check that gmuxContext implements huma.Context
@@ -96,6 +96,15 @@ func (c *gmuxContext) Version() huma.ProtoVersion {
 	}
 }
 
+func (c *gmuxContext) WithContext(ctx context.Context) huma.Context {
+	return &gmuxContext{
+		op:     c.op,
+		r:      c.r.WithContext(ctx),
+		w:      c.w,
+		status: c.status,
+	}
+}
+
 func (c *gmuxContext) EachHeader(cb func(name, value string)) {
 	for name, values := range c.r.Header {
 		for _, value := range values {
@@ -118,12 +127,12 @@ func (c *gmuxContext) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *gmuxContext) SetStatus(code int) {
-	c.status = code
+	*c.status = code
 	c.w.WriteHeader(code)
 }
 
 func (c *gmuxContext) Status() int {
-	return c.status
+	return *c.status
 }
 
 func (c *gmuxContext) AppendHeader(name string, value string) {
@@ -140,7 +149,7 @@ func (c *gmuxContext) BodyWriter() io.Writer {
 
 // NewContext creates a new Huma context from an HTTP request and response.
 func NewContext(op *huma.Operation, r *http.Request, w http.ResponseWriter) huma.Context {
-	return &gmuxContext{op: op, r: r, w: w}
+	return &gmuxContext{op: op, r: r, w: w, status: new(int)}
 }
 
 type gMux struct {

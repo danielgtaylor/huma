@@ -38,7 +38,7 @@ type goContext struct {
 	op     *huma.Operation
 	r      *http.Request
 	w      http.ResponseWriter
-	status int
+	status *int // shared by every WithContext copy so ancestors see the final status
 }
 
 // check that goContext implements huma.Context
@@ -106,12 +106,12 @@ func (c *goContext) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *goContext) SetStatus(code int) {
-	c.status = code
+	*c.status = code
 	c.w.WriteHeader(code)
 }
 
 func (c *goContext) Status() int {
-	return c.status
+	return *c.status
 }
 
 func (c *goContext) AppendHeader(name string, value string) {
@@ -138,9 +138,18 @@ func (c *goContext) Version() huma.ProtoVersion {
 	}
 }
 
+func (c *goContext) WithContext(ctx context.Context) huma.Context {
+	return &goContext{
+		op:     c.op,
+		r:      c.r.WithContext(ctx),
+		w:      c.w,
+		status: c.status,
+	}
+}
+
 // NewContext creates a new Huma context from an HTTP request and response.
 func NewContext(op *huma.Operation, r *http.Request, w http.ResponseWriter) huma.Context {
-	return &goContext{op: op, r: r, w: w}
+	return &goContext{op: op, r: r, w: w, status: new(int)}
 }
 
 type Mux interface {
@@ -155,7 +164,7 @@ type goAdapter struct {
 
 func (a *goAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	a.HandleFunc(strings.ToUpper(op.Method)+" "+a.prefix+op.Path, func(w http.ResponseWriter, r *http.Request) {
-		handler(&goContext{op: op, r: r, w: w})
+		handler(NewContext(op, r, w))
 	})
 }
 

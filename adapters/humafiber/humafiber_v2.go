@@ -1,6 +1,7 @@
 package humafiber
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
@@ -41,7 +42,7 @@ type fiberV2Adapter struct {
 
 type fiberV2Wrapper struct {
 	op     *huma.Operation
-	status int
+	status *int // shared by every WithContext copy so ancestors see the final status
 	orig   *fiberV2.Ctx
 	ctx    context.Context
 }
@@ -95,10 +96,8 @@ func (c *fiberV2Wrapper) Header(name string) string {
 }
 
 func (c *fiberV2Wrapper) EachHeader(cb func(name, value string)) {
-	for name, values := range c.orig.Request().Header.All() {
-		for _, value := range values {
-			cb(string(name), string(value))
-		}
+	for name, value := range c.orig.Request().Header.All() {
+		cb(string(name), string(value))
 	}
 }
 
@@ -108,7 +107,7 @@ func (c *fiberV2Wrapper) BodyReader() io.Reader {
 		// Streaming is enabled, so send the reader.
 		return orig.Request().BodyStream()
 	}
-	return bytes.NewReader(orig.BodyRaw())
+	return bytes.NewReader(orig.Body())
 }
 
 func (c *fiberV2Wrapper) GetMultipartForm() (*multipart.Form, error) {
@@ -126,12 +125,12 @@ func (c *fiberV2Wrapper) SetReadDeadline(deadline time.Time) error {
 
 func (c *fiberV2Wrapper) SetStatus(code int) {
 	var orig = c.orig
-	c.status = code
+	*c.status = code
 	orig.Status(code)
 }
 
 func (c *fiberV2Wrapper) Status() int {
-	return c.status
+	return *c.status
 }
 
 func (c *fiberV2Wrapper) AppendHeader(name string, value string) {
@@ -146,6 +145,16 @@ func (c *fiberV2Wrapper) BodyWriter() io.Writer {
 	return c.orig.Context()
 }
 
+// StreamBody streams the response body via Fiber/fasthttp's stream writer. It
+// is the optional streaming hook huma's SSE support uses because fasthttp can't
+// flush the response writer synchronously from within the handler.
+func (c *fiberV2Wrapper) StreamBody(fn func(io.Writer)) {
+	rc := c.orig.Context()
+	rc.SetBodyStreamWriter(func(bw *bufio.Writer) {
+		fn(&fiberStreamWriter{bw: bw, conn: rc.Conn()})
+	})
+}
+
 func (c *fiberV2Wrapper) TLS() *tls.ConnectionState {
 	return c.orig.Context().TLSConnectionState()
 }
@@ -153,6 +162,20 @@ func (c *fiberV2Wrapper) TLS() *tls.ConnectionState {
 func (c *fiberV2Wrapper) Version() huma.ProtoVersion {
 	return huma.ProtoVersion{
 		Proto: c.orig.Protocol(),
+	}
+}
+
+// WithContext replaces the underlying context. Fiber stores a single user
+// context per request, so this mutates it in place (rather than returning an
+// isolated copy) so that native Fiber middleware observe values set via
+// huma.WithValue.
+func (c *fiberV2Wrapper) WithContext(ctx context.Context) huma.Context {
+	c.orig.SetUserContext(ctx)
+	return &fiberV2Wrapper{
+		op:     c.op,
+		status: c.status,
+		orig:   c.orig,
+		ctx:    ctx,
 	}
 }
 
@@ -205,8 +228,9 @@ func (a *fiberV2Adapter) Handle(op *huma.Operation, handler func(huma.Context)) 
 			})
 		})
 		handler(&fiberV2Wrapper{
-			op:   op,
-			orig: c,
+			op:     op,
+			orig:   c,
+			status: new(int),
 			ctx: &contextV2Wrapper{
 				values:  values,
 				Context: c.UserContext(),

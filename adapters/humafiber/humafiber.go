@@ -1,11 +1,13 @@
 package humafiber
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
 	"io"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -41,7 +43,7 @@ type fiberAdapter struct {
 
 type fiberWrapper struct {
 	op     *huma.Operation
-	status int
+	status *int // shared by every WithContext copy so ancestors see the final status
 	orig   fiber.Ctx
 	ctx    context.Context
 }
@@ -125,12 +127,12 @@ func (c *fiberWrapper) SetReadDeadline(deadline time.Time) error {
 
 func (c *fiberWrapper) SetStatus(code int) {
 	var orig = c.orig
-	c.status = code
+	*c.status = code
 	orig.Status(code)
 }
 
 func (c *fiberWrapper) Status() int {
-	return c.status
+	return *c.status
 }
 
 func (c *fiberWrapper) AppendHeader(name string, value string) {
@@ -145,6 +147,16 @@ func (c *fiberWrapper) BodyWriter() io.Writer {
 	return c.orig.RequestCtx()
 }
 
+// StreamBody streams the response body via Fiber/fasthttp's stream writer. It
+// is the optional streaming hook huma's SSE support uses because fasthttp can't
+// flush the response writer synchronously from within the handler.
+func (c *fiberWrapper) StreamBody(fn func(io.Writer)) {
+	rc := c.orig.RequestCtx()
+	rc.SetBodyStreamWriter(func(bw *bufio.Writer) {
+		fn(&fiberStreamWriter{bw: bw, conn: rc.Conn()})
+	})
+}
+
 func (c *fiberWrapper) TLS() *tls.ConnectionState {
 	return c.orig.RequestCtx().TLSConnectionState()
 }
@@ -153,6 +165,24 @@ func (c *fiberWrapper) Version() huma.ProtoVersion {
 	return huma.ProtoVersion{
 		Proto: c.orig.Protocol(),
 	}
+}
+
+// WithContext replaces the underlying context. Fiber stores a single context
+// per request, so this mutates it in place (rather than returning an isolated
+// copy) so that native Fiber middleware observe values set via huma.WithValue.
+func (c *fiberWrapper) WithContext(ctx context.Context) huma.Context {
+	c.orig.SetContext(ctx)
+	return &fiberWrapper{
+		op:     c.op,
+		status: c.status,
+		orig:   c.orig,
+		ctx:    ctx,
+	}
+}
+
+// NewContext creates a new Huma context from a fiber context
+func NewContext(op *huma.Operation, c fiber.Ctx) huma.Context {
+	return &fiberWrapper{op: op, orig: c, ctx: c.Context(), status: new(int)}
 }
 
 type router interface {
@@ -204,8 +234,9 @@ func (a *fiberAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 			})
 		})
 		handler(&fiberWrapper{
-			op:   op,
-			orig: c,
+			op:     op,
+			orig:   c,
+			status: new(int),
 			ctx: &contextWrapper{
 				values:  values,
 				Context: c.Context(),
@@ -243,4 +274,27 @@ func New(r *fiber.App, config huma.Config) huma.API {
 // NewWithGroup creates a new Huma API using the Fiber adapter with a route group.
 func NewWithGroup(r *fiber.App, g fiber.Router, config huma.Config) huma.API {
 	return huma.NewAPI(config, &fiberAdapter{tester: r, router: g})
+}
+
+// fiberStreamWriter adapts fasthttp's buffered stream writer to the io.Writer,
+// http.Flusher, and write-deadline interfaces the streaming code expects. It is
+// shared by the Fiber v2 and v3 adapters.
+type fiberStreamWriter struct {
+	bw   *bufio.Writer
+	conn net.Conn
+}
+
+func (w *fiberStreamWriter) Write(p []byte) (int, error) {
+	return w.bw.Write(p)
+}
+
+func (w *fiberStreamWriter) Flush() {
+	_ = w.bw.Flush()
+}
+
+func (w *fiberStreamWriter) SetWriteDeadline(t time.Time) error {
+	if w.conn == nil {
+		return nil
+	}
+	return w.conn.SetWriteDeadline(t)
 }

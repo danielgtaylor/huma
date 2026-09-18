@@ -396,6 +396,22 @@ var validateTests = []struct {
 		errs:  []string{"expected string to be RFC 5322 email: mail: missing '@' or angle-addr"},
 	},
 	{
+		name: "expected email bare addr-spec rejects mailbox with display name",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"email\""
+		}](),
+		input: map[string]any{"value": "Alice <alice@example.com>"},
+		errs:  []string{"expected string to be RFC 5322 email (addr-spec only, no display name)"},
+	},
+	{
+		name: "expected idn-email bare addr-spec rejects mailbox with display name",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"idn-email\""
+		}](),
+		input: map[string]any{"value": "Name <user@example.com>"},
+		errs:  []string{"expected string to be RFC 5322 email (addr-spec only, no display name)"},
+	},
+	{
 		name: "hostname success",
 		typ: reflect.TypeFor[struct {
 			Value string "json:\"value\" format:\"hostname\""
@@ -476,6 +492,37 @@ var validateTests = []struct {
 		}](),
 		input: map[string]any{"value": ":"},
 		errs:  []string{"expected string to be RFC 3986 uri: parse \":\": missing protocol scheme"},
+	},
+	{
+		name: "expected uri absolute rejects empty string",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"uri\""
+		}](),
+		input: map[string]any{"value": ""},
+		errs:  []string{"expected string to be RFC 3986 absolute uri (non-empty scheme)"},
+	},
+	{
+		name: "expected uri absolute rejects path-only reference",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"uri\""
+		}](),
+		input: map[string]any{"value": "/relative"},
+		errs:  []string{"expected string to be RFC 3986 absolute uri (non-empty scheme)"},
+	},
+	{
+		name: "expected uri absolute rejects scheme-less token",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"uri\""
+		}](),
+		input: map[string]any{"value": "foo"},
+		errs:  []string{"expected string to be RFC 3986 absolute uri (non-empty scheme)"},
+	},
+	{
+		name: "uri-reference allows relative path",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" format:\"uri-reference\""
+		}](),
+		input: map[string]any{"value": "/relative"},
 	},
 	{
 		name: "uuid success",
@@ -761,6 +808,41 @@ var validateTests = []struct {
 		input: map[string]any{"value": []any{1, 2, 1, 3}},
 		errs:  []string{"expected array items to be unique"},
 	},
+	{
+		// Regression test for issue #1042:
+		// uniqueItems validation must NOT panic when array items are
+		// non-hashable types (e.g. objects decoded from JSON like [{}]).
+		// Expected: a 422 type-validation error, not a server crash.
+		name: "uniqueItems with unhashable object element must not panic",
+		typ: reflect.TypeFor[struct {
+			Value []string "json:\"value\" uniqueItems:\"true\""
+		}](),
+		input: map[string]any{"value": []any{map[string]any{"key": "val"}}},
+		errs:  []string{"expected string"},
+	},
+	{
+		// Regression test for issue #1042:
+		// Duplicate unhashable objects should still be detected as non-unique.
+		name: "uniqueItems detects duplicate unhashable objects",
+		typ: reflect.TypeFor[struct {
+			Value []any "json:\"value\" uniqueItems:\"true\""
+		}](),
+		input: map[string]any{"value": []any{
+			map[string]any{"a": 1},
+			map[string]any{"a": 1},
+		}},
+		errs: []string{"expected array items to be unique"},
+	},
+	{
+		// Regression test for issue #1042:
+		// Mixed arrays (some hashable, some not) must not panic.
+		name: "uniqueItems with mixed hashable and unhashable elements must not panic",
+		typ: reflect.TypeFor[struct {
+			Value []any "json:\"value\" uniqueItems:\"true\""
+		}](),
+		input: map[string]any{"value": []any{"ok", map[string]any{"k": "v"}}},
+	},
+
 	{
 		name:  "map success",
 		typ:   reflect.TypeFor[map[string]int](),
@@ -1818,4 +1900,69 @@ func TestPathBuffer_WithIndex_ReturnsExpectedString(t *testing.T) {
 	pb.Push("prefix")
 
 	assert.Equal(t, "prefix[1]", pb.WithIndex(1))
+}
+
+func TestValidateUnresolvedSchemaRefNoPanic(t *testing.T) {
+	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	pb := huma.NewPathBuffer([]byte{}, 0)
+	res := &huma.ValidateResult{}
+
+	assertUnresolved := func(t *testing.T, fn func()) {
+		t.Helper()
+		res.Reset()
+		require.NotPanics(t, fn)
+		require.NotEmpty(t, res.Errors)
+		require.Contains(t, res.Errors[0].Error(), "expected schema $ref to resolve")
+	}
+
+	t.Run("top-level ref", func(t *testing.T) {
+		assertUnresolved(t, func() {
+			huma.Validate(registry, &huma.Schema{Ref: "#/components/schemas/Missing"}, pb, huma.ModeWriteToServer, map[string]any{"x": 1}, res)
+		})
+	})
+
+	t.Run("nil schema", func(t *testing.T) {
+		assertUnresolved(t, func() {
+			huma.Validate(registry, nil, pb, huma.ModeWriteToServer, map[string]any{"x": 1}, res)
+		})
+	})
+
+	t.Run("discriminator mapping ref", func(t *testing.T) {
+		schema := &huma.Schema{
+			OneOf: []*huma.Schema{{Type: huma.TypeObject}},
+			Discriminator: &huma.Discriminator{
+				PropertyName: "kind",
+				Mapping:      map[string]string{"cat": "#/components/schemas/MissingCat"},
+			},
+		}
+		assertUnresolved(t, func() {
+			huma.Validate(registry, schema, pb, huma.ModeWriteToServer, map[string]any{"kind": "cat"}, res)
+		})
+	})
+
+	t.Run("property ref map[string]any", func(t *testing.T) {
+		schema := &huma.Schema{
+			Type: huma.TypeObject,
+			Properties: map[string]*huma.Schema{
+				"nested": {Ref: "#/components/schemas/AlsoMissing"},
+			},
+		}
+		schema.PrecomputeMessages()
+		assertUnresolved(t, func() {
+			huma.Validate(registry, schema, pb, huma.ModeWriteToServer, map[string]any{"nested": "v"}, res)
+		})
+	})
+
+	t.Run("property ref map[any]any", func(t *testing.T) {
+		schema := &huma.Schema{
+			Type: huma.TypeObject,
+			Properties: map[string]*huma.Schema{
+				"nested": {Ref: "#/components/schemas/StillMissing"},
+			},
+		}
+		schema.PrecomputeMessages()
+		assertUnresolved(t, func() {
+			huma.Validate(registry, schema, pb, huma.ModeWriteToServer, map[any]any{"nested": "v"}, res)
+		})
+	})
 }

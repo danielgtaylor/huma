@@ -255,10 +255,17 @@ func multiPartContentEncoding(t reflect.Type) map[string]*Encoding {
 		name := formDataFieldName(f)
 
 		contentType := "text/plain"
-		if f.Type == reflect.TypeFor[FormFile]() || f.Type == reflect.TypeFor[[]FormFile]() {
+		switch {
+		case f.Type == reflect.TypeFor[FormFile]() || f.Type == reflect.TypeFor[[]FormFile]():
 			contentType = f.Tag.Get("contentType")
 			if contentType == "" {
 				contentType = "application/octet-stream"
+			}
+		default:
+			// Honor an explicit content type (e.g. application/json) so the
+			// generated encoding matches how the field is actually parsed.
+			if c := f.Tag.Get("contentType"); c != "" {
+				contentType = c
 			}
 		}
 		encoding[name] = &Encoding{

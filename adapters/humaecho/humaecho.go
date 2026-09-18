@@ -37,7 +37,7 @@ func Unwrap(ctx huma.Context) *echo.Context {
 type echoCtx struct {
 	op     *huma.Operation
 	orig   *echo.Context
-	status int
+	status *int // shared by every WithContext copy so ancestors see the final status
 }
 
 // check that echoCtx implements huma.Context
@@ -105,12 +105,12 @@ func (c *echoCtx) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *echoCtx) SetStatus(code int) {
-	c.status = code
+	*c.status = code
 	c.orig.Response().WriteHeader(code)
 }
 
 func (c *echoCtx) Status() int {
-	return c.status
+	return *c.status
 }
 
 func (c *echoCtx) AppendHeader(name, value string) {
@@ -138,6 +138,19 @@ func (c *echoCtx) Version() huma.ProtoVersion {
 	}
 }
 
+// WithContext replaces the underlying context. Echo exposes only the request's
+// context, so this mutates the request in place (rather than returning an
+// isolated copy) so that native Echo middleware observe values set via
+// huma.WithValue.
+func (c *echoCtx) WithContext(ctx context.Context) huma.Context {
+	c.orig.SetRequest(c.orig.Request().WithContext(ctx))
+	return &echoCtx{
+		op:     c.op,
+		orig:   c.orig,
+		status: c.status,
+	}
+}
+
 type router interface {
 	Add(method, path string, handler echo.HandlerFunc, middlewares ...echo.MiddlewareFunc) echo.RouteInfo
 }
@@ -153,7 +166,7 @@ func (a *echoAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	path = strings.ReplaceAll(path, "{", ":")
 	path = strings.ReplaceAll(path, "}", "")
 	a.router.Add(op.Method, path, func(c *echo.Context) error {
-		ctx := &echoCtx{op: op, orig: c}
+		ctx := &echoCtx{op: op, orig: c, status: new(int)}
 		handler(ctx)
 		return nil
 	})

@@ -73,10 +73,15 @@ func TestContextValue(t *testing.T) {
 	_, api := humatest.New(t)
 
 	api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+		orig := ctx
 		// Make an updated context available to the handler.
 		ctx = huma.WithValue(ctx, "foo", "bar")
 		next(ctx)
 		assert.Equal(t, http.StatusNoContent, ctx.Status())
+		// The status the handler set must also be visible from the pre-fork
+		// context, since logging / telemetry middleware hold on to that one and
+		// can't know whether anything downstream forked again.
+		assert.Equal(t, http.StatusNoContent, orig.Status())
 	})
 
 	// Register a simple hello world operation in the API.

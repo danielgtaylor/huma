@@ -37,7 +37,7 @@ func Unwrap(ctx huma.Context) *gin.Context {
 type ginCtx struct {
 	op     *huma.Operation
 	orig   *gin.Context
-	status int
+	status *int // shared by every WithContext copy so ancestors see the final status
 }
 
 // check that ginCtx implements huma.Context
@@ -105,12 +105,12 @@ func (c *ginCtx) SetReadDeadline(deadline time.Time) error {
 }
 
 func (c *ginCtx) SetStatus(code int) {
-	c.status = code
+	*c.status = code
 	c.orig.Status(code)
 }
 
 func (c *ginCtx) Status() int {
-	return c.status
+	return *c.status
 }
 
 func (c *ginCtx) AppendHeader(name string, value string) {
@@ -137,9 +137,22 @@ func (c *ginCtx) Version() huma.ProtoVersion {
 	}
 }
 
+// WithContext replaces the underlying context. Gin exposes only the request's
+// context, so this mutates the request in place (rather than returning an
+// isolated copy) so that native Gin middleware observe values set via
+// huma.WithValue.
+func (c *ginCtx) WithContext(ctx context.Context) huma.Context {
+	c.orig.Request = c.orig.Request.WithContext(ctx)
+	return &ginCtx{
+		op:     c.op,
+		orig:   c.orig,
+		status: c.status,
+	}
+}
+
 // NewContext creates a new Huma context from a Gin context
 func NewContext(op *huma.Operation, c *gin.Context) huma.Context {
-	return &ginCtx{op: op, orig: c}
+	return &ginCtx{op: op, orig: c, status: new(int)}
 }
 
 // Router is an interface that wraps the Gin router's Handle method.
@@ -158,8 +171,7 @@ func (a *ginAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	path = strings.ReplaceAll(path, "{", ":")
 	path = strings.ReplaceAll(path, "}", "")
 	a.router.Handle(op.Method, path, func(c *gin.Context) {
-		ctx := &ginCtx{op: op, orig: c}
-		handler(ctx)
+		handler(NewContext(op, c))
 	})
 }
 

@@ -529,6 +529,59 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
+			Name: "params-named-numeric-slices",
+			Register: func(t *testing.T, api huma.API) {
+				type ID int
+				type IDs []ID
+				type Numbers []int
+				type Count uint16
+				type Counts []Count
+				type Ratio float32
+				type Ratios []Ratio
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/named-numeric-slices",
+				}, func(ctx context.Context, input *struct {
+					IDs     IDs     `query:"ids"`
+					Numbers Numbers `query:"numbers"`
+					Counts  Counts  `query:"counts"`
+					Ratios  Ratios  `query:"ratios"`
+				}) (*struct{}, error) {
+					assert.Equal(t, IDs{1, 2}, input.IDs)
+					assert.Equal(t, Numbers{5, 6}, input.Numbers)
+					assert.Equal(t, Counts{3, 4}, input.Counts)
+					assert.Equal(t, Ratios{1.5, 2.5}, input.Ratios)
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/named-numeric-slices?ids=1,2&numbers=5,6&counts=3,4&ratios=1.5,2.5",
+		},
+		{
+			Name: "params-named-numeric-slices-validation",
+			Register: func(t *testing.T, api huma.API) {
+				type ID int
+				type IDs []ID
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/named-numeric-slices",
+				}, func(ctx context.Context, input *struct {
+					IDs IDs `query:"ids" minimum:"1" uniqueItems:"true"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/named-numeric-slices?ids=0,0",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "expected number >= 1")
+				assert.Contains(t, resp.Body.String(), "expected array items to be unique")
+			},
+		},
+		{
 			Name: "params-error",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
@@ -922,6 +975,32 @@ func TestFeatures(t *testing.T) {
 			URL:    "/body",
 			// Headers: map[string]string{"Content-Type": "application/json"},
 			Body: `{"name":"foo"}`,
+		},
+		{
+			// Media types are case-insensitive (RFC 9110 §8.3.1). A client sending
+			// e.g. `Application/Json` must still be matched to the registered
+			// `application/json` format rather than rejected with 415.
+			Name: "request-body-content-type-case-insensitive",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name string `json:"name"`
+					}
+				}) (*struct{}, error) {
+					assert.Equal(t, "foo", input.Body.Name)
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPut,
+			URL:     "/body",
+			Headers: map[string]string{"Content-Type": "Application/Json; charset=UTF-8"},
+			Body:    `{"name":"foo"}`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
+			},
 		},
 		{
 			Name: "request-body-embed",
@@ -1374,6 +1453,242 @@ func TestFeatures(t *testing.T) {
 			URL:     "/file",
 			Headers: map[string]string{"Content-Type": "application/foo"},
 			Body:    `some-data`,
+		},
+		{
+			Name: "request-body-multipart-json-struct",
+			Register: func(t *testing.T, api huma.API) {
+				type User struct {
+					Name  string `json:"name"`
+					Email string `json:"email"`
+					Age   int    `json:"age"`
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						UserData User          `form:"user" contentType:"application/json" required:"true"`
+						File     huma.FormFile `form:"file" contentType:"text/plain"`
+					}]
+				}) (*struct{}, error) {
+					data := input.RawBody.Data()
+
+					// Verify the struct was correctly deserialized from JSON
+					assert.Equal(t, "John Doe", data.UserData.Name)
+					assert.Equal(t, "john@example.com", data.UserData.Email)
+					assert.Equal(t, 30, data.UserData.Age)
+
+					// Verify the file was also processed correctly
+					assert.Equal(t, "test.txt", data.File.Filename)
+					content, err := io.ReadAll(data.File)
+					require.NoError(t, err)
+					assert.Equal(t, "Hello World", string(content))
+
+					return nil, nil
+				})
+
+				// The generated encoding must advertise the JSON content type so
+				// the published spec matches how the field is actually parsed.
+				mpContent := api.OpenAPI().Paths["/upload"].Post.RequestBody.Content["multipart/form-data"]
+				assert.Equal(t, "application/json", mpContent.Encoding["user"].ContentType)
+				assert.Equal(t, "text/plain", mpContent.Encoding["file"].ContentType)
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="user"
+Content-Type: application/json
+
+{"name": "John Doe", "email": "john@example.com", "age": 30}
+--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+Hello World
+--SimpleBoundary--`,
+		},
+		{
+			Name: "request-body-multipart-json-struct-invalid-json",
+			Register: func(t *testing.T, api huma.API) {
+				type User struct {
+					Name  string `json:"name"`
+					Email string `json:"email" format:"email"`
+					Age   int    `json:"age"`
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						UserData User          `form:"user" contentType:"application/json" required:"true"`
+						File     huma.FormFile `form:"file" contentType:"text/plain"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="user"
+Content-Type: application/json
+
+this is not valid json
+--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+Hello World
+--SimpleBoundary--`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				if ok := assert.Equal(t, http.StatusUnprocessableEntity, resp.Code); ok {
+					var errors huma.ErrorModel
+					err := json.Unmarshal(resp.Body.Bytes(), &errors)
+					require.NoError(t, err)
+					assert.Equal(t, "form.user", errors.Errors[0].Location)
+				}
+			},
+		},
+		{
+			Name: "request-body-multipart-json-struct-invalid-data",
+			Register: func(t *testing.T, api huma.API) {
+				type User struct {
+					Name  string `json:"name"`
+					Email string `json:"email" format:"email"`
+					Age   int    `json:"age"`
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						UserData User          `form:"user" contentType:"application/json" required:"true"`
+						File     huma.FormFile `form:"file" contentType:"text/plain"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="user"
+Content-Type: application/json
+
+{"name": "John Doe", "email": "SOME INVALID EMAIL", "age": 30}
+--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+Hello World
+--SimpleBoundary--`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				if ok := assert.Equal(t, http.StatusUnprocessableEntity, resp.Code); ok {
+					var errors huma.ErrorModel
+					err := json.Unmarshal(resp.Body.Bytes(), &errors)
+					require.NoError(t, err)
+					assert.Equal(t, "form.user.email", errors.Errors[0].Location)
+				}
+			},
+		},
+		{
+			Name: "request-body-multipart-json-struct-default-set",
+			Register: func(t *testing.T, api huma.API) {
+				type User struct {
+					Name  string `json:"name,omitempty" default:"Default Name"`
+					Email string `json:"email,omitempty" format:"email"`
+					Age   *int   `json:"age,omitempty" default:"25"`
+				}
+
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						UserData User          `form:"user" contentType:"application/json" required:"true"`
+						File     huma.FormFile `form:"file" contentType:"text/plain"`
+					}]
+				}) (*struct{}, error) {
+					data := input.RawBody.Data()
+
+					// Verify the struct was correctly deserialized from JSON
+					assert.Equal(t, "Default Name", data.UserData.Name)
+					assert.Equal(t, 25, *data.UserData.Age)
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="user"
+Content-Type: application/json
+
+{}
+--SimpleBoundary
+Content-Disposition: form-data; name="file"; filename="test.txt"
+Content-Type: text/plain
+
+Hello World
+--SimpleBoundary--`,
+		},
+		{
+			Name: "request-body-multipart-json-array",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						Numbers []int    `form:"numbers" contentType:"application/json"`
+						Tags    []string `form:"tags" contentType:"application/json"`
+						Count   int      `form:"count" contentType:"application/json"`
+						Active  bool     `form:"active" contentType:"application/json"`
+					}]
+				}) (*struct{}, error) {
+					data := input.RawBody.Data()
+
+					// Verify arrays were correctly deserialized from JSON
+					assert.Equal(t, []int{1, 2, 3, 4, 5}, data.Numbers)
+					assert.Equal(t, []string{"tag1", "tag2", "tag3"}, data.Tags)
+
+					// Verify scalar types were correctly deserialized from JSON
+					assert.Equal(t, 42, data.Count)
+					assert.True(t, data.Active)
+
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="numbers"
+Content-Type: application/json
+
+[1, 2, 3, 4, 5]
+--SimpleBoundary
+Content-Disposition: form-data; name="tags"
+Content-Type: application/json
+
+["tag1", "tag2", "tag3"]
+--SimpleBoundary
+Content-Disposition: form-data; name="count"
+Content-Type: application/json
+
+42
+--SimpleBoundary
+Content-Disposition: form-data; name="active"
+Content-Type: application/json
+
+true
+--SimpleBoundary--`,
 		},
 		{
 			Name: "request-body-multipart-file-decoded",
@@ -2589,6 +2904,27 @@ Content-Type: text/plain
 			},
 		},
 		{
+			Name: "response-transform-nil-interface-body",
+			Transformers: []huma.Transformer{
+				huma.NewSchemaLinkTransformer("/", "/").Transform,
+			},
+			Register: func(t *testing.T, api huma.API) {
+				huma.Get(api, "/transform", func(ctx context.Context, i *struct{}) (*struct {
+					Body any
+				}, error) {
+					return &struct {
+						Body any
+					}{Body: nil}, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/transform",
+Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+	assert.Equal(t, http.StatusOK, resp.Code)
+	assert.JSONEq(t, `null`, resp.Body.String())
+},
+		},
+		{
 			Name: "schema-url-from-x-forwarded-host",
 			Transformers: []huma.Transformer{
 				huma.NewSchemaLinkTransformer("/", "/").Transform,
@@ -3304,6 +3640,77 @@ Content-Type: text/plain
 	}
 }
 
+// TestMultipartJSONContentTypeMatching ensures the `contentType` tag is matched
+// as a media type: parameters like `charset` and structured `+json` suffixes
+// still select JSON handling.
+func TestMultipartJSONContentTypeMatching(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test", "1.0.0"))
+
+	type Meta struct {
+		Name string `json:"name"`
+	}
+
+	huma.Register(api, huma.Operation{
+		Method: http.MethodPost,
+		Path:   "/upload",
+	}, func(ctx context.Context, input *struct {
+		RawBody huma.MultipartFormFiles[struct {
+			Charset Meta `form:"charset" contentType:"application/json; charset=utf-8"`
+			Vendor  Meta `form:"vendor" contentType:"application/vnd.api+json"`
+		}]
+	}) (*struct{}, error) {
+		data := input.RawBody.Data()
+		assert.Equal(t, "a", data.Charset.Name)
+		assert.Equal(t, "b", data.Vendor.Name)
+		return nil, nil
+	})
+
+	body := "--B\r\n" +
+		"Content-Disposition: form-data; name=\"charset\"\r\n\r\n" +
+		`{"name":"a"}` + "\r\n" +
+		"--B\r\n" +
+		"Content-Disposition: form-data; name=\"vendor\"\r\n\r\n" +
+		`{"name":"b"}` + "\r\n" +
+		"--B--\r\n"
+
+	r := httptest.NewRequest(http.MethodPost, "/upload", strings.NewReader(body))
+	r.Header.Set("Content-Type", "multipart/form-data; boundary=B")
+	w := httptest.NewRecorder()
+	api.Adapter().ServeHTTP(w, r)
+	assert.Less(t, w.Code, 300, w.Body.String())
+
+	// The generated encoding must reflect the tagged content types.
+	enc := api.OpenAPI().Paths["/upload"].Post.RequestBody.Content["multipart/form-data"].Encoding
+	assert.Equal(t, "application/json; charset=utf-8", enc["charset"].ContentType)
+	assert.Equal(t, "application/vnd.api+json", enc["vendor"].ContentType)
+}
+
+// TestMultipartStructFieldRequiresJSONTag ensures a non-parseable struct form
+// field without a JSON content type fails fast at registration with actionable
+// guidance instead of a confusing request-time error.
+func TestMultipartStructFieldRequiresJSONTag(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test", "1.0.0"))
+
+	type Meta struct {
+		Name string `json:"name"`
+	}
+
+	assert.PanicsWithError(t,
+		`multipart form field 'meta' of type 'huma_test.Meta' requires contentType:"application/json" to be unmarshalled as JSON`,
+		func() {
+			huma.Register(api, huma.Operation{
+				Method: http.MethodPost,
+				Path:   "/upload",
+			}, func(ctx context.Context, input *struct {
+				RawBody huma.MultipartFormFiles[struct {
+					Meta Meta `form:"meta"`
+				}]
+			}) (*struct{}, error) {
+				return nil, nil
+			})
+		})
+}
+
 func TestOpenAPI(t *testing.T) {
 	r, api := humatest.New(t, huma.DefaultConfig("Features Test API", "1.0.0"))
 
@@ -3486,6 +3893,36 @@ func TestExhaustiveErrors(t *testing.T) {
 	}`, w.Body.String())
 }
 
+type WrappedResolverErrorInput struct{}
+
+func (*WrappedResolverErrorInput) Resolve(huma.Context) []error {
+	err := huma.ErrorWithHeaders(
+		huma.Error401Unauthorized("credentials required"),
+		http.Header{
+			"WWW-Authenticate": {"Bearer realm=\"protected\""},
+			"Set-Cookie":       {"session=; Max-Age=0", "refresh=; Max-Age=0"},
+		},
+	)
+	return []error{fmt.Errorf("resolver failed: %w", err)}
+}
+
+func TestWrappedResolverErrorStatusAndHeaders(t *testing.T) {
+	router, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	handlerCalled := false
+	huma.Get(api, "/resolver-error", func(context.Context, *WrappedResolverErrorInput) (*struct{}, error) {
+		handlerCalled = true
+		return nil, nil
+	})
+
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, httptest.NewRequest(http.MethodGet, "/resolver-error", nil))
+
+	assert.Equal(t, http.StatusUnauthorized, resp.Code)
+	assert.Equal(t, "Bearer realm=\"protected\"", resp.Header().Get("WWW-Authenticate"))
+	assert.Equal(t, []string{"session=; Max-Age=0", "refresh=; Max-Age=0"}, resp.Header().Values("Set-Cookie"))
+	assert.False(t, handlerCalled)
+}
+
 type MyError struct {
 	status  int
 	Message string   `json:"message"`
@@ -3602,6 +4039,190 @@ func TestNestedResolverWithPath(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusUnprocessableEntity, w.Code, w.Body.String())
 	assert.Contains(t, w.Body.String(), `"location":"body.field1.foo[0].field2"`)
+}
+
+type FixedArrayResolverItem struct {
+	Value    string `json:"value,omitempty" default:"default"`
+	Resolved bool   `json:"-"`
+	Path     string `json:"-"`
+}
+
+func (i *FixedArrayResolverItem) Resolve(_ huma.Context, prefix *huma.PathBuffer) []error {
+	i.Resolved = true
+	i.Path = prefix.String()
+	return nil
+}
+
+func TestResolverInFixedArray(t *testing.T) {
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	var got FixedArrayResolverItem
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodPost,
+		Path:        "/test",
+	}, func(ctx context.Context, input *struct {
+		Body struct {
+			Items [1]FixedArrayResolverItem `json:"items"`
+		}
+	}) (*struct{}, error) {
+		got = input.Body.Items[0]
+		return nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(`{"items":[{}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	assert.Equal(t, "default", got.Value)
+	assert.True(t, got.Resolved)
+	assert.Equal(t, "body.items[0]", got.Path)
+}
+
+// CollectionResolverArray and CollectionResolverSlice have resolvers on the
+// collection type itself rather than on an element type.
+type CollectionResolverArray [2]float64
+
+func (c *CollectionResolverArray) Resolve(_ huma.Context) []error {
+	*c = CollectionResolverArray{1, 2}
+	return nil
+}
+
+type CollectionResolverSlice []float64
+
+func (c *CollectionResolverSlice) Resolve(_ huma.Context) []error {
+	*c = CollectionResolverSlice{3, 4}
+	return nil
+}
+
+func TestResolverOnCollectionType(t *testing.T) {
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	var got struct {
+		Array  CollectionResolverArray
+		Slice  CollectionResolverSlice
+		Nested []CollectionResolverArray
+	}
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodPost,
+		Path:        "/test",
+	}, func(ctx context.Context, input *struct {
+		Body struct {
+			Array  CollectionResolverArray   `json:"array"`
+			Slice  CollectionResolverSlice   `json:"slice"`
+			Nested []CollectionResolverArray `json:"nested"`
+		}
+	}) (*struct{}, error) {
+		got.Array = input.Body.Array
+		got.Slice = input.Body.Slice
+		got.Nested = input.Body.Nested
+		return nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(`{"array":[0,0],"slice":[0],"nested":[[0,0],[0,0]]}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	assert.Equal(t, CollectionResolverArray{1, 2}, got.Array)
+	assert.Equal(t, CollectionResolverSlice{3, 4}, got.Slice)
+	// Each element of the outer slice is itself the match, so the resolver runs
+	// on the elements rather than on the slice.
+	assert.Equal(t, []CollectionResolverArray{{1, 2}, {1, 2}}, got.Nested)
+}
+
+// BothResolverItems and BothResolverItem both have a resolver, so both the
+// collection and its elements must be resolved, each exactly once.
+type BothResolverItem struct {
+	Name  string `json:"name"`
+	Count int    `json:"count,omitempty"`
+}
+
+func (i *BothResolverItem) Resolve(_ huma.Context) []error {
+	i.Count++
+	return nil
+}
+
+type BothResolverItems []BothResolverItem
+
+func (i *BothResolverItems) Resolve(_ huma.Context) []error {
+	*i = append(*i, BothResolverItem{Name: "appended"})
+	return nil
+}
+
+func TestResolverOnCollectionAndElement(t *testing.T) {
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	var got BothResolverItems
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodPost,
+		Path:        "/test",
+	}, func(ctx context.Context, input *struct {
+		Body struct {
+			Items BothResolverItems `json:"items"`
+		}
+	}) (*struct{}, error) {
+		got = input.Body.Items
+		return nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(`{"items":[{"name":"a"}]}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	require.Len(t, got, 2, "the collection resolver should run exactly once")
+	assert.Equal(t, "a", got[0].Name)
+	assert.Equal(t, 1, got[0].Count, "the element resolver should run exactly once")
+}
+
+type MapValueResolverItem struct {
+	Value    string `json:"value,omitempty" default:"default"`
+	Resolved string `json:"resolved,omitempty"`
+}
+
+func (i *MapValueResolverItem) Resolve(_ huma.Context) []error {
+	i.Resolved = "yes"
+	return nil
+}
+
+// TestDefaultsInMapValue covers defaults and resolver mutations on values only
+// reachable through a map. Map values are copies, so they are written back to
+// the map after being visited, otherwise the changes would be lost.
+func TestDefaultsInMapValue(t *testing.T) {
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	var got struct {
+		Structs map[string]MapValueResolverItem
+		Arrays  map[string][1]MapValueResolverItem
+	}
+	huma.Register(app, huma.Operation{
+		OperationID: "test",
+		Method:      http.MethodPost,
+		Path:        "/test",
+	}, func(ctx context.Context, input *struct {
+		Body struct {
+			Structs map[string]MapValueResolverItem    `json:"structs"`
+			Arrays  map[string][1]MapValueResolverItem `json:"arrays"`
+		}
+	}) (*struct{}, error) {
+		got.Structs = input.Body.Structs
+		got.Arrays = input.Body.Arrays
+		return nil, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(`{"structs":{"a":{}},"arrays":{"a":[{}]}}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	assert.NotPanics(t, func() { r.ServeHTTP(w, req) })
+	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	assert.Equal(t, "default", got.Structs["a"].Value)
+	assert.Equal(t, "yes", got.Structs["a"].Resolved)
+	assert.Equal(t, "default", got.Arrays["a"][0].Value)
+	assert.Equal(t, "yes", got.Arrays["a"][0].Resolved)
 }
 
 type ResolverCustomStatus struct{}

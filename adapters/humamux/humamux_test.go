@@ -133,3 +133,63 @@ func BenchmarkHumaGorillaMux(b *testing.B) {
 		}
 	}
 }
+
+func TestOperationWithoutIDAndInlineRequestTypeDefinitionNotPanics(t *testing.T) {
+	r := mux.NewRouter()
+	api := New(r, huma.DefaultConfig("Test", "1.0.0"))
+
+	var (
+		op1 = huma.Operation{Method: http.MethodGet, Path: "/1"} // no OperationID
+		op2 = huma.Operation{Method: http.MethodGet, Path: "/2"} // no OperationID
+	)
+
+	huma.Register(api, op1, func(ctx context.Context, i *struct { // inline request input type definition
+		Body struct {
+			Test1 string // field name varying
+		}
+	},
+	) (*struct{}, error,
+	) {
+		return nil, nil
+	})
+
+	huma.Register(api, op2, func(ctx context.Context, i *struct { // inline request input type definition
+		Body struct {
+			Test2 string // field name varying
+		}
+	},
+	) (*struct{}, error,
+	) {
+		return nil, nil
+	})
+}
+
+func TestOperationWithoutIDAndInlineResponseTypeDefinitionNotPanics(t *testing.T) {
+	r := mux.NewRouter()
+	api := New(r, huma.DefaultConfig("", ""))
+
+	var (
+		op1 = huma.Operation{Method: http.MethodGet, Path: "/1"} // no OperationID
+		op2 = huma.Operation{Method: http.MethodGet, Path: "/2"} // no OperationID
+	)
+
+	huma.Register(api, op1, func(ctx context.Context, i *struct{},
+	) (*struct { // inline response output type definition
+		Body struct {
+			Test1 string // field name varying
+		}
+	}, error,
+	) {
+		return nil, nil
+	})
+
+	huma.Register(api, op2, func(ctx context.Context, i *struct{},
+	) (*struct { // inline response output type definition
+		Body struct {
+			Test2 string // field name varying
+		}
+	}, error,
+	) {
+		return nil, nil
+	})
+}

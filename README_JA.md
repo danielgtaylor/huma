@@ -77,17 +77,14 @@
 ご支援いただいたスポンサーの皆様に心より感謝いたします！
 
 <div>
-  <img width="1000" height="0" />
-  <a href="https://zuplo.link/huma-gh">
-    <picture>
-      <img src="https://github.com/user-attachments/assets/aace5aa7-32bd-45cf-a8f8-2e352feaf017" alt="Zuplo" width="260" align="right">
-    </picture>
+  <a href="https://serpapi.com/?utm_source=huma">
+    <img src="docs/docs/serpapi-banner.png" alt="SerpApi" width="260" align="right">
   </a>
-  <h3>Zuplo: あなたのHuma APIをスケール、保護、プロダクト化</h3>
+  <h3>SerpApi: Web Search API</h3>
   <p>
-    当社のAPI Gatewayは、APIのセキュリティ強化、グローバルスケール、OpenAPIからのドキュメント生成、ユーザーの収益化を支援します。
+    SerpApi のシンプルな API を使って、Google 検索、マップ、ショッピング、その他の検索エンジンのデータにアクセスできます。
   </p>
-  <a href="https://zuplo.link/huma-gh">無料で始める</a>
+  <a href="https://serpapi.com/?utm_source=huma">詳しく見る</a>
 </div>
 <hr/>
 

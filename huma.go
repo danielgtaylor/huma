@@ -100,15 +100,47 @@ type StreamResponse struct {
 const styleDeepObject = "deepObject"
 
 type paramFieldInfo struct {
-	Type       reflect.Type
-	Name       string
-	Loc        string
-	Required   bool
-	Default    string
-	TimeFormat string
-	Explode    bool
-	Style      string
-	Schema     *Schema
+	Type        reflect.Type
+	Name        string
+	Loc         string
+	Required    bool
+	Default     string
+	TimeFormat  string
+	Explode     bool
+	Style       string
+	ContentType string
+	Schema      *Schema
+}
+
+// jsonFormFieldInfo holds precomputed metadata for a multipart form field that
+// is unmarshalled and validated as JSON (via `contentType:"application/json"`).
+// It is computed once at registration time to keep request handling cheap.
+type jsonFormFieldInfo struct {
+	schema   *Schema
+	defaults *findResult[any]
+}
+
+// multipartFieldNeedsJSONTag reports whether a multipart form field of type t
+// can only be handled by unmarshalling it as JSON, i.e. it cannot be parsed
+// from a plain-text form value by parseInto. Such fields must be tagged
+// `contentType:"application/json"`.
+//
+// It is intentionally conservative: it flags only struct and map types that are
+// not otherwise scalar-parseable, so it never reports a field that parseInto
+// would have handled successfully.
+func multipartFieldNeedsJSONTag(t reflect.Type) bool {
+	switch t.Kind() {
+	case reflect.Struct, reflect.Map:
+		if t == timeType || t == urlType {
+			return false
+		}
+		if reflect.PointerTo(t).Implements(paramWrapperType) ||
+			reflect.PointerTo(t).Implements(textUnmarshalerType) {
+			return false
+		}
+		return true
+	}
+	return false
 }
 
 // paramLocation holds the result of parsing a struct field's parameter location tags.
@@ -248,6 +280,10 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 			pfi.Required = boolTag(f, "required", false)
 		}
 
+		if _, ok = f.Tag.Lookup("contentType"); ok {
+			pfi.ContentType = f.Tag.Get("contentType")
+		}
+
 		// Per OpenAPI 3.x spec, path parameters MUST always be required.
 		// Override any user-set `required:"false"` tag for path params.
 		if pfi.Loc == "path" {
@@ -335,8 +371,28 @@ func findHeaders(t reflect.Type) *findResult[*headerInfo] {
 }
 
 type findResultPath[T comparable] struct {
+	// Path is a sequence of struct field indices to walk, where `collectionElem`
+	// means "step into the elements of this slice, array, or map".
 	Path  []int
 	Value T
+}
+
+// collectionElem is a path step meaning "into the elements of this slice, array
+// or map". Field indices are never negative, so it can't collide with one. A
+// path that stops at a collection instead of stepping into it means the
+// collection's own type is the match.
+const collectionElem = -1
+
+// collectionPath returns the rest of the path after the step into a
+// collection's elements. Arriving at a collection without that step means the
+// path was recorded wrong, e.g. a new kind was added to `_findInType` without
+// marking its elements.
+func collectionPath(path []int) []int {
+	if len(path) == 0 || path[0] != collectionElem {
+		panic("expected a collection element path step, please file a bug")
+	}
+
+	return path[1:]
 }
 
 type findResult[T comparable] struct {
@@ -361,17 +417,31 @@ func (r *findResult[T]) every(current reflect.Value, path []int, v T, f func(ref
 	switch current.Kind() {
 	case reflect.Struct:
 		r.every(current.Field(path[0]), path[1:], v, f)
-	case reflect.Slice:
+	case reflect.Slice, reflect.Array:
+		elem := collectionPath(path)
 		for j := 0; j < current.Len(); j++ {
-			r.every(current.Index(j), path, v, f)
+			r.every(current.Index(j), elem, v, f)
 		}
 	case reflect.Map:
+		elem := collectionPath(path)
 		for _, k := range current.MapKeys() {
-			r.every(current.MapIndex(k), path, v, f)
+			item := addressableMapValue(current, k)
+			r.every(item, elem, v, f)
+			current.SetMapIndex(k, item)
 		}
 	default:
 		panic("unsupported")
 	}
+}
+
+// addressableMapValue returns a settable copy of the value stored at the given
+// key. Map values are never addressable, so callers must work on a copy and
+// write it back via `SetMapIndex` for changes like defaults or resolver
+// mutations to survive.
+func addressableMapValue(m reflect.Value, key reflect.Value) reflect.Value {
+	item := reflect.New(m.Type().Elem()).Elem()
+	item.Set(m.MapIndex(key))
+	return item
 }
 
 // Every iterates over all paths in the result, applying the provided function
@@ -393,16 +463,13 @@ func jsonName(field reflect.StructField) string {
 }
 
 // everyPB traverses and processes a value using a path, building paths with
-// PathBuffer, and applying a function to leaf nodes.
+// PathBuffer, and applying a function to leaf nodes. A path stopping at a
+// collection means the collection itself is the match; a `collectionElem` step
+// means the match is inside it.
 func (r *findResult[T]) everyPB(current reflect.Value, path []int, pb *PathBuffer, v T, f func(reflect.Value, T)) {
-	switch reflect.Indirect(current).Kind() {
-	case reflect.Slice, reflect.Map:
-		// Ignore these. We only care about the leaf nodes.
-	default:
-		if len(path) == 0 {
-			f(current, v)
-			return
-		}
+	if len(path) == 0 {
+		f(current, v)
+		return
 	}
 
 	current = reflect.Indirect(current)
@@ -444,20 +511,24 @@ func (r *findResult[T]) everyPB(current reflect.Value, path []int, pb *PathBuffe
 		for i := 0; i < pops; i++ {
 			pb.Pop()
 		}
-	case reflect.Slice:
+	case reflect.Slice, reflect.Array:
+		elem := collectionPath(path)
 		for j := 0; j < current.Len(); j++ {
 			pb.PushIndex(j)
-			r.everyPB(current.Index(j), path, pb, v, f)
+			r.everyPB(current.Index(j), elem, pb, v, f)
 			pb.Pop()
 		}
 	case reflect.Map:
+		elem := collectionPath(path)
 		for _, k := range current.MapKeys() {
 			if k.Kind() == reflect.String {
 				pb.Push(k.String())
 			} else {
 				pb.Push(fmt.Sprintf("%v", k.Interface()))
 			}
-			r.everyPB(current.MapIndex(k), path, pb, v, f)
+			item := addressableMapValue(current, k)
+			r.everyPB(item, elem, pb, v, f)
+			current.SetMapIndex(k, item)
 			pb.Pop()
 		}
 	default:
@@ -530,10 +601,13 @@ func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T]
 				delete(visited, t)
 			}
 		}
-	case reflect.Slice:
-		_findInType[T](t.Elem(), path, result, onType, onField, recurseFields, visited, ignore...)
-	case reflect.Map:
-		_findInType[T](t.Elem(), path, result, onType, onField, recurseFields, visited, ignore...)
+	case reflect.Slice, reflect.Array, reflect.Map:
+		// Record that the match is inside the collection rather than on the
+		// collection's own type, so the walkers know to descend into elements.
+		// Both can match, e.g. `type Items []Item` where each has a resolver, in
+		// which case two paths are recorded and both run.
+		elem := append(append([]int{}, path...), collectionElem)
+		_findInType[T](t.Elem(), elem, result, onType, onField, recurseFields, visited, ignore...)
 	}
 }
 
@@ -643,20 +717,6 @@ func transformAndWrite(api API, ctx Context, status int, ct string, body any) er
 	}
 
 	return nil
-}
-
-func parseArrElement[T any](values []string, parse func(string) (T, error)) ([]T, error) {
-	result := make([]T, 0, len(values))
-
-	for i := range values {
-		v, err := parse(values[i])
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, v)
-	}
-
-	return result, nil
 }
 
 // writeHeader is a utility function to write a header value to the response.
@@ -779,8 +839,44 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 	a := api.Adapter()
 	var rawBodyInputParams *findResult[*paramFieldInfo]
+	// jsonFormFields holds precomputed metadata for multipart form fields that
+	// carry `contentType:"application/json"`, so the per-request handler avoids
+	// repeating schema lookups and reflection-based default discovery.
+	var jsonFormFields map[*paramFieldInfo]*jsonFormFieldInfo
 	if rawBodyDataT != nil {
 		rawBodyInputParams = findParams(registry, &op, rawBodyDataT)
+		for i := range rawBodyInputParams.Paths {
+			p := rawBodyInputParams.Paths[i].Value
+			if p.Loc != "form" || p.Type == formFileType || p.Type == formFilesType {
+				continue
+			}
+			// Resolve the field's content type the same way body codecs do (via
+			// parseContentType), so `+json` suffixes and `;charset` parameters
+			// are handled consistently.
+			ct := ""
+			if start, end, err := parseContentType(p.ContentType); err == nil {
+				ct = strings.ToLower(p.ContentType[start:end])
+			}
+			if ct != "application/json" && ct != "json" {
+				// Fail fast at registration with actionable guidance rather than
+				// a confusing "unsupported param type" error at request time.
+				if multipartFieldNeedsJSONTag(p.Type) {
+					panic(fmt.Errorf(`multipart form field '%s' of type '%s' requires contentType:"application/json" to be unmarshalled as JSON`, p.Name, p.Type))
+				}
+				continue
+			}
+			if jsonFormFields == nil {
+				jsonFormFields = map[*paramFieldInfo]*jsonFormFieldInfo{}
+			}
+			var schema *Schema
+			if mt := op.RequestBody.Content["multipart/form-data"]; mt != nil && mt.Schema != nil {
+				schema = mt.Schema.Properties[p.Name]
+			}
+			jsonFormFields[p] = &jsonFormFieldInfo{
+				schema:   schema,
+				defaults: findDefaults(registry, p.Type),
+			}
+		}
 	}
 	a.Handle(&op, api.Middlewares().Handler(op.Middlewares.Handler(func(ctx Context) {
 		var input I
@@ -925,6 +1021,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			if rbt.isMultipart() {
 				// Read form
 				form, err := readForm(ctx)
+				jsonUnmarshaler := func(data []byte, v any) error { return api.Unmarshal("application/json", data, v) }
 
 				if err != nil {
 					res.Errors = append(res.Errors, err)
@@ -968,6 +1065,30 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 									res.Add(pb, value, "expected at most one value, but received multiple values")
 									return
 								}
+
+								// JSON fields
+								if jf := jsonFormFields[p]; jf != nil {
+									errorsBeforeValidation := len(res.Errors)
+
+									var parsed any
+									if err := jsonUnmarshaler([]byte(value[0]), &parsed); err != nil {
+										res.Add(pb, value, "invalid JSON: "+err.Error())
+									} else if !op.SkipValidateParams {
+										Validate(oapi.Components.Schemas, jf.schema, pb, ModeWriteToServer, parsed, res)
+									}
+
+									if errorsBeforeValidation == len(res.Errors) {
+										if err := jsonUnmarshaler([]byte(value[0]), f.Addr().Interface()); err != nil {
+											// Should have been caught by the validation above.
+											res.Add(pb, value, "invalid JSON: "+err.Error())
+										}
+										// Set defaults on the unmarshalled value.
+										setDefaults(f, jf.defaults)
+									}
+									return
+								}
+
+								// Regular fields
 								pv, err := parseInto(ctx, f, value[0], value, *p)
 								if err != nil {
 									res.Add(pb, value, err.Error())
@@ -1091,10 +1212,16 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 				// If there are errors, and they provide a status, then update the
 				// response status code to match. Otherwise, use the default status
 				// code is used. Since these run in order, the last error code wins.
-				if s, ok := res.Errors[i].(StatusError); ok {
+				var s StatusError
+				if errors.As(res.Errors[i], &s) {
 					errStatus = s.GetStatus()
 					break
 				}
+			}
+			// Resolver errors may be wrapped and may each carry response metadata,
+			// so preserve headers from every error, matching the handler path below.
+			for _, err := range res.Errors {
+				appendErrorHeaders(ctx, err)
 			}
 			WriteErr(api, ctx, errStatus, "validation failed", res.Errors...)
 			return
@@ -1102,14 +1229,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 		output, err := handler(ctx.Context(), &input)
 		if err != nil {
-			var he HeadersError
-			if errors.As(err, &he) {
-				for k, values := range he.GetHeaders() {
-					for _, v := range values {
-						ctx.AppendHeader(k, v)
-					}
-				}
-			}
+			appendErrorHeaders(ctx, err)
 
 			status := http.StatusInternalServerError
 
@@ -1799,7 +1919,8 @@ func parseInto(ctx Context, f reflect.Value, value string, preSplit []string, p 
 // parseSliceInto converts a slice of string values into the expected type of f
 // and sets the result on f.
 func parseSliceInto(f reflect.Value, values []string) (any, error) {
-	switch f.Type().Elem().Kind() {
+	elemType := f.Type().Elem()
+	switch elemType.Kind() {
 	case reflect.String:
 		if f.Type() == stringSliceType {
 			f.Set(reflect.ValueOf(values))
@@ -1816,198 +1937,45 @@ func parseSliceInto(f reflect.Value, values []string) (any, error) {
 		}
 
 		return values, nil
-	case reflect.Int:
-		vs, err := parseArrElement(values, func(s string) (int, error) {
-			val, err := strconv.ParseInt(s, 10, strconv.IntSize)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		vs := reflect.MakeSlice(reflect.SliceOf(elemType), len(values), len(values))
+		for i, s := range values {
+			v, err := strconv.ParseInt(s, 10, elemType.Bits())
 			if err != nil {
-				return 0, err
+				return nil, errors.New("invalid integer")
 			}
-
-			return int(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
+			vs.Index(i).SetInt(v)
 		}
 
-		f.Set(reflect.ValueOf(vs))
+		f.Set(vs)
 
-		return vs, nil
-	case reflect.Int8:
-		vs, err := parseArrElement(values, func(s string) (int8, error) {
-			val, err := strconv.ParseInt(s, 10, 8)
+		return vs.Interface(), nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		vs := reflect.MakeSlice(reflect.SliceOf(elemType), len(values), len(values))
+		for i, s := range values {
+			v, err := strconv.ParseUint(s, 10, elemType.Bits())
 			if err != nil {
-				return 0, err
+				return nil, errors.New("invalid integer")
 			}
-
-			return int8(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
+			vs.Index(i).SetUint(v)
 		}
 
-		f.Set(reflect.ValueOf(vs))
+		f.Set(vs)
 
-		return vs, nil
-	case reflect.Int16:
-		vs, err := parseArrElement(values, func(s string) (int16, error) {
-			val, err := strconv.ParseInt(s, 10, 16)
+		return vs.Interface(), nil
+	case reflect.Float32, reflect.Float64:
+		vs := reflect.MakeSlice(reflect.SliceOf(elemType), len(values), len(values))
+		for i, s := range values {
+			v, err := strconv.ParseFloat(s, elemType.Bits())
 			if err != nil {
-				return 0, err
+				return nil, errors.New("invalid floating value")
 			}
-
-			return int16(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
+			vs.Index(i).SetFloat(v)
 		}
 
-		f.Set(reflect.ValueOf(vs))
+		f.Set(vs)
 
-		return vs, nil
-	case reflect.Int32:
-		vs, err := parseArrElement(values, func(s string) (int32, error) {
-			val, err := strconv.ParseInt(s, 10, 32)
-			if err != nil {
-				return 0, err
-			}
-
-			return int32(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
-	case reflect.Int64:
-		vs, err := parseArrElement(values, func(s string) (int64, error) {
-			val, err := strconv.ParseInt(s, 10, 64)
-			if err != nil {
-				return 0, err
-			}
-
-			return val, nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
-	case reflect.Uint:
-		vs, err := parseArrElement(values, func(s string) (uint, error) {
-			val, err := strconv.ParseUint(s, 10, strconv.IntSize)
-			if err != nil {
-				return 0, err
-			}
-
-			return uint(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
-	case reflect.Uint8:
-		vs, err := parseArrElement(values, func(s string) (uint8, error) {
-			val, err := strconv.ParseUint(s, 10, 8)
-			if err != nil {
-				return 0, err
-			}
-
-			return uint8(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
-	case reflect.Uint16:
-		vs, err := parseArrElement(values, func(s string) (uint16, error) {
-			val, err := strconv.ParseUint(s, 10, 16)
-			if err != nil {
-				return 0, err
-			}
-
-			return uint16(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
-	case reflect.Uint32:
-		vs, err := parseArrElement(values, func(s string) (uint32, error) {
-			val, err := strconv.ParseUint(s, 10, 32)
-			if err != nil {
-				return 0, err
-			}
-
-			return uint32(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
-	case reflect.Uint64:
-		vs, err := parseArrElement(values, func(s string) (uint64, error) {
-			val, err := strconv.ParseUint(s, 10, 64)
-			if err != nil {
-				return 0, err
-			}
-
-			return val, nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid integer")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
-	case reflect.Float32:
-		vs, err := parseArrElement(values, func(s string) (float32, error) {
-			val, err := strconv.ParseFloat(s, 32)
-			if err != nil {
-				return 0, err
-			}
-
-			return float32(val), nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid floating value")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
-	case reflect.Float64:
-		vs, err := parseArrElement(values, func(s string) (float64, error) {
-			val, err := strconv.ParseFloat(s, 64)
-			if err != nil {
-				return 0, err
-			}
-
-			return val, nil
-		})
-		if err != nil {
-			return nil, errors.New("invalid floating value")
-		}
-
-		f.Set(reflect.ValueOf(vs))
-
-		return vs, nil
+		return vs.Interface(), nil
 	}
 
 	// Last resort: use the `encoding.TextUnmarshaler` interface.
@@ -2173,6 +2141,14 @@ func parseBodyInto(v reflect.Value, bodyIndex []int, u intoUnmarshaler, body []b
 		}
 	}
 	// Set defaults for any fields that were not in the input.
+	setDefaults(v, defaults)
+	return nil
+}
+
+// setDefaults sets default values on every field reachable from v that was left
+// at its zero value. It is shared by the request body and multipart JSON form
+// field decoding paths.
+func setDefaults(v reflect.Value, defaults *findResult[any]) {
 	defaults.Every(v, func(item reflect.Value, def any) {
 		if item.IsZero() {
 			if item.Kind() == reflect.Pointer {
@@ -2182,7 +2158,6 @@ func parseBodyInto(v reflect.Value, bodyIndex []int, u intoUnmarshaler, body []b
 			item.Set(reflect.Indirect(reflect.ValueOf(def)))
 		}
 	})
-	return nil
 }
 
 // readBody reads the message body from ctx into buf, respecting the
