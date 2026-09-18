@@ -14,8 +14,8 @@ import (
 
 func TestSchemaStdlibUUID(t *testing.T) {
 	type Input struct {
-		ID   uuid.UUID   `json:"id"`
-		IDs  []uuid.UUID `json:"ids"`
+		ID  uuid.UUID   `json:"id"`
+		IDs []uuid.UUID `json:"ids"`
 	}
 
 	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
