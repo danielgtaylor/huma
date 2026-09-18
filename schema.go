@@ -792,6 +792,10 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 		return custom
 	}
 
+	if s := stdlibUUIDSchema(t, isPointer); s != nil {
+		return s
+	}
+
 	// Handle special cases for known stdlib types.
 	switch t {
 	case timeType:
