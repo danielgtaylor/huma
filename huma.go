@@ -878,7 +878,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			}
 		}
 	}
-	a.Handle(&op, api.Middlewares().Handler(op.Middlewares.Handler(func(ctx Context) {
+	requestHandler := func(ctx Context) {
 		var input I
 
 		// Get the validation dependencies from the shared pool.
@@ -1298,7 +1298,16 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		} else {
 			ctx.SetStatus(status)
 		}
-	})))
+	}
+
+	if _, isGroup := api.(*Group); isGroup {
+		// Group adapters re-run the modifier chain and wrap the final
+		// operation's middlewares, so a pre-wrap here would both miss
+		// modifier-added middleware and double-run directly-set ones.
+		a.Handle(&op, api.Middlewares().Handler(requestHandler))
+	} else {
+		a.Handle(&op, api.Middlewares().Handler(op.Middlewares.Handler(requestHandler)))
+	}
 }
 
 func parseDeepObjectQuery(query url.Values, name string) map[string]string {

@@ -44,7 +44,9 @@ type groupAdapter struct {
 
 func (a *groupAdapter) Handle(op *Operation, handler func(Context)) {
 	a.group.ModifyOperation(op, func(op *Operation) {
-		a.Adapter.Handle(op, handler)
+		// Modifiers may have added operation middlewares; wrap them here so
+		// the runtime chain reflects the final (post-modifier) operation.
+		a.Adapter.Handle(op, op.Middlewares.Handler(handler))
 	})
 }
 
