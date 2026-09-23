@@ -777,6 +777,32 @@ func writeHeader(write func(string, string), info *headerInfo, f reflect.Value) 
 //		return resp, nil
 //	})
 func Register[I, O any](api API, op Operation, handler func(context.Context, *I) (*O, error)) {
+	// Keep the generic part as small as possible. Go compiles a separate copy
+	// of a generic function body for each distinct set of type arguments, so
+	// every registered operation used to get its own copy of the whole
+	// registration and request-handling code. Everything below except creating
+	// the input and calling the handler already works via reflection.
+	registerCore(api, op, reflect.TypeFor[I](), reflect.TypeFor[O](),
+		func() any { return new(I) },
+		func(ctx context.Context, input any) (any, error) {
+			output, err := handler(ctx, input.(*I))
+			if output == nil {
+				// Return an untyped nil so the `output == nil` check in
+				// registerCore still works (a nil *O in an interface is not nil).
+				return nil, err
+			}
+			return output, err
+		})
+}
+
+func registerCore(
+	api API,
+	op Operation,
+	inputType reflect.Type,
+	outputType reflect.Type,
+	newInput func() any,
+	callHandler func(context.Context, any) (any, error),
+) {
 	oapi := api.OpenAPI()
 	registry := oapi.Components.Schemas
 
@@ -790,13 +816,11 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	}
 	initResponses(&op)
 
-	inputType := reflect.TypeFor[I]()
 	if inputType.Kind() != reflect.Struct {
 		panic("input must be a struct")
 	}
 	inputParams, inputBodyIndex, hasInputBody, rawBodyIndex, rbt, rawBodyDataT, inSchema := processInputType(inputType, &op, registry)
 
-	outputType := reflect.TypeFor[O]()
 	if outputType.Kind() != reflect.Struct {
 		panic("output must be a struct")
 	}
@@ -879,7 +903,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		}
 	}
 	a.Handle(&op, api.Middlewares().Handler(op.Middlewares.Handler(func(ctx Context) {
-		var input I
+		input := newInput()
 
 		// Get the validation dependencies from the shared pool.
 		deps := validatePool.Get().(*validateDeps)
@@ -900,7 +924,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 		var cookies map[string]*http.Cookie
 
-		v := reflect.ValueOf(&input).Elem()
+		v := reflect.ValueOf(input).Elem()
 
 		// Reject unknown query parameters if config is set.
 		cfg := getConfig[Config](api)
@@ -1227,7 +1251,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			return
 		}
 
-		output, err := handler(ctx.Context(), &input)
+		output, err := callHandler(ctx.Context(), input)
 		if err != nil {
 			appendErrorHeaders(ctx, err)
 
