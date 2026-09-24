@@ -61,6 +61,14 @@ huma.Register(api, huma.Operation{
 
 Keep in mind that the body is read into memory before being passed to the handler function.
 
+## Compressed Request Bodies
+
+Huma does not decode `Content-Encoding` on request bodies, and neither do the `net/http` based adapters. Use a router middleware such as Echo's [`middleware.Decompress`](https://echo.labstack.com/docs/middleware/decompress) if you need it.
+
+!!! warning "Fiber"
+
+    Fiber's buffered `Body()` decodes compressed bodies, so `humafiber` does too by default. With `StreamRequestBody` enabled the raw stream is passed through undecoded, like the other adapters.
+
 ## Dive Deeper
 
 -   Reference
