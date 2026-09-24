@@ -1867,6 +1867,10 @@ func parseInto(ctx Context, f reflect.Value, value string, preSplit []string, p 
 			if p.Explode {
 				u := ctx.URL()
 				values = (&u).Query()[p.Name]
+				if values == nil && p.Default != "" {
+					// Defaults use comma-separated values even for exploded parameters.
+					values = strings.Split(p.Default, ",")
+				}
 			} else {
 				values = strings.Split(value, ",")
 			}
