@@ -264,6 +264,55 @@ data: {"message":"Hello, world!"}
 		},
 	},
 	{
+		Title: "sse string event ids",
+		TestFunc: func(t *testing.T) {
+			_, api := humatest.New(t)
+			sse.Register(api, huma.Operation{
+				OperationID: "sse",
+				Method:      http.MethodGet,
+				Path:        "/sse",
+			}, map[string]any{
+				"message": &DefaultMessage{},
+			}, func(ctx context.Context, input *struct{}, send sse.Sender) {
+				// String IDs take precedence over the legacy integer ID.
+				send(sse.Message{ID: 5, IDString: "stream-123:456", Data: DefaultMessage{Message: "one"}})
+				// Legacy integer IDs keep working when no string ID is set.
+				send(sse.Message{ID: 7, Data: DefaultMessage{Message: "two"}})
+				// String IDs may be "0" or other values the integer field cannot hold.
+				send(sse.Message{IDString: "0", Data: DefaultMessage{Message: "three"}})
+				// Line breaks cannot inject extra SSE fields.
+				send(sse.Message{IDString: "ab\r\ncd", Data: DefaultMessage{Message: "four"}})
+			})
+
+			resp := api.Get("/sse")
+
+			assert.Equal(t, http.StatusOK, resp.Code)
+			assert.Equal(t, `id: stream-123:456
+data: {"message":"one"}
+
+id: 7
+data: {"message":"two"}
+
+id: 0
+data: {"message":"three"}
+
+id: abcd
+data: {"message":"four"}
+
+`, resp.Body.String())
+
+			// The OpenAPI schema documents both integer and string IDs.
+			o := api.OpenAPI()
+			events := o.Paths["/sse"].Get.Responses["200"].Content["text/event-stream"].Schema.Items.Extensions["oneOf"].([]*huma.Schema)
+			idSchema := events[0].Properties["id"]
+			types := make([]string, len(idSchema.OneOf))
+			for i, s := range idSchema.OneOf {
+				types[i] = s.Type
+			}
+			assert.ElementsMatch(t, []string{"integer", "string"}, types)
+		},
+	},
+	{
 		Title: "sse stable event order in openapi",
 		TestFunc: func(t *testing.T) {
 			_, api := humatest.New(t)
