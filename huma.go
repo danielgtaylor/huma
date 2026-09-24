@@ -2302,7 +2302,12 @@ func OperationTags(tags ...string) func(o *Operation) {
 }
 
 func convenience[I, O any](api API, method, path string, handler func(context.Context, *I) (*O, error), operationHandlers ...func(o *Operation)) {
-	var o *O
+	// Keep this wrapper minimal, see Register. The typed nil *O is what the ID
+	// and summary generators inspect.
+	Register(api, convenienceOperation(method, path, (*O)(nil), operationHandlers), handler)
+}
+
+func convenienceOperation(method, path string, o any, operationHandlers []func(o *Operation)) Operation {
 	opID := GenerateOperationID(method, path, o)
 	opSummary := GenerateSummary(method, path, o)
 	operation := Operation{
@@ -2324,7 +2329,7 @@ func convenience[I, O any](api API, method, path string, handler func(context.Co
 		operation.Metadata["_convenience_summary"] = opSummary
 		operation.Metadata["_convenience_summary_out"] = o
 	}
-	Register(api, operation, handler)
+	return operation
 }
 
 // Get HTTP operation handler for an API. The handler must be a function that

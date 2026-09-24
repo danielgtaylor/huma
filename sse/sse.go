@@ -83,6 +83,19 @@ func (s Sender) Comment(comment string) error {
 // to the client. Flushing is handled automatically as long as the adapter's
 // `BodyWriter` implements `http.Flusher`.
 func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]any, f func(ctx context.Context, input *I, send Sender)) {
+	// Keep this wrapper minimal: Go compiles a separate copy of the body for
+	// each input type, so all non-generic work lives in the helpers below.
+	typeToEvent := addEventStreamResponse(api, &op, eventTypeMap)
+	huma.Register(api, op, func(ctx context.Context, input *I) (*huma.StreamResponse, error) {
+		return streamResponse(typeToEvent, func(ctx context.Context, send Sender) {
+			f(ctx, input, send)
+		}), nil
+	})
+}
+
+// addEventStreamResponse documents the SSE response on the operation and
+// returns the lookup used to name each sent event by its data type.
+func addEventStreamResponse(api huma.API, op *huma.Operation, eventTypeMap map[string]any) map[reflect.Type]string {
 	// Start by defining the SSE schema & operation response.
 	if op.Responses == nil {
 		op.Responses = map[string]*huma.Response{}
@@ -148,39 +161,40 @@ func Register[I any](api huma.API, op huma.Operation, eventTypeMap map[string]an
 		Schema: schema,
 	}
 
-	// Register the operation with the API, using the built-in streaming
-	// response callback functionality. This will call the user's `f` function
-	// and provide a `send` function to simplify sending messages.
-	huma.Register(api, op, func(ctx context.Context, input *I) (*huma.StreamResponse, error) {
-		return &huma.StreamResponse{
-			Body: func(ctx huma.Context) {
-				ctx.SetHeader("Content-Type", "text/event-stream")
-				// Commit response headers immediately so the client's
-				// EventSource.onopen fires without waiting for the first event.
-				ctx.SetStatus(http.StatusOK)
+	return typeToEvent
+}
 
-				// Adapters whose response writer can't be flushed synchronously
-				// (e.g. Fiber/fasthttp) implement bodyStreamer and stream through
-				// a callback; everything else writes to BodyWriter directly.
-				if bs, ok := ctx.(bodyStreamer); ok {
-					bs.StreamBody(func(w io.Writer) {
-						stream(ctx.Context(), w, typeToEvent, input, f)
-					})
+// streamResponse uses the built-in streaming response callback functionality
+// to call `run` with a `send` function that simplifies sending messages.
+func streamResponse(typeToEvent map[reflect.Type]string, run func(ctx context.Context, send Sender)) *huma.StreamResponse {
+	return &huma.StreamResponse{
+		Body: func(ctx huma.Context) {
+			ctx.SetHeader("Content-Type", "text/event-stream")
+			// Commit response headers immediately so the client's
+			// EventSource.onopen fires without waiting for the first event.
+			ctx.SetStatus(http.StatusOK)
 
-					return
-				}
+			// Adapters whose response writer can't be flushed synchronously
+			// (e.g. Fiber/fasthttp) implement bodyStreamer and stream through
+			// a callback; everything else writes to BodyWriter directly.
+			if bs, ok := ctx.(bodyStreamer); ok {
+				bs.StreamBody(func(w io.Writer) {
+					stream(ctx.Context(), w, typeToEvent, run)
+				})
 
-				stream(ctx.Context(), ctx.BodyWriter(), typeToEvent, input, f)
-			},
-		}, nil
-	})
+				return
+			}
+
+			stream(ctx.Context(), ctx.BodyWriter(), typeToEvent, run)
+		},
+	}
 }
 
 // stream runs the SSE send loop against a single writer: it discovers the
 // writer's flush and write-deadline support, builds the send function, and
 // invokes the user handler. It is shared by the direct-write path and the
 // bodyStreamer callback path.
-func stream[I any](reqCtx context.Context, w io.Writer, typeToEvent map[reflect.Type]string, input *I, f func(ctx context.Context, input *I, send Sender)) {
+func stream(reqCtx context.Context, w io.Writer, typeToEvent map[reflect.Type]string, run func(ctx context.Context, send Sender)) {
 	encoder := json.NewEncoder(w)
 
 	// Get the flusher/deadliner from the writer if possible.
@@ -286,5 +300,5 @@ func stream[I any](reqCtx context.Context, w io.Writer, typeToEvent map[reflect.
 	}
 
 	// Call the user-provided SSE handler.
-	f(reqCtx, input, send)
+	run(reqCtx, send)
 }
