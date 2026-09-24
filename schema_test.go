@@ -1721,3 +1721,93 @@ func TestSchemaTransformer(t *testing.T) {
 	updateSchema2 := huma.SchemaFromType(r, reflect.TypeFor[ExampleUpdateStruct]())
 	validateSchema(updateSchema2)
 }
+
+type PropertyNamesMetadata map[string]any
+
+func (m PropertyNamesMetadata) Schema(r huma.Registry) *huma.Schema {
+	return &huma.Schema{
+		Type: huma.TypeObject,
+		PropertyNames: &huma.Schema{
+			Type:    huma.TypeString,
+			Pattern: "^[a-z][a-z0-9-]{1,10}$",
+		},
+	}
+}
+
+var _ huma.SchemaProvider = PropertyNamesMetadata{}
+
+type PropertyNamesPayload struct {
+	Fixed string `json:"fixed"`
+}
+
+func (p PropertyNamesPayload) TransformSchema(r huma.Registry, s *huma.Schema) *huma.Schema {
+	s.PropertyNames = &huma.Schema{
+		Type:    huma.TypeString,
+		Pattern: "^[a-z][a-z0-9-]{1,10}$",
+	}
+	return s
+}
+
+var _ huma.SchemaTransformer = PropertyNamesPayload{}
+
+func TestPropertyNamesSchemaMarshal(t *testing.T) {
+	s := &huma.Schema{
+		Type: huma.TypeObject,
+		PropertyNames: &huma.Schema{
+			Type:    huma.TypeString,
+			Pattern: "^[a-z][a-z0-9-]{1,10}$",
+		},
+	}
+
+	b, err := json.Marshal(s)
+	require.NoError(t, err)
+
+	var m map[string]any
+	require.NoError(t, json.Unmarshal(b, &m))
+
+	assert.Equal(t, huma.TypeObject, m["type"])
+
+	propertyNames, ok := m["propertyNames"].(map[string]any)
+	require.True(t, ok, "propertyNames missing from marshaled schema %s", string(b))
+	assert.Equal(t, huma.TypeString, propertyNames["type"])
+	assert.Equal(t, "^[a-z][a-z0-9-]{1,10}$", propertyNames["pattern"])
+}
+
+func TestPropertyNamesSchemaDeclaration(t *testing.T) {
+	tests := []struct {
+		name       string
+		schema     func(huma.Registry) *huma.Schema
+		checkFixed bool
+	}{
+		{
+			name: "schema provider",
+			schema: func(r huma.Registry) *huma.Schema {
+				return r.Schema(reflect.TypeFor[PropertyNamesMetadata](), false, "")
+			},
+		},
+		{
+			name: "schema transformer",
+			schema: func(r huma.Registry) *huma.Schema {
+				return r.Schema(reflect.TypeFor[PropertyNamesPayload](), false, "")
+			},
+			checkFixed: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+			s := tc.schema(r)
+
+			assert.Equal(t, huma.TypeObject, s.Type)
+			require.NotNil(t, s.PropertyNames, "propertyNames must survive schema generation")
+			assert.Equal(t, huma.TypeString, s.PropertyNames.Type)
+			assert.Equal(t, "^[a-z][a-z0-9-]{1,10}$", s.PropertyNames.Pattern)
+
+			if tc.checkFixed {
+				require.Contains(t, s.Properties, "fixed", "ordinary properties must survive adding propertyNames")
+				assert.Equal(t, huma.TypeString, s.Properties["fixed"].Type)
+			}
+		})
+	}
+}
