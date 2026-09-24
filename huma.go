@@ -777,32 +777,22 @@ func writeHeader(write func(string, string), info *headerInfo, f reflect.Value) 
 //		return resp, nil
 //	})
 func Register[I, O any](api API, op Operation, handler func(context.Context, *I) (*O, error)) {
-	// Keep the generic part as small as possible. Go compiles a separate copy
-	// of a generic function body for each distinct set of type arguments, so
-	// every registered operation used to get its own copy of the whole
-	// registration and request-handling code. Everything below except creating
-	// the input and calling the handler already works via reflection.
-	registerCore(api, op, reflect.TypeFor[I](), reflect.TypeFor[O](),
+	// Keep this wrapper minimal: Go compiles a separate copy of the body for
+	// each type pair, so all reflection-based work lives in register.
+	register(api, op, reflect.TypeFor[I](), reflect.TypeFor[O](),
 		func() any { return new(I) },
 		func(ctx context.Context, input any) (any, error) {
 			output, err := handler(ctx, input.(*I))
 			if output == nil {
-				// Return an untyped nil so the `output == nil` check in
-				// registerCore still works (a nil *O in an interface is not nil).
+				// A nil *O in an interface is not nil, which would bypass
+				// register's "no output" path.
 				return nil, err
 			}
 			return output, err
 		})
 }
 
-func registerCore(
-	api API,
-	op Operation,
-	inputType reflect.Type,
-	outputType reflect.Type,
-	newInput func() any,
-	callHandler func(context.Context, any) (any, error),
-) {
+func register(api API, op Operation, inputType, outputType reflect.Type, newInput func() any, callHandler func(context.Context, any) (any, error)) {
 	oapi := api.OpenAPI()
 	registry := oapi.Components.Schemas
 
