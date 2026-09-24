@@ -107,6 +107,70 @@ func (m *MyCustomUnmarshaler) UnmarshalText(text []byte) error {
 	return nil
 }
 
+// PointerParams exercises pointer parameters across every location and every
+// supported scalar type. A `nil` field means the parameter was not provided.
+type PointerParams struct {
+	PathStr   *string            `path:"str"`
+	Str       *string            `query:"str"`
+	Int       *int               `query:"int"`
+	Uint      *uint32            `query:"uint"`
+	Float     *float64           `query:"float"`
+	Bool      *bool              `query:"bool"`
+	Time      *time.Time         `query:"time"`
+	URL       *url.URL           `query:"url"`
+	Custom    *MyTextUnmarshaler `query:"custom"`
+	Header    *string            `header:"X-Str"`
+	HeaderInt *int               `header:"X-Int"`
+	Cookie    *string            `cookie:"str"`
+}
+
+// nilCheckingResolverSawNil records what the resolver below observed. Resolvers
+// run even when parameter parsing failed, so a pointer whose value could not be
+// parsed must still be nil rather than a half-parsed zero value.
+var nilCheckingResolverSawNil bool
+
+type NilCheckingResolver struct {
+	Num *int `query:"num"`
+}
+
+func (r *NilCheckingResolver) Resolve(ctx huma.Context) []error {
+	nilCheckingResolverSawNil = r.Num == nil
+	return nil
+}
+
+// deepObjectNilCheckingResolverSawNil records what the resolver below observed
+// for a deepObject pointer whose subfield failed to parse.
+var deepObjectNilCheckingResolverSawNil bool
+
+type DeepObjectNilCheckingResolver struct {
+	Filter *struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	} `query:"filter,deepObject"`
+}
+
+func (r *DeepObjectNilCheckingResolver) Resolve(ctx huma.Context) []error {
+	deepObjectNilCheckingResolverSawNil = r.Filter == nil
+	return nil
+}
+
+// defaultedNilCheckingResolverSawNil records what the resolver below observed
+// for an unparsable pointer param with a `default` tag on a request that also
+// carries a body: the body-time default pass must not re-inflate the pointer.
+var defaultedNilCheckingResolverSawNil bool
+
+type DefaultedNilCheckingResolver struct {
+	Body struct {
+		Value string `json:"value"`
+	}
+	Num *int `query:"num" default:"5"`
+}
+
+func (r *DefaultedNilCheckingResolver) Resolve(ctx huma.Context) []error {
+	defaultedNilCheckingResolverSawNil = r.Num == nil
+	return nil
+}
+
 type OptionalParam[T any] struct {
 	Value T
 	IsSet bool
@@ -804,6 +868,334 @@ func TestFeatures(t *testing.T) {
 				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
 				assert.Contains(t, resp.Body.String(), "unsupported param type: []struct {}")
 			},
+		},
+		{
+			Name: "params-pointers-present",
+			Register: func(t *testing.T, api huma.API) {
+				op := huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test/{str}",
+				}
+				huma.Register(api, op, func(ctx context.Context, i *PointerParams) (*struct{}, error) {
+					require.NotNil(t, i.PathStr)
+					assert.Equal(t, "path", *i.PathStr)
+					require.NotNil(t, i.Str)
+					assert.Equal(t, "hello", *i.Str)
+					require.NotNil(t, i.Int)
+					assert.Equal(t, 42, *i.Int)
+					require.NotNil(t, i.Uint)
+					assert.Equal(t, uint32(7), *i.Uint)
+					require.NotNil(t, i.Float)
+					assert.InDelta(t, 1.5, *i.Float, 0)
+					require.NotNil(t, i.Bool)
+					// The zero value: proves nil and false are distinguishable,
+					// which is the whole point of https://github.com/danielgtaylor/huma/issues/393
+					assert.False(t, *i.Bool)
+					require.NotNil(t, i.Time)
+					assert.True(t, i.Time.Equal(time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)))
+					require.NotNil(t, i.URL)
+					assert.Equal(t, "https://example.com/x", i.URL.String())
+					require.NotNil(t, i.Custom)
+					assert.Equal(t, "Hello, World!", i.Custom.value)
+					require.NotNil(t, i.Header)
+					assert.Equal(t, "head", *i.Header)
+					require.NotNil(t, i.HeaderInt)
+					assert.Equal(t, 5, *i.HeaderInt)
+					require.NotNil(t, i.Cookie)
+					assert.Equal(t, "cook", *i.Cookie)
+					return nil, nil
+				})
+
+				// A pointer parameter is documented as optional and nullable.
+				for _, p := range api.OpenAPI().Paths["/test/{str}"].Get.Parameters {
+					if p.Name == "str" && p.In == "query" {
+						assert.False(t, p.Required)
+						b, err := p.Schema.MarshalJSON()
+						require.NoError(t, err)
+						assert.JSONEq(t, `{"type":["string","null"]}`, string(b))
+					}
+					if p.Name == "str" && p.In == "path" {
+						// Path params are always required, pointer or not.
+						assert.True(t, p.Required)
+					}
+				}
+			},
+			Method: http.MethodGet,
+			URL:    "/test/path?str=hello&int=42&uint=7&float=1.5&bool=false&time=2023-01-01T12:00:00Z&url=https://example.com/x&custom=anything",
+			Headers: map[string]string{
+				"X-Str":  "head",
+				"X-Int":  "5",
+				"Cookie": "str=cook",
+			},
+		},
+		{
+			// The core regression test for issue #393: absent means nil, not zero.
+			Name: "params-pointers-absent",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test/{str}",
+				}, func(ctx context.Context, i *PointerParams) (*struct{}, error) {
+					assert.Nil(t, i.Str)
+					assert.Nil(t, i.Int)
+					assert.Nil(t, i.Uint)
+					assert.Nil(t, i.Float)
+					assert.Nil(t, i.Bool)
+					assert.Nil(t, i.Time)
+					assert.Nil(t, i.URL)
+					assert.Nil(t, i.Custom)
+					assert.Nil(t, i.Header)
+					assert.Nil(t, i.HeaderInt)
+					assert.Nil(t, i.Cookie)
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test/path",
+		},
+		{
+			// A present-but-empty value counts as not provided. Documented
+			// limitation: there is no cheap presence check for headers/cookies.
+			Name: "params-pointer-empty-value",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Str *string `query:"str"`
+				}) (*struct{}, error) {
+					assert.Nil(t, i.Str)
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?str=",
+		},
+		{
+			Name: "params-pointer-nullable-false",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Str *string `query:"str" nullable:"false"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+
+				p := api.OpenAPI().Paths["/test"].Get.Parameters[0]
+				b, err := p.Schema.MarshalJSON()
+				require.NoError(t, err)
+				assert.JSONEq(t, `{"type":"string"}`, string(b))
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+		},
+		{
+			Name: "params-pointer-required-missing",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Str *string `query:"str" required:"true"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "required query parameter is missing")
+			},
+		},
+		{
+			Name: "params-pointer-default-absent",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					// A body is present so `setDefaults` also walks the input
+					// struct, proving it leaves the already-set pointer alone.
+					Body struct {
+						Value string `json:"value"`
+					}
+					Num *int `query:"num" default:"5"`
+				}) (*struct{}, error) {
+					require.NotNil(t, i.Num)
+					assert.Equal(t, 5, *i.Num)
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPut,
+			URL:     "/test",
+			Headers: map[string]string{"Content-Type": "application/json"},
+			Body:    `{"value": "x"}`,
+		},
+		{
+			Name: "params-pointer-default-present",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Num *int `query:"num" default:"5"`
+				}) (*struct{}, error) {
+					require.NotNil(t, i.Num)
+					assert.Equal(t, 7, *i.Num)
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?num=7",
+		},
+		{
+			// A value that fails to parse must leave the pointer nil, since
+			// resolvers still run before the 422 is written.
+			Name: "params-pointer-invalid",
+			Register: func(t *testing.T, api huma.API) {
+				nilCheckingResolverSawNil = false
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *NilCheckingResolver) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?num=abc",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "invalid integer")
+				assert.True(t, nilCheckingResolverSawNil, "resolver saw a non-nil pointer for an unparsable value")
+			},
+		},
+		{
+			// A deepObject subfield that fails to parse must leave the pointer
+			// nil rather than publish a half-parsed struct.
+			Name: "params-pointer-deepobject-invalid",
+			Register: func(t *testing.T, api huma.API) {
+				deepObjectNilCheckingResolverSawNil = false
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *DeepObjectNilCheckingResolver) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?filter[name]=bob&filter[age]=abc",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "invalid integer")
+				assert.True(t, deepObjectNilCheckingResolverSawNil, "resolver saw a half-parsed deepObject pointer")
+			},
+		},
+		{
+			// The same unparsable value on a request that carries a body: the
+			// defaults applied after body parsing must not re-inflate the
+			// pointer the parse failure left nil.
+			Name: "params-pointer-invalid-with-body",
+			Register: func(t *testing.T, api huma.API) {
+				defaultedNilCheckingResolverSawNil = false
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/test",
+				}, func(ctx context.Context, i *DefaultedNilCheckingResolver) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPut,
+			URL:     "/test?num=abc",
+			Headers: map[string]string{"Content-Type": "application/json"},
+			Body:    `{"value": "x"}`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "invalid integer")
+				assert.True(t, defaultedNilCheckingResolverSawNil, "defaults re-inflated a pointer left nil by a parse failure")
+			},
+		},
+		{
+			// Validation runs against the parsed scalar, not the pointer.
+			Name: "params-pointer-validation",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Num *int `query:"num" minimum:"5"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test?num=1",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "expected number >= 5")
+			},
+		},
+		{
+			// Pointers to slices, structs and wrapper types fall out of the same
+			// mechanism as scalars: `nil` means the parameter was not provided.
+			Name: "params-pointer-composite-present",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Tags   *[]string `query:"tags"`
+					Nums   *[]int    `query:"nums,explode"`
+					Filter *struct {
+						Name string `json:"name"`
+					} `query:"filter,deepObject"`
+					Cookie  *http.Cookie        `cookie:"sess"`
+					Wrapped *OptionalParam[int] `query:"wrapped"`
+				}) (*struct{}, error) {
+					require.NotNil(t, i.Tags)
+					assert.Equal(t, []string{"a", "b"}, *i.Tags)
+					require.NotNil(t, i.Nums)
+					assert.Equal(t, []int{1, 2}, *i.Nums)
+					require.NotNil(t, i.Filter)
+					assert.Equal(t, "bob", i.Filter.Name)
+					require.NotNil(t, i.Cookie)
+					assert.Equal(t, "sess", i.Cookie.Name)
+					assert.Equal(t, "abc", i.Cookie.Value)
+					require.NotNil(t, i.Wrapped)
+					assert.Equal(t, 9, i.Wrapped.Value)
+					assert.True(t, i.Wrapped.IsSet)
+					return nil, nil
+				})
+			},
+			Method:  http.MethodGet,
+			URL:     "/test?tags=a,b&nums=1&nums=2&filter[name]=bob&wrapped=9",
+			Headers: map[string]string{"Cookie": "sess=abc"},
+		},
+		{
+			Name: "params-pointer-composite-absent",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Tags   *[]string `query:"tags"`
+					Filter *struct {
+						Name string `json:"name"`
+					} `query:"filter,deepObject"`
+					Cookie  *http.Cookie        `cookie:"sess"`
+					Wrapped *OptionalParam[int] `query:"wrapped"`
+				}) (*struct{}, error) {
+					assert.Nil(t, i.Tags)
+					assert.Nil(t, i.Filter)
+					assert.Nil(t, i.Cookie)
+					assert.Nil(t, i.Wrapped)
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test",
 		},
 		{
 			Name: "parse-with-param-receiver",
@@ -2919,10 +3311,10 @@ Content-Type: text/plain
 			},
 			Method: http.MethodGet,
 			URL:    "/transform",
-Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-	assert.Equal(t, http.StatusOK, resp.Code)
-	assert.JSONEq(t, `null`, resp.Body.String())
-},
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				assert.JSONEq(t, `null`, resp.Body.String())
+			},
 		},
 		{
 			Name: "schema-url-from-x-forwarded-host",
@@ -4311,20 +4703,67 @@ func TestResolverWithPointer(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
 }
 
-func TestParamPointerPanics(t *testing.T) {
-	// For now, we don't support these, so we panic rather than have subtle
-	// bugs that are hard to track down.
-	_, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+func TestParamPointerUnsupported(t *testing.T) {
+	// Pointer params are supported, but a few forms can't be, so we panic at
+	// registration rather than have subtle bugs that are hard to track down.
+	op := huma.Operation{
+		OperationID: "bug",
+		Method:      http.MethodGet,
+		Path:        "/bug",
+	}
 
-	assert.Panics(t, func() {
-		huma.Register(app, huma.Operation{
-			OperationID: "bug",
-			Method:      http.MethodGet,
-			Path:        "/bug",
-		}, func(ctx context.Context, input *struct {
-			Param *string `query:"param"`
-		}) (*struct{}, error) {
-			return nil, nil
+	t.Run("double-pointer", func(t *testing.T) {
+		_, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+		assert.PanicsWithError(t, "multiple levels of pointer indirection are not supported for query parameter 'param' (field 'Param' of type '**string')", func() {
+			huma.Register(app, op, func(ctx context.Context, input *struct {
+				Param **string `query:"param"`
+			}) (*struct{}, error) {
+				return nil, nil
+			})
+		})
+	})
+
+	// Multipart form binding does not allocate pointers yet, so these must fail
+	// fast at registration rather than silently stay nil.
+	t.Run("form-scalar", func(t *testing.T) {
+		_, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+		assert.PanicsWithError(t, "pointers are not supported for form parameter 'param' (field 'Param' of type '*string')", func() {
+			huma.Register(app, op, func(ctx context.Context, input *struct {
+				Param *string `form:"param"`
+			}) (*struct{}, error) {
+				return nil, nil
+			})
+		})
+	})
+
+	t.Run("form-file", func(t *testing.T) {
+		_, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+		assert.PanicsWithError(t, "pointers are not supported for form parameter 'param' (field 'Param' of type '*huma.FormFile')", func() {
+			huma.Register(app, op, func(ctx context.Context, input *struct {
+				Param *huma.FormFile `form:"param"`
+			}) (*struct{}, error) {
+				return nil, nil
+			})
+		})
+	})
+
+	// A pointer param carrying any other location tag inside a multipart form
+	// data struct is still bound from the form values, so it must fail fast at
+	// registration too.
+	t.Run("multipart-data-pointer", func(t *testing.T) {
+		_, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+		assert.PanicsWithError(t, "pointers are not supported for query parameter 'x' in a multipart form data struct (type '*string')", func() {
+			huma.Register(app, huma.Operation{
+				OperationID: "bug",
+				Method:      http.MethodPost,
+				Path:        "/bug",
+			}, func(ctx context.Context, input *struct {
+				RawBody huma.MultipartFormFiles[struct {
+					X *string `query:"x"`
+				}]
+			}) (*struct{}, error) {
+				return nil, nil
+			})
 		})
 	})
 }

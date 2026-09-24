@@ -32,7 +32,7 @@ Fields being optional/required is determined automatically but can be overridden
 
 Path parameters are always required. Cookie, header, and query parameters are optional unless explicitly marked with `required:"true"`. All other fields (like those in a request body or multipart form) follow the default required status.
 
-Pointers have no effect on optional/required. The same rules apply regardless of whether the struct is being used for request input or response output. Some examples:
+Pointers have no effect on optional/required — for [parameters](./request-inputs.md#optional-parameters) as well as for object fields. A pointer parameter means "may be absent, in which case it is `nil`", which is orthogonal to whether the client is *allowed* to omit it. The same rules apply regardless of whether the struct is being used for request input or response output. Some examples:
 
 ```go
 type MyStruct struct {
@@ -81,6 +81,8 @@ Fields being nullable is determined automatically but can be overridden as neede
     1. To a `boolean`, `integer`, `number`, `string`, `array`: it is nullable
     2. To an `object`: **panic** saying this is not currently supported
 5. If a struct has a field `_` with `nullable: true`, the struct is nullable enabling users to opt-in for `object` without the `anyOf`/`oneOf` complication.
+
+These rules apply to [parameters](./request-inputs.md#optional-parameters) too, so a `*string` query param is documented as `type: [string, "null"]`. A parameter is text on the wire and can never actually carry a literal `null`, so use `nullable:"false"` if you would rather generated clients see a plain `string`.
 
 Here are some examples:
 
@@ -165,6 +167,8 @@ Built-in string formats include:
 The `default` field validation tag listed above is used to both document the existence of a server-side default value as well as to automatically have Huma set that value for you. This is useful for fields that are optional but have a default value if not provided.
 
 Similar to how the standard library JSON unmarshaler works, it is recommended to use pointers for scalar types where the zero value has semantic meaning to your application. For example, if you have a `bool` field that defaults to `true`, you should use a `*bool` field and set the default to `true`. This way, if the field is not provided, the default value will be used.
+
+The same applies to [parameters](./request-inputs.md#optional-parameters), e.g. ``Verbose *bool `query:"verbose" default:"true"` ``. A parameter with a default is never `nil`: leave the default off if you want to tell "not provided" apart from an explicitly sent value.
 
 ```go title="code.go"
 type MyInput struct {
