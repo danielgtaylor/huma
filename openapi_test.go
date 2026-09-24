@@ -2,6 +2,7 @@ package huma_test
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 func TestOpenAPIMarshal(t *testing.T) {
@@ -267,6 +269,762 @@ func TestDowngrade(t *testing.T) {
 
 	// Check that the downgrade worked as expected.
 	assert.JSONEq(t, expected, string(v30))
+}
+
+func TestDowngradeWrapsRefSiblingsInAllOf(t *testing.T) {
+	v31 := &huma.OpenAPI{
+		OpenAPI: "3.1.0",
+		Info: &huma.Info{
+			Title:   "Test API",
+			Version: "1.0.0",
+		},
+		Paths: map[string]*huma.PathItem{
+			"/test": {
+				Get: &huma.Operation{
+					Responses: map[string]*huma.Response{
+						"200": {
+							Description: "OK",
+							Content: map[string]*huma.MediaType{
+								"application/json": {
+									Schema: &huma.Schema{
+										Type: huma.TypeObject,
+										Properties: map[string]*huma.Schema{
+											"location": {
+												Ref:         "#/components/schemas/Location",
+												Description: "User home address location",
+												Extensions: map[string]any{
+													"x-test": true,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	v30, err := v31.Downgrade()
+	require.NoError(t, err)
+
+	expected := `{
+		"openapi": "3.0.3",
+		"info": {
+			"title": "Test API",
+			"version": "1.0.0"
+		},
+		"paths": {
+			"/test": {
+				"get": {
+					"responses": {
+						"200": {
+							"description": "OK",
+							"content": {
+								"application/json": {
+									"schema": {
+										"properties": {
+											"location": {
+												"allOf": [
+													{
+														"$ref": "#/components/schemas/Location"
+													}
+												],
+												"description": "User home address location",
+												"x-test": true
+											}
+										},
+										"type": "object"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}`
+
+	assert.JSONEq(t, expected, string(v30))
+}
+
+func TestDowngradePreservesExistingAllOfRefSiblings(t *testing.T) {
+	v31 := &huma.OpenAPI{
+		OpenAPI: "3.1.0",
+		Info: &huma.Info{
+			Title:   "Test API",
+			Version: "1.0.0",
+		},
+		Paths: map[string]*huma.PathItem{
+			"/test": {
+				Get: &huma.Operation{
+					Responses: map[string]*huma.Response{
+						"200": {
+							Description: "OK",
+							Content: map[string]*huma.MediaType{
+								"application/json": {
+									Schema: &huma.Schema{
+										Ref:         "#/components/schemas/Test",
+										Description: "A schema description",
+										AllOf: []*huma.Schema{
+											{
+												Type: huma.TypeObject,
+												Properties: map[string]*huma.Schema{
+													"name": {
+														Type: huma.TypeString,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	v30, err := v31.Downgrade()
+	require.NoError(t, err)
+
+	expected := `{
+		"openapi": "3.0.3",
+		"info": {
+			"title": "Test API",
+			"version": "1.0.0"
+		},
+		"paths": {
+			"/test": {
+				"get": {
+					"responses": {
+						"200": {
+							"description": "OK",
+							"content": {
+								"application/json": {
+									"schema": {
+										"allOf": [
+											{
+												"$ref": "#/components/schemas/Test"
+											},
+											{
+												"properties": {
+													"name": {
+														"type": "string"
+													}
+												},
+												"type": "object"
+											}
+										],
+										"description": "A schema description"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}`
+
+	assert.JSONEq(t, expected, string(v30))
+}
+
+func TestDowngradeYAMLWrapsRefSiblingsInAllOf(t *testing.T) {
+	v31 := &huma.OpenAPI{
+		OpenAPI: "3.1.0",
+		Info: &huma.Info{
+			Title:   "Test API",
+			Version: "1.0.0",
+		},
+		Paths: map[string]*huma.PathItem{
+			"/test": {
+				Get: &huma.Operation{
+					Responses: map[string]*huma.Response{
+						"200": {
+							Description: "OK",
+							Content: map[string]*huma.MediaType{
+								"application/json": {
+									Schema: &huma.Schema{
+										Ref:         "#/components/schemas/Test",
+										Description: "A schema description",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	v30, err := v31.DowngradeYAML()
+	require.NoError(t, err)
+
+	var spec map[string]any
+	require.NoError(t, yaml.Unmarshal(v30, &spec))
+
+	paths, ok := spec["paths"].(map[string]any)
+	require.True(t, ok)
+	path, ok := paths["/test"].(map[string]any)
+	require.True(t, ok)
+	get, ok := path["get"].(map[string]any)
+	require.True(t, ok)
+	responses, ok := get["responses"].(map[string]any)
+	require.True(t, ok)
+	response, ok := responses["200"].(map[string]any)
+	require.True(t, ok)
+	content, ok := response["content"].(map[string]any)
+	require.True(t, ok)
+	mediaType, ok := content["application/json"].(map[string]any)
+	require.True(t, ok)
+	schema, ok := mediaType["schema"].(map[string]any)
+	require.True(t, ok)
+	allOf, ok := schema["allOf"].([]any)
+	require.True(t, ok)
+	require.Len(t, allOf, 1)
+	refSchema, ok := allOf[0].(map[string]any)
+	require.True(t, ok)
+
+	assert.Equal(t, "#/components/schemas/Test", refSchema["$ref"])
+	assert.Equal(t, "A schema description", schema["description"])
+	assert.NotContains(t, schema, "$ref")
+}
+
+func TestDowngradeWrapsRefSiblingsInParameterContent(t *testing.T) {
+	v31 := &huma.OpenAPI{
+		OpenAPI: "3.1.0",
+		Info: &huma.Info{
+			Title:   "Test API",
+			Version: "1.0.0",
+		},
+		Paths: map[string]*huma.PathItem{
+			"/test": {
+				Get: &huma.Operation{
+					Parameters: []*huma.Param{
+						{
+							Name: "filter",
+							In:   "query",
+							Extensions: map[string]any{
+								"content": map[string]any{
+									"application/json": map[string]any{
+										"schema": map[string]any{
+											"$ref":        "#/components/schemas/Filter",
+											"description": "Filter expression",
+										},
+									},
+								},
+							},
+						},
+					},
+					Responses: map[string]*huma.Response{
+						"204": {
+							Description: "No content",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	v30, err := v31.Downgrade()
+	require.NoError(t, err)
+
+	expected := `{
+		"openapi": "3.0.3",
+		"info": {
+			"title": "Test API",
+			"version": "1.0.0"
+		},
+		"paths": {
+			"/test": {
+				"get": {
+					"parameters": [
+						{
+							"name": "filter",
+							"in": "query",
+							"content": {
+								"application/json": {
+									"schema": {
+										"allOf": [
+											{
+												"$ref": "#/components/schemas/Filter"
+											}
+										],
+										"description": "Filter expression"
+									}
+								}
+							}
+						}
+					],
+					"responses": {
+						"204": {
+							"description": "No content"
+						}
+					}
+				}
+			}
+		}
+	}`
+
+	assert.JSONEq(t, expected, string(v30))
+}
+
+func TestDowngradeWrapsRefSiblingsInComponentSchemas(t *testing.T) {
+	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	registry.Map()["Wrapped"] = &huma.Schema{
+		Type: huma.TypeObject,
+		Properties: map[string]*huma.Schema{
+			"property": {
+				Ref:         "#/components/schemas/Property",
+				Description: "Property ref",
+			},
+		},
+		Items: &huma.Schema{
+			Ref:         "#/components/schemas/Item",
+			Description: "Item ref",
+		},
+		AdditionalProperties: &huma.Schema{
+			Ref:         "#/components/schemas/Additional",
+			Description: "Additional property ref",
+		},
+		Not: &huma.Schema{
+			Ref:         "#/components/schemas/Not",
+			Description: "Not ref",
+		},
+		OneOf: []*huma.Schema{
+			{
+				Ref:         "#/components/schemas/OneOf",
+				Description: "OneOf ref",
+			},
+		},
+		AnyOf: []*huma.Schema{
+			{
+				Ref:         "#/components/schemas/AnyOf",
+				Description: "AnyOf ref",
+			},
+		},
+		AllOf: []*huma.Schema{
+			{
+				Ref:         "#/components/schemas/AllOf",
+				Description: "AllOf ref",
+			},
+		},
+	}
+
+	v31 := &huma.OpenAPI{
+		OpenAPI: "3.1.0",
+		Info: &huma.Info{
+			Title:   "Test API",
+			Version: "1.0.0",
+		},
+		Components: &huma.Components{
+			Schemas: registry,
+		},
+		Paths: map[string]*huma.PathItem{
+			"/wrapped": {
+				Get: &huma.Operation{
+					Responses: map[string]*huma.Response{
+						"200": {
+							Description: "OK",
+							Content: map[string]*huma.MediaType{
+								"application/json": {
+									Schema: &huma.Schema{
+										Ref: "#/components/schemas/Wrapped",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	v30, err := v31.Downgrade()
+	require.NoError(t, err)
+
+	spec := decodeOpenAPIJSON(t, v30)
+	schema := specMap(t, spec, "components", "schemas", "Wrapped")
+
+	assertWrappedRefSibling(t, specMap(t, schema, "properties", "property"), "#/components/schemas/Property", "Property ref")
+	assertWrappedRefSibling(t, specMap(t, schema, "items"), "#/components/schemas/Item", "Item ref")
+	assertWrappedRefSibling(t, specMap(t, schema, "additionalProperties"), "#/components/schemas/Additional", "Additional property ref")
+	assertWrappedRefSibling(t, specMap(t, schema, "not"), "#/components/schemas/Not", "Not ref")
+	assertWrappedRefSibling(t, specMapAt(t, schema, "oneOf", 0), "#/components/schemas/OneOf", "OneOf ref")
+	assertWrappedRefSibling(t, specMapAt(t, schema, "anyOf", 0), "#/components/schemas/AnyOf", "AnyOf ref")
+	assertWrappedRefSibling(t, specMapAt(t, schema, "allOf", 0), "#/components/schemas/AllOf", "AllOf ref")
+}
+
+func TestDowngradeWrapsRefSiblingsInComponentObjects(t *testing.T) {
+	v31 := &huma.OpenAPI{
+		OpenAPI: "3.1.0",
+		Info: &huma.Info{
+			Title:   "Test API",
+			Version: "1.0.0",
+		},
+		Components: &huma.Components{
+			Responses: map[string]*huma.Response{
+				"TestResponse": {
+					Description: "OK",
+					Headers: map[string]*huma.Param{
+						"X-Test": {
+							Schema: &huma.Schema{
+								Ref:         "#/components/schemas/ResponseHeader",
+								Description: "Response header ref",
+							},
+						},
+					},
+					Content: map[string]*huma.MediaType{
+						"application/json": {
+							Schema: &huma.Schema{
+								Ref:         "#/components/schemas/ResponseBody",
+								Description: "Response body ref",
+							},
+						},
+					},
+				},
+			},
+			Parameters: map[string]*huma.Param{
+				"TestParameter": {
+					Name: "filter",
+					In:   "query",
+					Schema: &huma.Schema{
+						Ref:         "#/components/schemas/Parameter",
+						Description: "Parameter ref",
+					},
+					Extensions: map[string]any{
+						"content": map[string]any{
+							"application/json": map[string]any{
+								"schema": map[string]any{
+									"$ref":        "#/components/schemas/ParameterContent",
+									"description": "Parameter content ref",
+								},
+							},
+						},
+					},
+				},
+			},
+			RequestBodies: map[string]*huma.RequestBody{
+				"TestRequest": {
+					Content: map[string]*huma.MediaType{
+						"application/json": {
+							Schema: &huma.Schema{
+								Ref:         "#/components/schemas/RequestBody",
+								Description: "Request body ref",
+							},
+						},
+					},
+				},
+			},
+			Headers: map[string]*huma.Param{
+				"TestHeader": {
+					Schema: &huma.Schema{
+						Ref:         "#/components/schemas/Header",
+						Description: "Header ref",
+					},
+				},
+			},
+		},
+	}
+
+	v30, err := v31.Downgrade()
+	require.NoError(t, err)
+
+	spec := decodeOpenAPIJSON(t, v30)
+
+	assertWrappedRefSibling(t, specMap(t, spec, "components", "responses", "TestResponse", "headers", "X-Test", "schema"), "#/components/schemas/ResponseHeader", "Response header ref")
+	assertWrappedRefSibling(t, specMap(t, spec, "components", "responses", "TestResponse", "content", "application/json", "schema"), "#/components/schemas/ResponseBody", "Response body ref")
+	assertWrappedRefSibling(t, specMap(t, spec, "components", "parameters", "TestParameter", "schema"), "#/components/schemas/Parameter", "Parameter ref")
+	assertWrappedRefSibling(t, specMap(t, spec, "components", "parameters", "TestParameter", "content", "application/json", "schema"), "#/components/schemas/ParameterContent", "Parameter content ref")
+	assertWrappedRefSibling(t, specMap(t, spec, "components", "requestBodies", "TestRequest", "content", "application/json", "schema"), "#/components/schemas/RequestBody", "Request body ref")
+	assertWrappedRefSibling(t, specMap(t, spec, "components", "headers", "TestHeader", "schema"), "#/components/schemas/Header", "Header ref")
+}
+
+func TestDowngradeWrapsRefSiblingsInPathItemsAndOperations(t *testing.T) {
+	v31 := &huma.OpenAPI{
+		OpenAPI: "3.1.0",
+		Info: &huma.Info{
+			Title:   "Test API",
+			Version: "1.0.0",
+		},
+		Paths: map[string]*huma.PathItem{
+			"/test": {
+				Parameters: []*huma.Param{
+					{
+						Name: "path-filter",
+						In:   "query",
+						Schema: &huma.Schema{
+							Ref:         "#/components/schemas/PathParameter",
+							Description: "Path parameter ref",
+						},
+					},
+				},
+				Post: operationWithSchemaLocations(),
+			},
+		},
+		Webhooks: map[string]*huma.PathItem{
+			"test-hook": {
+				Post: operationWithSchemaLocations(),
+			},
+		},
+		Components: &huma.Components{
+			Extensions: map[string]any{
+				"callbacks": map[string]any{
+					"TestCallback": map[string]any{
+						"{$request.body#/url}": map[string]any{
+							"post": operationWithSchemaLocations(),
+						},
+					},
+				},
+			},
+			PathItems: map[string]*huma.PathItem{
+				"TestPathItem": {
+					Parameters: []*huma.Param{
+						{
+							Name: "component-path-filter",
+							In:   "query",
+							Schema: &huma.Schema{
+								Ref:         "#/components/schemas/ComponentPathParameter",
+								Description: "Component path parameter ref",
+							},
+						},
+					},
+					Post: operationWithSchemaLocations(),
+				},
+			},
+		},
+	}
+
+	v30, err := v31.Downgrade()
+	require.NoError(t, err)
+
+	spec := decodeOpenAPIJSON(t, v30)
+
+	assertWrappedRefSibling(t, specMapAt(t, specMap(t, spec, "paths", "/test"), "parameters", 0, "schema"), "#/components/schemas/PathParameter", "Path parameter ref")
+	assertOperationSchemaLocationsWrapped(t, specMap(t, spec, "paths", "/test", "post"))
+	assertOperationSchemaLocationsWrapped(t, specMap(t, spec, "webhooks", "test-hook", "post"))
+	assertOperationSchemaLocationsWrapped(t, specMap(t, spec, "components", "callbacks", "TestCallback", "{$request.body#/url}", "post"))
+	assertWrappedRefSibling(t, specMapAt(t, specMap(t, spec, "components", "pathItems", "TestPathItem"), "parameters", 0, "schema"), "#/components/schemas/ComponentPathParameter", "Component path parameter ref")
+	assertOperationSchemaLocationsWrapped(t, specMap(t, spec, "components", "pathItems", "TestPathItem", "post"))
+}
+
+func TestDowngradeRecursiveSchemaRefDoesNotExpandRef(t *testing.T) {
+	type Node struct {
+		Value string `json:"value"`
+		Child *Node  `json:"child,omitempty" doc:"Child node"`
+	}
+
+	_, api := humatest.New(t)
+	huma.Register(api, huma.Operation{
+		Method: http.MethodGet,
+		Path:   "/node",
+	}, func(ctx context.Context, input *struct{}) (*struct {
+		Body Node
+	}, error) {
+		return nil, nil
+	})
+
+	v30, err := api.OpenAPI().Downgrade()
+	require.NoError(t, err)
+
+	assert.Contains(t, string(v30), `"$ref":"#/components/schemas/Node"`)
+	assert.Contains(t, string(v30), `"description":"Child node"`)
+	assert.NotContains(t, string(v30), `"$ref":"#/components/schemas/Node","description"`)
+}
+
+func TestDowngradeDoesNotWrapSchemaKeysOutsideOpenAPIFields(t *testing.T) {
+	v31 := &huma.OpenAPI{
+		OpenAPI: "3.1.0",
+		Info: &huma.Info{
+			Title:   "Test API",
+			Version: "1.0.0",
+		},
+		Paths: map[string]*huma.PathItem{
+			"/test": {
+				Get: &huma.Operation{
+					Responses: map[string]*huma.Response{
+						"200": {
+							Description: "OK",
+							Content: map[string]*huma.MediaType{
+								"application/json": {
+									Example: map[string]any{
+										"schema": map[string]any{
+											"$ref":        "#/components/schemas/Test",
+											"description": "Not an OpenAPI schema field",
+										},
+									},
+									Schema: &huma.Schema{
+										Type: huma.TypeObject,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	v30, err := v31.Downgrade()
+	require.NoError(t, err)
+
+	expected := `{
+		"openapi": "3.0.3",
+		"info": {
+			"title": "Test API",
+			"version": "1.0.0"
+		},
+		"paths": {
+			"/test": {
+				"get": {
+					"responses": {
+						"200": {
+							"description": "OK",
+							"content": {
+								"application/json": {
+									"example": {
+										"schema": {
+											"$ref": "#/components/schemas/Test",
+											"description": "Not an OpenAPI schema field"
+										}
+									},
+									"schema": {
+										"type": "object"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}`
+
+	assert.JSONEq(t, expected, string(v30))
+}
+
+func operationWithSchemaLocations() *huma.Operation {
+	return &huma.Operation{
+		Parameters: []*huma.Param{
+			{
+				Name: "filter",
+				In:   "query",
+				Schema: &huma.Schema{
+					Ref:         "#/components/schemas/OperationParameter",
+					Description: "Operation parameter ref",
+				},
+			},
+		},
+		RequestBody: &huma.RequestBody{
+			Content: map[string]*huma.MediaType{
+				"application/json": {
+					Schema: &huma.Schema{
+						Ref:         "#/components/schemas/OperationRequestBody",
+						Description: "Operation request body ref",
+					},
+					Encoding: map[string]*huma.Encoding{
+						"file": {
+							Headers: map[string]*huma.Param{
+								"X-Encoding": {
+									Schema: &huma.Schema{
+										Ref:         "#/components/schemas/EncodingHeader",
+										Description: "Encoding header ref",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Responses: map[string]*huma.Response{
+			"200": {
+				Description: "OK",
+				Headers: map[string]*huma.Param{
+					"X-Response": {
+						Schema: &huma.Schema{
+							Ref:         "#/components/schemas/OperationResponseHeader",
+							Description: "Operation response header ref",
+						},
+					},
+				},
+				Content: map[string]*huma.MediaType{
+					"application/json": {
+						Schema: &huma.Schema{
+							Ref:         "#/components/schemas/OperationResponseBody",
+							Description: "Operation response body ref",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func assertOperationSchemaLocationsWrapped(t *testing.T, operation map[string]any) {
+	t.Helper()
+
+	assertWrappedRefSibling(t, specMapAt(t, operation, "parameters", 0, "schema"), "#/components/schemas/OperationParameter", "Operation parameter ref")
+	assertWrappedRefSibling(t, specMap(t, operation, "requestBody", "content", "application/json", "schema"), "#/components/schemas/OperationRequestBody", "Operation request body ref")
+	assertWrappedRefSibling(t, specMap(t, operation, "requestBody", "content", "application/json", "encoding", "file", "headers", "X-Encoding", "schema"), "#/components/schemas/EncodingHeader", "Encoding header ref")
+	assertWrappedRefSibling(t, specMap(t, operation, "responses", "200", "headers", "X-Response", "schema"), "#/components/schemas/OperationResponseHeader", "Operation response header ref")
+	assertWrappedRefSibling(t, specMap(t, operation, "responses", "200", "content", "application/json", "schema"), "#/components/schemas/OperationResponseBody", "Operation response body ref")
+}
+
+func decodeOpenAPIJSON(t *testing.T, data []byte) map[string]any {
+	t.Helper()
+
+	var spec map[string]any
+	require.NoError(t, json.Unmarshal(data, &spec))
+	return spec
+}
+
+func specMap(t *testing.T, root map[string]any, path ...string) map[string]any {
+	t.Helper()
+
+	current := any(root)
+	for _, key := range path {
+		m, ok := current.(map[string]any)
+		require.Truef(t, ok, "expected object before key %q", key)
+		current = m[key]
+	}
+
+	m, ok := current.(map[string]any)
+	require.Truef(t, ok, "expected object at %v", path)
+	return m
+}
+
+func specMapAt(t *testing.T, root map[string]any, arrayKey string, index int, path ...string) map[string]any {
+	t.Helper()
+
+	array, ok := root[arrayKey].([]any)
+	require.Truef(t, ok, "expected array at key %q", arrayKey)
+	require.Greater(t, len(array), index)
+
+	m, ok := array[index].(map[string]any)
+	require.Truef(t, ok, "expected object at %s[%d]", arrayKey, index)
+	if len(path) == 0 {
+		return m
+	}
+	return specMap(t, m, path...)
+}
+
+func assertWrappedRefSibling(t *testing.T, schema map[string]any, ref string, description string) {
+	t.Helper()
+
+	allOf, ok := schema["allOf"].([]any)
+	require.True(t, ok)
+	require.Len(t, allOf, 1)
+
+	refSchema, ok := allOf[0].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, ref, refSchema["$ref"])
+	assert.Equal(t, description, schema["description"])
+	assert.NotContains(t, schema, "$ref")
 }
 
 func TestAddOperationForceUniqueOperationIDs(t *testing.T) {
