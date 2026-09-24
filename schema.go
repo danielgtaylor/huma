@@ -105,6 +105,16 @@ func (d *Discriminator) MarshalJSON() ([]byte, error) {
 //	schema := huma.SchemaFromType(registry, reflect.TypeOf(MyType{}))
 //
 // Note that the registry may create references for your types.
+
+// patternPropertySchema holds a compiled `patternProperties` regular
+// expression alongside the schema that matching properties must validate
+// against. The list is precomputed from the `PatternProperties` map so that
+// validation avoids recompiling regexes and iterates in a deterministic order.
+type patternPropertySchema struct {
+	re     *regexp.Regexp
+	schema *Schema
+}
+
 type Schema struct {
 	Type                 string              `yaml:"type,omitempty"`
 	Nullable             bool                `yaml:"-"`
@@ -118,6 +128,7 @@ type Schema struct {
 	Items                *Schema             `yaml:"items,omitempty"`
 	AdditionalProperties any                 `yaml:"additionalProperties,omitempty"`
 	Properties           map[string]*Schema  `yaml:"properties,omitempty"`
+	PatternProperties    map[string]*Schema  `yaml:"patternProperties,omitempty"`
 	Enum                 []any               `yaml:"enum,omitempty"`
 	Const                any                 `yaml:"const,omitempty"`
 	Minimum              *float64            `yaml:"minimum,omitempty"`
@@ -149,10 +160,11 @@ type Schema struct {
 	// OpenAPI specific fields
 	Discriminator *Discriminator `yaml:"discriminator,omitempty"`
 
-	patternRe     *regexp.Regexp  `yaml:"-"`
-	requiredMap   map[string]bool `yaml:"-"`
-	propertyNames []string        `yaml:"-"`
-	hidden        bool            `yaml:"-"`
+	patternRe         *regexp.Regexp          `yaml:"-"`
+	patternProperties []patternPropertySchema `yaml:"-"`
+	requiredMap       map[string]bool         `yaml:"-"`
+	propertyNames     []string                `yaml:"-"`
+	hidden            bool                    `yaml:"-"`
 
 	// Precomputed validation messages. These prevent allocations during
 	// validation and are known at schema creation time.
@@ -214,6 +226,7 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 		{"items", s.Items, omitEmpty},
 		{"additionalProperties", s.AdditionalProperties, omitNil},
 		{"properties", props, omitEmpty},
+		{"patternProperties", s.PatternProperties, omitEmpty},
 		{"enum", s.Enum, omitEmpty},
 		{"const", s.Const, omitNil},
 		{"minimum", s.Minimum, omitEmpty},
@@ -336,6 +349,23 @@ func (s *Schema) PrecomputeMessages() {
 		prop.PrecomputeMessages()
 	}
 
+	s.patternProperties = s.patternProperties[:0]
+	if len(s.PatternProperties) > 0 {
+		patterns := make([]string, 0, len(s.PatternProperties))
+		for pattern := range s.PatternProperties {
+			patterns = append(patterns, pattern)
+		}
+		sort.Strings(patterns)
+		for _, pattern := range patterns {
+			prop := s.PatternProperties[pattern]
+			s.patternProperties = append(s.patternProperties, patternPropertySchema{
+				re:     regexp.MustCompile(pattern),
+				schema: prop,
+			})
+			prop.PrecomputeMessages()
+		}
+	}
+
 	for _, sub := range s.OneOf {
 		sub.PrecomputeMessages()
 	}
@@ -351,6 +381,19 @@ func (s *Schema) PrecomputeMessages() {
 	if sub := s.Not; sub != nil {
 		sub.PrecomputeMessages()
 	}
+}
+
+// matchesPatternProperty reports whether the given property name matches at
+// least one of the schema's precomputed `patternProperties` regular
+// expressions. Such properties are validated against the matching pattern
+// schema(s) and are therefore not treated as additional properties.
+func (s *Schema) matchesPatternProperty(name string) bool {
+	for i := range s.patternProperties {
+		if s.patternProperties[i].re.MatchString(name) {
+			return true
+		}
+	}
+	return false
 }
 
 func boolTag(f reflect.StructField, tag string, def bool) bool {
