@@ -3641,38 +3641,40 @@ Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 }
 
 func TestQueryArrayDefaults(t *testing.T) {
+	type input struct {
+		Exploded []string `query:"exploded,explode" default:"a,b"`
+		Plain    []string `query:"plain" default:"a,b"`
+		Optional []string `query:"optional,explode"`
+	}
+
+	_, api := humatest.New(t)
+	var got *input
+	huma.Get(api, "/defaults", func(ctx context.Context, in *input) (*struct{}, error) {
+		got = in
+		return nil, nil
+	})
+
 	for _, tc := range []struct {
-		name        string
-		query       string
-		strings     []string
-		nonExploded []string
+		name     string
+		query    string
+		exploded []string
+		plain    []string
 	}{
 		{"absent", "", []string{"a", "b"}, []string{"a", "b"}},
 		{"unrelated", "?other=value", []string{"a", "b"}, []string{"a", "b"}},
-		{"explicit", "?strings=x&strings=y&plain=x,y", []string{"x", "y"}, []string{"x", "y"}},
-		{"single", "?strings=x&plain=x", []string{"x"}, []string{"x"}},
-		{"literal comma", "?strings=x%2Cy", []string{"x,y"}, []string{"a", "b"}},
-		{"explicit empty", "?strings=&plain=", []string{""}, []string{"a", "b"}},
-		{"empty first value", "?strings=&strings=x", []string{"", "x"}, []string{"a", "b"}},
+		{"explicit", "?exploded=x&exploded=y&plain=x,y", []string{"x", "y"}, []string{"x", "y"}},
+		{"single", "?exploded=x&plain=x", []string{"x"}, []string{"x"}},
+		{"literal comma", "?exploded=x%2Cy", []string{"x,y"}, []string{"a", "b"}},
+		{"explicit empty", "?exploded=&plain=", []string{""}, []string{"a", "b"}},
+		{"empty first value", "?exploded=&exploded=x", []string{"", "x"}, []string{"a", "b"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, api := humatest.New(t)
-			called := false
-			huma.Register(api, huma.Operation{Method: http.MethodGet, Path: "/defaults"},
-				func(ctx context.Context, input *struct {
-					Strings  []string `query:"strings,explode" default:"a,b"`
-					Plain    []string `query:"plain" default:"a,b"`
-					Optional []string `query:"optional,explode"`
-				}) (*struct{}, error) {
-					called = true
-					assert.Equal(t, tc.strings, input.Strings)
-					assert.Equal(t, tc.nonExploded, input.Plain)
-					assert.Nil(t, input.Optional)
-					return nil, nil
-				})
+			got = nil
 			resp := api.Get("/defaults" + tc.query)
-			assert.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
-			assert.True(t, called, "handler should be called")
+			require.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
+			assert.Equal(t, tc.exploded, got.Exploded)
+			assert.Equal(t, tc.plain, got.Plain)
+			assert.Nil(t, got.Optional)
 		})
 	}
 }
