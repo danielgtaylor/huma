@@ -17,6 +17,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humaflow/flow"
 	"github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/danielgtaylor/huma/v2/adapters/humago"
+	"github.com/danielgtaylor/huma/v2/adapters/humagofr"
 	"github.com/danielgtaylor/huma/v2/adapters/humahttprouter"
 	"github.com/danielgtaylor/huma/v2/adapters/humamux"
 	"github.com/danielgtaylor/huma/v2/humatest"
@@ -30,6 +31,7 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/uptrace/bunrouter"
+	"gofr.dev/pkg/gofr"
 )
 
 type key struct{}
@@ -186,6 +188,11 @@ func TestAdapters(t *testing.T) {
 		{"gin", func() huma.API {
 			return wrap(humagin.New(gin.New(), config()), false, func(ctx huma.Context) context.Context {
 				return humagin.Unwrap(ctx).Request.Context()
+			})
+		}},
+		{"gofr", func() huma.API {
+			return wrap(humagofr.New(gofr.New(), config()), false, func(ctx huma.Context) context.Context {
+				return humagofr.Unwrap(ctx).Context
 			})
 		}},
 		{"httprouter", func() huma.API {
