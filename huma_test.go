@@ -1275,6 +1275,29 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
+			Name: "request-body-example-promoted-to-media-type",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name string `json:"name"`
+					} `example:"{\"name\": \"world\"}"`
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+				content := api.OpenAPI().Paths["/body"].Put.RequestBody.Content["application/json"]
+				// The example from the Body field is surfaced on the media
+				// type, since examples alongside a schema $ref are ignored
+				// by many tools.
+				require.NotNil(t, content.Example)
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   `{"name": "world"}`,
+		},
+		{
 			Name: "request-body-nameHint",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
