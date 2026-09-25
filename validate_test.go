@@ -1460,6 +1460,38 @@ var validateTests = []struct {
 		errs:  []string{"expected value to match at least one schema but matched none"},
 	},
 	{
+		name:  "null success",
+		s:     &huma.Schema{Type: huma.TypeNull},
+		input: nil,
+	},
+	{
+		name:  "expected null",
+		s:     &huma.Schema{Type: huma.TypeNull},
+		input: "x",
+		errs:  []string{"expected null"},
+	},
+	{
+		name: "anyOf nullable success",
+		s: &huma.Schema{
+			AnyOf: []*huma.Schema{
+				{Type: huma.TypeNumber, Minimum: Ptr(float64(40))},
+				{Type: huma.TypeNull},
+			},
+		},
+		input: nil,
+	},
+	{
+		name: "anyOf nullable fail",
+		s: &huma.Schema{
+			AnyOf: []*huma.Schema{
+				{Type: huma.TypeNumber, Minimum: Ptr(float64(40))},
+				{Type: huma.TypeNull},
+			},
+		},
+		input: 10,
+		errs:  []string{"expected value to match at least one schema but matched none"},
+	},
+	{
 		name: "allOf success",
 		s: &huma.Schema{
 			AllOf: []*huma.Schema{

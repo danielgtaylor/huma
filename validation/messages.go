@@ -25,6 +25,7 @@ var (
 	MsgExpectedNotMatchSchema             = "expected value to not match schema"
 	MsgExpectedPropertyNameInObject       = "expected propertyName value to be present in object"
 	MsgExpectedBoolean                    = "expected boolean"
+	MsgExpectedNull                       = "expected null"
 	MsgExpectedDuration                   = "expected duration: %v"
 	MsgExpectedNumber                     = "expected number"
 	MsgExpectedInteger                    = "expected integer"
