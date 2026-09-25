@@ -507,6 +507,10 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 	}
 
 	switch s.Type {
+	case TypeNull:
+		if v != nil {
+			res.Add(path, v, validation.MsgExpectedNull)
+		}
 	case TypeBoolean:
 		if _, ok := v.(bool); !ok {
 			res.Add(path, v, validation.MsgExpectedBoolean)
