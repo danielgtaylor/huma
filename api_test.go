@@ -284,6 +284,7 @@ func TestDocsRenderers(t *testing.T) {
 			DocsRendererConfig: map[string]any{
 				"defaultModelsExpandDepth": -1,
 				"tryItOutEnabled":          true,
+				"persistAuthorization":     true,
 			},
 			OpenAPIPath: "/openapi",
 			Formats:     huma.DefaultFormats,
@@ -294,6 +295,7 @@ func TestDocsRenderers(t *testing.T) {
 		assert.Contains(t, resp.Body.String(), `data-config="`)
 		assert.Contains(t, resp.Body.String(), `&#34;defaultModelsExpandDepth&#34;:-1`)
 		assert.Contains(t, resp.Body.String(), `&#34;tryItOutEnabled&#34;:true`)
+		assert.Contains(t, resp.Body.String(), `&#34;persistAuthorization&#34;:true`)
 	})
 
 	t.Run("SwaggerUIRendererConfigInvalid", func(t *testing.T) {
