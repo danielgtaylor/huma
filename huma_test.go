@@ -4437,6 +4437,46 @@ func TestConvenienceMethods(t *testing.T) {
 	}, huma.OperationTags("Things"))
 	assert.Equal(t, "delete-things-by-thing-id", api.OpenAPI().Paths[path].Delete.OperationID)
 	assert.Equal(t, []string{"Things"}, api.OpenAPI().Paths[path].Delete.Tags)
+
+	huma.Query(api, path, func(ctx context.Context, input *Input) (*struct{}, error) {
+		return nil, nil
+	}, huma.OperationTags("Things"))
+	assert.Equal(t, "query-things-by-thing-id", api.OpenAPI().Paths[path].Query.OperationID)
+	assert.Equal(t, []string{"Things"}, api.OpenAPI().Paths[path].Query.Tags)
+}
+
+func TestQueryMethod(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	type QueryInput struct {
+		Body struct {
+			Q string `json:"q"`
+		}
+	}
+	type QueryOutput struct {
+		Body struct {
+			Result string `json:"result"`
+		}
+	}
+
+	huma.Query(api, "/search", func(ctx context.Context, input *QueryInput) (*QueryOutput, error) {
+		resp := &QueryOutput{}
+		resp.Body.Result = "got:" + input.Body.Q
+		return resp, nil
+	})
+
+	// The operation is registered under the `query` key (OpenAPI 3.2).
+	require.NotNil(t, api.OpenAPI().Paths["/search"].Query)
+	assert.Equal(t, "query-search", api.OpenAPI().Paths["/search"].Query.OperationID)
+
+	spec, err := json.Marshal(api.OpenAPI())
+	require.NoError(t, err)
+	assert.Contains(t, string(spec), `"query":`)
+
+	// A QUERY request carries a body like POST but is safe/idempotent like GET.
+	resp := api.Query("/search", map[string]string{"q": "hello"})
+	assert.Equal(t, http.StatusOK, resp.Code)
+	assert.Contains(t, resp.Body.String(), `"result":"got:hello"`)
 }
 
 type EmbeddedWithMethod struct{}

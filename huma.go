@@ -2458,3 +2458,22 @@ func Patch[I, O any](api API, path string, handler func(context.Context, *I) (*O
 func Delete[I, O any](api API, path string, handler func(context.Context, *I) (*O, error), operationHandlers ...func(o *Operation)) {
 	convenience(api, http.MethodDelete, path, handler, operationHandlers...)
 }
+
+// Query HTTP operation handler for an API (RFC 10008). The handler must be a
+// function that takes a context and a pointer to the input struct and returns
+// a pointer to the output struct and an error. Like POST the input may carry
+// a body, but unlike POST the operation is safe and idempotent like GET.
+//
+//	huma.Query(api, "/things-search", func(ctx context.Context, input *struct{
+//		Body struct {
+//			Q string `json:"q"`
+//		}
+//	}) (*ThingsOutput, error) {
+//		// TODO: run query...
+//		return &ThingsOutput{}, nil
+//	})
+//
+// This is a convenience wrapper around `huma.Register`.
+func Query[I, O any](api API, path string, handler func(context.Context, *I) (*O, error), operationHandlers ...func(o *Operation)) {
+	convenience(api, MethodQuery, path, handler, operationHandlers...)
+}
