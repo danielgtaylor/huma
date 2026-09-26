@@ -185,6 +185,26 @@ type TestAPI interface {
 	// 	// Make a DELETE request with a custom header.
 	// 	api.Delete("/foo", "X-My-Header: my-value")
 	Delete(path string, args ...any) *httptest.ResponseRecorder
+
+	// QueryCtx performs a QUERY request against the API with a custom
+	// [context.Context] in the [http.Request]. Args, if provided, should be string
+	// headers like `Content-Type: application/json`, an `io.Reader` for the request
+	// body, or a slice/map/struct which will be serialized to JSON and sent as the
+	// request body. Anything else will panic.
+	//
+	// 	// Make a QUERY request
+	// 	api.QueryCtx(ctx, "/foo", MyBody{Foo: "bar"})
+	QueryCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder
+
+	// Query performs a QUERY request against the API using [context.Background] in
+	// the [http.Request]. Args, if provided, should be string headers like
+	// `Content-Type: application/json`, an `io.Reader` for the request body, or a
+	// slice/map/struct which will be serialized to JSON and sent as the request
+	// body. Anything else will panic.
+	//
+	// 	// Make a QUERY request
+	// 	api.Query("/foo", MyBody{Foo: "bar"})
+	Query(path string, args ...any) *httptest.ResponseRecorder
 }
 
 var _ TestAPI = &testAPI{}
@@ -305,6 +325,16 @@ func (a *testAPI) Delete(path string, args ...any) *httptest.ResponseRecorder {
 func (a *testAPI) DeleteCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder {
 	a.tb.Helper()
 	return a.DoCtx(ctx, http.MethodDelete, path, args...)
+}
+
+func (a *testAPI) Query(path string, args ...any) *httptest.ResponseRecorder {
+	a.tb.Helper()
+	return a.QueryCtx(context.Background(), path, args...)
+}
+
+func (a *testAPI) QueryCtx(ctx context.Context, path string, args ...any) *httptest.ResponseRecorder {
+	a.tb.Helper()
+	return a.DoCtx(ctx, huma.MethodQuery, path, args...)
 }
 
 // Wrap returns a `TestAPI` wrapping the given API.
