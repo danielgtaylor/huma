@@ -893,6 +893,10 @@ func register(api API, op Operation, inputType, outputType reflect.Type, newInpu
 		}
 	}
 	a.Handle(&op, api.Middlewares().Handler(op.Middlewares.Handler(func(ctx Context) {
+		// Group modifiers may configure validation on a per-route operation copy.
+		op := op
+		op.SkipValidateBody = ctx.Operation().SkipValidateBody
+		op.SkipValidateParams = ctx.Operation().SkipValidateParams
 		input := newInput()
 
 		// Get the validation dependencies from the shared pool.
