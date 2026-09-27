@@ -1196,6 +1196,27 @@ func TestFeatures(t *testing.T) {
 			Body:   `{"items": [{"id": 1}]}`,
 		},
 		{
+			Name: "request-body-custom-unmarshaler-default",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name OmittableNullable[string] `json:"name,omitzero" default:"Kari"`
+					}
+				}) (*struct{}, error) {
+					assert.True(t, input.Body.Name.Sent)
+					assert.False(t, input.Body.Name.Null)
+					assert.Equal(t, "Kari", input.Body.Name.Value)
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   `{}`,
+		},
+		{
 			Name: "request-body-pointer-defaults",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{

@@ -43,6 +43,7 @@ var (
 	ipType                = reflect.TypeFor[net.IP]()
 	ipAddrType            = reflect.TypeFor[netip.Addr]()
 	rawMessageType        = reflect.TypeFor[json.RawMessage]()
+	jsonUnmarshalerType   = reflect.TypeFor[json.Unmarshaler]()
 	schemaProviderType    = reflect.TypeFor[SchemaProvider]()
 	schemaTransformerType = reflect.TypeFor[SchemaTransformer]()
 	textUnmarshalerType   = reflect.TypeFor[encoding.TextUnmarshaler]()
@@ -504,6 +505,24 @@ func convertType(fieldName string, t reflect.Type, v any) any {
 		return tmp.Interface()
 	}
 
+	target := deref(t)
+	targetPtr := reflect.PointerTo(target)
+	if target.Implements(jsonUnmarshalerType) || targetPtr.Implements(jsonUnmarshalerType) {
+		data, err := json.Marshal(v)
+		if err != nil {
+			panic(fmt.Errorf("unable to convert %v to %v for field '%s': %v: %w", tv, t, fieldName, err, ErrSchemaInvalid))
+		}
+
+		converted := reflect.New(target)
+		if err := json.Unmarshal(data, converted.Interface()); err != nil {
+			panic(fmt.Errorf("unable to convert %v to %v for field '%s': %v: %w", tv, t, fieldName, err, ErrSchemaInvalid))
+		}
+		if t.Kind() == reflect.Pointer {
+			return converted.Interface()
+		}
+		return converted.Elem().Interface()
+	}
+
 	if !tv.ConvertibleTo(deref(t)) {
 		panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", tv, t, fieldName, ErrSchemaInvalid))
 	}
@@ -557,7 +576,12 @@ func jsonTagValue(r Registry, fieldName string, s *Schema, value string) any {
 func jsonTag(r Registry, f reflect.StructField, s *Schema, name string) any {
 	t := f.Type
 	if value := f.Tag.Get(name); value != "" {
-		return convertType(f.Name, t, jsonTagValue(r, f.Name, s, value))
+		parsed := jsonTagValue(r, f.Name, s, value)
+		base := deref(t)
+		if base.Implements(schemaProviderType) || reflect.PointerTo(base).Implements(schemaProviderType) {
+			return parsed
+		}
+		return convertType(f.Name, t, parsed)
 	}
 	return nil
 }
