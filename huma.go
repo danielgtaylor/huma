@@ -1103,7 +1103,11 @@ func register(api API, op Operation, inputType, outputType reflect.Type, newInpu
 								}
 
 								// Regular fields
-								pv, err := parseInto(ctx, f, value[0], value, *p)
+								receiver := f
+								if f.Addr().Type().Implements(paramWrapperType) {
+									receiver = f.Addr().Interface().(ParamWrapper).Receiver()
+								}
+								pv, err := parseInto(ctx, receiver, value[0], value, *p)
 								if err != nil {
 									res.Add(pb, value, err.Error())
 								}
