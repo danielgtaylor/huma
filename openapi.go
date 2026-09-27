@@ -1005,6 +1005,15 @@ func (o *Operation) MarshalJSON() ([]byte, error) {
 	}, o.Extensions)
 }
 
+// MethodQuery is the HTTP QUERY method (RFC 10008). It is a safe and
+// idempotent method that carries request content, filling the gap between
+// GET and POST for query operations with a structured body.
+//
+// Defined here instead of net/http because http.MethodQuery is not in a Go
+// release yet (only on master, CL 822384). Swap this for http.MethodQuery
+// once it ships.
+const MethodQuery = "QUERY"
+
 // PathItem describes the operations available on a single path. A Path Item MAY
 // be empty, due to ACL constraints. The path itself is still exposed to the
 // documentation viewer but they will not know which operations and parameters
@@ -1077,6 +1086,10 @@ type PathItem struct {
 	// Trace is a definition of a TRACE operation on this path.
 	Trace *Operation `yaml:"trace,omitempty"`
 
+	// Query is a definition of a QUERY operation on this path (RFC 10008,
+	// OpenAPI 3.2).
+	Query *Operation `yaml:"query,omitempty"`
+
 	// Servers is an alternative server array to service all operations in this
 	// path.
 	Servers []*Server `yaml:"servers,omitempty"`
@@ -1107,6 +1120,7 @@ func (p *PathItem) MarshalJSON() ([]byte, error) {
 		{"head", p.Head, omitEmpty},
 		{"patch", p.Patch, omitEmpty},
 		{"trace", p.Trace, omitEmpty},
+		{"query", p.Query, omitEmpty},
 		{"servers", p.Servers, omitEmpty},
 		{"parameters", p.Parameters, omitEmpty},
 	}, p.Extensions)
@@ -1520,6 +1534,7 @@ func (o *OpenAPI) AddOperation(op *Operation) {
 			for _, existingOp := range []*Operation{
 				pathItem.Get, pathItem.Post, pathItem.Put, pathItem.Patch,
 				pathItem.Delete, pathItem.Head, pathItem.Options, pathItem.Trace,
+				pathItem.Query,
 			} {
 				if existingOp != nil && existingOp.OperationID == op.OperationID {
 					panic("duplicate operation ID: " + op.OperationID)
@@ -1551,6 +1566,8 @@ func (o *OpenAPI) AddOperation(op *Operation) {
 		item.Options = op
 	case http.MethodTrace:
 		item.Trace = op
+	case MethodQuery:
+		item.Query = op
 	default:
 		panic("unknown method " + op.Method)
 	}

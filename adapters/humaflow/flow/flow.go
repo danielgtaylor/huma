@@ -69,7 +69,7 @@ import (
 )
 
 // AllMethods is a slice containing all HTTP request methods.
-var AllMethods = []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace}
+var AllMethods = []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodConnect, http.MethodOptions, http.MethodTrace, "QUERY"}
 
 var compiledRXPatterns = map[string]*regexp.Regexp{}
 

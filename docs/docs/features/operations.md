@@ -62,6 +62,7 @@ A number of convenience methods are provided if you don't want to use the `huma.
 -   `huma.Put`
 -   `huma.Patch`
 -   `huma.Delete`
+-   `huma.Query` (RFC 10008, safe & idempotent with a body)
 
 These methods are equivalent to using `huma.Register` with the `Method` field set to the corresponding HTTP method, and they generate the operation ID for you based on the path. For example:
 
