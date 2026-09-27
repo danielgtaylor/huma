@@ -1966,3 +1966,194 @@ func TestValidateUnresolvedSchemaRefNoPanic(t *testing.T) {
 		})
 	})
 }
+
+func TestPropertyNamesValidate(t *testing.T) {
+	type expectedError struct {
+		location    string
+		messagePart string
+	}
+
+	tests := []struct {
+		name       string
+		schema     *huma.Schema
+		input      any
+		wantPanic  bool
+		wantErrors []expectedError
+	}{
+		{
+			name: "rejects invalid pattern",
+			schema: &huma.Schema{
+				Type: huma.TypeObject,
+				PropertyNames: &huma.Schema{
+					Type:    huma.TypeString,
+					Pattern: "^[a-z][a-z0-9-]{1,10}$",
+				},
+			},
+			input: map[string]any{"User_ID": "anything"},
+			wantErrors: []expectedError{
+				{location: "User_ID"},
+			},
+		},
+		{
+			name: "rejects short name",
+			schema: &huma.Schema{
+				Type: huma.TypeObject,
+				PropertyNames: &huma.Schema{
+					Type:      huma.TypeString,
+					MinLength: Ptr(2),
+				},
+			},
+			input: map[string]any{"a": 1},
+			wantErrors: []expectedError{
+				{location: "a"},
+			},
+		},
+		{
+			name: "rejects long name",
+			schema: &huma.Schema{
+				Type: huma.TypeObject,
+				PropertyNames: &huma.Schema{
+					Type:      huma.TypeString,
+					MaxLength: Ptr(6),
+				},
+			},
+			input: map[string]any{"toolong": 1},
+			wantErrors: []expectedError{
+				{location: "toolong"},
+			},
+		},
+		{
+			name: "accepts valid name",
+			schema: &huma.Schema{
+				Type: huma.TypeObject,
+				PropertyNames: &huma.Schema{
+					Type:    huma.TypeString,
+					Pattern: "^[a-z][a-z0-9-]{1,10}$",
+				},
+			},
+			input: map[string]any{"valid-name": "ok"},
+		},
+		{
+			name: "checks declared property names",
+			schema: &huma.Schema{
+				Type: huma.TypeObject,
+				Properties: map[string]*huma.Schema{
+					"X": {Type: huma.TypeString},
+				},
+				PropertyNames: &huma.Schema{
+					Type:    huma.TypeString,
+					Pattern: "^[a-z]+$",
+				},
+			},
+			input: map[string]any{"X": "value"},
+			wantErrors: []expectedError{
+				{location: "X"},
+			},
+		},
+		{
+			name: "still checks property values",
+			schema: &huma.Schema{
+				Type: huma.TypeObject,
+				PropertyNames: &huma.Schema{
+					Type:    huma.TypeString,
+					Pattern: "^[a-z-]+$",
+				},
+				AdditionalProperties: &huma.Schema{Type: huma.TypeInteger},
+			},
+			input: map[string]any{"valid-name": "bad"},
+			wantErrors: []expectedError{
+				{location: "valid-name", messagePart: "expected integer"},
+			},
+		},
+		{
+			name: "reports property name and value errors",
+			schema: &huma.Schema{
+				Type: huma.TypeObject,
+				PropertyNames: &huma.Schema{
+					Type:    huma.TypeString,
+					Pattern: "^[a-z-]+$",
+				},
+				AdditionalProperties: &huma.Schema{Type: huma.TypeInteger},
+			},
+			input: map[string]any{"BAD": 1, "valid-name": "bad"},
+			wantErrors: []expectedError{
+				{location: "BAD"},
+				{location: "valid-name", messagePart: "expected integer"},
+			},
+		},
+		{
+			name: "checks map any string key",
+			schema: &huma.Schema{
+				Type: huma.TypeObject,
+				PropertyNames: &huma.Schema{
+					Type:    huma.TypeString,
+					Pattern: "^[a-z]+$",
+				},
+			},
+			input: map[any]any{"BAD": "value"},
+			wantErrors: []expectedError{
+				{location: "BAD"},
+			},
+		},
+		{
+			name: "invalid nested regex panics",
+			schema: &huma.Schema{
+				Type: huma.TypeObject,
+				PropertyNames: &huma.Schema{
+					Type:    huma.TypeString,
+					Pattern: "[",
+				},
+			},
+			wantPanic: true,
+		},
+		{
+			name: "ignores map any non-string key",
+			schema: &huma.Schema{
+				Type: huma.TypeObject,
+				PropertyNames: &huma.Schema{
+					Type:    huma.TypeString,
+					Pattern: "^[a-z]+$",
+				},
+			},
+			input: map[any]any{123: "value"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+			if tc.wantPanic {
+				assert.Panics(t, func() {
+					tc.schema.PrecomputeMessages()
+				})
+				return
+			}
+
+			tc.schema.PrecomputeMessages()
+			pb := huma.NewPathBuffer([]byte(""), 0)
+			res := &huma.ValidateResult{}
+
+			huma.Validate(registry, tc.schema, pb, huma.ModeReadFromServer, tc.input, res)
+			if len(tc.wantErrors) == 0 {
+				assert.Empty(t, res.Errors)
+				return
+			}
+
+			require.Len(t, res.Errors, len(tc.wantErrors))
+			for _, expected := range tc.wantErrors {
+				found := false
+				for _, err := range res.Errors {
+					detail := err.(*huma.ErrorDetail)
+					if detail.Location != expected.location {
+						continue
+					}
+					if expected.messagePart == "" || strings.Contains(detail.Message, expected.messagePart) {
+						found = true
+						break
+					}
+				}
+				assert.Truef(t, found, "expected matching error location=%q messagePart=%q errors=%v", expected.location, expected.messagePart, res.Errors)
+			}
+		})
+	}
+}

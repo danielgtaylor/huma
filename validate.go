@@ -758,6 +758,17 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		}
 	}
 
+	// Property name constraints apply to every key as a string value,
+	// cumulatively with the named, pattern, and additional property value
+	// validations.
+	if s.PropertyNames != nil {
+		for k := range m {
+			path.Push(k)
+			Validate(r, s.PropertyNames, path, mode, k, res)
+			path.Pop()
+		}
+	}
+
 	for _, k := range s.propertyNames {
 		v := s.Properties[k]
 
@@ -882,6 +893,21 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 	if s.MaxProperties != nil {
 		if len(m) > *s.MaxProperties {
 			res.Add(path, m, s.msgMaxProperties)
+		}
+	}
+
+	// Property name constraints apply to every string key as a string value,
+	// cumulatively with the named, pattern, and additional property value
+	// validations. Non-string keys cannot violate property name constraints.
+	if s.PropertyNames != nil {
+		for k := range m {
+			kStr, ok := k.(string)
+			if !ok {
+				continue
+			}
+			path.Push(kStr)
+			Validate(r, s.PropertyNames, path, mode, kStr, res)
+			path.Pop()
 		}
 	}
 
