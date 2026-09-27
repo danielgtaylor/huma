@@ -76,6 +76,7 @@ config.DocsRenderer = huma.DocsRendererSwaggerUI
 config.DocsRendererConfig = map[string]any{
 	"defaultModelsExpandDepth": -1,   // hide the models section
 	"tryItOutEnabled":          true, // enable "Try it out" by default
+	"persistAuthorization":     true, // keep auth across page reloads
 }
 
 api := humachi.New(router, config)
