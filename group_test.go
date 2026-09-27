@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -245,4 +246,60 @@ func TestGroupTransformError(t *testing.T) {
 	assert.Panics(t, func() {
 		api.Get("/v1/users")
 	})
+}
+
+// Group modifiers may update copies of an operation for individual routes.
+func TestGroupSkipValidation(t *testing.T) {
+	for _, source := range []string{"modifier", "hook", "hidden modifier"} {
+		for _, flags := range []struct {
+			name         string
+			body, params bool
+		}{{"neither", false, false}, {"body", true, false}, {"params", false, true}, {"both", true, true}} {
+			t.Run(source+"/"+flags.name, func(t *testing.T) {
+				configure := func(op *huma.Operation) {
+					if strings.HasPrefix(op.Path, "/skip/") {
+						op.SkipValidateBody = flags.body
+						op.SkipValidateParams = flags.params
+					}
+				}
+				cfg := huma.DefaultConfig("test", "1")
+				if source == "hook" {
+					cfg.OnAddOperation = append(cfg.OnAddOperation, func(_ *huma.OpenAPI, op *huma.Operation) { configure(op) })
+				}
+				_, api := humatest.New(t, cfg)
+				parent := huma.NewGroup(api, "/skip", "/validate")
+				if source != "hook" {
+					parent.UseSimpleModifier(configure)
+				}
+				group := huma.NewGroup(parent, "/nested")
+				huma.Post(group, "/test", func(_ context.Context, input *struct {
+					Q    string `query:"q" maxLength:"2"`
+					Body struct {
+						Name string `json:"name" maxLength:"2"`
+					}
+				}) (*struct{}, error) {
+					return nil, nil
+				}, func(op *huma.Operation) { op.Hidden = source == "hidden modifier" })
+				// Alternate sibling routes to catch accidental sharing of validation flags.
+				for _, prefix := range []string{"/skip", "/validate", "/skip"} {
+					for _, kind := range []string{"body", "params"} {
+						body := `{"name":"long"}`
+						query := "?q=ok"
+						skip := flags.body
+						if kind == "params" {
+							body = `{"name":"ok"}`
+							query = "?q=long"
+							skip = flags.params
+						}
+						want := http.StatusUnprocessableEntity
+						if prefix == "/skip" && skip {
+							want = http.StatusNoContent
+						}
+						resp := api.Post(prefix+"/nested/test"+query, "Content-Type: application/json", strings.NewReader(body))
+						assert.Equal(t, want, resp.Code, "%s/%s: %s", prefix, kind, resp.Body.String())
+					}
+				}
+			})
+		}
+	}
 }

@@ -44,6 +44,15 @@ type groupAdapter struct {
 
 func (a *groupAdapter) Handle(op *Operation, handler func(Context)) {
 	a.group.ModifyOperation(op, func(op *Operation) {
+		if documented := a.group.documentedOperations[[2]string{op.Method, op.Path}]; documented != nil {
+			// Preserve validation settings applied by OnAddOperation to the
+			// documented copy, without sharing mutable state between routes.
+			modified := *op
+			modified.SkipValidateBody = documented.SkipValidateBody
+			modified.SkipValidateParams = documented.SkipValidateParams
+			op = &modified
+			delete(a.group.documentedOperations, [2]string{op.Method, op.Path})
+		}
 		a.Adapter.Handle(op, handler)
 	})
 }
@@ -61,6 +70,10 @@ type Group struct {
 	modifiers    []func(o *Operation, next func(*Operation))
 	middlewares  Middlewares
 	transformers []Transformer
+
+	// Operations retained between documentation and adapter registration so
+	// validation settings added by OpenAPI hooks reach the runtime handler.
+	documentedOperations map[[2]string]*Operation
 }
 
 var _ API = (*Group)(nil)                    // The Group struct must implement our API interface
@@ -107,6 +120,10 @@ func (g *Group) DocumentOperation(op *Operation) {
 				return
 			}
 			g.OpenAPI().AddOperation(op)
+			if g.documentedOperations == nil {
+				g.documentedOperations = map[[2]string]*Operation{}
+			}
+			g.documentedOperations[[2]string{op.Method, op.Path}] = op
 		}
 	})
 }
