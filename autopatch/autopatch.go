@@ -467,6 +467,7 @@ func makeOptionalSchema(s *huma.Schema) *huma.Schema {
 		Default:              s.Default,
 		Examples:             s.Examples,
 		AdditionalProperties: s.AdditionalProperties,
+		PatternProperties:    s.PatternProperties,
 		Enum:                 s.Enum,
 		Minimum:              s.Minimum,
 		ExclusiveMinimum:     s.ExclusiveMinimum,

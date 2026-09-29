@@ -1721,3 +1721,20 @@ func TestSchemaTransformer(t *testing.T) {
 	updateSchema2 := huma.SchemaFromType(r, reflect.TypeFor[ExampleUpdateStruct]())
 	validateSchema(updateSchema2)
 }
+
+func TestSchemaPatternProperties(t *testing.T) {
+	s := &huma.Schema{
+		Type: huma.TypeObject,
+		PatternProperties: map[string]*huma.Schema{
+			"^x-": {Type: huma.TypeString},
+		},
+	}
+	b, err := json.Marshal(s)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{
+		"type": "object",
+		"patternProperties": {
+			"^x-": {"type": "string"}
+		}
+	}`, string(b))
+}
