@@ -94,6 +94,77 @@ type sseTest struct {
 
 var sseTests = []sseTest{
 	{
+		Title: "sse preserves existing text/event-stream content",
+		TestFunc: func(t *testing.T) {
+			_, api := humatest.New(t)
+			existingSchema := &huma.Schema{
+				Title:       "Existing Schema",
+				Description: "This schema should be preserved",
+				Type:        huma.TypeString,
+			}
+
+			sse.Register(api, huma.Operation{
+				OperationID: "sse",
+				Method:      http.MethodGet,
+				Path:        "/sse",
+				Responses: map[string]*huma.Response{
+					"200": {
+						Content: map[string]*huma.MediaType{
+							"text/event-stream": {
+								Schema: existingSchema,
+							},
+						},
+					},
+				},
+			}, map[string]any{
+				"message": &DefaultMessage{},
+			}, func(ctx context.Context, input *struct{}, send sse.Sender) {
+				send.Data(DefaultMessage{Message: "Hello, world!"})
+			})
+
+			o := api.OpenAPI()
+			response := o.Paths["/sse"].Get.Responses["200"]
+			content := response.Content["text/event-stream"]
+
+			assert.Equal(t, "Existing Schema", content.Schema.Title)
+			assert.Equal(t, "This schema should be preserved", content.Schema.Description)
+			assert.Equal(t, huma.TypeString, content.Schema.Type)
+		},
+	},
+	{
+		Title: "sse sets default schema and preserves other fields in text/event-stream content",
+		TestFunc: func(t *testing.T) {
+			_, api := humatest.New(t)
+
+			example := DefaultMessage{Message: "Example message"}
+			sse.Register(api, huma.Operation{
+				OperationID: "sse",
+				Method:      http.MethodGet,
+				Path:        "/sse",
+				Responses: map[string]*huma.Response{
+					"200": {
+						Content: map[string]*huma.MediaType{
+							"text/event-stream": {
+								Example: example,
+							},
+						},
+					},
+				},
+			}, map[string]any{
+				"message": &DefaultMessage{},
+			}, func(ctx context.Context, input *struct{}, send sse.Sender) {
+				send.Data(DefaultMessage{Message: "Hello, world!"})
+			})
+
+			o := api.OpenAPI()
+			response := o.Paths["/sse"].Get.Responses["200"]
+			content := response.Content["text/event-stream"]
+
+			assert.Equal(t, example, content.Example)
+			assert.NotNil(t, content.Schema)
+		},
+	},
+	{
 		Title: "sse",
 		TestFunc: func(t *testing.T) {
 			_, api := humatest.New(t)
@@ -261,6 +332,34 @@ data: {"message":"Hello, world!"}
 			assert.Less(t, whIdx, flushIdx, "WriteHeader must precede Flush")
 			assert.NotContains(t, eventsBeforeRelease, "write",
 				"no body write should occur before the user handler sends an event")
+		},
+	},
+	{
+		Title: "sse adds text/event-stream content when not present",
+		TestFunc: func(t *testing.T) {
+			_, api := humatest.New(t)
+
+			sse.Register(api, huma.Operation{
+				OperationID: "sse",
+				Method:      http.MethodGet,
+				Path:        "/sse",
+			}, map[string]any{
+				"message": &DefaultMessage{},
+			}, func(ctx context.Context, input *struct{}, send sse.Sender) {
+				send.Data(DefaultMessage{Message: "Hello, world!"})
+			})
+
+			o := api.OpenAPI()
+			response := o.Paths["/sse"].Get.Responses["200"]
+			content := response.Content["text/event-stream"]
+
+			// The SSE schema should be added
+			assert.NotNil(t, content, "text/event-stream content should be present")
+			assert.NotNil(t, content.Schema, "schema should be present")
+			assert.Equal(t, "Server Sent Events", content.Schema.Title)
+			assert.Equal(t, huma.TypeArray, content.Schema.Type)
+			assert.NotNil(t, content.Schema.Items, "schema items should be present")
+			assert.NotNil(t, content.Schema.Items.Extensions["oneOf"], "oneOf extension should be present")
 		},
 	},
 	{
