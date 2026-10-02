@@ -504,6 +504,19 @@ func convertType(fieldName string, t reflect.Type, v any) any {
 		return tmp.Interface()
 	}
 
+	target := deref(t)
+	targetPtr := reflect.PointerTo(target)
+	if s, ok := v.(string); ok && (target.Implements(textUnmarshalerType) || targetPtr.Implements(textUnmarshalerType)) {
+		converted := reflect.New(target)
+		if err := converted.Interface().(encoding.TextUnmarshaler).UnmarshalText([]byte(s)); err != nil {
+			panic(fmt.Errorf("unable to convert %v to %v for field '%s': %v: %w", tv, t, fieldName, err, ErrSchemaInvalid))
+		}
+		if t.Kind() == reflect.Pointer {
+			return converted.Interface()
+		}
+		return converted.Elem().Interface()
+	}
+
 	if !tv.ConvertibleTo(deref(t)) {
 		panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", tv, t, fieldName, ErrSchemaInvalid))
 	}
@@ -557,7 +570,14 @@ func jsonTagValue(r Registry, fieldName string, s *Schema, value string) any {
 func jsonTag(r Registry, f reflect.StructField, s *Schema, name string) any {
 	t := f.Type
 	if value := f.Tag.Get(name); value != "" {
-		return convertType(f.Name, t, jsonTagValue(r, f.Name, s, value))
+		parsed := jsonTagValue(r, f.Name, s, value)
+		base := deref(t)
+		// Keep schema defaults in wire form for TextUnmarshaler string types so
+		// OpenAPI stays a string (e.g. "10s") while findDefaults still converts.
+		if base.Implements(textUnmarshalerType) || reflect.PointerTo(base).Implements(textUnmarshalerType) {
+			return parsed
+		}
+		return convertType(f.Name, t, parsed)
 	}
 	return nil
 }
