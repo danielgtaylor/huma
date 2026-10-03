@@ -45,7 +45,7 @@ type Hooks interface {
 	// OnStart sets a function to call when the service should be started. This
 	// is called by the default command if no command is given. The callback
 	// should take whatever steps are necessary to start the server, such as
-	// `httpServer.ListenAndServer(...)`.
+	// `httpServer.ListenAndServe(...)`.
 	OnStart(func())
 
 	// OnStop sets a function to call when the service should be stopped. This
@@ -77,9 +77,10 @@ func WithOptions[Options any](f func(cmd *cobra.Command, args []string, options 
 }
 
 type option struct {
-	name string
-	typ  reflect.Type
-	path []int
+	name    string
+	typ     reflect.Type
+	path    []int
+	envName string
 }
 
 type cli[Options any] struct {
@@ -161,18 +162,10 @@ func getBoolValue(flags *pflag.FlagSet, flagName, envValue string, hasEnv bool) 
 	return value
 }
 
-// getEnvName converts a flag name to the corresponding environment variable name
-func getEnvName(flagName string) string {
-	name := strings.ReplaceAll(flagName, "-", "_")
-	name = strings.ReplaceAll(name, ".", "_")
-	return "SERVICE_" + strings.ToUpper(name)
-}
-
 // getValueFromType uses the appropriate getter based on the field type
 // and returns the value respecting precedence rules.
-func getValueFromType(flags *pflag.FlagSet, flagName string, fieldType reflect.Type) (any, bool) {
+func getValueFromType(flags *pflag.FlagSet, flagName, envName string, fieldType reflect.Type) (any, bool) {
 	// Check environment variables
-	envName := getEnvName(flagName)
 	envValue, hasEnv := os.LookupEnv(envName)
 
 	// Determine the appropriate getter based on type
@@ -195,7 +188,7 @@ func getValueFromType(flags *pflag.FlagSet, flagName string, fieldType reflect.T
 // CLI args take precedence over environment variables.
 func getValueFromFlagOrEnv(flags *pflag.FlagSet, opt option, fieldType reflect.Type) reflect.Value {
 	// Get the value based on type
-	value, ok := getValueFromType(flags, opt.name, fieldType)
+	value, ok := getValueFromType(flags, opt.name, opt.envName, fieldType)
 	if !ok {
 		// This shouldn't happen if setupOptions validates types properly
 		panic(fmt.Sprintf("unsupported type for option %s: %s", opt.name, fieldType.String()))
@@ -268,11 +261,11 @@ func (c *cli[O]) OnStop(fn func()) {
 
 // registerOption registers an option with the CLI, handling common tasks like
 // parsing default values, setting up flags, and storing option metadata.
-func (c *cli[O]) registerOption(flags *pflag.FlagSet, field reflect.StructField, currentPath []int, name, defaultValue string) error {
+func (c *cli[O]) registerOption(flags *pflag.FlagSet, field reflect.StructField, currentPath []int, name, envName, defaultValue string) error {
 	fieldType := deref(field.Type)
 
 	// Store option metadata regardless of type
-	c.optInfo = append(c.optInfo, option{name, field.Type, currentPath})
+	c.optInfo = append(c.optInfo, option{name, field.Type, currentPath, envName})
 
 	// Type-specific flag setup and default parsing
 	switch fieldType.Kind() {
@@ -349,8 +342,13 @@ func (c *cli[O]) setupOptions(t reflect.Type, path []int, prefix string) error {
 			name = prefix + "." + name
 		}
 
-		// Convert dotted names to snake case with underscores for env vars
-		envName := "SERVICE_" + casing.Snake(strings.ReplaceAll(name, ".", "_"), strings.ToUpper)
+		// Determine the environment variable name. Prioritize the `env` tag.
+		envName := field.Tag.Get("env")
+		if envName == "" {
+			// Fallback to default behavior if `env` tag is not set.
+			envName = getEnvName(name)
+		}
+
 		defaultValue := field.Tag.Get("default")
 		if v, ok := os.LookupEnv(envName); ok {
 			// Env vars will override the default value, which is used to document
@@ -360,7 +358,7 @@ func (c *cli[O]) setupOptions(t reflect.Type, path []int, prefix string) error {
 
 		switch fieldType.Kind() {
 		case reflect.String, reflect.Int, reflect.Int64, reflect.Bool:
-			if err := c.registerOption(flags, field, currentPath, name, defaultValue); err != nil {
+			if err := c.registerOption(flags, field, currentPath, name, envName, defaultValue); err != nil {
 				return fmt.Errorf("failed to register option %q: %w", field.Name, err)
 			}
 		case reflect.Struct:
@@ -394,11 +392,11 @@ func (c *cli[O]) setupOptions(t reflect.Type, path []int, prefix string) error {
 //	type Options struct {
 //		Debug bool   `doc:"Enable debug logging"`
 //		Host  string `doc:"Hostname to listen on."`
-//		Port  int    `doc:"Port to listen on." short:"p" default:"8888"`
+//		Port  int    `doc:"Port to listen on." short:"p" default:"8888" env:"APP_PORT"`
 //	}
 //
 //	// Then, create the CLI.
-//	cli := humacli.CLI(func(hooks humacli.Hooks, opts *Options) {
+//	cli := humacli.New(func(hooks humacli.Hooks, opts *Options) {
 //		fmt.Printf("Options are debug:%v host:%v port%v\n",
 //			opts.Debug, opts.Host, opts.Port)
 //
@@ -462,4 +460,11 @@ func New[O any](onParsed func(Hooks, *O)) CLI {
 
 	}
 	return c
+}
+
+// getEnvName converts a flag name to the corresponding environment variable name
+func getEnvName(flagName string) string {
+	name := strings.ReplaceAll(flagName, "-", "_")
+	name = strings.ReplaceAll(name, ".", "_")
+	return "SERVICE_" + strings.ToUpper(name)
 }
