@@ -48,6 +48,7 @@ func (v MimeTypeValidator) Validate(fh *multipart.FileHeader, location string) (
 	if err != nil {
 		return "", &ErrorDetail{Message: "Failed to open file", Location: location}
 	}
+	defer file.Close()
 
 	mimeType := fh.Header.Get("Content-Type")
 	if mimeType == "" {
@@ -178,6 +179,7 @@ func readFile(
 	}
 	contentType, validationErr := validator.Validate(fh, location)
 	if validationErr != nil {
+		f.Close()
 		return FormFile{}, validationErr
 	}
 	return FormFile{
