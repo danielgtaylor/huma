@@ -234,12 +234,9 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 
 	// Get the schema from the PUT operation
 	putSchema := put.RequestBody.Content["application/json"].Schema
-	if putSchema.Ref != "" {
-		putSchema = oapi.Components.Schemas.SchemaFromRef(putSchema.Ref)
-	}
 
 	// Create an optional version of the PUT schema
-	optionalPutSchema := makeOptionalSchema(putSchema)
+	optionalPutSchema := makeOptionalSchema(oapi.Components.Schemas, putSchema, map[string]struct{}{})
 
 	// Manually register the operation so it shows up in the generated OpenAPI.
 	op := &huma.Operation{
@@ -453,77 +450,97 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 	})
 }
 
-func makeOptionalSchema(s *huma.Schema) *huma.Schema {
+func makeOptionalSchema(registry huma.Registry, s *huma.Schema, visitedRefs map[string]struct{}) *huma.Schema {
 	if s == nil {
 		return nil
 	}
 
+	// If this schema has a ref, try to resolve it and leverage the referenced schema
+	if s.Ref != "" {
+		resolved := registry.SchemaFromRef(s.Ref)
+		if _, cycle := visitedRefs[s.Ref]; cycle || resolved == nil {
+			// Unresolvable or self-referential: leave the ref in place.
+			return &huma.Schema{Ref: s.Ref}
+		}
+
+		visitedRefs[s.Ref] = struct{}{}
+		defer delete(visitedRefs, s.Ref)
+		s = resolved
+	}
+
 	optionalSchema := &huma.Schema{
-		Type:                 s.Type,
-		Title:                s.Title,
-		Description:          s.Description,
-		Format:               s.Format,
-		ContentEncoding:      s.ContentEncoding,
-		Default:              s.Default,
-		Examples:             s.Examples,
-		AdditionalProperties: s.AdditionalProperties,
-		Enum:                 s.Enum,
-		Minimum:              s.Minimum,
-		ExclusiveMinimum:     s.ExclusiveMinimum,
-		Maximum:              s.Maximum,
-		ExclusiveMaximum:     s.ExclusiveMaximum,
-		MultipleOf:           s.MultipleOf,
-		MinLength:            s.MinLength,
-		MaxLength:            s.MaxLength,
-		Pattern:              s.Pattern,
-		PatternDescription:   s.PatternDescription,
-		MinItems:             s.MinItems,
-		MaxItems:             s.MaxItems,
-		UniqueItems:          s.UniqueItems,
-		MinProperties:        s.MinProperties,
-		MaxProperties:        s.MaxProperties,
-		ReadOnly:             s.ReadOnly,
-		WriteOnly:            s.WriteOnly,
-		Deprecated:           s.Deprecated,
-		Extensions:           s.Extensions,
-		DependentRequired:    s.DependentRequired,
-		Discriminator:        s.Discriminator,
+		Type:               s.Type,
+		Title:              s.Title,
+		Description:        s.Description,
+		Format:             s.Format,
+		ContentEncoding:    s.ContentEncoding,
+		Default:            s.Default,
+		Examples:           s.Examples,
+		Enum:               s.Enum,
+		Minimum:            s.Minimum,
+		ExclusiveMinimum:   s.ExclusiveMinimum,
+		Maximum:            s.Maximum,
+		ExclusiveMaximum:   s.ExclusiveMaximum,
+		MultipleOf:         s.MultipleOf,
+		MinLength:          s.MinLength,
+		MaxLength:          s.MaxLength,
+		Pattern:            s.Pattern,
+		PatternDescription: s.PatternDescription,
+		MinItems:           s.MinItems,
+		MaxItems:           s.MaxItems,
+		UniqueItems:        s.UniqueItems,
+		MinProperties:      s.MinProperties,
+		MaxProperties:      s.MaxProperties,
+		ReadOnly:           s.ReadOnly,
+		WriteOnly:          s.WriteOnly,
+		Deprecated:         s.Deprecated,
+		Extensions:         s.Extensions,
+		DependentRequired:  s.DependentRequired,
+		Discriminator:      s.Discriminator,
 	}
 
 	if s.Items != nil {
-		optionalSchema.Items = makeOptionalSchema(s.Items)
+		optionalSchema.Items = makeOptionalSchema(registry, s.Items, visitedRefs)
 	}
 
 	if s.Properties != nil {
 		optionalSchema.Properties = make(map[string]*huma.Schema)
 		for k, v := range s.Properties {
-			optionalSchema.Properties[k] = makeOptionalSchema(v)
+			optionalSchema.Properties[k] = makeOptionalSchema(registry, v, visitedRefs)
+		}
+	}
+
+	if s.AdditionalProperties != nil {
+		if additionalPropertiesSchema, ok := s.AdditionalProperties.(*huma.Schema); ok {
+			optionalSchema.AdditionalProperties = makeOptionalSchema(registry, additionalPropertiesSchema, visitedRefs)
+		} else {
+			optionalSchema.AdditionalProperties = s.AdditionalProperties
 		}
 	}
 
 	if s.OneOf != nil {
 		optionalSchema.OneOf = make([]*huma.Schema, len(s.OneOf))
 		for i, schema := range s.OneOf {
-			optionalSchema.OneOf[i] = makeOptionalSchema(schema)
+			optionalSchema.OneOf[i] = makeOptionalSchema(registry, schema, visitedRefs)
 		}
 	}
 
 	if s.AnyOf != nil {
 		optionalSchema.AnyOf = make([]*huma.Schema, len(s.AnyOf))
 		for i, schema := range s.AnyOf {
-			optionalSchema.AnyOf[i] = makeOptionalSchema(schema)
+			optionalSchema.AnyOf[i] = makeOptionalSchema(registry, schema, visitedRefs)
 		}
 	}
 
 	if s.AllOf != nil {
 		optionalSchema.AllOf = make([]*huma.Schema, len(s.AllOf))
 		for i, schema := range s.AllOf {
-			optionalSchema.AllOf[i] = makeOptionalSchema(schema)
+			optionalSchema.AllOf[i] = makeOptionalSchema(registry, schema, visitedRefs)
 		}
 	}
 
 	if s.Not != nil {
-		optionalSchema.Not = makeOptionalSchema(s.Not)
+		optionalSchema.Not = makeOptionalSchema(registry, s.Not, visitedRefs)
 	}
 
 	// Make all properties optional
