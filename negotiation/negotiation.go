@@ -78,7 +78,7 @@ func SelectQValueFast(header string, allowed []string) string {
 				// Example: "a, b, c"
 				name = header[start : end+1]
 			} else {
-				if len(header) > end+1 {
+				if len(header) > end+1 && start+2 <= end+1 {
 					if parsed, _ := strconv.ParseFloat(header[start+2:end+1], 64); parsed > 0 {
 						q = parsed
 					}
