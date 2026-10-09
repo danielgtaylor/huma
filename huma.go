@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -1163,6 +1164,12 @@ func register(api API, op Operation, inputType, outputType reflect.Type, newInpu
 				unmarshaler := func(data []byte, v any) error { return api.Unmarshal(contentType, data, v) }
 				validator := func(data any, res *ValidateResult) {
 					pb.Reset()
+					if start, end, err := parseContentType(contentType); err == nil {
+						ct := strings.ToLower(contentType[start:end])
+						if ct == "json" || ct == "application/json" {
+							pb.valuePath = []validationStep{}
+						}
+					}
 					pb.Push("body")
 					Validate(oapi.Components.Schemas, inSchema, pb, ModeWriteToServer, data, res)
 				}
@@ -2103,10 +2110,14 @@ func processRegularMsgBody(body []byte, op Operation, v reflect.Value, hasInputB
 
 	// Parse into value
 	if len(inputBodyIndex) > 0 {
-		if err := parseBodyInto(v, inputBodyIndex, unmarshaler, body, defaults); err != nil && isValid {
+		if err := parseBodyInto(v, inputBodyIndex, unmarshaler, body, defaults, res); err != nil && isValid {
 			// Hmm, this should have worked... validator missed something?
 			res.Errors = append(res.Errors, err)
 		}
+	} else {
+		// Manual schemas can validate a body without a typed Body field.
+		// Only tracked JSON schema errors lack a safe value representation.
+		res.resolveValues(reflect.Value{}, nil)
 	}
 	return errStatus, nil
 }
@@ -2144,7 +2155,7 @@ func validateBody(body []byte, u intoUnmarshaler, validator func(data any, res *
 // parseBodyInto parses the raw body with u and populates the result in v at
 // index bodyIndex. Afterwards, it sets default values on v for all fields that
 // were not populated with body.
-func parseBodyInto(v reflect.Value, bodyIndex []int, u intoUnmarshaler, body []byte, defaults *findResult[any]) *ErrorDetail {
+func parseBodyInto(v reflect.Value, bodyIndex []int, u intoUnmarshaler, body []byte, defaults *findResult[any], results ...*ValidateResult) *ErrorDetail {
 	// We need to get the body into the correct type now that it has been
 	// validated. Benchmarks on Go 1.20 show that using `json.Unmarshal` a
 	// second time is faster than `mapstructure.Decode` or any of the other
@@ -2152,11 +2163,29 @@ func parseBodyInto(v reflect.Value, bodyIndex []int, u intoUnmarshaler, body []b
 	// JSON payloads with lots of strings.
 	f := v.FieldByIndex(bodyIndex)
 	if err := u(body, f.Addr().Interface()); err != nil {
+		for _, res := range results {
+			res.resolveValues(reflect.Value{}, nil)
+		}
 		return &ErrorDetail{
 			Location: "body",
 			Message:  err.Error(),
 			Value:    string(body),
 		}
+	}
+	typed := f
+	for _, res := range results {
+		if len(res.valuePaths) > 0 {
+			// Keep errors independent from defaults and resolvers. A fresh decode
+			// also recreates aliases and cycles made by custom unmarshalers.
+			typed = reflect.New(f.Type()).Elem()
+			if err := json.Unmarshal(body, typed.Addr().Interface()); err != nil {
+				typed = reflect.Value{}
+			}
+			break
+		}
+	}
+	for _, res := range results {
+		res.resolveValues(typed, body)
 	}
 	// Set defaults for any fields that were not in the input.
 	setDefaults(v, defaults)

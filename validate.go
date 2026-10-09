@@ -73,8 +73,9 @@ func mapTo[A, B any](s []A, f func(A) B) []B {
 //	pb.Pop()        // foo[1]
 //	pb.Pop()        // foo
 type PathBuffer struct {
-	buf []byte
-	off int
+	buf       []byte
+	off       int
+	valuePath []validationStep
 }
 
 // Push an entry onto the path, adding a `.` separator as needed.
@@ -82,6 +83,9 @@ type PathBuffer struct {
 //	pb.Push("foo") // foo
 //	pb.Push("bar") // foo.bar
 func (b *PathBuffer) Push(s string) {
+	if b.valuePath != nil {
+		b.valuePath = append(b.valuePath, validationStep{name: s, index: -1})
+	}
 	if len(b.buf) > 0 {
 		b.buf = append(b.buf, '.')
 	}
@@ -94,6 +98,9 @@ func (b *PathBuffer) Push(s string) {
 //	pb.Push("foo")  // foo
 //	pb.PushIndex(1) // foo[1]
 func (b *PathBuffer) PushIndex(i int) {
+	if b.valuePath != nil {
+		b.valuePath = append(b.valuePath, validationStep{index: i})
+	}
 	b.buf = append(b.buf, '[')
 	b.buf = strconv.AppendInt(b.buf, int64(i), 10)
 	b.buf = append(b.buf, ']')
@@ -108,6 +115,9 @@ func (b *PathBuffer) PushIndex(i int) {
 //	pb.Pop()        // foo[1]
 //	pb.Pop()        // foo
 func (b *PathBuffer) Pop() {
+	if len(b.valuePath) > 0 {
+		b.valuePath = b.valuePath[:len(b.valuePath)-1]
+	}
 	for b.off > 0 {
 		b.off--
 		if b.buf[b.off] == '.' || b.buf[b.off] == '[' {
@@ -158,6 +168,7 @@ func (b *PathBuffer) String() string {
 
 // Reset the path buffer to empty, keeping and reusing the underlying bytes.
 func (b *PathBuffer) Reset() {
+	b.valuePath = nil
 	b.buf = b.buf[:0]
 	b.off = 0
 }
@@ -174,31 +185,25 @@ func NewPathBuffer(buf []byte, offset int) *PathBuffer {
 // ValidateResult tracks validation errors. It is safe to use for multiple
 // validations as long as `Reset()` is called between uses.
 type ValidateResult struct {
-	Errors []error
+	Errors     []error
+	valuePaths map[*ErrorDetail]validationValuePath
 }
 
 // Add an error to the validation result at the given path and with the
 // given value.
 func (r *ValidateResult) Add(path *PathBuffer, v any, msg string) {
-	r.Errors = append(r.Errors, &ErrorDetail{
-		Message:  msg,
-		Location: path.String(),
-		Value:    v,
-	})
+	r.addValue(path, v, msg, path.valuePath)
 }
 
 // Addf adds an error to the validation result at the given path and with
 // the given value, allowing for fmt.Printf-style formatting.
 func (r *ValidateResult) Addf(path *PathBuffer, v any, format string, args ...any) {
-	r.Errors = append(r.Errors, &ErrorDetail{
-		Message:  fmt.Sprintf(format, args...),
-		Location: path.String(),
-		Value:    v,
-	})
+	r.Add(path, v, fmt.Sprintf(format, args...))
 }
 
 // Reset the validation error so it can be used again.
 func (r *ValidateResult) Reset() {
+	r.valuePaths = nil
 	r.Errors = r.Errors[:0]
 }
 
@@ -366,7 +371,7 @@ func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode Validat
 
 	if !found {
 		path.Push(s.Discriminator.PropertyName)
-		res.Add(path, v, validation.MsgExpectedPropertyNameInObject)
+		res.addContainer(path, v, validation.MsgExpectedPropertyNameInObject)
 		return
 	}
 
@@ -478,7 +483,9 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 
 	if s.OneOf != nil {
 		if s.Discriminator != nil {
+			valuePath := path.valuePath
 			validateDiscriminator(r, s, path, mode, v, res)
+			path.valuePath = valuePath
 		} else {
 			validateOneOf(r, s, path, mode, v, res)
 		}
@@ -761,6 +768,8 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 	for _, k := range s.propertyNames {
 		v := s.Properties[k]
 
+		actualKey, ok, shadowed := validationKey(m, k)
+
 		// Schemas are generated such that the read/write-only properties are set
 		// alongside the `$ref`, if it is present (i.e. for objects). If not,
 		// then the read/write-only properties are set directly on the schema and
@@ -772,7 +781,15 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 			v = r.SchemaFromRef(ref)
 			if v == nil {
 				path.Push(k)
-				res.Addf(path, m[k], validation.MsgExpectedResolvableSchemaRef, ref)
+				value := m[k]
+				if path.valuePath != nil {
+					// Keep the display location and standalone validation unchanged,
+					// but track the accepted wire key and its null provenance.
+					path.valuePath[len(path.valuePath)-1].name = actualKey
+					path.valuePath[len(path.valuePath)-1].shadowed = shadowed
+					value = m[actualKey]
+				}
+				res.Addf(path, value, validation.MsgExpectedResolvableSchemaRef, ref)
 				path.Pop()
 				break
 			}
@@ -789,19 +806,6 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		if mode == ModeReadFromServer && writeOnly && m[k] != nil && !reflect.ValueOf(m[k]).IsZero() {
 			res.Add(path, m[k], "write only property is non-zero")
 			continue
-		}
-
-		actualKey := k
-		_, ok := m[k]
-		if !ok && !ValidateStrictCasing {
-			for actual := range m {
-				if strings.EqualFold(actual, k) {
-					// Case-insensitive match found, so this is not an error.
-					actualKey = actual
-					ok = true
-					break
-				}
-			}
 		}
 
 		if !ok {
@@ -834,6 +838,10 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		}
 
 		path.Push(k)
+		if path.valuePath != nil {
+			path.valuePath[len(path.valuePath)-1].name = actualKey
+			path.valuePath[len(path.valuePath)-1].shadowed = shadowed
+		}
 		Validate(r, v, path, mode, m[actualKey], res)
 		path.Pop()
 	}
@@ -853,7 +861,7 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 				}
 
 				path.Push(k)
-				res.Add(path, m, validation.MsgUnexpectedProperty)
+				res.addContainer(path, m, validation.MsgUnexpectedProperty)
 				path.Pop()
 			}
 		}
