@@ -36,6 +36,7 @@ const (
 	TypeString  = "string"
 	TypeArray   = "array"
 	TypeObject  = "object"
+	TypeNull    = "null"
 )
 
 // Special JSON Schema formats.

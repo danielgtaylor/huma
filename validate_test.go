@@ -1460,6 +1460,54 @@ var validateTests = []struct {
 		errs:  []string{"expected value to match at least one schema but matched none"},
 	},
 	{
+		name:  "null success",
+		s:     &huma.Schema{Type: huma.TypeNull},
+		input: nil,
+	},
+	{
+		name:  "expected null",
+		s:     &huma.Schema{Type: huma.TypeNull},
+		input: "x",
+		errs:  []string{"expected null"},
+	},
+	{
+		name: "anyOf nullable success",
+		s: &huma.Schema{
+			AnyOf: []*huma.Schema{
+				{Type: huma.TypeNumber, Minimum: Ptr(float64(40))},
+				{Type: huma.TypeNull},
+			},
+		},
+		input: nil,
+	},
+	{
+		name: "anyOf nullable fail",
+		s: &huma.Schema{
+			AnyOf: []*huma.Schema{
+				{Type: huma.TypeNumber, Minimum: Ptr(float64(40))},
+				{Type: huma.TypeNull},
+			},
+		},
+		input: 10,
+		errs:  []string{"expected value to match at least one schema but matched none"},
+	},
+	{
+		name:  "null mismatch skips enum",
+		s:     &huma.Schema{Type: huma.TypeNull, Enum: []any{nil}},
+		input: "x",
+		errs:  []string{"expected null"},
+	},
+	{
+		name: "oneOf nullable success",
+		s: &huma.Schema{
+			OneOf: []*huma.Schema{
+				{Type: huma.TypeString},
+				{Type: huma.TypeNull},
+			},
+		},
+		input: "x",
+	},
+	{
 		name: "allOf success",
 		s: &huma.Schema{
 			AllOf: []*huma.Schema{
@@ -1781,6 +1829,34 @@ type Cat struct {
 type Dog struct {
 	Color string `json:"color" enum:"black,white,brown"`
 	Kind  string `json:"kind" enum:"dog"`
+}
+
+func TestValidateAnyOfRefOrNull(t *testing.T) {
+	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	catSchema := registry.Schema(reflect.TypeFor[Cat](), true, "Cat")
+
+	s := &huma.Schema{
+		AnyOf: []*huma.Schema{
+			{Ref: catSchema.Ref},
+			{Type: huma.TypeNull},
+		},
+	}
+	s.PrecomputeMessages()
+
+	pb := huma.NewPathBuffer([]byte(""), 0)
+	res := &huma.ValidateResult{}
+
+	huma.Validate(registry, s, pb, huma.ModeWriteToServer, nil, res)
+	assert.Empty(t, res.Errors)
+
+	res.Reset()
+	huma.Validate(registry, s, pb, huma.ModeWriteToServer, map[string]any{"kind": "cat", "name": "felix"}, res)
+	assert.Empty(t, res.Errors)
+
+	res.Reset()
+	huma.Validate(registry, s, pb, huma.ModeWriteToServer, map[string]any{"kind": "cat", "name": "c"}, res)
+	require.Len(t, res.Errors, 1)
+	assert.Contains(t, res.Errors[0].Error(), "expected value to match at least one schema but matched none")
 }
 
 func Test_validateWithDiscriminator(t *testing.T) {
