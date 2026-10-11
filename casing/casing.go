@@ -214,9 +214,10 @@ func Join(parts []string, sep string, transform ...TransformFunc) string {
 			parts[i] = t(parts[i])
 
 			if parts[i] == "" {
-				// Transformer completely removed this part.
+				// Removing the part shifts the rest down, so stop transforming this index.
 				parts = append(parts[:i], parts[i+1:]...)
 				i--
+				break
 			}
 		}
 	}

@@ -778,6 +778,22 @@ func writeHeader(write func(string, string), info *headerInfo, f reflect.Value) 
 //		return resp, nil
 //	})
 func Register[I, O any](api API, op Operation, handler func(context.Context, *I) (*O, error)) {
+	// Keep this wrapper minimal: Go compiles a separate copy of the body for
+	// each type pair, so all reflection-based work lives in register.
+	register(api, op, reflect.TypeFor[I](), reflect.TypeFor[O](),
+		func() any { return new(I) },
+		func(ctx context.Context, input any) (any, error) {
+			output, err := handler(ctx, input.(*I))
+			if output == nil {
+				// A nil *O in an interface is not nil, which would bypass
+				// register's "no output" path.
+				return nil, err
+			}
+			return output, err
+		})
+}
+
+func register(api API, op Operation, inputType, outputType reflect.Type, newInput func() any, callHandler func(context.Context, any) (any, error)) {
 	oapi := api.OpenAPI()
 	registry := oapi.Components.Schemas
 
@@ -791,13 +807,11 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 	}
 	initResponses(&op)
 
-	inputType := reflect.TypeFor[I]()
 	if inputType.Kind() != reflect.Struct {
 		panic("input must be a struct")
 	}
 	inputParams, inputBodyIndex, hasInputBody, rawBodyIndex, rbt, rawBodyDataT, inSchema := processInputType(inputType, &op, registry)
 
-	outputType := reflect.TypeFor[O]()
 	if outputType.Kind() != reflect.Struct {
 		panic("output must be a struct")
 	}
@@ -880,7 +894,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 		}
 	}
 	a.Handle(&op, api.Middlewares().Handler(op.Middlewares.Handler(func(ctx Context) {
-		var input I
+		input := newInput()
 
 		// Get the validation dependencies from the shared pool.
 		deps := validatePool.Get().(*validateDeps)
@@ -901,7 +915,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 
 		var cookies map[string]*http.Cookie
 
-		v := reflect.ValueOf(&input).Elem()
+		v := reflect.ValueOf(input).Elem()
 
 		// Reject unknown query parameters if config is set.
 		cfg := getConfig[Config](api)
@@ -1228,7 +1242,7 @@ func Register[I, O any](api API, op Operation, handler func(context.Context, *I)
 			return
 		}
 
-		output, err := handler(ctx.Context(), &input)
+		output, err := callHandler(ctx.Context(), input)
 		if err != nil {
 			appendErrorHeaders(ctx, err)
 
@@ -1868,6 +1882,10 @@ func parseInto(ctx Context, f reflect.Value, value string, preSplit []string, p 
 			if p.Explode {
 				u := ctx.URL()
 				values = (&u).Query()[p.Name]
+				if values == nil {
+					// Absent, so value holds the comma-separated default.
+					values = strings.Split(value, ",")
+				}
 			} else {
 				values = strings.Split(value, ",")
 			}
@@ -2312,7 +2330,12 @@ func OperationTags(tags ...string) func(o *Operation) {
 }
 
 func convenience[I, O any](api API, method, path string, handler func(context.Context, *I) (*O, error), operationHandlers ...func(o *Operation)) {
-	var o *O
+	// Keep this wrapper minimal, see Register. The typed nil *O is what the ID
+	// and summary generators inspect.
+	Register(api, convenienceOperation(method, path, (*O)(nil), operationHandlers), handler)
+}
+
+func convenienceOperation(method, path string, o any, operationHandlers []func(o *Operation)) Operation {
 	opID := GenerateOperationID(method, path, o)
 	opSummary := GenerateSummary(method, path, o)
 	operation := Operation{
@@ -2334,7 +2357,7 @@ func convenience[I, O any](api API, method, path string, handler func(context.Co
 		operation.Metadata["_convenience_summary"] = opSummary
 		operation.Metadata["_convenience_summary_out"] = o
 	}
-	Register(api, operation, handler)
+	return operation
 }
 
 // Get HTTP operation handler for an API. The handler must be a function that
