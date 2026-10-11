@@ -102,13 +102,16 @@ The special struct field `Body` will be treated as the input request body and ca
 
 The following special types are supported out of the box:
 
-| Type              | Schema                                      | Example                       |
-| ----------------- | ------------------------------------------- | ----------------------------- |
-| `time.Time`       | `{"type": "string", "format": "date-time"}` | `"2020-01-01T12:00:00Z"`      |
-| `url.URL`         | `{"type": "string", "format": "uri"}`       | `"https://example.com"`       |
-| `net.IP`          | `{"type": "string", "format": "ipv4"}`      | `"127.0.0.1"`                 |
-| `netip.Addr`      | `{"type": "string", "format": "ip"}`        | `"127.0.0.1"` or `fe80::1`    |
-| `json.RawMessage` | `{}`                                        | `["whatever", "you", "want"]` |
+| Type              | Schema                                      | Example                                  |
+| ----------------- | ------------------------------------------- | ---------------------------------------- |
+| `time.Time`       | `{"type": "string", "format": "date-time"}` | `"2020-01-01T12:00:00Z"`                 |
+| `url.URL`         | `{"type": "string", "format": "uri"}`       | `"https://example.com"`                  |
+| `net.IP`          | `{"type": "string", "format": "ipv4"}`      | `"127.0.0.1"`                            |
+| `netip.Addr`      | `{"type": "string", "format": "ip"}`        | `"127.0.0.1"` or `fe80::1`               |
+| `json.RawMessage` | `{}`                                        | `["whatever", "you", "want"]`            |
+| `uuid.UUID`       | `{"type": "string", "format": "uuid"}`      | `"550e8400-e29b-41d4-a716-446655440000"` |
+
+`uuid.UUID` is the [standard library type](https://pkg.go.dev/uuid) added in Go 1.27, and requires building with Go 1.27+.
 
 You can override this default behavior if needed as described in [Schema Customization](./schema-customization.md) and [Request Validation](./request-validation.md), e.g. setting a custom `format` tag for IPv6.
 

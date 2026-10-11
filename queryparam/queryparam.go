@@ -24,15 +24,14 @@ import (
 func Get(query, name string) string {
 	pos := 0
 	for pos < len(query) {
-		end := strings.IndexRune(query[pos:], '=')
-		if end == -1 {
-			end = strings.IndexRune(query[pos:], '&')
-		}
-
+		end := strings.IndexRune(query[pos:], '&')
 		if end == -1 {
 			end = len(query)
 		} else {
 			end += pos
+		}
+		if eq := strings.IndexRune(query[pos:end], '='); eq != -1 {
+			end = pos + eq
 		}
 
 		ueName, _ := url.QueryUnescape(query[pos:end])

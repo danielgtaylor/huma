@@ -104,7 +104,9 @@ func (c *fiberV2Wrapper) EachHeader(cb func(name, value string)) {
 func (c *fiberV2Wrapper) BodyReader() io.Reader {
 	var orig = c.orig
 	if orig.App().Server().StreamRequestBody {
-		// Streaming is enabled, so send the reader.
+		// Streaming is enabled, so send the reader. Fiber only decodes
+		// Content-Encoding in the buffered Body() (#928, #1058), so this is
+		// passed through raw, matching the net/http adapters (#1111).
 		return orig.Request().BodyStream()
 	}
 	return bytes.NewReader(orig.Body())

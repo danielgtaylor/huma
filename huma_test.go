@@ -3640,6 +3640,45 @@ Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 	}
 }
 
+func TestQueryArrayDefaults(t *testing.T) {
+	type input struct {
+		Exploded []string `query:"exploded,explode" default:"a,b"`
+		Plain    []string `query:"plain" default:"a,b"`
+		Optional []string `query:"optional,explode"`
+	}
+
+	_, api := humatest.New(t)
+	var got *input
+	huma.Get(api, "/defaults", func(ctx context.Context, in *input) (*struct{}, error) {
+		got = in
+		return nil, nil
+	})
+
+	for _, tc := range []struct {
+		name     string
+		query    string
+		exploded []string
+		plain    []string
+	}{
+		{"absent", "", []string{"a", "b"}, []string{"a", "b"}},
+		{"unrelated", "?other=value", []string{"a", "b"}, []string{"a", "b"}},
+		{"explicit", "?exploded=x&exploded=y&plain=x,y", []string{"x", "y"}, []string{"x", "y"}},
+		{"single", "?exploded=x&plain=x", []string{"x"}, []string{"x"}},
+		{"literal comma", "?exploded=x%2Cy", []string{"x,y"}, []string{"a", "b"}},
+		{"explicit empty", "?exploded=&plain=", []string{""}, []string{"a", "b"}},
+		{"empty first value", "?exploded=&exploded=x", []string{"", "x"}, []string{"a", "b"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got = nil
+			resp := api.Get("/defaults" + tc.query)
+			require.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
+			assert.Equal(t, tc.exploded, got.Exploded)
+			assert.Equal(t, tc.plain, got.Plain)
+			assert.Nil(t, got.Optional)
+		})
+	}
+}
+
 // TestMultipartJSONContentTypeMatching ensures the `contentType` tag is matched
 // as a media type: parameters like `charset` and structured `+json` suffixes
 // still select JSON handling.
