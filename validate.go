@@ -510,6 +510,7 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 	case TypeNull:
 		if v != nil {
 			res.Add(path, v, validation.MsgExpectedNull)
+			return
 		}
 	case TypeBoolean:
 		if _, ok := v.(bool); !ok {
