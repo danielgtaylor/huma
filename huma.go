@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -2179,6 +2180,8 @@ func setDefaults(v reflect.Value, defaults *findResult[any]) {
 }
 
 // readBody reads the message body from ctx into buf, respecting the
+// maxBytes limit: a body of exactly maxBytes is accepted, a longer one is
+// rejected with 413, and a non-positive limit disables the check.
 func readBody(buf io.Writer, ctx Context, maxBytes int64) *contextError {
 	reader := ctx.BodyReader()
 	if reader == nil {
@@ -2187,12 +2190,15 @@ func readBody(buf io.Writer, ctx Context, maxBytes int64) *contextError {
 	if closer, ok := reader.(io.Closer); ok {
 		defer closer.Close()
 	}
-	if maxBytes > 0 {
-		reader = io.LimitReader(reader, maxBytes)
+	if maxBytes > 0 && maxBytes < math.MaxInt64 {
+		// Read one byte more than the limit so that a body of exactly maxBytes is accepted
+		// while anything longer is still detected without buffering the whole payload. The
+		// largest limit is left alone so that the extra byte cannot overflow.
+		reader = io.LimitReader(reader, maxBytes+1)
 	}
 	count, err := io.Copy(buf, reader)
 	if maxBytes > 0 {
-		if count == maxBytes {
+		if count > maxBytes {
 			return &contextError{Code: http.StatusRequestEntityTooLarge, Msg: fmt.Sprintf("request body is too large limit=%d bytes", maxBytes)}
 		}
 	}

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -1384,6 +1385,96 @@ func TestFeatures(t *testing.T) {
 			Body:   "foobarbaz",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusRequestEntityTooLarge, resp.Code)
+			},
+		},
+		{
+			Name: "request-body-at-limit",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method:       http.MethodPut,
+					Path:         "/body",
+					MaxBodyBytes: 12,
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name string `json:"name"`
+					}
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   `{"name":"x"}`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				// Exactly 12 bytes against a 12-byte limit: the body does not exceed the limit.
+				assert.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
+			},
+		},
+		{
+			Name: "request-body-one-over-limit",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method:       http.MethodPut,
+					Path:         "/body",
+					MaxBodyBytes: 11,
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name string `json:"name"`
+					}
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   `{"name":"x"}`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusRequestEntityTooLarge, resp.Code)
+			},
+		},
+		{
+			Name: "request-body-unlimited",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method:       http.MethodPut,
+					Path:         "/body",
+					MaxBodyBytes: -1,
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name string `json:"name"`
+					}
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   `{"name":"` + strings.Repeat("x", 2*1024*1024) + `"}`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
+			},
+		},
+		{
+			Name: "request-body-max-int64",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method:       http.MethodPut,
+					Path:         "/body",
+					MaxBodyBytes: math.MaxInt64,
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Name string `json:"name"`
+					}
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   `{"name":"x"}`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				// The largest limit must behave as unlimited rather than overflow.
+				assert.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
 			},
 		},
 		{
