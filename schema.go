@@ -119,6 +119,7 @@ type Schema struct {
 	Items                *Schema             `yaml:"items,omitempty"`
 	AdditionalProperties any                 `yaml:"additionalProperties,omitempty"`
 	Properties           map[string]*Schema  `yaml:"properties,omitempty"`
+	PropertyNames        *Schema             `yaml:"propertyNames,omitempty"`
 	Enum                 []any               `yaml:"enum,omitempty"`
 	Const                any                 `yaml:"const,omitempty"`
 	Minimum              *float64            `yaml:"minimum,omitempty"`
@@ -215,6 +216,7 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 		{"items", s.Items, omitEmpty},
 		{"additionalProperties", s.AdditionalProperties, omitNil},
 		{"properties", props, omitEmpty},
+		{"propertyNames", s.PropertyNames, omitEmpty},
 		{"enum", s.Enum, omitEmpty},
 		{"const", s.Const, omitNil},
 		{"minimum", s.Minimum, omitEmpty},
@@ -351,6 +353,10 @@ func (s *Schema) PrecomputeMessages() {
 
 	if sub := s.Not; sub != nil {
 		sub.PrecomputeMessages()
+	}
+
+	if s.PropertyNames != nil {
+		s.PropertyNames.PrecomputeMessages()
 	}
 }
 
