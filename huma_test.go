@@ -3679,6 +3679,36 @@ func TestQueryArrayDefaults(t *testing.T) {
 	}
 }
 
+func TestQueryArrayJSONDefaults(t *testing.T) {
+	type input struct {
+		Ints     []int    `query:"ints" default:"[1,2]"`
+		Strings  []string `query:"strings" default:"[\"a\",\"b\"]"`
+		Exploded []int    `query:"exploded,explode" default:"[3,4]"`
+		Header   []int    `header:"X-Ints" default:"[5]"`
+		Scalar   string   `query:"scalar" default:"[1,2]"`
+	}
+
+	_, api := humatest.New(t)
+	var got *input
+	huma.Get(api, "/defaults", func(ctx context.Context, in *input) (*struct{}, error) {
+		got = in
+		return nil, nil
+	})
+
+	resp := api.Get("/defaults")
+	require.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
+	assert.Equal(t, []int{1, 2}, got.Ints)
+	assert.Equal(t, []string{"a", "b"}, got.Strings)
+	assert.Equal(t, []int{3, 4}, got.Exploded)
+	assert.Equal(t, []int{5}, got.Header)
+	assert.Equal(t, "[1,2]", got.Scalar)
+
+	resp = api.Get("/defaults?ints=7&exploded=8")
+	require.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
+	assert.Equal(t, []int{7}, got.Ints)
+	assert.Equal(t, []int{8}, got.Exploded)
+}
+
 // TestMultipartJSONContentTypeMatching ensures the `contentType` tag is matched
 // as a media type: parameters like `charset` and structured `+json` suffixes
 // still select JSON handling.

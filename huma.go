@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -170,6 +171,19 @@ func parseParamLocation(f reflect.StructField, registry Registry) (*paramLocatio
 
 	if def := f.Tag.Get("default"); def != "" {
 		pfi.Default = def
+		if pfi.Type.Kind() == reflect.Slice && strings.HasPrefix(def, "[") {
+			// Array defaults may be JSON, but values are parsed comma-separated.
+			var items []json.RawMessage
+			if err := json.Unmarshal([]byte(def), &items); err == nil {
+				parts := make([]string, len(items))
+				for i, item := range items {
+					if json.Unmarshal(item, &parts[i]) != nil {
+						parts[i] = string(item)
+					}
+				}
+				pfi.Default = strings.Join(parts, ",")
+			}
+		}
 	}
 
 	result := &paramLocation{pfi: pfi}
