@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -123,6 +122,16 @@ func (o *OptionalParam[T]) Receiver() reflect.Value {
 
 func (o *OptionalParam[T]) OnParamSet(isSet bool, parsed any) {
 	o.IsSet = isSet
+}
+
+// limitedBodyContext caps the body like a router middleware such as chi's
+// RequestSize would, before huma applies its own limit.
+type limitedBodyContext struct{ embeddedContext }
+
+type embeddedContext huma.Context
+
+func (c limitedBodyContext) BodyReader() io.Reader {
+	return http.MaxBytesReader(nil, io.NopCloser(c.embeddedContext.BodyReader()), 5)
 }
 
 // CountingInner is used to verify resolver traversal skips nil optional fields.
@@ -1406,7 +1415,7 @@ func TestFeatures(t *testing.T) {
 			URL:    "/body",
 			Body:   `{"name":"x"}`,
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-				// Exactly 12 bytes against a 12-byte limit: the body does not exceed the limit.
+				// Body length equals the limit.
 				assert.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
 			},
 		},
@@ -1449,18 +1458,21 @@ func TestFeatures(t *testing.T) {
 			},
 			Method: http.MethodPut,
 			URL:    "/body",
-			Body:   `{"name":"` + strings.Repeat("x", 2*1024*1024) + `"}`,
+			Body:   `{"name":"` + strings.Repeat("x", 1<<20+1) + `"}`,
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
 			},
 		},
 		{
-			Name: "request-body-max-int64",
+			Name: "request-body-upstream-limit",
 			Register: func(t *testing.T, api huma.API) {
+				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+					next(limitedBodyContext{ctx})
+				})
 				huma.Register(api, huma.Operation{
 					Method:       http.MethodPut,
 					Path:         "/body",
-					MaxBodyBytes: math.MaxInt64,
+					MaxBodyBytes: -1,
 				}, func(ctx context.Context, input *struct {
 					Body struct {
 						Name string `json:"name"`
@@ -1473,8 +1485,8 @@ func TestFeatures(t *testing.T) {
 			URL:    "/body",
 			Body:   `{"name":"x"}`,
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-				// The largest limit must behave as unlimited rather than overflow.
-				assert.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
+				assert.Equal(t, http.StatusRequestEntityTooLarge, resp.Code)
+				assert.Contains(t, resp.Body.String(), "limit=5 bytes")
 			},
 		},
 		{
