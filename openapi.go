@@ -846,8 +846,9 @@ type Operation struct {
 	DefaultStatus int `yaml:"-"`
 
 	// MaxBodyBytes is the maximum number of bytes to read from the request
-	// body. If not specified, the default is 1MB. Use -1 for unlimited. If
-	// the limit is reached, then an HTTP 413 error is returned.
+	// body. If not specified, the default is 1MB. Use -1 for unlimited. A body
+	// of exactly this size is accepted; if the body is larger than the limit,
+	// then an HTTP 413 error is returned.
 	MaxBodyBytes int64 `yaml:"-"`
 
 	// BodyReadTimeout is the maximum amount of time to wait for the request

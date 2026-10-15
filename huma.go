@@ -2178,7 +2178,8 @@ func setDefaults(v reflect.Value, defaults *findResult[any]) {
 	})
 }
 
-// readBody reads the message body from ctx into buf, respecting the
+// readBody reads the request body into buf, returning 413 if it exceeds
+// maxBytes (<= 0 means unlimited).
 func readBody(buf io.Writer, ctx Context, maxBytes int64) *contextError {
 	reader := ctx.BodyReader()
 	if reader == nil {
@@ -2188,15 +2189,15 @@ func readBody(buf io.Writer, ctx Context, maxBytes int64) *contextError {
 		defer closer.Close()
 	}
 	if maxBytes > 0 {
-		reader = io.LimitReader(reader, maxBytes)
+		// NopCloser only adapts the type; the defer above closes the real body.
+		reader = http.MaxBytesReader(nil, io.NopCloser(reader), maxBytes)
 	}
-	count, err := io.Copy(buf, reader)
-	if maxBytes > 0 {
-		if count == maxBytes {
-			return &contextError{Code: http.StatusRequestEntityTooLarge, Msg: fmt.Sprintf("request body is too large limit=%d bytes", maxBytes)}
+	if _, err := io.Copy(buf, reader); err != nil {
+		var mbErr *http.MaxBytesError
+		if errors.As(err, &mbErr) {
+			// Report the limit that fired, which may come from an upstream MaxBytesReader.
+			return &contextError{Code: http.StatusRequestEntityTooLarge, Msg: fmt.Sprintf("request body is too large limit=%d bytes", mbErr.Limit)}
 		}
-	}
-	if err != nil {
 		var nErr net.Error
 		if errors.As(err, &nErr) && nErr.Timeout() {
 			return &contextError{Code: http.StatusRequestTimeout, Msg: "request body read timeout"}
