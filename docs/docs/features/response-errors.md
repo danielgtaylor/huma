@@ -62,6 +62,12 @@ The `errors` field is optional and may contain more details about which specific
 
 To display a `location`, `message`, and `value` in the errors array, use the [`huma.ErrorDetail`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ErrorDetail) struct. If you need to wrap this with custom logic for any reason, you can implement the [`huma.ErrorDetailer`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#ErrorDetailer) interface.
 
+For JSON request-body schema errors, `value` retains the corresponding Go input type when it can be
+resolved. This allows `json.Marshaler` and `encoding.TextMarshaler` implementations to control its JSON
+representation, including redaction. Values are captured before defaults and resolvers are applied.
+If typed decoding or field resolution cannot provide a value, the raw JSON value is not used as a fallback.
+Standalone schema validation and non-JSON request bodies retain their existing behavior.
+
 ### Exhaustive Errors
 
 It is recommended to return exhaustive errors whenever possible to prevent user frustration with having to keep retrying a bad request and getting back a different error.
