@@ -270,6 +270,7 @@ func multiPartContentEncoding(t reflect.Type) map[string]*Encoding {
 		}
 		encoding[name] = &Encoding{
 			ContentType: contentType,
+			Explode:     maybeBoolTag(f, "explode"),
 		}
 	}
 	return encoding
