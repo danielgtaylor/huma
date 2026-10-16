@@ -1481,7 +1481,7 @@ func processInputType(inputType reflect.Type, op *Operation, registry Registry) 
 	if f, ok := inputType.FieldByName("RawBody"); ok {
 		rawBodyIndex = f.Index
 		initRequestBody(op, setRequestBodyRequired)
-		rbt = setRequestBodyFromRawBody(op, registry, f)
+		rbt = setRequestBodyFromRawBody(op, registry, f, hasInputBody)
 
 		if rbt == rbtMultipartDecoded {
 			dataField, ok := f.Type.FieldByName("data")
@@ -1574,7 +1574,7 @@ func (r rawBodyType) isMultipart() bool {
 }
 
 // setRequestBodyFromRawBody configures op.RequestBody from the RawBody field.
-func setRequestBodyFromRawBody(op *Operation, r Registry, fRawBody reflect.StructField) rawBodyType {
+func setRequestBodyFromRawBody(op *Operation, r Registry, fRawBody reflect.StructField, hasBody bool) rawBodyType {
 	rbt := rbtOther
 	contentType := "application/octet-stream"
 	if fRawBody.Type.String() == "multipart.Form" {
@@ -1585,11 +1585,18 @@ func setRequestBodyFromRawBody(op *Operation, r Registry, fRawBody reflect.Struc
 		contentType = "multipart/form-data"
 		rbt = rbtMultipartDecoded
 	}
+	explicitContentType := false
 	if c := fRawBody.Tag.Get("contentType"); c != "" {
 		contentType = c
+		explicitContentType = true
 	}
 
 	if contentType != "multipart/form-data" {
+		if hasBody && !explicitContentType && rbt == rbtOther {
+			// Next to a Body, RawBody holds the bytes of the parsed Body, so the
+			// Body's content types already describe the request.
+			return rbt
+		}
 		op.RequestBody.Content[contentType] = &MediaType{
 			Schema: &Schema{
 				Type:   "string",
