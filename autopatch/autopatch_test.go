@@ -2,6 +2,7 @@ package autopatch
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -348,12 +349,51 @@ func TestPatchRecursiveNode(t *testing.T) {
 	require.NotNil(t, path)
 	require.NotNil(t, path.Patch)
 
+	schema := path.Patch.RequestBody.Content["application/merge-patch+json"].Schema
+	assert.Empty(t, schema.Required)
+	assert.Equal(t, "string", schema.Properties["name"].Type)
+	require.NotNil(t, schema.Properties["children"].Items)
+	assert.Equal(t, "#/components/schemas/Node", schema.Properties["children"].Items.Ref)
+
 	w := api.Patch("/nodes/root",
 		"Content-Type: application/merge-patch+json",
 		strings.NewReader(`{"name": "updated"}`),
 	)
 	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Contains(t, w.Body.String(), `"name":"updated"`)
+}
+
+func TestPatchSchemaNestedRef(t *testing.T) {
+	type Inner struct {
+		Val    *string `json:"val" nullable:"true"`
+		Secret string  `json:"secret" hidden:"true"`
+	}
+	type Outer struct {
+		Billing Inner `json:"billing" doc:"Billing info" readOnly:"true"`
+		Private Inner `json:"private" hidden:"true"`
+	}
+
+	_, api := humatest.New(t)
+	huma.Get(api, "/outer", func(ctx context.Context, input *struct{}) (*struct{ Body Outer }, error) {
+		return &struct{ Body Outer }{}, nil
+	})
+	huma.Put(api, "/outer", func(ctx context.Context, input *struct{ Body Outer }) (*struct{ Body Outer }, error) {
+		return &struct{ Body Outer }{}, nil
+	})
+	AutoPatch(api)
+
+	schema := api.OpenAPI().Paths["/outer"].Patch.RequestBody.Content["application/merge-patch+json"].Schema
+	billing := schema.Properties["billing"]
+	require.NotNil(t, billing)
+	assert.Empty(t, billing.Ref)
+	assert.Equal(t, "Billing info", billing.Description)
+	assert.True(t, billing.ReadOnly)
+	assert.True(t, billing.Properties["val"].Nullable)
+
+	b, err := json.Marshal(schema)
+	require.NoError(t, err)
+	assert.NotContains(t, string(b), "secret")
+	assert.NotContains(t, string(b), "private")
 }
 
 func TestDeprecatedPatch(t *testing.T) {
@@ -487,8 +527,9 @@ func TestMakeOptionalSchemaBasicProperties(t *testing.T) {
 	originalSchema := &huma.Schema{
 		Type: "object",
 		Properties: map[string]*huma.Schema{
-			"id":   {Type: "string"},
-			"name": {Type: "string"},
+			"id":      {Type: "string"},
+			"name":    {Type: "string"},
+			"version": {Type: "string", Const: "v1"},
 		},
 		Required: []string{"id", "name"},
 	}
@@ -498,6 +539,7 @@ func TestMakeOptionalSchemaBasicProperties(t *testing.T) {
 	assert.Equal(t, "object", optionalSchema.Type)
 	assert.Contains(t, optionalSchema.Properties, "id")
 	assert.Contains(t, optionalSchema.Properties, "name")
+	assert.Equal(t, "v1", optionalSchema.Properties["version"].Const)
 	assert.Empty(t, optionalSchema.Required)
 }
 
@@ -682,7 +724,7 @@ func TestMakeOptionalSchemaRefs(t *testing.T) {
 	const addressRef = "#/components/schemas/Address"
 	const tagRef = "#/components/schemas/Tag"
 
-	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	registry := testRegistry()
 	registry.Map()["Address"] = &huma.Schema{
 		Type: "object",
 		Properties: map[string]*huma.Schema{
@@ -736,6 +778,23 @@ func TestMakeOptionalSchemaRefs(t *testing.T) {
 		assert.Equal(t, "string", optional.Items.Type)
 	})
 
+	t.Run("ref to a ref alias", func(t *testing.T) {
+		registry := testRegistry()
+		registry.Map()["Address"] = &huma.Schema{
+			Type:       "object",
+			Properties: map[string]*huma.Schema{"street": {Type: "string"}},
+			Required:   []string{"street"},
+		}
+		registry.Map()["Alias"] = &huma.Schema{Ref: addressRef}
+
+		optional := testMakeOptionalSchema(registry, &huma.Schema{Ref: "#/components/schemas/Alias", Description: "Home"})
+
+		assert.Empty(t, optional.Ref)
+		assert.Equal(t, "object", optional.Type)
+		assert.Equal(t, "Home", optional.Description)
+		assert.Empty(t, optional.Required)
+	})
+
 	t.Run("unresolvable external ref", func(t *testing.T) {
 		const externalRef = "https://example.com/schemas/Thing.json"
 
@@ -749,14 +808,14 @@ func TestMakeOptionalSchemaRefs(t *testing.T) {
 	t.Run("recursive self reference", func(t *testing.T) {
 		const nodeRef = "#/components/schemas/Node"
 
-		registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+		registry := testRegistry()
 		registry.Map()["Node"] = &huma.Schema{
 			Type: "object",
 			Properties: map[string]*huma.Schema{
 				"name": {Type: "string"},
 				"children": {
 					Type:  "array",
-					Items: &huma.Schema{Ref: nodeRef},
+					Items: &huma.Schema{Ref: nodeRef, Description: "Child", ReadOnly: true},
 				},
 			},
 			Required: []string{"name"},
@@ -771,6 +830,8 @@ func TestMakeOptionalSchemaRefs(t *testing.T) {
 		assert.Equal(t, "array", optional.Properties["children"].Type)
 		require.NotNil(t, optional.Properties["children"].Items)
 		assert.Equal(t, nodeRef, optional.Properties["children"].Items.Ref)
+		assert.Equal(t, "Child", optional.Properties["children"].Items.Description)
+		assert.True(t, optional.Properties["children"].Items.ReadOnly)
 	})
 }
 
@@ -817,7 +878,7 @@ func TestMakeOptionalSchemaAdditionalProperties(t *testing.T) {
 	t.Run("ref additionalProperties", func(t *testing.T) {
 		const tagRef = "#/components/schemas/Tag"
 
-		registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+		registry := testRegistry()
 		registry.Map()["Tag"] = &huma.Schema{
 			Type: "object",
 			Properties: map[string]*huma.Schema{
@@ -844,13 +905,13 @@ func TestMakeOptionalSchemaAdditionalProperties(t *testing.T) {
 	t.Run("recursive ref additionalProperties", func(t *testing.T) {
 		const nodeRef = "#/components/schemas/Node"
 
-		registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+		registry := testRegistry()
 		registry.Map()["Node"] = &huma.Schema{
 			Type: "object",
 			Properties: map[string]*huma.Schema{
 				"name": {Type: "string"},
 				"named": {
-					Type: "object",
+					Type:                 "object",
 					AdditionalProperties: &huma.Schema{Ref: nodeRef},
 				},
 			},

@@ -455,49 +455,38 @@ func makeOptionalSchema(registry huma.Registry, s *huma.Schema, visitedRefs map[
 		return nil
 	}
 
-	// If this schema has a ref, try to resolve it and leverage the referenced schema
+	// Inline refs, since the referenced component keeps its required fields.
 	if s.Ref != "" {
 		resolved := registry.SchemaFromRef(s.Ref)
 		if _, cycle := visitedRefs[s.Ref]; cycle || resolved == nil {
-			// Unresolvable or self-referential: leave the ref in place.
-			return &huma.Schema{Ref: s.Ref}
+			// Keep external refs and cycles as-is so recursion terminates.
+			cp := *s
+			return &cp
 		}
 
 		visitedRefs[s.Ref] = struct{}{}
 		defer delete(visitedRefs, s.Ref)
-		s = resolved
+
+		// Start from the referencing schema so its hidden flag and sibling
+		// annotations (description, readOnly, ...) win over the component's.
+		merged := *s
+		merged.Ref = ""
+		dst := reflect.ValueOf(&merged).Elem()
+		src := reflect.ValueOf(resolved).Elem()
+		for i := range dst.NumField() {
+			if f := dst.Field(i); f.CanSet() && f.IsZero() {
+				f.Set(src.Field(i))
+			}
+		}
+		if merged.Ref != "" {
+			// The component is itself a ref, so keep following the chain.
+			return makeOptionalSchema(registry, &merged, visitedRefs)
+		}
+		s = &merged
 	}
 
-	optionalSchema := &huma.Schema{
-		Type:               s.Type,
-		Title:              s.Title,
-		Description:        s.Description,
-		Format:             s.Format,
-		ContentEncoding:    s.ContentEncoding,
-		Default:            s.Default,
-		Examples:           s.Examples,
-		Enum:               s.Enum,
-		Minimum:            s.Minimum,
-		ExclusiveMinimum:   s.ExclusiveMinimum,
-		Maximum:            s.Maximum,
-		ExclusiveMaximum:   s.ExclusiveMaximum,
-		MultipleOf:         s.MultipleOf,
-		MinLength:          s.MinLength,
-		MaxLength:          s.MaxLength,
-		Pattern:            s.Pattern,
-		PatternDescription: s.PatternDescription,
-		MinItems:           s.MinItems,
-		MaxItems:           s.MaxItems,
-		UniqueItems:        s.UniqueItems,
-		MinProperties:      s.MinProperties,
-		MaxProperties:      s.MaxProperties,
-		ReadOnly:           s.ReadOnly,
-		WriteOnly:          s.WriteOnly,
-		Deprecated:         s.Deprecated,
-		Extensions:         s.Extensions,
-		DependentRequired:  s.DependentRequired,
-		Discriminator:      s.Discriminator,
-	}
+	// Copy the whole struct so unexported fields like hidden carry over.
+	optionalSchema := *s
 
 	if s.Items != nil {
 		optionalSchema.Items = makeOptionalSchema(registry, s.Items, visitedRefs)
@@ -510,12 +499,8 @@ func makeOptionalSchema(registry huma.Registry, s *huma.Schema, visitedRefs map[
 		}
 	}
 
-	if s.AdditionalProperties != nil {
-		if additionalPropertiesSchema, ok := s.AdditionalProperties.(*huma.Schema); ok {
-			optionalSchema.AdditionalProperties = makeOptionalSchema(registry, additionalPropertiesSchema, visitedRefs)
-		} else {
-			optionalSchema.AdditionalProperties = s.AdditionalProperties
-		}
+	if ap, ok := s.AdditionalProperties.(*huma.Schema); ok {
+		optionalSchema.AdditionalProperties = makeOptionalSchema(registry, ap, visitedRefs)
 	}
 
 	if s.OneOf != nil {
@@ -546,7 +531,7 @@ func makeOptionalSchema(registry huma.Registry, s *huma.Schema, visitedRefs map[
 	// Make all properties optional
 	optionalSchema.Required = nil
 
-	return optionalSchema
+	return &optionalSchema
 }
 
 // This function help to find the relative path of the resource to patch
