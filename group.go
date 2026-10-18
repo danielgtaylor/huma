@@ -106,6 +106,9 @@ func (g *Group) DocumentOperation(op *Operation) {
 			if op.Hidden {
 				return
 			}
+			// All group modifiers have run by this point; define the error
+			// responses so codes appended by modifiers are documented.
+			defineOperationErrors(op, g.OpenAPI().Components.Schemas)
 			g.OpenAPI().AddOperation(op)
 		}
 	})
