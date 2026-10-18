@@ -1978,6 +1978,47 @@ func TestPathBuffer_WithIndex_ReturnsExpectedString(t *testing.T) {
 	assert.Equal(t, "prefix[1]", pb.WithIndex(1))
 }
 
+func TestPathBuffer_PopKeyWithSeparators(t *testing.T) {
+	pb := huma.NewPathBuffer([]byte{}, 0)
+	pb.Push("tags")
+	pb.Push("a.b")
+	pb.Pop()
+	assert.Equal(t, "tags", pb.String())
+	pb.Push("a[0]")
+	pb.Pop()
+	assert.Equal(t, "tags", pb.String())
+	pb.Pop()
+	assert.Empty(t, pb.String())
+
+	assert.Equal(t, "zcount", pb.With("zcount"))
+}
+
+func TestValidateMapKeyWithSeparatorsLocation(t *testing.T) {
+	type Body struct {
+		Tags   map[string]int `json:"tags"`
+		Zcount int            `json:"zcount"`
+	}
+
+	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	s := huma.SchemaFromType(registry, reflect.TypeFor[Body]())
+
+	for _, key := range []string{"plain", "a.b", "a[0]"} {
+		t.Run(key, func(t *testing.T) {
+			pb := huma.NewPathBuffer([]byte{}, 0)
+			res := &huma.ValidateResult{}
+			huma.Validate(registry, s, pb, huma.ModeWriteToServer, map[string]any{
+				"tags":   map[string]any{key: "not-an-int"},
+				"zcount": "not-an-int",
+			}, res)
+
+			require.Len(t, res.Errors, 2)
+			assert.Contains(t, res.Errors[0].Error(), "(tags."+key+": not-an-int)")
+			assert.Contains(t, res.Errors[1].Error(), "(zcount: not-an-int)")
+			assert.Empty(t, pb.String())
+		})
+	}
+}
+
 func TestValidateUnresolvedSchemaRefNoPanic(t *testing.T) {
 	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 	pb := huma.NewPathBuffer([]byte{}, 0)
