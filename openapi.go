@@ -1748,6 +1748,12 @@ func downgradeSpec(input any) {
 				continue
 			}
 
+			if k == "propertyNames" {
+				// OpenAPI 3.0 has no propertyNames keyword.
+				delete(m, k)
+				continue
+			}
+
 			if k == "type" {
 				// OpenAPI 3.1 supports type arrays, which need to be converted.
 				// This may be lossy, but we want to keep it simple.

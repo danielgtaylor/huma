@@ -501,6 +501,10 @@ func makeOptionalSchema(s *huma.Schema) *huma.Schema {
 		}
 	}
 
+	if s.PropertyNames != nil {
+		optionalSchema.PropertyNames = makeOptionalSchema(s.PropertyNames)
+	}
+
 	if s.OneOf != nil {
 		optionalSchema.OneOf = make([]*huma.Schema, len(s.OneOf))
 		for i, schema := range s.OneOf {
