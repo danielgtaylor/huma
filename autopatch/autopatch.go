@@ -234,12 +234,9 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 
 	// Get the schema from the PUT operation
 	putSchema := put.RequestBody.Content["application/json"].Schema
-	if putSchema.Ref != "" {
-		putSchema = oapi.Components.Schemas.SchemaFromRef(putSchema.Ref)
-	}
 
 	// Create an optional version of the PUT schema
-	optionalPutSchema := makeOptionalSchema(putSchema)
+	optionalPutSchema := makeOptionalSchema(oapi.Components.Schemas, putSchema, map[string]struct{}{})
 
 	// Manually register the operation so it shows up in the generated OpenAPI.
 	op := &huma.Operation{
@@ -453,83 +450,88 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 	})
 }
 
-func makeOptionalSchema(s *huma.Schema) *huma.Schema {
+func makeOptionalSchema(registry huma.Registry, s *huma.Schema, visitedRefs map[string]struct{}) *huma.Schema {
 	if s == nil {
 		return nil
 	}
 
-	optionalSchema := &huma.Schema{
-		Type:                 s.Type,
-		Title:                s.Title,
-		Description:          s.Description,
-		Format:               s.Format,
-		ContentEncoding:      s.ContentEncoding,
-		Default:              s.Default,
-		Examples:             s.Examples,
-		AdditionalProperties: s.AdditionalProperties,
-		Enum:                 s.Enum,
-		Minimum:              s.Minimum,
-		ExclusiveMinimum:     s.ExclusiveMinimum,
-		Maximum:              s.Maximum,
-		ExclusiveMaximum:     s.ExclusiveMaximum,
-		MultipleOf:           s.MultipleOf,
-		MinLength:            s.MinLength,
-		MaxLength:            s.MaxLength,
-		Pattern:              s.Pattern,
-		PatternDescription:   s.PatternDescription,
-		MinItems:             s.MinItems,
-		MaxItems:             s.MaxItems,
-		UniqueItems:          s.UniqueItems,
-		MinProperties:        s.MinProperties,
-		MaxProperties:        s.MaxProperties,
-		ReadOnly:             s.ReadOnly,
-		WriteOnly:            s.WriteOnly,
-		Deprecated:           s.Deprecated,
-		Extensions:           s.Extensions,
-		DependentRequired:    s.DependentRequired,
-		Discriminator:        s.Discriminator,
+	// Inline refs, since the referenced component keeps its required fields.
+	if s.Ref != "" {
+		resolved := registry.SchemaFromRef(s.Ref)
+		if _, cycle := visitedRefs[s.Ref]; cycle || resolved == nil {
+			// Keep external refs and cycles as-is so recursion terminates.
+			cp := *s
+			return &cp
+		}
+
+		visitedRefs[s.Ref] = struct{}{}
+		defer delete(visitedRefs, s.Ref)
+
+		// Start from the referencing schema so its hidden flag and sibling
+		// annotations (description, readOnly, ...) win over the component's.
+		merged := *s
+		merged.Ref = ""
+		dst := reflect.ValueOf(&merged).Elem()
+		src := reflect.ValueOf(resolved).Elem()
+		for i := range dst.NumField() {
+			if f := dst.Field(i); f.CanSet() && f.IsZero() {
+				f.Set(src.Field(i))
+			}
+		}
+		if merged.Ref != "" {
+			// The component is itself a ref, so keep following the chain.
+			return makeOptionalSchema(registry, &merged, visitedRefs)
+		}
+		s = &merged
 	}
 
+	// Copy the whole struct so unexported fields like hidden carry over.
+	optionalSchema := *s
+
 	if s.Items != nil {
-		optionalSchema.Items = makeOptionalSchema(s.Items)
+		optionalSchema.Items = makeOptionalSchema(registry, s.Items, visitedRefs)
 	}
 
 	if s.Properties != nil {
 		optionalSchema.Properties = make(map[string]*huma.Schema)
 		for k, v := range s.Properties {
-			optionalSchema.Properties[k] = makeOptionalSchema(v)
+			optionalSchema.Properties[k] = makeOptionalSchema(registry, v, visitedRefs)
 		}
+	}
+
+	if ap, ok := s.AdditionalProperties.(*huma.Schema); ok {
+		optionalSchema.AdditionalProperties = makeOptionalSchema(registry, ap, visitedRefs)
 	}
 
 	if s.OneOf != nil {
 		optionalSchema.OneOf = make([]*huma.Schema, len(s.OneOf))
 		for i, schema := range s.OneOf {
-			optionalSchema.OneOf[i] = makeOptionalSchema(schema)
+			optionalSchema.OneOf[i] = makeOptionalSchema(registry, schema, visitedRefs)
 		}
 	}
 
 	if s.AnyOf != nil {
 		optionalSchema.AnyOf = make([]*huma.Schema, len(s.AnyOf))
 		for i, schema := range s.AnyOf {
-			optionalSchema.AnyOf[i] = makeOptionalSchema(schema)
+			optionalSchema.AnyOf[i] = makeOptionalSchema(registry, schema, visitedRefs)
 		}
 	}
 
 	if s.AllOf != nil {
 		optionalSchema.AllOf = make([]*huma.Schema, len(s.AllOf))
 		for i, schema := range s.AllOf {
-			optionalSchema.AllOf[i] = makeOptionalSchema(schema)
+			optionalSchema.AllOf[i] = makeOptionalSchema(registry, schema, visitedRefs)
 		}
 	}
 
 	if s.Not != nil {
-		optionalSchema.Not = makeOptionalSchema(s.Not)
+		optionalSchema.Not = makeOptionalSchema(registry, s.Not, visitedRefs)
 	}
 
 	// Make all properties optional
 	optionalSchema.Required = nil
 
-	return optionalSchema
+	return &optionalSchema
 }
 
 // This function help to find the relative path of the resource to patch
