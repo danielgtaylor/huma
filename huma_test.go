@@ -980,6 +980,10 @@ func TestFeatures(t *testing.T) {
 					assert.Equal(t, "foo", input.Body.Name)
 					return nil, nil
 				})
+
+				content := api.OpenAPI().Paths["/body"].Put.RequestBody.Content
+				assert.Len(t, content, 1)
+				assert.NotNil(t, content["application/json"])
 			},
 			Method: http.MethodPut,
 			URL:    "/body",
@@ -1533,35 +1537,6 @@ func TestFeatures(t *testing.T) {
 			Body:    `abcd`,
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusUnsupportedMediaType, resp.Code)
-			},
-		},
-		{
-			Name: "request-body-raw-body-with-body-docs",
-			Register: func(t *testing.T, api huma.API) {
-				huma.Register(api, huma.Operation{
-					Method: http.MethodPut,
-					Path:   "/body",
-				}, func(ctx context.Context, input *struct {
-					RawBody []byte
-					Body    struct {
-						Name string `json:"name"`
-					}
-				}) (*struct{}, error) {
-					return nil, nil
-				})
-
-				// RawBody next to Body only exposes the bytes of the parsed Body, so
-				// no binary media type should be documented.
-				content := api.OpenAPI().Paths["/body"].Put.RequestBody.Content
-				assert.Len(t, content, 1)
-				assert.NotNil(t, content["application/json"])
-			},
-			Method:  http.MethodPut,
-			URL:     "/body",
-			Headers: map[string]string{"Content-Type": "application/json"},
-			Body:    `{"name":"foo"}`,
-			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-				assert.Equal(t, http.StatusNoContent, resp.Code)
 			},
 		},
 		{

@@ -1585,16 +1585,13 @@ func setRequestBodyFromRawBody(op *Operation, r Registry, fRawBody reflect.Struc
 		contentType = "multipart/form-data"
 		rbt = rbtMultipartDecoded
 	}
-	explicitContentType := false
 	if c := fRawBody.Tag.Get("contentType"); c != "" {
 		contentType = c
-		explicitContentType = true
 	}
 
 	if contentType != "multipart/form-data" {
-		if hasBody && !explicitContentType && rbt == rbtOther {
-			// Next to a Body, RawBody holds the bytes of the parsed Body, so the
-			// Body's content types already describe the request.
+		// RawBody next to Body is just Body's bytes, which Body already documents.
+		if hasBody && fRawBody.Tag.Get("contentType") == "" {
 			return rbt
 		}
 		op.RequestBody.Content[contentType] = &MediaType{
