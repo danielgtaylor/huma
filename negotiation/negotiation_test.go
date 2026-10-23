@@ -56,6 +56,9 @@ func TestMalformedFast(t *testing.T) {
 	assert.Empty(t, SelectQValueFast("a;;", []string{"a", "b"}))
 	assert.Empty(t, SelectQValueFast(";,", []string{"a", "b"}))
 	assert.Equal(t, "a", SelectQValueFast("a;q=invalid", []string{"a", "b"}))
+	assert.Equal(t, "b", SelectQValueFast("a;,b", []string{"b"}))
+	assert.Equal(t, "b", SelectQValueFast("a; ,b", []string{"b"}))
+	assert.Empty(t, SelectQValueFast("a;,b", []string{"application/json"}))
 }
 
 var BenchResult string
