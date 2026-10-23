@@ -572,6 +572,23 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-default-text-unmarshaler",
+			input: struct {
+				Value MyDate `json:"value" default:"2020-01-02"`
+			}{},
+			expected: `{
+				"type": "object",
+				"properties": {
+					"value": {
+						"type": "string",
+						"default": "2020-01-02"
+					}
+				},
+				"additionalProperties": false,
+				"required": ["value"]
+			}`,
+		},
+		{
 			name: "field-optional-without-name",
 			input: struct {
 				Value string `json:",omitempty"`
