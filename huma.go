@@ -626,7 +626,7 @@ type validateDeps struct {
 var validatePool = sync.Pool{
 	New: func() any {
 		return &validateDeps{
-			pb:  &PathBuffer{buf: make([]byte, 0, 128)},
+			pb:  &PathBuffer{buf: make([]byte, 0, 128), offs: make([]int, 0, 16)},
 			res: &ValidateResult{},
 		}
 	},

@@ -75,6 +75,10 @@ func mapTo[A, B any](s []A, f func(A) B) []B {
 type PathBuffer struct {
 	buf []byte
 	off int
+
+	// offs records the offset before each push so that a pop restores it
+	// exactly, even when a pushed key itself contains `.` or `[`.
+	offs []int
 }
 
 // Push an entry onto the path, adding a `.` separator as needed.
@@ -82,6 +86,7 @@ type PathBuffer struct {
 //	pb.Push("foo") // foo
 //	pb.Push("bar") // foo.bar
 func (b *PathBuffer) Push(s string) {
+	b.offs = append(b.offs, b.off)
 	if len(b.buf) > 0 {
 		b.buf = append(b.buf, '.')
 	}
@@ -94,6 +99,7 @@ func (b *PathBuffer) Push(s string) {
 //	pb.Push("foo")  // foo
 //	pb.PushIndex(1) // foo[1]
 func (b *PathBuffer) PushIndex(i int) {
+	b.offs = append(b.offs, b.off)
 	b.buf = append(b.buf, '[')
 	b.buf = strconv.AppendInt(b.buf, int64(i), 10)
 	b.buf = append(b.buf, ']')
@@ -108,6 +114,15 @@ func (b *PathBuffer) PushIndex(i int) {
 //	pb.Pop()        // foo[1]
 //	pb.Pop()        // foo
 func (b *PathBuffer) Pop() {
+	if n := len(b.offs); n > 0 {
+		b.off = b.offs[n-1]
+		b.offs = b.offs[:n-1]
+		b.buf = b.buf[:b.off]
+		return
+	}
+
+	// No recorded push to undo, e.g. the buffer was created with an existing
+	// prefix, so fall back to finding the last separator.
 	for b.off > 0 {
 		b.off--
 		if b.buf[b.off] == '.' || b.buf[b.off] == '[' {
@@ -160,6 +175,7 @@ func (b *PathBuffer) String() string {
 func (b *PathBuffer) Reset() {
 	b.buf = b.buf[:0]
 	b.off = 0
+	b.offs = b.offs[:0]
 }
 
 // NewPathBuffer creates a new path buffer given an existing byte slice.
@@ -367,6 +383,7 @@ func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode Validat
 	if !found {
 		path.Push(s.Discriminator.PropertyName)
 		res.Add(path, v, validation.MsgExpectedPropertyNameInObject)
+		path.Pop()
 		return
 	}
 
@@ -376,14 +393,11 @@ func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode Validat
 		return
 	}
 
+	// A non-string value can't select a mapping, so treat it like an unknown
+	// one rather than letting it pass unvalidated.
 	key, ok := kk.(string)
-	if !ok {
-		path.Push(s.Discriminator.PropertyName)
-		return
-	}
-
 	ref, found := s.Discriminator.Mapping[key]
-	if !found {
+	if !ok || !found {
 		validateOneOf(r, s, path, mode, v, res)
 		return
 	}

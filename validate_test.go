@@ -1626,7 +1626,7 @@ var validateTests = []struct {
 			},
 		},
 		input: map[string]any{"inputType": 1},
-		errs:  []string{validation.MsgExpectedString},
+		errs:  []string{validation.MsgExpectedString, validation.MsgExpectedMatchExactlyOneSchema},
 	},
 	{
 		name: "discriminator: propertyName not explicitly mapped",
@@ -1956,6 +1956,14 @@ func Test_validateWithDiscriminator(t *testing.T) {
 			},
 			wantErrs: []string{validation.MsgExpectedMatchExactlyOneSchema},
 		},
+		{
+			name: "non-string kind",
+			input: map[string]any{
+				"kind": 5,
+				"name": "meow",
+			},
+			wantErrs: []string{validation.MsgExpectedMatchExactlyOneSchema},
+		},
 	}
 
 	for _, tc := range tests {
@@ -1976,6 +1984,78 @@ func TestPathBuffer_WithIndex_ReturnsExpectedString(t *testing.T) {
 	pb.Push("prefix")
 
 	assert.Equal(t, "prefix[1]", pb.WithIndex(1))
+}
+
+func TestPathBuffer_PopKeyWithSeparators(t *testing.T) {
+	pb := huma.NewPathBuffer([]byte{}, 0)
+	pb.Push("tags")
+	pb.Push("a.b")
+	pb.Pop()
+	assert.Equal(t, "tags", pb.String())
+	pb.Push("a[0]")
+	pb.Pop()
+	assert.Equal(t, "tags", pb.String())
+	pb.Pop()
+	assert.Empty(t, pb.String())
+}
+
+func TestPathBuffer_PopIntoPrefix(t *testing.T) {
+	pb := huma.NewPathBuffer([]byte("a.b"), 3)
+	pb.Pop()
+	assert.Equal(t, "a", pb.String())
+}
+
+func TestValidateDiscriminatorMissingPropertyLocation(t *testing.T) {
+	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	catSchema := registry.Schema(reflect.TypeFor[Cat](), true, "Cat")
+	dogSchema := registry.Schema(reflect.TypeFor[Dog](), true, "Dog")
+	s := &huma.Schema{
+		Type: huma.TypeArray,
+		Items: &huma.Schema{
+			Type:  huma.TypeObject,
+			OneOf: []*huma.Schema{{Ref: catSchema.Ref}, {Ref: dogSchema.Ref}},
+			Discriminator: &huma.Discriminator{
+				PropertyName: "kind",
+				Mapping:      map[string]string{"cat": catSchema.Ref, "dog": dogSchema.Ref},
+			},
+		},
+	}
+
+	pb := huma.NewPathBuffer([]byte{}, 0)
+	pb.Push("body")
+	res := &huma.ValidateResult{}
+	huma.Validate(registry, s, pb, huma.ModeWriteToServer, []any{map[string]any{}, map[string]any{}}, res)
+
+	require.Len(t, res.Errors, 2)
+	assert.Equal(t, "body[0].kind", res.Errors[0].(*huma.ErrorDetail).Location)
+	assert.Equal(t, "body[1].kind", res.Errors[1].(*huma.ErrorDetail).Location)
+	assert.Equal(t, "body", pb.String())
+}
+
+func TestValidateMapKeyWithSeparatorsLocation(t *testing.T) {
+	type Body struct {
+		Tags   map[string]int `json:"tags"`
+		Zcount int            `json:"zcount"`
+	}
+
+	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	s := huma.SchemaFromType(registry, reflect.TypeFor[Body]())
+
+	for _, key := range []string{"plain", "a.b", "a[0]"} {
+		t.Run(key, func(t *testing.T) {
+			pb := huma.NewPathBuffer([]byte{}, 0)
+			res := &huma.ValidateResult{}
+			huma.Validate(registry, s, pb, huma.ModeWriteToServer, map[string]any{
+				"tags":   map[string]any{key: "not-an-int"},
+				"zcount": "not-an-int",
+			}, res)
+
+			require.Len(t, res.Errors, 2)
+			assert.Contains(t, res.Errors[0].Error(), "(tags."+key+": not-an-int)")
+			assert.Contains(t, res.Errors[1].Error(), "(zcount: not-an-int)")
+			assert.Empty(t, pb.String())
+		})
+	}
 }
 
 func TestValidateUnresolvedSchemaRefNoPanic(t *testing.T) {
