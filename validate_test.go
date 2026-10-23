@@ -1971,6 +1971,53 @@ func Test_validateWithDiscriminator(t *testing.T) {
 	}
 }
 
+func TestValidateDiscriminatorErrorPaths(t *testing.T) {
+	registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	catSchema := registry.Schema(reflect.TypeFor[Cat](), true, "Cat")
+	schema := &huma.Schema{
+		Type: huma.TypeArray,
+		Items: &huma.Schema{
+			Type:  huma.TypeObject,
+			OneOf: []*huma.Schema{catSchema},
+			Properties: map[string]*huma.Schema{
+				"kind": {Type: huma.TypeString},
+			},
+			Discriminator: &huma.Discriminator{
+				PropertyName: "kind",
+				Mapping:      map[string]string{"cat": catSchema.Ref},
+			},
+		},
+	}
+	schema.PrecomputeMessages()
+
+	for _, test := range []struct {
+		name  string
+		input any
+	}{
+		{"missing/string map", map[string]any{}},
+		{"missing/any map", map[any]any{}},
+		{"non-string/string map", map[string]any{"kind": 1}},
+		{"non-string/any map", map[any]any{"kind": 1}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := huma.NewPathBuffer([]byte("body"), len("body"))
+			result := &huma.ValidateResult{}
+			huma.Validate(registry, schema, path, huma.ModeWriteToServer, []any{
+				test.input,
+				map[string]any{"kind": "cat", "name": "c"},
+			}, result)
+
+			require.Len(t, result.Errors, 2)
+			for i, location := range []string{"body[0].kind", "body[1].name"} {
+				var detail *huma.ErrorDetail
+				require.ErrorAs(t, result.Errors[i], &detail)
+				assert.Equal(t, location, detail.Location)
+			}
+			assert.Equal(t, "body", path.String())
+		})
+	}
+}
+
 func TestPathBuffer_WithIndex_ReturnsExpectedString(t *testing.T) {
 	pb := huma.NewPathBuffer([]byte(""), 0)
 	pb.Push("prefix")

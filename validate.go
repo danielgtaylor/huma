@@ -367,6 +367,7 @@ func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode Validat
 	if !found {
 		path.Push(s.Discriminator.PropertyName)
 		res.Add(path, v, validation.MsgExpectedPropertyNameInObject)
+		path.Pop()
 		return
 	}
 
@@ -378,7 +379,6 @@ func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode Validat
 
 	key, ok := kk.(string)
 	if !ok {
-		path.Push(s.Discriminator.PropertyName)
 		return
 	}
 
