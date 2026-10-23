@@ -383,6 +383,7 @@ func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode Validat
 	if !found {
 		path.Push(s.Discriminator.PropertyName)
 		res.Add(path, v, validation.MsgExpectedPropertyNameInObject)
+		path.Pop()
 		return
 	}
 
@@ -392,14 +393,11 @@ func validateDiscriminator(r Registry, s *Schema, path *PathBuffer, mode Validat
 		return
 	}
 
+	// A non-string value can't select a mapping, so treat it like an unknown
+	// one rather than letting it pass unvalidated.
 	key, ok := kk.(string)
-	if !ok {
-		path.Push(s.Discriminator.PropertyName)
-		return
-	}
-
 	ref, found := s.Discriminator.Mapping[key]
-	if !found {
+	if !ok || !found {
 		validateOneOf(r, s, path, mode, v, res)
 		return
 	}
