@@ -3022,10 +3022,10 @@ Content-Type: text/plain
 			},
 			Method: http.MethodGet,
 			URL:    "/transform",
-Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-	assert.Equal(t, http.StatusOK, resp.Code)
-	assert.JSONEq(t, `null`, resp.Body.String())
-},
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				assert.JSONEq(t, `null`, resp.Body.String())
+			},
 		},
 		{
 			Name: "schema-url-from-x-forwarded-host",
@@ -5116,4 +5116,1659 @@ func TestWriteResponseTransformErrorStatus(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, res.StatusCode)
 	assert.Contains(t, string(body), "error transforming response")
+}
+
+// Typed validation error values: assertions use public HTTP and transformer seams.
+type errorSecret string
+
+func (s errorSecret) MarshalJSON() ([]byte, error) { return json.Marshal("json:" + string(s)) }
+
+type errorText string
+
+func (s errorText) MarshalText() ([]byte, error) { return []byte("text:" + string(s)), nil }
+
+type errorPointer string
+
+func (s *errorPointer) MarshalJSON() ([]byte, error) {
+	if s == nil {
+		panic("nil marshaler invoked")
+	}
+	return json.Marshal("pointer:" + string(*s))
+}
+
+type errorPointerText string
+
+func (s *errorPointerText) MarshalText() ([]byte, error) { return []byte("ptrtext:" + string(*s)), nil }
+
+type errorBoth string
+
+func (s errorBoth) MarshalText() ([]byte, error)  { return []byte("wrong-text"), nil }
+func (s *errorBoth) MarshalJSON() ([]byte, error) { return json.Marshal("both:" + string(*s)) }
+
+type errorStringer string
+
+func (s errorStringer) String() string { return "not-json" }
+
+type errorInt int
+
+func (s errorInt) MarshalJSON() ([]byte, error) { return json.Marshal(fmt.Sprintf("int:%d", s)) }
+
+type errorFloat float64
+
+func (s errorFloat) MarshalJSON() ([]byte, error) { return json.Marshal(fmt.Sprintf("float:%g", s)) }
+
+type errorBool bool
+
+func (s errorBool) MarshalJSON() ([]byte, error) { return json.Marshal(fmt.Sprintf("bool:%t", s)) }
+
+type errorKey string
+type errorLeaf struct {
+	Secret errorSecret `json:"secret" minLength:"5"`
+}
+type ErrorEmbedded struct {
+	Secret errorSecret `json:"renamed" minLength:"5"`
+}
+type errorEnvelope struct {
+	ErrorEmbedded
+	Other errorSecret `json:"other,omitempty" minLength:"5"`
+}
+type errorRootMap map[string]errorPointer
+
+func (m errorRootMap) MarshalJSON() ([]byte, error) {
+	return json.Marshal(fmt.Sprintf("map:%d", len(m)))
+}
+
+type errorRootSlice []errorSecret
+
+func (s errorRootSlice) MarshalJSON() ([]byte, error) {
+	return json.Marshal(fmt.Sprintf("slice:%d", len(s)))
+}
+
+type errorObject struct {
+	Secret   errorSecret `json:"secret"`
+	Required string      `json:"required"`
+}
+
+func (o errorObject) MarshalJSON() ([]byte, error) { return json.Marshal("object:" + string(o.Secret)) }
+
+type errorNormalize string
+
+func (s *errorNormalize) UnmarshalJSON(data []byte) error {
+	var raw string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*s = errorNormalize("normalized:" + raw)
+	return nil
+}
+func (s errorNormalize) MarshalJSON() ([]byte, error) { return json.Marshal(string(s)) }
+
+type errorReject string
+
+func (s *errorReject) UnmarshalJSON(data []byte) error {
+	*s = "partial"
+	return errors.New("typed rejection")
+}
+
+type errorMutating struct {
+	Secret *errorPointer          `json:"secret" minLength:"5"`
+	Items  []errorSecret          `json:"items" minItems:"3"`
+	Values map[string]errorSecret `json:"values" minProperties:"3"`
+}
+
+func (b *errorMutating) Resolve(ctx huma.Context) []error {
+	if b.Secret != nil {
+		*b.Secret = "changed"
+	}
+	if len(b.Items) > 0 {
+		b.Items[0] = "changed"
+	}
+	b.Values["a"] = "changed"
+	return nil
+}
+
+type errorValueResponse struct {
+	details []*huma.ErrorDetail
+	wire    []map[string]any
+	code    int
+	called  bool
+}
+
+func errorValueRequest[B any](t *testing.T, raw string, modify func(*huma.Schema), contentType ...string) errorValueResponse {
+	t.Helper()
+	config := huma.DefaultConfig("Typed errors", "1")
+	config.CreateHooks = nil
+	var result errorValueResponse
+	config.Transformers = []huma.Transformer{func(_ huma.Context, _ string, v any) (any, error) {
+		if model, ok := v.(*huma.ErrorModel); ok {
+			result.details = model.Errors
+		}
+		return v, nil
+	}}
+	mux := http.NewServeMux()
+	api := humago.New(mux, config)
+	schema := api.OpenAPI().Components.Schemas.Schema(reflect.TypeFor[B](), true, "")
+	if modify != nil {
+		target := schema
+		if target.Ref != "" {
+			target = api.OpenAPI().Components.Schemas.SchemaFromRef(target.Ref)
+		}
+		modify(target)
+		target.PrecomputeMessages()
+	}
+	huma.Register(api, huma.Operation{Method: "POST", Path: "/values", OperationID: "values", RequestBody: &huma.RequestBody{Content: map[string]*huma.MediaType{"application/json": {Schema: schema}}}}, func(_ context.Context, _ *struct{ Body B }) (*struct{}, error) { result.called = true; return nil, nil })
+	req := httptest.NewRequest("POST", "/values", strings.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
+	if len(contentType) > 0 {
+		req.Header.Set("Content-Type", contentType[0])
+	}
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	result.code = w.Code
+	if w.Code >= 400 {
+		var document struct {
+			Errors []map[string]any `json:"errors"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &document), w.Body.String())
+		result.wire = document.Errors
+	}
+	return result
+}
+func errorValueCheck(t *testing.T, r errorValueResponse, index int, want any, typ reflect.Type) {
+	t.Helper()
+	require.Equal(t, 422, r.code)
+	require.False(t, r.called)
+	require.Greater(t, len(r.details), index)
+	require.Greater(t, len(r.wire), index)
+	assert.Equal(t, want, r.wire[index]["value"])
+	if typ != nil {
+		v := reflect.ValueOf(r.details[index].Value)
+		require.True(t, v.IsValid())
+		if v.Kind() == reflect.Pointer && typ.Kind() != reflect.Pointer {
+			v = v.Elem()
+		}
+		require.True(t, v.IsValid())
+		assert.Equal(t, typ, v.Type())
+	}
+	message, _ := r.wire[index]["message"].(string)
+	assert.Equal(t, r.details[index].Message, message)
+	assert.True(t, strings.HasPrefix(r.details[index].Location, "body"))
+}
+
+type errorFoldLowerFirst struct {
+	Lower errorSecret  `json:"foo" minLength:"5"`
+	Upper errorPointer `json:"FOO" minLength:"5"`
+}
+
+type errorFoldUpperFirst struct {
+	Upper errorPointer `json:"FOO" minLength:"5"`
+	Lower errorSecret  `json:"foo" minLength:"5"`
+}
+
+type ErrorFoldPromoted struct {
+	Lower errorSecret `json:"foo" minLength:"5"`
+}
+
+type errorFoldEmbeddedFirst struct {
+	ErrorFoldPromoted
+	Upper errorPointer `json:"FOO" minLength:"5"`
+}
+
+func checkTypedErrorFoldOrder[B any](t *testing.T, raw string, selected func(*B) any, locations ...string) {
+	t.Helper()
+	var decoded B
+	require.NoError(t, json.Unmarshal([]byte(raw), &decoded))
+	want := selected(&decoded)
+	encoded, err := json.Marshal(want)
+	require.NoError(t, err)
+	var serialized any
+	require.NoError(t, json.Unmarshal(encoded, &serialized))
+	r := errorValueRequest[B](t, raw, nil)
+	require.Len(t, r.details, len(locations))
+	for i, location := range locations {
+		errorValueCheck(t, r, i, serialized, reflect.TypeOf(want))
+		assert.Equal(t, location, r.details[i].Location)
+	}
+}
+
+func TestTypedErrorValuesFoldOrder(t *testing.T) {
+	t.Run("lower_declared_first", func(t *testing.T) {
+		checkTypedErrorFoldOrder(t, `{"FoO":"one"}`, func(b *errorFoldLowerFirst) any {
+			require.Equal(t, errorSecret("one"), b.Lower)
+			require.Empty(t, b.Upper)
+			return b.Lower
+		}, "body.FOO", "body.foo")
+	})
+	t.Run("upper_declared_first", func(t *testing.T) {
+		checkTypedErrorFoldOrder(t, `{"FoO":"one"}`, func(b *errorFoldUpperFirst) any {
+			require.Equal(t, errorPointer("one"), b.Upper)
+			require.Empty(t, b.Lower)
+			return &b.Upper
+		}, "body.FOO", "body.foo")
+	})
+	t.Run("exact_upper_over_earlier_folded", func(t *testing.T) {
+		checkTypedErrorFoldOrder(t, `{"FOO":"one"}`, func(b *errorFoldLowerFirst) any {
+			require.Equal(t, errorPointer("one"), b.Upper)
+			require.Empty(t, b.Lower)
+			return &b.Upper
+		}, "body.FOO", "body.foo")
+	})
+	t.Run("exact_lower_over_earlier_folded", func(t *testing.T) {
+		checkTypedErrorFoldOrder(t, `{"foo":"one"}`, func(b *errorFoldUpperFirst) any {
+			require.Equal(t, errorSecret("one"), b.Lower)
+			require.Empty(t, b.Upper)
+			return b.Lower
+		}, "body.FOO", "body.foo")
+	})
+	t.Run("promoted_index_before_shallower_field", func(t *testing.T) {
+		checkTypedErrorFoldOrder(t, `{"FoO":"one"}`, func(b *errorFoldEmbeddedFirst) any {
+			require.Equal(t, errorSecret("one"), b.Lower)
+			require.Empty(t, b.Upper)
+			return b.Lower
+		}, "body.FOO", "body.foo")
+	})
+	t.Run("exact_shallower_over_promoted_folded", func(t *testing.T) {
+		checkTypedErrorFoldOrder(t, `{"FOO":"one"}`, func(b *errorFoldEmbeddedFirst) any {
+			require.Equal(t, errorPointer("one"), b.Upper)
+			require.Empty(t, b.Lower)
+			return &b.Upper
+		}, "body.FOO", "body.foo")
+	})
+	t.Run("unicode_folded", func(t *testing.T) {
+		type body struct {
+			Lower errorSecret  `json:"σ" minLength:"5"`
+			Upper errorPointer `json:"Σ" minLength:"5"`
+		}
+		checkTypedErrorFoldOrder(t, `{"ς":"one"}`, func(b *body) any {
+			require.Equal(t, errorSecret("one"), b.Lower)
+			require.Empty(t, b.Upper)
+			return b.Lower
+		}, "body.Σ", "body.σ")
+	})
+}
+
+type errorRawNumberBody[N any] struct {
+	N N `json:"n" maximum:"1" minimum:"-1"`
+}
+
+type errorWireLexeme string
+
+func (v *errorWireLexeme) UnmarshalJSON(data []byte) error {
+	*v = errorWireLexeme(data)
+	return nil
+}
+func (v errorWireLexeme) MarshalJSON() ([]byte, error) { return json.Marshal("raw:" + string(v)) }
+func (errorWireLexeme) Schema(huma.Registry) *huma.Schema {
+	return &huma.Schema{Enum: []any{"never-selected"}}
+}
+
+type errorRawLexicalBody struct {
+	Value errorWireLexeme `json:"value"`
+}
+
+func checkTypedErrorRawCollision[B any](t *testing.T, raw, location string, want any) {
+	t.Helper()
+	r := errorValueRequest[B](t, raw, nil)
+	require.Len(t, r.details, 1)
+	encoded, err := json.Marshal(want)
+	require.NoError(t, err)
+	var serialized any
+	require.NoError(t, json.Unmarshal(encoded, &serialized))
+	errorValueCheck(t, r, 0, serialized, reflect.TypeOf(want))
+	assert.Equal(t, want, r.details[0].Value)
+	assert.Equal(t, location, r.details[0].Location)
+}
+
+func TestTypedErrorValuesRawCollisions(t *testing.T) {
+	t.Run("int64_precision", func(t *testing.T) {
+		checkTypedErrorRawCollision[errorRawNumberBody[int64]](t, `{"n":9007199254740993,"N":1}`, "body.n", int64(9007199254740993))
+	})
+	t.Run("int64_maximum", func(t *testing.T) {
+		checkTypedErrorRawCollision[errorRawNumberBody[int64]](t, `{"n":9223372036854775807,"N":1}`, "body.n", int64(9223372036854775807))
+	})
+	t.Run("int64_negative", func(t *testing.T) {
+		checkTypedErrorRawCollision[errorRawNumberBody[int64]](t, `{"n":-9007199254740993,"N":1}`, "body.n", int64(-9007199254740993))
+	})
+	t.Run("uint64_maximum", func(t *testing.T) {
+		checkTypedErrorRawCollision[errorRawNumberBody[uint64]](t, `{"n":18446744073709551615,"N":1}`, "body.n", uint64(18446744073709551615))
+	})
+	t.Run("exact_after_folded", func(t *testing.T) {
+		checkTypedErrorRawCollision[errorRawNumberBody[int64]](t, `{"N":1,"n":9007199254740993}`, "body.n", int64(9007199254740993))
+	})
+	t.Run("slice_index", func(t *testing.T) {
+		checkTypedErrorRawCollision[[]errorRawNumberBody[int64]](t, `[{"n":0},{"n":9007199254740993,"N":1}]`, "body[1].n", int64(9007199254740993))
+	})
+	t.Run("array_index", func(t *testing.T) {
+		checkTypedErrorRawCollision[[2]errorRawNumberBody[int64]](t, `[{"n":0},{"n":9007199254740993,"N":1}]`, "body[1].n", int64(9007199254740993))
+	})
+	t.Run("map_literal_key", func(t *testing.T) {
+		checkTypedErrorRawCollision[map[string]errorRawNumberBody[int64]](t, `{"a.b[0]":{"n":9007199254740993,"N":1}}`, "body.a.b[0].n", int64(9007199254740993))
+	})
+	for _, tc := range []struct{ name, raw string }{
+		{"nested_pointer", `{"child":{"n":9007199254740993,"N":1}}`},
+		{"ancestor_collision", `{"child":{"n":9007199254740993},"CHILD":{"n":1}}`},
+		{"two_collisions", `{"child":{"n":9007199254740993,"N":1},"CHILD":{"n":0}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			checkTypedErrorRawCollision[struct {
+				Child *errorRawNumberBody[int64] `json:"child"`
+			}](t, tc.raw, "body.child.n", int64(9007199254740993))
+		})
+	}
+	for _, tc := range []struct{ name, token string }{
+		{"exponent", `1e+03`},
+		{"negative_zero", `-0`},
+		{"escaped_string", `"\u006fn\u0065"`},
+		{"escaped_slash", `"o\/ne"`},
+		{"object_spacing_order", `{ "z": 1e+03, "a": "\u006f" }`},
+		{"array_spacing", `[ 1e+03, "\u006f" ]`},
+		{"duplicate_object_members", `{"z":1,"z":2}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			checkTypedErrorRawCollision[errorRawLexicalBody](t, `{"value":`+tc.token+`,"VALUE":"replacement"}`, "body.value", errorWireLexeme(tc.token))
+		})
+	}
+	t.Run("lexical_nested_escaped_keys", func(t *testing.T) {
+		checkTypedErrorRawCollision[map[string][]errorRawLexicalBody](t, `{"a\u002eb[0]":[{"v\u0061lue":"\u006fne","VALUE":"replacement"}]}`, "body.a.b[0][0].value", errorWireLexeme(`"\u006fne"`))
+	})
+}
+
+func errorMinLength(s *huma.Schema) { n := 5; s.MinLength = &n }
+func errorMinItems(s *huma.Schema)  { n := 3; s.MinItems = &n }
+
+func TestTypedErrorValuesScalars(t *testing.T) {
+	checkTypedErrorCompatibility(t)
+	t.Run("json", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorSecret](t, `"one"`, errorMinLength), 0, "json:one", reflect.TypeFor[errorSecret]())
+	})
+	t.Run("text", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorText](t, `"two"`, errorMinLength), 0, "text:two", reflect.TypeFor[errorText]())
+	})
+	t.Run("pointer", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorPointer](t, `"red"`, errorMinLength), 0, "pointer:red", reflect.TypeFor[errorPointer]())
+	})
+	t.Run("pointer_body", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[*errorPointer](t, `"red"`, errorMinLength), 0, "pointer:red", reflect.TypeFor[*errorPointer]())
+	})
+	t.Run("pointer_text", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorPointerText](t, `"txt"`, errorMinLength), 0, "ptrtext:txt", reflect.TypeFor[errorPointerText]())
+	})
+	t.Run("precedence", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorBoth](t, `"one"`, errorMinLength), 0, "both:one", reflect.TypeFor[errorBoth]())
+	})
+	t.Run("stringer", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorStringer](t, `"raw"`, errorMinLength), 0, "raw", reflect.TypeFor[errorStringer]())
+	})
+	t.Run("integer", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorInt](t, `2`, func(s *huma.Schema) { n := 5.0; s.Minimum = &n }), 0, "int:2", reflect.TypeFor[errorInt]())
+	})
+	t.Run("float", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorFloat](t, `2.5`, func(s *huma.Schema) { n := 5.0; s.Minimum = &n }), 0, "float:2.5", reflect.TypeFor[errorFloat]())
+	})
+	t.Run("bool", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorBool](t, `false`, func(s *huma.Schema) { s.Enum = []any{true} }), 0, "bool:false", reflect.TypeFor[errorBool]())
+	})
+	t.Run("zero", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorSecret](t, `""`, errorMinLength), 0, "json:", reflect.TypeFor[errorSecret]())
+	})
+	for _, ct := range []string{"application/json; charset=utf-8", "application/problem+json", "APPLICATION/JSON", ""} {
+		t.Run("content_"+ct, func(t *testing.T) {
+			errorValueCheck(t, errorValueRequest[errorSecret](t, `"one"`, errorMinLength, ct), 0, "json:one", reflect.TypeFor[errorSecret]())
+		})
+	}
+}
+func TestTypedErrorValuesShapes(t *testing.T) {
+	t.Run("nested", func(t *testing.T) {
+		r := errorValueRequest[struct {
+			Child *errorLeaf `json:"child"`
+		}](t, `{"child":{"secret":"one"}}`, nil)
+		errorValueCheck(t, r, 0, "json:one", reflect.TypeFor[errorSecret]())
+		assert.Equal(t, "body.child.secret", r.details[0].Location)
+	})
+	t.Run("embedded", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorEnvelope](t, `{"renamed":"one"}`, nil), 0, "json:one", reflect.TypeFor[errorSecret]())
+	})
+	t.Run("embedded_pointer", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[struct{ *ErrorEmbedded }](t, `{"renamed":"one"}`, nil), 0, "json:one", reflect.TypeFor[errorSecret]())
+	})
+	t.Run("named_embed", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[struct {
+			ErrorEmbedded `json:"inner"`
+		}](t, `{"inner":{"renamed":"one"}}`, nil), 0, "json:one", reflect.TypeFor[errorSecret]())
+	})
+	t.Run("casing", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorLeaf](t, `{"SECRET":"one"}`, nil), 0, "json:one", reflect.TypeFor[errorSecret]())
+	})
+	t.Run("exact_folded_collision", func(t *testing.T) {
+		r := errorValueRequest[errorLeaf](t, `{"secret":"one","SECRET":"long-enough"}`, nil)
+		errorValueCheck(t, r, 0, "json:one", reflect.TypeFor[errorSecret]())
+		assert.Equal(t, "body.secret", r.details[0].Location)
+	})
+	t.Run("exact_folded_pointer_collision", func(t *testing.T) {
+		r := errorValueRequest[struct {
+			Secret *errorPointer `json:"secret" minLength:"5"`
+		}](t, `{"secret":"one","SECRET":null}`, nil)
+		errorValueCheck(t, r, 0, "pointer:one", reflect.TypeFor[*errorPointer]())
+	})
+	t.Run("slice", func(t *testing.T) {
+		r := errorValueRequest[[]errorLeaf](t, `[{"secret":"one"},{"secret":"two"}]`, nil)
+		for i, w := range []string{"json:one", "json:two"} {
+			errorValueCheck(t, r, i, w, reflect.TypeFor[errorSecret]())
+		}
+	})
+	t.Run("array", func(t *testing.T) {
+		r := errorValueRequest[[2]errorLeaf](t, `[{"secret":"one"},{"secret":"two"}]`, nil)
+		for i, w := range []string{"json:one", "json:two"} {
+			errorValueCheck(t, r, i, w, reflect.TypeFor[errorSecret]())
+		}
+	})
+	for _, key := range []string{"plain", "a.b", "a[0]", "", "0", "\u03bb", "x.y[2]"} {
+		t.Run("map_"+key, func(t *testing.T) {
+			data, _ := json.Marshal(map[string]string{key: "one"})
+			r := errorValueRequest[map[errorKey]errorPointer](t, string(data), func(s *huma.Schema) { errorMinLength(s.AdditionalProperties.(*huma.Schema)) })
+			errorValueCheck(t, r, 0, "pointer:one", reflect.TypeFor[errorPointer]())
+		})
+	}
+	t.Run("map_text", func(t *testing.T) {
+		r := errorValueRequest[map[string]errorText](t, `{"key":"one"}`, func(s *huma.Schema) { errorMinLength(s.AdditionalProperties.(*huma.Schema)) })
+		errorValueCheck(t, r, 0, "text:one", reflect.TypeFor[errorText]())
+	})
+	t.Run("map_pointer_text", func(t *testing.T) {
+		r := errorValueRequest[map[string]errorPointerText](t, `{"key":"one"}`, func(s *huma.Schema) { errorMinLength(s.AdditionalProperties.(*huma.Schema)) })
+		errorValueCheck(t, r, 0, "ptrtext:one", reflect.TypeFor[errorPointerText]())
+	})
+	t.Run("nested_map_slice", func(t *testing.T) {
+		r := errorValueRequest[map[string][]errorLeaf](t, `{"a.b[0]":[{"secret":"one"},{"secret":"two"}]}`, nil)
+		for i, w := range []string{"json:one", "json:two"} {
+			errorValueCheck(t, r, i, w, reflect.TypeFor[errorSecret]())
+		}
+	})
+	t.Run("dotted_collision", func(t *testing.T) {
+		r := errorValueRequest[struct {
+			Literal errorSecret `json:"a.b" minLength:"5"`
+			A       struct {
+				B errorPointer `json:"b" minLength:"5"`
+			} `json:"a"`
+		}](t, `{"a.b":"one","a":{"b":"two"}}`, nil)
+		values := make([]any, 0, len(r.wire))
+		for _, e := range r.wire {
+			values = append(values, e["value"])
+		}
+		assert.ElementsMatch(t, []any{"json:one", "pointer:two"}, values)
+	})
+	t.Run("bracket_collision", func(t *testing.T) {
+		r := errorValueRequest[struct {
+			Literal errorSecret    `json:"a[0]" minLength:"5"`
+			A       []errorPointer `json:"a"`
+		}](t, `{"a[0]":"one","a":["two"]}`, func(s *huma.Schema) { errorMinLength(s.Properties["a"].Items) })
+		values := make([]any, 0, len(r.wire))
+		for _, e := range r.wire {
+			values = append(values, e["value"])
+		}
+		assert.ElementsMatch(t, []any{"json:one", "pointer:two"}, values)
+	})
+}
+func TestTypedErrorValuesContainers(t *testing.T) {
+	t.Run("required", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorObject](t, `{"secret":"one"}`, nil), 0, "object:one", reflect.TypeFor[errorObject]())
+	})
+	t.Run("unexpected", func(t *testing.T) {
+		r := errorValueRequest[errorObject](t, `{"secret":"one","required":"ok","extra":"raw"}`, nil)
+		errorValueCheck(t, r, 0, "object:one", reflect.TypeFor[errorObject]())
+		assert.Equal(t, "body.extra", r.details[0].Location)
+	})
+	t.Run("dependent", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorObject](t, `{"secret":"one"}`, func(s *huma.Schema) {
+			s.Required = nil
+			s.DependentRequired = map[string][]string{"secret": {"required"}}
+		}), 0, "object:one", reflect.TypeFor[errorObject]())
+	})
+	t.Run("object_children", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorLeaf](t, `{"secret":"valid","extra":true}`, nil), 0, map[string]any{"secret": "json:valid"}, reflect.TypeFor[errorLeaf]())
+	})
+	t.Run("map_min", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorRootMap](t, `{"a":"one"}`, func(s *huma.Schema) { n := 2; s.MinProperties = &n }), 0, "map:1", reflect.TypeFor[errorRootMap]())
+	})
+	t.Run("slice_min", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorRootSlice](t, `["one"]`, errorMinItems), 0, "slice:1", reflect.TypeFor[errorRootSlice]())
+	})
+	t.Run("empty_slice", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorRootSlice](t, `[]`, errorMinItems), 0, "slice:0", reflect.TypeFor[errorRootSlice]())
+	})
+	t.Run("empty_map", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorRootMap](t, `{}`, func(s *huma.Schema) { n := 1; s.MinProperties = &n }), 0, "map:0", reflect.TypeFor[errorRootMap]())
+	})
+	t.Run("unique", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorRootSlice](t, `["one","one"]`, func(s *huma.Schema) { s.UniqueItems = true }), 0, "slice:2", reflect.TypeFor[errorRootSlice]())
+	})
+	t.Run("array_container", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[[2]errorSecret](t, `["one","two"]`, errorMinItems), 0, []any{"json:one", "json:two"}, reflect.TypeFor[[2]errorSecret]())
+	})
+	t.Run("multiple", func(t *testing.T) {
+		r := errorValueRequest[errorSecret](t, `"one"`, func(s *huma.Schema) { errorMinLength(s); s.Pattern = "^z"; s.Enum = []any{"different"} })
+		require.Len(t, r.details, 3)
+		for i := range r.details {
+			errorValueCheck(t, r, i, "json:one", reflect.TypeFor[errorSecret]())
+		}
+	})
+	for _, composition := range []string{"allOf", "anyOf", "oneOf", "not"} {
+		t.Run(composition, func(t *testing.T) {
+			r := errorValueRequest[errorSecret](t, `"one"`, func(s *huma.Schema) {
+				sub := &huma.Schema{Type: "string"}
+				errorMinLength(sub)
+				switch composition {
+				case "allOf":
+					s.AllOf = []*huma.Schema{sub}
+				case "anyOf":
+					s.AnyOf = []*huma.Schema{sub}
+				case "oneOf":
+					s.OneOf = []*huma.Schema{sub}
+				case "not":
+					s.Not = &huma.Schema{Type: "string"}
+				}
+			})
+			errorValueCheck(t, r, 0, "json:one", reflect.TypeFor[errorSecret]())
+		})
+	}
+}
+func checkTypedErrorSnapshotFailure[B any](t *testing.T, raw string, populate func(*B), modify func(*huma.Schema)) {
+	t.Helper()
+	var standard B
+	require.Error(t, json.Unmarshal([]byte(raw), &standard))
+	config := huma.DefaultConfig("Decoder divergence", "1")
+	config.CreateHooks = nil
+	decodes := 0
+	format := huma.DefaultJSONFormat
+	format.Unmarshal = func(data []byte, target any) error {
+		if body, ok := target.(*B); ok {
+			decodes++
+			populate(body)
+			return nil
+		}
+		return json.Unmarshal(data, target)
+	}
+	config.Formats = map[string]huma.Format{"application/json": format, "json": format}
+	var details []*huma.ErrorDetail
+	config.Transformers = []huma.Transformer{func(_ huma.Context, _ string, value any) (any, error) {
+		if model, ok := value.(*huma.ErrorModel); ok {
+			details = model.Errors
+		}
+		return value, nil
+	}}
+	mux := http.NewServeMux()
+	api := humago.New(mux, config)
+	schema := api.OpenAPI().Components.Schemas.Schema(reflect.TypeFor[B](), true, "")
+	target := schema
+	if target.Ref != "" {
+		target = api.OpenAPI().Components.Schemas.SchemaFromRef(target.Ref)
+	}
+	if modify != nil {
+		modify(target)
+		target.PrecomputeMessages()
+	}
+	called := false
+	huma.Register(api, huma.Operation{Method: "POST", Path: "/", OperationID: "divergence", RequestBody: &huma.RequestBody{Content: map[string]*huma.MediaType{"application/json": {Schema: schema}}}}, func(_ context.Context, _ *struct{ Body B }) (*struct{}, error) {
+		called = true
+		return nil, nil
+	})
+	req := httptest.NewRequest("POST", "/", strings.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	require.Equal(t, 422, w.Code)
+	require.Equal(t, 1, decodes)
+	require.False(t, called)
+	var model struct {
+		Errors []map[string]any `json:"errors"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &model))
+	require.Len(t, model.Errors, 2)
+	require.Len(t, details, 2)
+	for i, detail := range model.Errors {
+		_, present := detail["value"]
+		assert.False(t, present, "partial typed value leaked: %v", detail)
+		assert.Nil(t, details[i].Value)
+		assert.True(t, strings.HasPrefix(details[i].Location, "body"))
+	}
+}
+
+func TestTypedErrorValuesSnapshotFailure(t *testing.T) {
+	constraints := func(s *huma.Schema) {
+		errorMinLength(s)
+		s.Pattern = "^z"
+	}
+	t.Run("configured_scalar_succeeds", func(t *testing.T) {
+		checkTypedErrorSnapshotFailure(t, `"one"`, func(v *errorReject) { *v = "configured-success" }, constraints)
+	})
+	t.Run("configured_pointer_succeeds", func(t *testing.T) {
+		checkTypedErrorSnapshotFailure(t, `"one"`, func(v **errorReject) { value := errorReject("configured-success"); *v = &value }, constraints)
+	})
+	t.Run("discard_all_partial_struct_fields", func(t *testing.T) {
+		type body struct {
+			Good errorSecret `json:"good" minLength:"5"`
+			Bad  errorReject `json:"bad" minLength:"5"`
+		}
+		checkTypedErrorSnapshotFailure(t, `{"good":"one","bad":"two"}`, func(v *body) {
+			v.Good = "configured-good"
+			v.Bad = "configured-bad"
+		}, nil)
+	})
+}
+
+func TestTypedErrorValuesLifecycle(t *testing.T) {
+	checkTypedErrorLifecycleCompatibility(t)
+	checkTypedErrorDecodeCompatibility(t)
+	t.Run("wire_before_normalization", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorNormalize](t, `"one"`, errorMinLength), 0, "normalized:one", reflect.TypeFor[errorNormalize]())
+	})
+	t.Run("before_default", func(t *testing.T) {
+		r := errorValueRequest[struct {
+			Secret errorSecret `json:"secret" minLength:"5" default:"default"`
+		}](t, `{"secret":""}`, nil)
+		errorValueCheck(t, r, 0, "json:", reflect.TypeFor[errorSecret]())
+	})
+	t.Run("before_resolver", func(t *testing.T) {
+		r := errorValueRequest[errorMutating](t, `{"secret":"one","items":["old"],"values":{"a":"old"}}`, nil)
+		require.Len(t, r.wire, 3)
+		values := map[string]any{}
+		for _, e := range r.wire {
+			values[e["location"].(string)] = e["value"]
+		}
+		assert.Equal(t, "pointer:one", values["body.secret"])
+		assert.Equal(t, []any{"json:old"}, values["body.items"])
+		assert.Equal(t, map[string]any{"a": "json:old"}, values["body.values"])
+	})
+	for _, raw := range []string{`{"secret":"one","number":"bad"}`, `{"secret":"one","number":999999999999999999999999999999}`} {
+		t.Run("decode_failure_"+raw, func(t *testing.T) {
+			r := errorValueRequest[struct {
+				Secret errorSecret `json:"secret" minLength:"5"`
+				Number int8        `json:"number"`
+			}](t, raw, nil)
+			require.Equal(t, 422, r.code)
+			require.NotEmpty(t, r.wire)
+			for _, e := range r.wire {
+				_, ok := e["value"]
+				assert.False(t, ok, "untrusted value: %v", e)
+			}
+		})
+	}
+	t.Run("partial_decoder", func(t *testing.T) {
+		r := errorValueRequest[errorReject](t, `"one"`, errorMinLength)
+		require.Equal(t, 422, r.code)
+		require.Len(t, r.wire, 1)
+		_, ok := r.wire[0]["value"]
+		assert.False(t, ok)
+	})
+	t.Run("schema_only", func(t *testing.T) {
+		r := errorValueRequest[struct{}](t, `{"virtual":"one"}`, func(s *huma.Schema) {
+			sub := &huma.Schema{Type: "string"}
+			errorMinLength(sub)
+			s.Properties = map[string]*huma.Schema{"virtual": sub}
+		})
+		require.Equal(t, 422, r.code)
+		require.Len(t, r.wire, 1)
+		_, ok := r.wire[0]["value"]
+		assert.False(t, ok)
+	})
+}
+
+type errorCounted string
+
+func (s *errorCounted) UnmarshalJSON(data []byte) error {
+	var raw string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if *s != "" {
+		return errors.New("typed value decoded twice")
+	}
+	*s = errorCounted(raw)
+	return nil
+}
+func (s errorCounted) MarshalJSON() ([]byte, error) { return json.Marshal("counted:" + string(s)) }
+
+type ErrorFirst struct {
+	Value errorSecret `json:"value" minLength:"5"`
+}
+type ErrorSecond struct {
+	Value errorPointer `json:"value" minLength:"5"`
+}
+type ErrorUntagged struct {
+	Value errorSecret `minLength:"5"`
+}
+type ErrorTagged struct {
+	Other errorPointer `json:"Value" minLength:"5"`
+}
+type errorRecursive struct {
+	*errorRecursive             //nolint:unused // Exercises recursive embedding through reflection.
+	Value           errorSecret `json:"value" minLength:"5"`
+}
+type errorInterface struct {
+	Value any `json:"value"`
+}
+
+func (v *errorInterface) UnmarshalJSON(data []byte) error {
+	v.Value = errorSecret("inside")
+	return nil
+}
+
+type errorTextInterface struct {
+	Value any `json:"value"`
+}
+
+func (v *errorTextInterface) UnmarshalJSON([]byte) error {
+	v.Value = errorText("inside")
+	return nil
+}
+
+type errorPointerTextInterface struct {
+	Value any `json:"value"`
+}
+
+func (v *errorPointerTextInterface) UnmarshalJSON([]byte) error {
+	v.Value = errorPointerText("inside")
+	return nil
+}
+
+type errorShortSlice []errorSecret
+
+func (v *errorShortSlice) UnmarshalJSON(data []byte) error { *v = []errorSecret{"kept"}; return nil }
+
+type errorMissingMap map[string]errorSecret
+
+func (v *errorMissingMap) UnmarshalJSON(data []byte) error { *v = map[string]errorSecret{}; return nil }
+
+type errorNilParent struct {
+	Child *errorLeaf `json:"child"`
+}
+
+func (v *errorNilParent) UnmarshalJSON(data []byte) error { v.Child = nil; return nil }
+
+type errorSnapshot struct {
+	Value    any                    `json:"value"`
+	Pointer  *errorPointer          `json:"pointer"`
+	NilMap   map[string]errorSecret `json:"nilMap"`
+	NilSlice []errorSecret          `json:"nilSlice"`
+	NilAny   any                    `json:"nilAny"`
+	Array    [1]*errorPointer       `json:"array"`
+	hidden   string                 //nolint:unused // Reflection must ignore private fields.
+}
+
+func (v *errorSnapshot) Resolve(huma.Context) []error {
+	if m, ok := v.Value.(map[string]any); ok {
+		m["a"] = "changed"
+	}
+	v.Value = "changed"
+	*v.Array[0] = "changed"
+	return nil
+}
+
+func TestTypedErrorValuesBoundaries(t *testing.T) {
+	checkTypedErrorNullCompatibility(t)
+	t.Run("direct_dominates", func(t *testing.T) {
+		r := errorValueRequest[struct {
+			ErrorFirst
+			Value errorPointer `json:"value" minLength:"5"`
+		}](t, `{"value":"one"}`, nil)
+		errorValueCheck(t, r, 0, "pointer:one", reflect.TypeFor[errorPointer]())
+	})
+	t.Run("tag_dominates", func(t *testing.T) {
+		r := errorValueRequest[struct {
+			ErrorUntagged
+			ErrorTagged
+		}](t, `{"Value":"one"}`, nil)
+		errorValueCheck(t, r, 0, "pointer:one", reflect.TypeFor[errorPointer]())
+	})
+	t.Run("ambiguous", func(t *testing.T) {
+		r := errorValueRequest[struct {
+			ErrorFirst
+			ErrorSecond //nolint:govet // Duplicate promoted JSON names are the case under test.
+		}](t, `{"value":"one"}`, nil)
+		require.Equal(t, 422, r.code)
+		require.NotEmpty(t, r.wire)
+		for _, e := range r.wire {
+			_, ok := e["value"]
+			assert.False(t, ok)
+		}
+	})
+	t.Run("recursive_embedding", func(t *testing.T) {
+		errorValueCheck(t, errorValueRequest[errorRecursive](t, `{"value":"one"}`, nil), 0, "json:one", reflect.TypeFor[errorSecret]())
+	})
+	t.Run("invalid_json_tag", func(t *testing.T) {
+		r := errorValueRequest[struct {
+			Value errorSecret `json:"\\" minLength:"5"` //nolint:staticcheck // Invalid names must follow encoding/json fallback semantics.
+		}](t, `{"Value":"one"}`, func(s *huma.Schema) {
+			s.Properties = map[string]*huma.Schema{"Value": {Type: "string"}}
+			errorMinLength(s.Properties["Value"])
+			s.Required = nil
+		})
+		errorValueCheck(t, r, 0, "json:one", reflect.TypeFor[errorSecret]())
+	})
+	t.Run("ignored_unexported", func(t *testing.T) {
+		r := errorValueRequest[struct {
+			Skip   string `json:"-"`
+			hidden string
+			Value  errorSecret `json:"value" minLength:"5"`
+		}](t, `{"value":"one"}`, nil)
+		errorValueCheck(t, r, 0, "json:one", reflect.TypeFor[errorSecret]())
+	})
+	t.Run("dynamic_interface", func(t *testing.T) {
+		r := errorValueRequest[errorInterface](t, `{"value":"one"}`, func(s *huma.Schema) {
+			s.Properties["value"] = &huma.Schema{Type: "string"}
+			errorMinLength(s.Properties["value"])
+		})
+		errorValueCheck(t, r, 0, "json:inside", nil)
+	})
+	t.Run("dynamic_text_interface", func(t *testing.T) {
+		r := errorValueRequest[errorTextInterface](t, `{"value":"one"}`, func(s *huma.Schema) {
+			s.Properties["value"] = &huma.Schema{Type: "string"}
+			errorMinLength(s.Properties["value"])
+		})
+		errorValueCheck(t, r, 0, "text:inside", reflect.TypeFor[errorText]())
+	})
+	t.Run("dynamic_pointer_text_interface", func(t *testing.T) {
+		r := errorValueRequest[errorPointerTextInterface](t, `{"value":"one"}`, func(s *huma.Schema) {
+			s.Properties["value"] = &huma.Schema{Type: "string"}
+			errorMinLength(s.Properties["value"])
+		})
+		errorValueCheck(t, r, 0, "ptrtext:inside", reflect.TypeFor[errorPointerText]())
+	})
+	t.Run("short_array_representation", func(t *testing.T) {
+		r := errorValueRequest[errorShortSlice](t, `["one","two"]`, func(s *huma.Schema) { errorMinLength(s.Items) })
+		require.Len(t, r.wire, 2)
+		errorValueCheck(t, r, 0, "json:kept", reflect.TypeFor[errorSecret]())
+		_, ok := r.wire[1]["value"]
+		assert.False(t, ok)
+	})
+	t.Run("missing_map_representation", func(t *testing.T) {
+		r := errorValueRequest[errorMissingMap](t, `{"a":"one"}`, func(s *huma.Schema) { v := s.AdditionalProperties.(*huma.Schema); errorMinLength(v) })
+		require.Len(t, r.wire, 1)
+		_, ok := r.wire[0]["value"]
+		assert.False(t, ok)
+	})
+	t.Run("nil_parent_representation", func(t *testing.T) {
+		r := errorValueRequest[errorNilParent](t, `{"child":{"secret":"one"}}`, nil)
+		require.Len(t, r.wire, 1)
+		_, ok := r.wire[0]["value"]
+		assert.False(t, ok)
+	})
+	t.Run("nil_embedded_representation", func(t *testing.T) {
+		r := errorValueRequest[errorNilEmbedded](t, `{"renamed":"one"}`, nil)
+		require.Equal(t, 422, r.code)
+		require.Len(t, r.wire, 1)
+		_, ok := r.wire[0]["value"]
+		assert.False(t, ok)
+	})
+	t.Run("container_snapshot", func(t *testing.T) {
+		r := errorValueRequest[errorSnapshot](t, `{"value":{"a":"old"},"pointer":null,"nilMap":null,"nilSlice":null,"nilAny":null,"array":["old"]}`, func(s *huma.Schema) { n := 10; s.MinProperties = &n })
+		errorValueCheck(t, r, 0, map[string]any{"value": map[string]any{"a": "old"}, "pointer": nil, "nilMap": nil, "nilSlice": nil, "nilAny": nil, "array": []any{"pointer:old"}}, reflect.TypeFor[errorSnapshot]())
+	})
+}
+
+func checkTypedErrorCompatibility(t *testing.T) {
+	func() {
+		r := errorValueRequest[*errorPointer](t, `null`, func(s *huma.Schema) { s.Nullable = false; s.Enum = []any{"not-null"} })
+		require.Equal(t, 422, r.code)
+		require.NotEmpty(t, r.wire)
+		for _, e := range r.wire {
+			_, ok := e["value"]
+			assert.False(t, ok)
+		}
+	}()
+	func() {
+		r := errorValueRequest[string](t, `"one"`, errorMinLength)
+		errorValueCheck(t, r, 0, "one", reflect.TypeFor[string]())
+	}()
+	func() {
+		r := errorValueRequest[errorSecret](t, `{`, errorMinLength)
+		require.Equal(t, 400, r.code)
+		require.False(t, r.called)
+		require.Len(t, r.wire, 1)
+		assert.Equal(t, "{", r.wire[0]["value"])
+	}()
+	func() {
+		r := errorValueRequest[errorSecret](t, `"one"`, errorMinLength, "application/unknown")
+		assert.Equal(t, 415, r.code)
+		assert.False(t, r.called)
+	}()
+	func() {
+		r := errorValueRequest[errorSecret](t, `"one"`, errorMinLength, "application/json;plus+json")
+		assert.Equal(t, 415, r.code)
+	}()
+	func() {
+		r := errorValueRequest[errorSecret](t, `"long-enough"`, errorMinLength)
+		assert.True(t, r.called)
+		assert.Less(t, r.code, 400)
+	}()
+	func() {
+		schema := &huma.Schema{Type: "string"}
+		errorMinLength(schema)
+		schema.PrecomputeMessages()
+		res := &huma.ValidateResult{}
+		pb := huma.NewPathBuffer(nil, 0)
+		pb.Push("standalone")
+		huma.Validate(huma.NewMapRegistry("#/", huma.DefaultSchemaNamer), schema, pb, huma.ModeWriteToServer, "one", res)
+		require.Len(t, res.Errors, 1)
+		assert.Equal(t, "one", res.Errors[0].(*huma.ErrorDetail).Value)
+	}()
+}
+
+func TestTypedErrorValuesRepeated(t *testing.T) {
+	config := huma.DefaultConfig("Repeated", "1")
+	config.CreateHooks = nil
+	decodes := 0
+	format := huma.DefaultJSONFormat
+	format.Unmarshal = func(data []byte, v any) error {
+		if reflect.TypeOf(v) != reflect.TypeFor[*any]() {
+			decodes++
+		}
+		return json.Unmarshal(data, v)
+	}
+	config.Formats = map[string]huma.Format{"application/json": format, "json": format}
+	mux := http.NewServeMux()
+	api := humago.New(mux, config)
+	huma.Post(api, "/a", func(_ context.Context, _ *struct {
+		Body struct {
+			Value errorCounted `json:"value" minLength:"5" pattern:"^z"`
+		}
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+	huma.Post(api, "/b", func(_ context.Context, _ *struct {
+		Body struct {
+			Value errorPointer `json:"value" minLength:"5"`
+		}
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+	for i, path := range []string{"/a", "/b", "/a", "/b"} {
+		t.Run(fmt.Sprintf("request_%d", i), func(t *testing.T) {
+			raw := fmt.Sprintf(`{"value":"v%d"}`, i)
+			req := httptest.NewRequest("POST", path, strings.NewReader(raw))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			before := decodes
+			mux.ServeHTTP(w, req)
+			assert.Equal(t, before+1, decodes)
+			require.Equal(t, 422, w.Code)
+			var model struct {
+				Errors []map[string]any `json:"errors"`
+			}
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &model))
+			prefix := "counted:"
+			if path == "/b" {
+				prefix = "pointer:"
+			}
+			for _, e := range model.Errors {
+				assert.Equal(t, fmt.Sprintf("%sv%d", prefix, i), e["value"])
+			}
+			success := httptest.NewRequest("POST", path, strings.NewReader(`{"value":"z-good"}`))
+			success.Header.Set("Content-Type", "application/json")
+			successResult := httptest.NewRecorder()
+			before = decodes
+			mux.ServeHTTP(successResult, success)
+			assert.Equal(t, before+1, decodes)
+			assert.Less(t, successResult.Code, 400)
+
+		})
+	}
+}
+
+type errorNilEmbedded struct{ *ErrorEmbedded }
+
+func (v *errorNilEmbedded) UnmarshalJSON([]byte) error { v.ErrorEmbedded = nil; return nil }
+
+type errorDynamicPointer struct {
+	Value any `json:"value"`
+}
+
+func (v *errorDynamicPointer) UnmarshalJSON([]byte) error {
+	v.Value = errorPointer("dynamic")
+	return nil
+}
+
+type errorWrongShape struct {
+	Value any `json:"value"`
+}
+
+func (v *errorWrongShape) UnmarshalJSON([]byte) error { v.Value = 123; return nil }
+func TestTypedErrorValuesAdversarial(t *testing.T) {
+	t.Run("dynamic_pointer_method", func(t *testing.T) {
+		r := errorValueRequest[errorDynamicPointer](t, `{"value":"one"}`, func(s *huma.Schema) {
+			s.Properties["value"] = &huma.Schema{Type: "string"}
+			errorMinLength(s.Properties["value"])
+		})
+		errorValueCheck(t, r, 0, "pointer:dynamic", reflect.TypeFor[errorPointer]())
+	})
+	t.Run("wrong_shape", func(t *testing.T) {
+		r := errorValueRequest[errorWrongShape](t, `{"value":{"leaf":"one"}}`, func(s *huma.Schema) {
+			s.Properties["value"] = &huma.Schema{Type: "object", Properties: map[string]*huma.Schema{"leaf": {Type: "string"}}}
+			errorMinLength(s.Properties["value"].Properties["leaf"])
+		})
+		require.Equal(t, 422, r.code)
+		require.Len(t, r.wire, 1)
+		_, ok := r.wire[0]["value"]
+		assert.False(t, ok)
+	})
+	t.Run("discriminator_container", func(t *testing.T) {
+		r := errorValueRequest[errorObject](t, `{"secret":"one"}`, func(s *huma.Schema) {
+			s.OneOf = []*huma.Schema{{Type: "object"}}
+			s.Discriminator = &huma.Discriminator{PropertyName: "kind", Mapping: map[string]string{}}
+		})
+		require.GreaterOrEqual(t, len(r.wire), 2)
+		for i := range r.wire {
+			errorValueCheck(t, r, i, "object:one", reflect.TypeFor[errorObject]())
+		}
+	})
+}
+
+func TestTypedErrorValuesParallel(t *testing.T) {
+	config := huma.DefaultConfig("Parallel", "1")
+	config.CreateHooks = nil
+	mux := http.NewServeMux()
+	api := humago.New(mux, config)
+	huma.Post(api, "/values", func(_ context.Context, _ *struct{ Body errorLeaf }) (*struct{}, error) { return nil, nil })
+	for i := 0; i < 12; i++ {
+		t.Run(fmt.Sprintf("request_%d", i), func(t *testing.T) {
+			t.Parallel()
+			raw := fmt.Sprintf(`{"secret":"p%d"}`, i)
+			req := httptest.NewRequest("POST", "/values", strings.NewReader(raw))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, req)
+			require.Equal(t, 422, w.Code)
+			var model struct {
+				Errors []map[string]any `json:"errors"`
+			}
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &model))
+			require.Len(t, model.Errors, 1)
+			assert.Equal(t, fmt.Sprintf("json:p%d", i), model.Errors[0]["value"])
+		})
+	}
+}
+
+func checkTypedErrorLifecycleCompatibility(t *testing.T) {
+	func() {
+		config := huma.DefaultConfig("Skip", "1")
+		mux := http.NewServeMux()
+		api := humago.New(mux, config)
+		called := false
+		huma.Register(api, huma.Operation{Method: "POST", Path: "/", OperationID: "skip", SkipValidateBody: true}, func(_ context.Context, i *struct {
+			Body struct {
+				Value errorSecret `json:"value" minLength:"5" default:"filled"`
+			}
+		}) (*struct{}, error) {
+			called = true
+			assert.Equal(t, errorSecret("filled"), i.Body.Value)
+			return nil, nil
+		})
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", "/", strings.NewReader(`{"value":""}`))
+		r.Header.Set("Content-Type", "application/json")
+		mux.ServeHTTP(w, r)
+		assert.True(t, called)
+		assert.Less(t, w.Code, 400)
+	}()
+	func() {
+		config := huma.DefaultConfig("Nonjson", "1")
+		config.CreateHooks = nil
+		config.Formats = map[string]huma.Format{"application/json": huma.DefaultJSONFormat, "application/test": huma.DefaultJSONFormat, "json": huma.DefaultJSONFormat}
+		mux := http.NewServeMux()
+		api := humago.New(mux, config)
+		huma.Post(api, "/", func(_ context.Context, _ *struct{ Body errorLeaf }) (*struct{}, error) {
+			t.Error("invalid input reached handler")
+			return nil, nil
+		})
+		r := httptest.NewRequest("POST", "/", strings.NewReader(`{"secret":"one"}`))
+		r.Header.Set("Content-Type", "application/test")
+		r.Header.Set("Accept", "application/json")
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, r)
+		require.Equal(t, 422, w.Code)
+		var model struct {
+			Errors []map[string]any `json:"errors"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &model))
+		require.Len(t, model.Errors, 1)
+		assert.Equal(t, "one", model.Errors[0]["value"])
+	}()
+}
+
+func TestTypedErrorValuesMapCasing(t *testing.T) {
+	r := errorValueRequest[map[string]errorSecret](t, `{"SECRET":"one"}`, func(s *huma.Schema) {
+		s.Properties = map[string]*huma.Schema{"secret": {Type: "string"}}
+		errorMinLength(s.Properties["secret"])
+		s.AdditionalProperties = true
+	})
+	errorValueCheck(t, r, 0, "json:one", reflect.TypeFor[errorSecret]())
+}
+func TestTypedErrorValuesMixedModes(t *testing.T) {
+	config := huma.DefaultConfig("Mixed modes", "1")
+	config.CreateHooks = nil
+	config.Formats = map[string]huma.Format{"application/json": huma.DefaultJSONFormat, "json": huma.DefaultJSONFormat, "application/test": huma.DefaultJSONFormat}
+	mux := http.NewServeMux()
+	api := humago.New(mux, config)
+	huma.Post(api, "/", func(_ context.Context, _ *struct {
+		Q    string `query:"q" minLength:"5"`
+		Body struct {
+			Secret errorSecret `json:"secret" minLength:"5"`
+			Number int         `json:"number"`
+		}
+	}) (*struct{}, error) {
+		t.Error("invalid input reached handler")
+		return nil, nil
+	})
+	for _, ct := range []string{"application/json", "application/test", "application/json"} {
+		for _, number := range []string{"1", `"bad"`} {
+			func() {
+				r := httptest.NewRequest("POST", "/?q=raw", strings.NewReader(`{"secret":"one","number":`+number+`}`))
+				r.Header.Set("Content-Type", ct)
+				r.Header.Set("Accept", "application/json")
+				w := httptest.NewRecorder()
+				mux.ServeHTTP(w, r)
+				require.Equal(t, 422, w.Code)
+				var model struct {
+					Errors []map[string]any `json:"errors"`
+				}
+				require.NoError(t, json.Unmarshal(w.Body.Bytes(), &model))
+				require.GreaterOrEqual(t, len(model.Errors), 2)
+				seen := false
+				for _, e := range model.Errors {
+					if e["location"] == "query.q" {
+						assert.Equal(t, "raw", e["value"])
+					} else {
+						seen = true
+						if ct == "application/json" {
+							if number == "1" {
+								assert.Equal(t, "json:one", e["value"])
+							} else {
+								_, ok := e["value"]
+								assert.False(t, ok)
+							}
+						} else if e["location"] == "body.secret" {
+							assert.Equal(t, "one", e["value"])
+						}
+					}
+				}
+				assert.True(t, seen)
+			}()
+		}
+	}
+}
+
+type errorHiddenField struct{ hidden errorSecret } //nolint:unused // Reflection must ignore private fields.
+type errorIgnoredField struct {
+	Skip errorSecret `json:"-"`
+}
+
+func TestTypedErrorValuesMutationEdges(t *testing.T) {
+	t.Run("digit_tag", func(t *testing.T) {
+		r := errorValueRequest[struct {
+			Value errorSecret `json:"v1" minLength:"5"`
+		}](t, `{"v1":"one"}`, nil)
+		errorValueCheck(t, r, 0, "json:one", reflect.TypeFor[errorSecret]())
+	})
+	t.Run("hidden_field", func(t *testing.T) {
+		r := errorValueRequest[errorHiddenField](t, `{"hidden":"one"}`, func(s *huma.Schema) {
+			s.Properties = map[string]*huma.Schema{"hidden": {Type: "string"}}
+			errorMinLength(s.Properties["hidden"])
+		})
+		require.Equal(t, 422, r.code)
+		require.Len(t, r.wire, 1)
+		_, ok := r.wire[0]["value"]
+		assert.False(t, ok)
+	})
+	t.Run("ignored_field", func(t *testing.T) {
+		r := errorValueRequest[errorIgnoredField](t, `{"-":"one"}`, func(s *huma.Schema) {
+			s.Properties = map[string]*huma.Schema{"-": {Type: "string"}}
+			errorMinLength(s.Properties["-"])
+		})
+		require.Equal(t, 422, r.code)
+		require.Len(t, r.wire, 1)
+		_, ok := r.wire[0]["value"]
+		assert.False(t, ok)
+	})
+}
+
+type errorNullNormalizer string
+
+func (v *errorNullNormalizer) UnmarshalJSON([]byte) error  { *v = "synthesized"; return nil }
+func (v errorNullNormalizer) MarshalJSON() ([]byte, error) { return json.Marshal(string(v)) }
+func checkTypedErrorNullCompatibility(t *testing.T) {
+	r := errorValueRequest[errorNullNormalizer](t, `null`, func(s *huma.Schema) { s.Nullable = false })
+	require.Equal(t, 422, r.code)
+	require.NotEmpty(t, r.wire)
+	for _, e := range r.wire {
+		_, ok := e["value"]
+		assert.False(t, ok)
+	}
+}
+
+func TestTypedErrorValuesUnresolvedReference(t *testing.T) {
+	missing := func(s *huma.Schema) { s.Properties["secret"] = &huma.Schema{Ref: "#/components/schemas/Absent"} }
+	for _, key := range []string{"secret", "SECRET"} {
+		t.Run(key, func(t *testing.T) {
+			r := errorValueRequest[errorLeaf](t, `{"`+key+`":"one"}`, missing)
+			errorValueCheck(t, r, 0, "json:one", reflect.TypeFor[errorSecret]())
+			assert.Equal(t, "body.secret", r.details[0].Location)
+			assert.Contains(t, r.details[0].Message, "#/components/schemas/Absent")
+			registry := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+			schema := &huma.Schema{Type: "object", Properties: map[string]*huma.Schema{"secret": {Ref: "#/components/schemas/Absent"}}}
+			schema.PrecomputeMessages()
+			validation := &huma.ValidateResult{}
+			huma.Validate(registry, schema, &huma.PathBuffer{}, huma.ModeWriteToServer, map[string]any{key: "one"}, validation)
+			require.NotEmpty(t, validation.Errors)
+			if key == "secret" {
+				assert.Equal(t, "one", validation.Errors[0].(*huma.ErrorDetail).Value)
+			} else {
+				assert.Nil(t, validation.Errors[0].(*huma.ErrorDetail).Value)
+			}
+			// Null or absent input has no typed offending value, even when
+			// reference resolution itself produces an error.
+			for _, raw := range []string{`{"` + key + `":null}`, `{}`} {
+				n := errorValueRequest[errorLeaf](t, raw, missing)
+				require.Equal(t, 422, n.code)
+				require.NotEmpty(t, n.wire)
+				_, present := n.wire[0]["value"]
+				assert.False(t, present)
+			}
+		})
+	}
+	t.Run("map_unicode_path", func(t *testing.T) {
+		r := errorValueRequest[map[string]errorSecret](t, `{"\u00c9.[KEY]":"one"}`, func(s *huma.Schema) {
+			s.Properties = map[string]*huma.Schema{"\u00e9.[key]": {Ref: "#/components/schemas/Absent"}}
+			s.AdditionalProperties = true
+		})
+		errorValueCheck(t, r, 0, "json:one", reflect.TypeFor[errorSecret]())
+		assert.Equal(t, "body.\u00e9.[key]", r.details[0].Location)
+	})
+	t.Run("exact_priority", func(t *testing.T) {
+		r := errorValueRequest[map[string]errorSecret](t, `{"secret":"one","SECRET":"other"}`, func(s *huma.Schema) {
+			s.Properties = map[string]*huma.Schema{"secret": {Ref: "#/components/schemas/Absent"}}
+			s.AdditionalProperties = true
+		})
+		errorValueCheck(t, r, 0, "json:one", reflect.TypeFor[errorSecret]())
+		assert.Equal(t, "body.secret", r.details[0].Location)
+	})
+	t.Run("nested_composition", func(t *testing.T) {
+		r := errorValueRequest[struct {
+			Child map[string]errorSecret `json:"child"`
+		}](t, `{"CHILD":{"SECRET":"one"}}`, func(s *huma.Schema) {
+			s.Properties["child"] = &huma.Schema{AllOf: []*huma.Schema{{Type: "object", Properties: map[string]*huma.Schema{"secret": {Ref: "#/components/schemas/Absent"}}}}}
+		})
+		errorValueCheck(t, r, 0, "json:one", reflect.TypeFor[errorSecret]())
+		assert.Equal(t, "body.child.secret", r.details[0].Location)
+	})
+	t.Run("strict_exact", func(t *testing.T) {
+		old := huma.ValidateStrictCasing
+		huma.ValidateStrictCasing = true
+		defer func() { huma.ValidateStrictCasing = old }()
+		r := errorValueRequest[errorLeaf](t, `{"secret":"one"}`, missing)
+		errorValueCheck(t, r, 0, "json:one", reflect.TypeFor[errorSecret]())
+		n := errorValueRequest[errorLeaf](t, `{"SECRET":"one"}`, missing)
+		require.Equal(t, 422, n.code)
+		require.NotEmpty(t, n.wire)
+		_, present := n.wire[0]["value"]
+		assert.False(t, present)
+	})
+}
+
+type ErrorAmbiguous struct {
+	ErrorFirst
+	ErrorSecond //nolint:govet // Duplicate promoted JSON names are the case under test.
+}
+type ErrorDeepLeaf struct {
+	Value errorSecret `json:"value" minLength:"5"`
+}
+type ErrorDeepOne struct{ ErrorDeepLeaf }
+type ErrorDeepTwo struct{ ErrorDeepOne }
+
+func TestTypedErrorValuesEmbeddingDepth(t *testing.T) {
+	r := errorValueRequest[struct {
+		ErrorAmbiguous //nolint:govet // Ambiguous shallow fields must hide the deeper field.
+		ErrorDeepTwo
+	}](t, `{"value":"one"}`, nil)
+	require.Equal(t, 422, r.code)
+	require.NotEmpty(t, r.wire)
+	for _, e := range r.wire {
+		_, ok := e["value"]
+		assert.False(t, ok)
+	}
+}
+
+var errorMarshalFailure = errors.New("custom value serialization failed")
+
+type errorFailMarshal string
+
+func (errorFailMarshal) MarshalJSON() ([]byte, error) { return nil, errorMarshalFailure }
+func TestTypedErrorValuesMarshalerFailure(t *testing.T) {
+	config := huma.DefaultConfig("Marshaler failure", "1")
+	config.CreateHooks = nil
+	var observed error
+	format := huma.DefaultJSONFormat
+	format.Marshal = func(w io.Writer, v any) error {
+		_, err := json.Marshal(v)
+		if err != nil {
+			observed = err
+		}
+		return err
+	}
+	config.Formats = map[string]huma.Format{"application/json": format, "json": format}
+	mux := http.NewServeMux()
+	api := humago.New(mux, config)
+	huma.Post(api, "/", func(_ context.Context, _ *struct {
+		Body struct {
+			Value errorFailMarshal `json:"value" minLength:"5"`
+		}
+	}) (*struct{}, error) {
+		t.Error("invalid body reached handler")
+		return nil, nil
+	})
+	r := httptest.NewRequest("POST", "/", strings.NewReader(`{"value":"one"}`))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, r)
+	require.ErrorIs(t, observed, errorMarshalFailure)
+}
+
+func checkTypedErrorDecodeCompatibility(t *testing.T) {
+	r := errorValueRequest[errorReject](t, `"long-enough"`, errorMinLength)
+	require.Equal(t, 422, r.code)
+	require.Len(t, r.wire, 1)
+	assert.Equal(t, "typed rejection", r.wire[0]["message"])
+	assert.Equal(t, `"long-enough"`, r.wire[0]["value"])
+}
+
+type errorOpaqueValue struct {
+	data   []byte
+	labels map[string]*errorSecret
+	held   struct{ value *errorPointer }
+}
+
+func (errorOpaqueValue) Schema(huma.Registry) *huma.Schema { return &huma.Schema{Type: "string"} }
+func (v *errorOpaqueValue) UnmarshalJSON(data []byte) error {
+	var raw string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	v.data = []byte(raw)
+	s := errorSecret(raw)
+	v.labels = map[string]*errorSecret{"x": &s}
+	p := errorPointer(raw)
+	v.held.value = &p
+	return nil
+}
+func (v errorOpaqueValue) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{"data": string(v.data), "label": v.labels["x"], "held": v.held.value})
+}
+func (v *errorOpaqueValue) Resolve(huma.Context) []error {
+	v.data[0] = 'X'
+	*v.labels["x"] = "changed"
+	*v.held.value = "changed"
+	return nil
+}
+func TestTypedErrorValuesPrivateMarshalerState(t *testing.T) {
+	r := errorValueRequest[errorOpaqueValue](t, `"one"`, errorMinLength)
+	errorValueCheck(t, r, 0, map[string]any{"data": "one", "label": "json:one", "held": "pointer:one"}, reflect.TypeFor[errorOpaqueValue]())
+}
+
+func errorSchemaOnlyRequest[I any](t *testing.T, raw, contentType string, skip bool) (int, []map[string]any, bool) {
+	t.Helper()
+	config := huma.DefaultConfig("Schema only", "1")
+	config.CreateHooks = nil
+	config.Formats = map[string]huma.Format{"application/json": huma.DefaultJSONFormat, "json": huma.DefaultJSONFormat, "application/test": huma.DefaultJSONFormat}
+	mux := http.NewServeMux()
+	api := humago.New(mux, config)
+	called := false
+	schema := &huma.Schema{Type: huma.TypeObject, Required: []string{"required"}, AdditionalProperties: false, Properties: map[string]*huma.Schema{
+		"virtual":  {Type: huma.TypeString, MinLength: Ptr(5)},
+		"test":     {Type: huma.TypeInteger, Minimum: Ptr(10.0)},
+		"required": {Type: huma.TypeString},
+	}}
+	schema.PrecomputeMessages()
+	huma.Register(api, huma.Operation{Method: "POST", Path: "/", OperationID: "schema-only", SkipValidateBody: skip, RequestBody: &huma.RequestBody{Content: map[string]*huma.MediaType{"application/json": {Schema: schema}}}}, func(_ context.Context, _ *I) (*struct{}, error) {
+		called = true
+		return nil, nil
+	})
+	req := httptest.NewRequest("POST", "/?q=raw", strings.NewReader(raw))
+	req.Header.Set("Content-Type", contentType)
+	req.Header.Set("Accept", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	var model struct {
+		Errors []map[string]any `json:"errors"`
+	}
+	if w.Code >= 400 {
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &model))
+	}
+	return w.Code, model.Errors, called
+}
+
+func TestTypedErrorValuesSchemaOnly(t *testing.T) {
+	checkTypedErrorSchemaCompatibility(t)
+	for _, shape := range []string{"raw", "empty", "query"} {
+		t.Run(shape, func(t *testing.T) {
+			for _, ct := range []string{"application/json", "application/json; charset=utf-8"} {
+				t.Run(ct, func(t *testing.T) {
+					raw := `{"virtual":"one","test":1,"extra":true}`
+					var code int
+					var details []map[string]any
+					var called bool
+					switch shape {
+					case "raw":
+						code, details, called = errorSchemaOnlyRequest[struct{ RawBody []byte }](t, raw, ct, false)
+					case "empty":
+						code, details, called = errorSchemaOnlyRequest[struct{}](t, raw, ct, false)
+					case "query":
+						code, details, called = errorSchemaOnlyRequest[struct {
+							Q string `query:"q" minLength:"5"`
+						}](t, raw, ct, false)
+					}
+					require.Equal(t, 422, code)
+					require.False(t, called)
+					locations := map[string]bool{}
+					for _, detail := range details {
+						location := detail["location"].(string)
+						locations[location] = true
+						if location == "query.q" {
+							assert.Equal(t, "raw", detail["value"])
+							continue
+						}
+						assert.True(t, location == "body" || strings.HasPrefix(location, "body."))
+						assert.NotEmpty(t, detail["message"])
+						assert.NotContains(t, detail, "value", "untyped body value at %s", location)
+					}
+					for _, name := range []string{"virtual", "test", "extra"} {
+						assert.True(t, locations["body."+name], name)
+					}
+					assert.True(t, locations["body"], "required-property container error")
+					if shape == "query" {
+						assert.True(t, locations["query.q"])
+					}
+				})
+			}
+		})
+	}
+}
+
+func TestTypedErrorValuesSemicolonTag(t *testing.T) {
+	type body struct {
+		Value errorSecret `json:";" minLength:"5"`
+	}
+	var decoded body
+	require.NoError(t, json.Unmarshal([]byte(`{";":"one"}`), &decoded))
+	require.Equal(t, errorSecret("one"), decoded.Value)
+	r := errorValueRequest[body](t, `{";":"one"}`, nil)
+	errorValueCheck(t, r, 0, "json:one", reflect.TypeFor[errorSecret]())
+	require.Len(t, r.wire, 1)
+	assert.Equal(t, "body.;", r.details[0].Location)
+}
+
+func checkTypedErrorSchemaCompatibility(t *testing.T) {
+	func() {
+		code, details, called := errorSchemaOnlyRequest[struct{ RawBody []byte }](t, `{"virtual":"one","test":1,"required":"ok"}`, "application/test", false)
+		require.Equal(t, 422, code)
+		require.False(t, called)
+		require.Len(t, details, 2)
+		for _, detail := range details {
+			if detail["location"] == "body.virtual" {
+				assert.Equal(t, "one", detail["value"])
+			} else {
+				assert.InDelta(t, float64(1), detail["value"], 0)
+			}
+		}
+	}()
+	func() {
+		code, details, called := errorSchemaOnlyRequest[struct{}](t, `{`, "application/json", false)
+		require.Equal(t, 400, code)
+		require.False(t, called)
+		require.Len(t, details, 1)
+		assert.Equal(t, "{", details[0]["value"])
+	}()
+	for _, skip := range []bool{false, true} {
+		func() {
+			raw := `{"virtual":"valid","test":10,"required":"ok"}`
+			if skip {
+				raw = `{"virtual":"one"}`
+			}
+			code, details, called := errorSchemaOnlyRequest[struct{ RawBody []byte }](t, raw, "application/json", skip)
+			assert.Equal(t, 204, code)
+			assert.True(t, called)
+			assert.Empty(t, details)
+		}()
+	}
+}
+
+func TestTypedErrorValuesMapSliceContainer(t *testing.T) {
+	r := errorValueRequest[map[string]errorRootSlice](t, `{"x":["one"]}`, func(s *huma.Schema) {
+		s.AdditionalProperties = &huma.Schema{Type: "array", Items: &huma.Schema{Type: "string"}, MinItems: func() *int { n := 2; return &n }()}
+	})
+	errorValueCheck(t, r, 0, "slice:1", reflect.TypeFor[errorRootSlice]())
+}
+
+type errorDiscardedContainer[T any] struct {
+	Value T `json:"value"`
+}
+
+func (v *errorDiscardedContainer[T]) UnmarshalJSON([]byte) error { return nil }
+
+type errorNilDynamicContainer[T any] struct {
+	Value any `json:"value"`
+}
+
+func (v *errorNilDynamicContainer[T]) UnmarshalJSON([]byte) error {
+	var zero T
+	v.Value = zero
+	return nil
+}
+
+type errorNilMap map[string]errorSecret
+type errorNilSlice []errorSecret
+
+func (v *errorNilMap) UnmarshalJSON([]byte) error   { *v = nil; return nil }
+func (v *errorNilSlice) UnmarshalJSON([]byte) error { *v = nil; return nil }
+
+func checkTypedErrorAbsentContainer[B any](t *testing.T, raw string, schema *huma.Schema) {
+	t.Helper()
+	r := errorValueRequest[B](t, raw, func(s *huma.Schema) { *s = *schema })
+	require.Equal(t, http.StatusUnprocessableEntity, r.code)
+	require.False(t, r.called)
+	require.Len(t, r.wire, 1)
+	require.Len(t, r.details, 1)
+	_, present := r.wire[0]["value"]
+	assert.False(t, present, "an absent typed container must omit value, not emit null")
+	assert.Nil(t, r.details[0].Value)
+	assert.Equal(t, r.details[0].Location, r.wire[0]["location"])
+}
+
+func TestTypedErrorValuesAbsentContainers(t *testing.T) {
+	two := 2
+	object := &huma.Schema{Type: "object", MinProperties: &two, AdditionalProperties: true}
+	array := &huma.Schema{Type: "array", MinItems: &two, Items: &huma.Schema{Type: "string"}}
+	wrap := func(child *huma.Schema) *huma.Schema {
+		return &huma.Schema{Type: "object", Properties: map[string]*huma.Schema{"value": child}, AdditionalProperties: true}
+	}
+	for _, folded := range []bool{false, true} {
+		suffix := "}"
+		if folded {
+			suffix = `,"VALUE":null}`
+		}
+		for _, tc := range []struct {
+			name string
+			run  func(*testing.T)
+		}{
+			{"pointer", func(t *testing.T) {
+				checkTypedErrorAbsentContainer[errorDiscardedContainer[*errorLeaf]](t, `{"value":{"secret":"one"}`+suffix, wrap(object))
+			}},
+			{"map", func(t *testing.T) {
+				checkTypedErrorAbsentContainer[errorDiscardedContainer[map[string]errorSecret]](t, `{"value":{"secret":"one"}`+suffix, wrap(object))
+			}},
+			{"slice", func(t *testing.T) {
+				checkTypedErrorAbsentContainer[errorDiscardedContainer[[]errorSecret]](t, `{"value":["one"]`+suffix, wrap(array))
+			}},
+			{"interface_pointer", func(t *testing.T) {
+				checkTypedErrorAbsentContainer[errorNilDynamicContainer[*errorLeaf]](t, `{"value":{"secret":"one"}`+suffix, wrap(object))
+			}},
+			{"interface_map", func(t *testing.T) {
+				checkTypedErrorAbsentContainer[errorNilDynamicContainer[map[string]errorSecret]](t, `{"value":{"secret":"one"}`+suffix, wrap(object))
+			}},
+			{"interface_slice", func(t *testing.T) {
+				checkTypedErrorAbsentContainer[errorNilDynamicContainer[[]errorSecret]](t, `{"value":["one"]`+suffix, wrap(array))
+			}},
+			{"absent_parent", func(t *testing.T) {
+				child := &huma.Schema{Type: "object", Properties: map[string]*huma.Schema{"secret": {Type: "string", MinLength: &two}}, AdditionalProperties: true}
+				checkTypedErrorAbsentContainer[errorDiscardedContainer[*errorLeaf]](t, `{"value":{"secret":"x","SECRET":"long"}`+suffix, wrap(child))
+			}},
+			{"absent_map_entry", func(t *testing.T) {
+				child := &huma.Schema{Type: "object", Properties: map[string]*huma.Schema{"secret": object}, AdditionalProperties: true}
+				checkTypedErrorAbsentContainer[errorDiscardedContainer[map[string]*errorLeaf]](t, `{"value":{"secret":{"secret":"one"},"SECRET":null}`+suffix, wrap(child))
+			}},
+		} {
+			t.Run(fmt.Sprintf("%s/folded_%t", tc.name, folded), tc.run)
+		}
+	}
+	t.Run("root_map", func(t *testing.T) {
+		checkTypedErrorAbsentContainer[errorNilMap](t, `{"secret":"one"}`, object)
+	})
+	t.Run("root_slice", func(t *testing.T) {
+		checkTypedErrorAbsentContainer[errorNilSlice](t, `["one"]`, array)
+	})
+	t.Run("pointer_to_nil_map", func(t *testing.T) {
+		checkTypedErrorAbsentContainer[*errorNilMap](t, `{"secret":"one"}`, object)
+	})
+	t.Run("map_element", func(t *testing.T) {
+		checkTypedErrorAbsentContainer[map[string]errorNilMap](t, `{"value":{"secret":"one"}}`, wrap(object))
+	})
+	t.Run("slice_element", func(t *testing.T) {
+		checkTypedErrorAbsentContainer[[]errorNilSlice](t, `[["one"]]`, &huma.Schema{Type: "array", Items: array})
+	})
+	t.Run("folded_map_decoder", func(t *testing.T) {
+		checkTypedErrorAbsentContainer[struct {
+			Value errorNilMap `json:"value"`
+		}](t, `{"value":{"secret":"one"},"VALUE":null}`, wrap(object))
+	})
+	t.Run("folded_slice_decoder", func(t *testing.T) {
+		checkTypedErrorAbsentContainer[struct {
+			Value errorNilSlice `json:"value"`
+		}](t, `{"value":["one"],"VALUE":null}`, wrap(array))
+	})
+}
+
+func TestTypedErrorValuesRepresentedCollisions(t *testing.T) {
+	t.Run("parent_overwritten_by_null", func(t *testing.T) {
+		r := errorValueRequest[struct {
+			Child *errorLeaf `json:"child"`
+		}](t, `{"child":{"secret":"one"},"CHILD":null}`, nil)
+		errorValueCheck(t, r, 0, "json:one", reflect.TypeFor[errorSecret]())
+	})
+	t.Run("slice_overwritten_by_empty", func(t *testing.T) {
+		r := errorValueRequest[struct {
+			Children []errorLeaf `json:"children"`
+		}](t, `{"children":[{"secret":"one"}],"CHILDREN":[]}`, nil)
+		errorValueCheck(t, r, 0, "json:one", reflect.TypeFor[errorSecret]())
+	})
+	t.Run("decoded_empty_map", func(t *testing.T) {
+		r := errorValueRequest[errorMissingMap](t, `{"key":"long-enough"}`, func(s *huma.Schema) { n := 2; s.MinProperties = &n })
+		errorValueCheck(t, r, 0, map[string]any{}, reflect.TypeFor[errorMissingMap]())
+	})
 }
