@@ -980,6 +980,10 @@ func TestFeatures(t *testing.T) {
 					assert.Equal(t, "foo", input.Body.Name)
 					return nil, nil
 				})
+
+				content := api.OpenAPI().Paths["/body"].Put.RequestBody.Content
+				assert.Len(t, content, 1)
+				assert.NotNil(t, content["application/json"])
 			},
 			Method: http.MethodPut,
 			URL:    "/body",
