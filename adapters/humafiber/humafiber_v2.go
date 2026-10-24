@@ -243,6 +243,15 @@ func (a *fiberV2Adapter) Handle(op *huma.Operation, handler func(huma.Context)) 
 }
 
 func (a *fiberV2Adapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Host == "" {
+		// fasthttp rejects an HTTP/1.1 request without a Host, and autopatch's
+		// internal GET/PUT have none. Default it the way Fiber v3's Test does.
+		if r.URL != nil && r.URL.Host != "" {
+			r.Host = r.URL.Host
+		} else {
+			r.Host = "localhost"
+		}
+	}
 	resp, err := a.tester.Test(r)
 	if resp != nil && resp.Body != nil {
 		defer func() {
