@@ -300,7 +300,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 				// ignore them here.
 				return
 			}
-			if k == "Content-Type" || k == "Content-Length" {
+			if k == "Content-Type" || k == "Content-Length" || k == "Content-Encoding" {
 				// GET will be empty.
 				return
 			}
@@ -415,13 +415,17 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 			return
 		}
 		ctx.EachHeader(func(k, v string) {
-			if k == "Content-Type" || k == "Content-Length" {
+			// These describe the client's PATCH body, not the patched JSON.
+			if k == "Content-Type" || k == "Content-Length" || k == "Content-Encoding" {
 				return
 			}
 			putReq.Header.Add(k, v)
 		})
 
 		putReq.Header.Set("Content-Type", "application/json")
+		// Leave response compression to the outer PATCH middleware so the
+		// forwarded PUT response is not compressed twice.
+		putReq.Header.Set("Accept-Encoding", "")
 
 		h := putReq.Header
 		if h.Get("If-Match") == "" && h.Get("If-None-Match") == "" && h.Get("If-Unmodified-Since") == "" && h.Get("If-Modified-Since") == "" {
