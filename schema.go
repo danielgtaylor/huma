@@ -480,6 +480,12 @@ func convertType(fieldName string, t reflect.Type, v any) any {
 		return converted.Elem().Interface()
 	}
 
+	// JSON numbers decode as float64 and reflect's Convert silently wraps
+	// out-of-range values, e.g. 128 -> int8(-128).
+	if f, ok := v.(float64); ok && overflows(target, f) {
+		panic(fmt.Errorf("value %v overflows %v for field '%s': %w", f, t, fieldName, ErrSchemaInvalid))
+	}
+
 	// Directly convert equal underlying types, avoiding traversal.
 	// e.g., json.RawMessage -> []byte.
 	if tv.ConvertibleTo(t) {
@@ -521,6 +527,20 @@ func convertType(fieldName string, t reflect.Type, v any) any {
 	}
 
 	return converted.Interface()
+}
+
+// overflows reports whether f cannot be represented by numeric type t.
+func overflows(t reflect.Type, f float64) bool {
+	z := reflect.Zero(t)
+	switch t.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return f < -(1<<63) || f >= 1<<63 || z.OverflowInt(int64(f))
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return f < 0 || f >= 1<<64 || z.OverflowUint(uint64(f))
+	case reflect.Float32, reflect.Float64:
+		return z.OverflowFloat(f)
+	}
+	return false
 }
 
 func jsonTagValue(r Registry, fieldName string, s *Schema, value string) any {
