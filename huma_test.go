@@ -4523,6 +4523,35 @@ func TestPointerDefaultPanics(t *testing.T) {
 	})
 }
 
+func TestInvalidParamDefaultPanics(t *testing.T) {
+	// Bad defaults would otherwise fail per request, blaming the client.
+	_, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	assert.PanicsWithError(t, "value 128 overflows int8 for field 'Value': schema is invalid", func() {
+		huma.Register(app, huma.Operation{
+			Method: http.MethodGet,
+			Path:   "/query",
+		}, func(ctx context.Context, input *struct {
+			Value int8 `query:"value" default:"128"`
+		}) (*struct{}, error) {
+			return nil, nil
+		})
+	})
+
+	assert.PanicsWithError(t, "value 128 overflows int8 for field 'Value': schema is invalid", func() {
+		huma.Register(app, huma.Operation{
+			Method: http.MethodGet,
+			Path:   "/deep-overflow",
+		}, func(ctx context.Context, input *struct {
+			Test struct {
+				Value int8 `json:"value" default:"128"`
+			} `query:"test,deepObject"`
+		}) (*struct{}, error) {
+			return nil, nil
+		})
+	})
+}
+
 func TestConvenienceMethods(t *testing.T) {
 	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
 

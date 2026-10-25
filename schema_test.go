@@ -1112,6 +1112,50 @@ func TestSchema(t *testing.T) {
 			panics: `invalid number tag value 'true' for field 'Value[0]': schema is invalid`,
 		},
 		{
+			name: "panic-default-int-overflow",
+			input: struct {
+				Value int8 `json:"value" default:"128"`
+			}{},
+			panics: `value 128 overflows int8 for field 'Value': schema is invalid`,
+		},
+		{
+			name: "panic-default-uint-negative",
+			input: struct {
+				Value *uint16 `json:"value" default:"-1"`
+			}{},
+			panics: `value -1 overflows *uint16 for field 'Value': schema is invalid`,
+		},
+		{
+			name: "panic-default-float-overflow",
+			input: struct {
+				Value float32 `json:"value" default:"1e39"`
+			}{},
+			panics: `value 1e+39 overflows float32 for field 'Value': schema is invalid`,
+		},
+		{
+			name: "panic-default-array-item-overflow",
+			input: struct {
+				Value []int16 `json:"value" default:"[1,40000]"`
+			}{},
+			panics: `value 40000 overflows int16 for field 'Value': schema is invalid`,
+		},
+		{
+			name: "field-default-int-bounds",
+			input: struct {
+				Min int8  `json:"min" default:"-128"`
+				Max uint8 `json:"max" default:"255"`
+			}{},
+			expected: `{
+				"additionalProperties":false,
+				"properties":{
+					"min":{"type":"integer","format":"int32","default":-128},
+					"max":{"type":"integer","format":"int32","minimum":0,"default":255}
+				},
+				"required":["min","max"],
+				"type":"object"
+			}`,
+		},
+		{
 			name: "panic-json-object",
 			input: struct {
 				Value struct {
