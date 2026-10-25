@@ -69,6 +69,10 @@ func deref(t reflect.Type) reflect.Type {
 	return t
 }
 
+func isTextUnmarshaler(t reflect.Type) bool {
+	return t.Implements(textUnmarshalerType) || reflect.PointerTo(t).Implements(textUnmarshalerType)
+}
+
 // Discriminator object when request bodies or response payloads may be one of a
 // number of different schemas can be used to aid in serialization,
 // deserialization, and validation. The discriminator is a specific object in a
@@ -464,7 +468,7 @@ func convertType(fieldName string, t reflect.Type, v any) any {
 	}
 
 	target := deref(t)
-	if s, ok := v.(string); ok && (target.Implements(textUnmarshalerType) || reflect.PointerTo(target).Implements(textUnmarshalerType)) {
+	if s, ok := v.(string); ok && isTextUnmarshaler(target) {
 		converted := reflect.New(target)
 		if err := converted.Interface().(encoding.TextUnmarshaler).UnmarshalText([]byte(s)); err != nil {
 			panic(fmt.Errorf("unable to convert %q to %v for field '%s': %v: %w", s, t, fieldName, err, ErrSchemaInvalid))
@@ -496,21 +500,7 @@ func convertType(fieldName string, t reflect.Type, v any) any {
 			}
 
 			item = reflect.Indirect(item)
-			typ := deref(t.Elem())
-			if !item.Type().ConvertibleTo(typ) {
-				panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", item.Interface(), t.Elem(), fieldName, ErrSchemaInvalid))
-			}
-
-			value := item.Convert(typ)
-			if t.Elem().Kind() == reflect.Pointer {
-				// Special case: if the field is a pointer, we need to get a pointer
-				// to the converted value.
-				ptr := reflect.New(value.Type())
-				ptr.Elem().Set(value)
-				value = ptr
-			}
-
-			tmp = reflect.Append(tmp, value)
+			tmp = reflect.Append(tmp, reflect.ValueOf(convertType(fieldName, t.Elem(), item.Interface())))
 		}
 
 		return tmp.Interface()
@@ -573,7 +563,10 @@ func jsonTag(r Registry, f reflect.StructField, s *Schema, name string) any {
 		converted := convertType(f.Name, t, parsed)
 		// TextUnmarshaler types are documented as strings, so keep the tag text.
 		base := deref(t)
-		if _, ok := parsed.(string); ok && (base.Implements(textUnmarshalerType) || reflect.PointerTo(base).Implements(textUnmarshalerType)) {
+		if _, ok := parsed.(string); ok && isTextUnmarshaler(base) {
+			return parsed
+		}
+		if base.Kind() == reflect.Slice && isTextUnmarshaler(deref(base.Elem())) {
 			return parsed
 		}
 		return converted
