@@ -219,6 +219,14 @@ func TestDocsRenderers(t *testing.T) {
 		resp := api.Get("/docs")
 		assert.Equal(t, http.StatusOK, resp.Code)
 		assert.Contains(t, resp.Body.String(), "@scalar/api-reference")
+		assert.Contains(t, resp.Body.String(), "@scalar/api-reference@1.66.1")
+
+		csp := resp.Header().Get("Content-Security-Policy")
+		assert.NotContains(t, csp, "unsafe-eval")
+		assert.Contains(t, csp, "style-src 'unsafe-inline'")
+		assert.Contains(t, csp, "font-src https://fonts.scalar.com")
+		assert.Regexp(t, `script-src [^;]+ 'sha256-[A-Za-z0-9+/]+=*'`, csp)
+		assert.NotContains(t, csp, "'nonce-")
 	})
 
 	t.Run("ScalarRendererConfig", func(t *testing.T) {
@@ -238,9 +246,51 @@ func TestDocsRenderers(t *testing.T) {
 
 		resp := api.Get("/docs")
 		assert.Equal(t, http.StatusOK, resp.Code)
-		assert.Contains(t, resp.Body.String(), `data-configuration="`)
-		assert.Contains(t, resp.Body.String(), `&#34;theme&#34;:&#34;mars&#34;`)
-		assert.Contains(t, resp.Body.String(), `&#34;hideModels&#34;:true`)
+		assert.Contains(t, resp.Body.String(), `Scalar.createApiReference('#app', `)
+		assert.Contains(t, resp.Body.String(), `"theme":"mars"`)
+		assert.Contains(t, resp.Body.String(), `"hideModels":true`)
+		assert.Contains(t, resp.Body.String(), `"url":"/openapi.json"`)
+	})
+
+	t.Run("ScalarRendererMultiDocument", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+			},
+			DocsPath:     "/docs",
+			DocsRenderer: huma.DocsRendererScalar,
+			DocsRendererConfig: map[string]any{
+				"sources": []map[string]any{
+					{"url": "/openapi.json", "title": "Main"},
+					{"url": "/other/openapi.json", "title": "Other"},
+				},
+			},
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		body := resp.Body.String()
+		assert.Contains(t, body, `"sources":[`)
+		assert.Contains(t, body, `"title":"Other"`)
+		assert.NotContains(t, body, `"url":"/openapi.json","sources"`)
+		assert.NotRegexp(t, `\{"sources":\[.*\],"url"`, body)
+	})
+
+	t.Run("ScalarRendererConfigNotObject", func(t *testing.T) {
+		assert.Panics(t, func() {
+			humatest.New(t, huma.Config{
+				OpenAPI: &huma.OpenAPI{
+					Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+				},
+				DocsPath:           "/docs",
+				DocsRenderer:       huma.DocsRendererScalar,
+				DocsRendererConfig: []string{"not", "an", "object"},
+				OpenAPIPath:        "/openapi",
+				Formats:            huma.DefaultFormats,
+			})
+		})
 	})
 
 	t.Run("ScalarRendererConfigInvalid", func(t *testing.T) {
@@ -256,6 +306,146 @@ func TestDocsRenderers(t *testing.T) {
 				Formats:            huma.DefaultFormats,
 			})
 		})
+	})
+
+	t.Run("ScalarCustomScript", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+			},
+			DocsPath:     "/docs",
+			DocsRenderer: huma.DocsRendererScalar,
+			DocsScalar: huma.ScalarDocsConfig{
+				ScriptURL:       "https://cdn.example.com/scalar/standalone.js",
+				ScriptIntegrity: "sha384-custom",
+			},
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), `src="https://cdn.example.com/scalar/standalone.js"`)
+		assert.Contains(t, resp.Body.String(), `integrity="sha384-custom"`)
+		assert.NotContains(t, resp.Body.String(), "@scalar/api-reference")
+		assert.Contains(t, resp.Header().Get("Content-Security-Policy"), "script-src https://cdn.example.com/scalar/standalone.js")
+	})
+
+	t.Run("ScalarCustomScriptNoIntegrity", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+			},
+			DocsPath:     "/docs",
+			DocsRenderer: huma.DocsRendererScalar,
+			DocsScalar: huma.ScalarDocsConfig{
+				ScriptURL: "https://cdn.example.com/scalar/standalone.js",
+			},
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Contains(t, resp.Body.String(), `src="https://cdn.example.com/scalar/standalone.js"`)
+		assert.NotContains(t, resp.Body.String(), "integrity=")
+	})
+
+	t.Run("ScalarCustomFontSrc", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+			},
+			DocsPath:     "/docs",
+			DocsRenderer: huma.DocsRendererScalar,
+			DocsScalar:   huma.ScalarDocsConfig{FontSrc: "'self' data:"},
+			OpenAPIPath:  "/openapi",
+			Formats:      huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		csp := resp.Header().Get("Content-Security-Policy")
+		assert.Contains(t, csp, "font-src 'self' data:")
+		assert.NotContains(t, csp, "fonts.scalar.com")
+	})
+
+	t.Run("ScalarInvalidFontSrc", func(t *testing.T) {
+		assert.Panics(t, func() {
+			humatest.New(t, huma.Config{
+				OpenAPI: &huma.OpenAPI{
+					Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+				},
+				DocsPath:     "/docs",
+				DocsRenderer: huma.DocsRendererScalar,
+				DocsScalar:   huma.ScalarDocsConfig{FontSrc: "https://fonts.example.com; script-src 'unsafe-eval'"},
+				OpenAPIPath:  "/openapi",
+				Formats:      huma.DefaultFormats,
+			})
+		})
+	})
+
+	t.Run("ScalarInvalidScriptURL", func(t *testing.T) {
+		assert.Panics(t, func() {
+			humatest.New(t, huma.Config{
+				OpenAPI: &huma.OpenAPI{
+					Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+				},
+				DocsPath:     "/docs",
+				DocsRenderer: huma.DocsRendererScalar,
+				DocsScalar:   huma.ScalarDocsConfig{ScriptURL: "https://cdn.example.com/a.js; script-src 'unsafe-eval'"},
+				OpenAPIPath:  "/openapi",
+				Formats:      huma.DefaultFormats,
+			})
+		})
+	})
+
+	t.Run("ScalarScriptURLComma", func(t *testing.T) {
+		assert.Panics(t, func() {
+			humatest.New(t, huma.Config{
+				OpenAPI: &huma.OpenAPI{
+					Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+				},
+				DocsPath:     "/docs",
+				DocsRenderer: huma.DocsRendererScalar,
+				DocsScalar:   huma.ScalarDocsConfig{ScriptURL: "https://cdn.example.com/a.js,script-src-elem"},
+				OpenAPIPath:  "/openapi",
+				Formats:      huma.DefaultFormats,
+			})
+		})
+	})
+
+	t.Run("ScalarFontSrcComma", func(t *testing.T) {
+		assert.Panics(t, func() {
+			humatest.New(t, huma.Config{
+				OpenAPI: &huma.OpenAPI{
+					Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+				},
+				DocsPath:     "/docs",
+				DocsRenderer: huma.DocsRendererScalar,
+				DocsScalar:   huma.ScalarDocsConfig{FontSrc: "https://fonts.example.com,default-src *"},
+				OpenAPIPath:  "/openapi",
+				Formats:      huma.DefaultFormats,
+			})
+		})
+	})
+
+	t.Run("ScalarTitleEscaped", func(t *testing.T) {
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: `Test </title><script>alert(1)</script>`, Version: "1.0.0"},
+			},
+			DocsPath:     "/docs",
+			DocsRenderer: huma.DocsRendererScalar,
+			OpenAPIPath:  "/openapi",
+			Formats:      huma.DefaultFormats,
+		})
+
+		resp := api.Get("/docs")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		body := resp.Body.String()
+		assert.NotContains(t, body, "<title>Test </title><script>alert(1)</script>")
+		assert.Contains(t, body, "&lt;/title&gt;&lt;script&gt;alert(1)&lt;/script&gt;")
 	})
 
 	t.Run("SwaggerUIRenderer", func(t *testing.T) {
