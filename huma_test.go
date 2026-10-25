@@ -3685,6 +3685,8 @@ func TestQueryArrayJSONDefaults(t *testing.T) {
 		Strings  []string `query:"strings" default:"[\"a\",\"b\"]"`
 		Exploded []int    `query:"exploded,explode" default:"[3,4]"`
 		Header   []int    `header:"X-Ints" default:"[5]"`
+		Cookie   []int    `cookie:"ints" default:"[6,7]"`
+		Numbers  []int    `query:"numbers" default:" [1e2, 2.0]"`
 		Scalar   string   `query:"scalar" default:"[1,2]"`
 	}
 
@@ -3701,6 +3703,8 @@ func TestQueryArrayJSONDefaults(t *testing.T) {
 	assert.Equal(t, []string{"a", "b"}, got.Strings)
 	assert.Equal(t, []int{3, 4}, got.Exploded)
 	assert.Equal(t, []int{5}, got.Header)
+	assert.Equal(t, []int{6, 7}, got.Cookie)
+	assert.Equal(t, []int{100, 2}, got.Numbers)
 	assert.Equal(t, "[1,2]", got.Scalar)
 
 	resp = api.Get("/defaults?ints=7&exploded=8")

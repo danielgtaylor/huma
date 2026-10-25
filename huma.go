@@ -171,19 +171,6 @@ func parseParamLocation(f reflect.StructField, registry Registry) (*paramLocatio
 
 	if def := f.Tag.Get("default"); def != "" {
 		pfi.Default = def
-		if pfi.Type.Kind() == reflect.Slice && strings.HasPrefix(def, "[") {
-			// Array defaults may be JSON, but values are parsed comma-separated.
-			var items []json.RawMessage
-			if err := json.Unmarshal([]byte(def), &items); err == nil {
-				parts := make([]string, len(items))
-				for i, item := range items {
-					if json.Unmarshal(item, &parts[i]) != nil {
-						parts[i] = string(item)
-					}
-				}
-				pfi.Default = strings.Join(parts, ",")
-			}
-		}
 	}
 
 	result := &paramLocation{pfi: pfi}
@@ -286,6 +273,19 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 
 		pfi := pl.pfi
 		pfi.Schema = SchemaFromField(registry, f, "")
+
+		if pfi.Default != "" && pfi.Schema != nil && pfi.Schema.Type == TypeArray {
+			// parseInto splits defaults on commas, so rebuild them from the parsed schema default.
+			d := reflect.ValueOf(pfi.Schema.Default)
+			parts := make([]string, d.Len())
+			for i := range parts {
+				b, _ := json.Marshal(d.Index(i).Interface())
+				if json.Unmarshal(b, &parts[i]) != nil {
+					parts[i] = string(b)
+				}
+			}
+			pfi.Default = strings.Join(parts, ",")
+		}
 
 		// While discouraged, make it possible to override `required` for non-path
 		// params via the struct tag. Path params are always required per the
