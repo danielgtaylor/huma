@@ -1148,10 +1148,88 @@ func TestSchema(t *testing.T) {
 			expected: `{
 				"additionalProperties":false,
 				"properties":{
-					"min":{"type":"integer","format":"int32","default":-128},
-					"max":{"type":"integer","format":"int32","minimum":0,"default":255}
+					"min":{"type":"integer","format":"int32","minimum":-128,"maximum":127,"default":-128},
+					"max":{"type":"integer","format":"int32","minimum":0,"maximum":255,"default":255}
 				},
 				"required":["min","max"],
+				"type":"object"
+			}`,
+		},
+		{
+			name: "field-small-int-bounds",
+			input: struct {
+				I16    int16  `json:"i16"`
+				U16    uint16 `json:"u16"`
+				Tagged int8   `json:"tagged" minimum:"0" maximum:"100"`
+			}{},
+			expected: `{
+				"additionalProperties":false,
+				"properties":{
+					"i16":{"type":"integer","format":"int32","minimum":-32768,"maximum":32767},
+					"u16":{"type":"integer","format":"int32","minimum":0,"maximum":65535},
+					"tagged":{"type":"integer","format":"int32","minimum":0,"maximum":100}
+				},
+				"required":["i16","u16","tagged"],
+				"type":"object"
+			}`,
+		},
+		{
+			name: "field-int-bound-tags-at-limits",
+			input: struct {
+				I32 int32  `json:"i32" maximum:"8"`
+				I8  int8   `json:"i8" exclusiveMinimum:"-129" exclusiveMaximum:"128"`
+				I64 int64  `json:"i64" maximum:"9223372036854775807"`
+				U64 uint64 `json:"u64" maximum:"18446744073709551615"`
+			}{},
+			expected: `{
+				"additionalProperties":false,
+				"properties":{
+					"i32":{"type":"integer","format":"int32","maximum":8},
+					"i8":{"type":"integer","format":"int32","minimum":-128,"maximum":127,"exclusiveMinimum":-129,"exclusiveMaximum":128},
+					"i64":{"type":"integer","format":"int64","maximum":9223372036854775807},
+					"u64":{"type":"integer","format":"int64","minimum":0,"maximum":18446744073709551615}
+				},
+				"required":["i32","i8","i64","u64"],
+				"type":"object"
+			}`,
+		},
+		{
+			name: "panic-maximum-out-of-range",
+			input: struct {
+				Value int8 `json:"value" maximum:"500"`
+			}{},
+			panics: `maximum 500 for field 'Value' is outside the range of int8: schema is invalid`,
+		},
+		{
+			name: "panic-minimum-negative-uint",
+			input: struct {
+				Value uint `json:"value" minimum:"-1"`
+			}{},
+			panics: `minimum -1 for field 'Value' is outside the range of uint: schema is invalid`,
+		},
+		{
+			name: "panic-exclusive-maximum-out-of-range",
+			input: struct {
+				Value uint8 `json:"value" exclusiveMaximum:"257"`
+			}{},
+			panics: `exclusiveMaximum 257 for field 'Value' is outside the range of uint8: schema is invalid`,
+		},
+		{
+			name: "panic-array-item-bound-out-of-range",
+			input: struct {
+				Value []int16 `json:"value" maximum:"40000"`
+			}{},
+			panics: `maximum 40000 for field 'Value' is outside the range of int16: schema is invalid`,
+		},
+		{
+			name: "field-non-integer-schema-skips-range-check",
+			input: struct {
+				Value TextLevel `json:"value" minimum:"-1"`
+			}{},
+			expected: `{
+				"additionalProperties":false,
+				"properties":{"value":{"type":"string","minimum":-1}},
+				"required":["value"],
 				"type":"object"
 			}`,
 		},
@@ -1501,6 +1579,13 @@ func (d *MyDate) UnmarshalText(data []byte) error {
 }
 
 var _ encoding.TextUnmarshaler = (*MyDate)(nil)
+
+// TextLevel is a uint8 on the wire as a string, so integer range checks skip it.
+type TextLevel uint8
+
+func (l *TextLevel) UnmarshalText(data []byte) error {
+	return nil
+}
 
 func TestCustomDateType(t *testing.T) {
 	type O struct {

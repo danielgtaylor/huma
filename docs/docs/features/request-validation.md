@@ -176,6 +176,16 @@ type MyInput struct {
 
 If you had used `bool` instead of `*bool` then the zero value of `false` would get overridden by the default value of `true`, even if false is explicitly sent by the client.
 
+### Integer Ranges
+
+`int8`, `int16`, `uint8` and `uint16` fields get a `minimum` and `maximum` matching the Go type, since their `int32` format would otherwise allow larger values. Your own tags override these, but must stay within the type's range. A `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum` or `default` that the type can't hold panics at registration.
+
+```go title="code.go"
+Level   uint8 `json:"level"`                // minimum: 0, maximum: 255
+Percent uint8 `json:"percent" maximum:"100"` // minimum: 0, maximum: 100
+Bad     int8  `json:"bad" maximum:"500"`     // panics: outside the range of int8
+```
+
 ### Read and Write Only
 
 Note that the `readOnly` and `writeOnly` validations are not enforced by Huma and the values in those fields are not modified by Huma. They are purely for documentation purposes and allow you to re-use structs for both inputs and outputs.
