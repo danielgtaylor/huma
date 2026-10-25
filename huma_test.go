@@ -881,6 +881,32 @@ func TestFeatures(t *testing.T) {
 			URL:    "/test?test[int]=1&test[uint]=12&test[float]=123.0&test[bool]=true&test[string]=foo&test[any]=foo&test2[foo]=a",
 		},
 		{
+			Name: "param-numeric-overflow",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodGet,
+					Path:   "/test/{uint}",
+				}, func(ctx context.Context, i *struct {
+					Uint  uint8           `path:"uint"`
+					Int   int8            `query:"int"`
+					Float float32         `query:"float"`
+					Map   map[string]int8 `query:"map,deepObject"`
+				}) (*struct{}, error) {
+					t.Fatal("handler should not be called")
+					return nil, nil
+				})
+			},
+			Method: http.MethodGet,
+			URL:    "/test/256?int=128&float=1e39&map[a]=-129",
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), `"location":"path.uint"`)
+				assert.Contains(t, resp.Body.String(), `"location":"query.int"`)
+				assert.Contains(t, resp.Body.String(), `"location":"query.float"`)
+				assert.Contains(t, resp.Body.String(), `"location":"query.map.a"`)
+			},
+		},
+		{
 			Name: "param-deepObject-map-required",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
@@ -3026,10 +3052,10 @@ Content-Type: text/plain
 			},
 			Method: http.MethodGet,
 			URL:    "/transform",
-Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
-	assert.Equal(t, http.StatusOK, resp.Code)
-	assert.JSONEq(t, `null`, resp.Body.String())
-},
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, resp.Code)
+				assert.JSONEq(t, `null`, resp.Body.String())
+			},
 		},
 		{
 			Name: "schema-url-from-x-forwarded-host",
