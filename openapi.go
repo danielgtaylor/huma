@@ -113,10 +113,9 @@ func unmarshalJSON(data []byte, fields map[string]any, extensions *map[string]an
 			continue
 		}
 		if strings.HasPrefix(k, "x-") {
+			// Can't fail as v was already parsed as valid JSON above.
 			var ext any
-			if err := json.Unmarshal(v, &ext); err != nil {
-				return fmt.Errorf("%s: %w", k, err)
-			}
+			json.Unmarshal(v, &ext)
 			if *extensions == nil {
 				*extensions = map[string]any{}
 			}

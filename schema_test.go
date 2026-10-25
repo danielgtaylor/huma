@@ -1782,7 +1782,8 @@ func TestSchemaRoundTrip(t *testing.T) {
 		"allOf": [{"type": "string"}],
 		"not": {"type": "integer"},
 		"discriminator": {"propertyName": "a", "mapping": {"a": "#/components/schemas/A"}},
-		"x-ext": {"nested": [1]}
+		"x-ext": {"nested": [1]},
+		"x-other": true
 	}`
 	var full huma.Schema
 	require.NoError(t, json.Unmarshal([]byte(all), &full))
@@ -1802,6 +1803,10 @@ func TestSchemaRoundTrip(t *testing.T) {
 	assert.Nil(t, addlNull.AdditionalProperties)
 
 	for _, bad := range []string{
+		`[]`,
+		`{"title": 1}`,
+		`{"type": 1}`,
+		`{"additionalProperties": 1}`,
 		`{"type": ["string", "integer"]}`,
 		`{"type": ["null"]}`,
 		`{"pattern": "("}`,
