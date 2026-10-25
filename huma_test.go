@@ -1275,7 +1275,7 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
-			Name: "request-body-example-promoted-to-media-type",
+			Name: "body-example-promoted-to-media-type",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
 					Method: http.MethodPut,
@@ -1284,11 +1284,16 @@ func TestFeatures(t *testing.T) {
 					Body struct {
 						Name string `json:"name"`
 					} `example:"{\"name\": \"world\"}"`
-				}) (*struct{}, error) {
+				}) (*struct {
+					Body struct {
+						ID string `json:"id"`
+					} `example:"{\"id\": \"abc\"}"`
+				}, error) {
 					return nil, nil
 				})
-				content := api.OpenAPI().Paths["/body"].Put.RequestBody.Content["application/json"]
-				assert.Equal(t, map[string]any{"name": "world"}, content.Example)
+				op := api.OpenAPI().Paths["/body"].Put
+				assert.Equal(t, map[string]any{"name": "world"}, op.RequestBody.Content["application/json"].Example)
+				assert.Equal(t, map[string]any{"id": "abc"}, op.Responses["200"].Content["application/json"].Example)
 			},
 			Method: http.MethodPut,
 			URL:    "/body",
