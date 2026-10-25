@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"context"
 	"encoding"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -272,6 +273,19 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 
 		pfi := pl.pfi
 		pfi.Schema = SchemaFromField(registry, f, "")
+
+		if pfi.Default != "" && pfi.Schema != nil && pfi.Schema.Type == TypeArray {
+			// parseInto splits defaults on commas, so rebuild them from the parsed schema default.
+			d := reflect.ValueOf(pfi.Schema.Default)
+			parts := make([]string, d.Len())
+			for i := range parts {
+				b, _ := json.Marshal(d.Index(i).Interface())
+				if json.Unmarshal(b, &parts[i]) != nil {
+					parts[i] = string(b)
+				}
+			}
+			pfi.Default = strings.Join(parts, ",")
+		}
 
 		// While discouraged, make it possible to override `required` for non-path
 		// params via the struct tag. Path params are always required per the
