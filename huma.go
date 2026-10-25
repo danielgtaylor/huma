@@ -1558,6 +1558,16 @@ func setRequestBodyFromBody(op *Operation, registry Registry, fBody reflect.Stru
 		}
 		s := SchemaFromField(registry, fBody, hint)
 		op.RequestBody.Content[contentType].Schema = s
+		setExampleFromRef(op.RequestBody.Content[contentType], s)
+	}
+}
+
+// setExampleFromRef copies the Body field's `example` tag onto the media type,
+// as many tools ignore examples beside a `$ref`. A `$ref` wrapper's examples
+// can only come from that tag.
+func setExampleFromRef(mt *MediaType, s *Schema) {
+	if s != nil && s.Ref != "" && len(s.Examples) > 0 && mt.Example == nil && len(mt.Examples) == 0 {
+		mt.Example = s.Examples[0]
 	}
 }
 
@@ -1713,6 +1723,7 @@ func processOutputType(outputType reflect.Type, op *Operation, registry Registry
 			}
 			if op.Responses[statusStr].Content[contentType] != nil && op.Responses[statusStr].Content[contentType].Schema == nil {
 				op.Responses[statusStr].Content[contentType].Schema = outSchema
+				setExampleFromRef(op.Responses[statusStr].Content[contentType], outSchema)
 			}
 		}
 	}
