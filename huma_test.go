@@ -871,25 +871,29 @@ func TestFeatures(t *testing.T) {
 			URL:    "/test?test[int]=1&test[uint]=12&test[float]=123.0&test[bool]=true&test[string]=foo&test[any]=foo&test2[foo]=a",
 		},
 		{
-			Name: "param-deepObject-default-overflow",
+			Name: "param-numeric-overflow",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
 					Method: http.MethodGet,
-					Path:   "/test",
+					Path:   "/test/{uint}",
 				}, func(ctx context.Context, i *struct {
-					Test struct {
-						Name  string `json:"name"`
-						Value int8   `json:"value" default:"128"`
-					} `query:"test,deepObject"`
+					Uint  uint8           `path:"uint"`
+					Int   int8            `query:"int"`
+					Float float32         `query:"float"`
+					Map   map[string]int8 `query:"map,deepObject"`
 				}) (*struct{}, error) {
+					t.Fatal("handler should not be called")
 					return nil, nil
 				})
 			},
 			Method: http.MethodGet,
-			URL:    "/test?test[name]=foo",
+			URL:    "/test/256?int=128&float=1e39&map[a]=-129",
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
-				assert.Contains(t, resp.Body.String(), "invalid integer")
+				assert.Contains(t, resp.Body.String(), `"location":"path.uint"`)
+				assert.Contains(t, resp.Body.String(), `"location":"query.int"`)
+				assert.Contains(t, resp.Body.String(), `"location":"query.float"`)
+				assert.Contains(t, resp.Body.String(), `"location":"query.map.a"`)
 			},
 		},
 		{
@@ -4996,38 +5000,4 @@ func TestWriteResponseTransformErrorStatus(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, res.StatusCode)
 	assert.Contains(t, string(body), "error transforming response")
-}
-
-func TestInputOverflowIsRejected(t *testing.T) {
-	mux, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
-
-	var handlerCalled bool
-	var gotVal int8
-
-	huma.Register(api, huma.Operation{
-		Method: http.MethodGet,
-		Path:   "/number",
-	}, func(_ context.Context, input *struct {
-		Value int8 `query:"value"`
-	}) (*struct{}, error) {
-		handlerCalled = true
-		gotVal = input.Value
-		return &struct{}{}, nil
-	})
-
-	req := httptest.NewRequest(
-		http.MethodGet,
-		"/number?value=128",
-		nil,
-	)
-	res := httptest.NewRecorder()
-	mux.ServeHTTP(res, req)
-
-	if handlerCalled {
-		t.Fatalf("handler was called with value=%d, 128 is not representable as int8", gotVal)
-	}
-
-	if got := res.Code; got < 400 || got >= 500 {
-		t.Fatalf("expected a 4xx response status, got %d", got)
-	}
 }
