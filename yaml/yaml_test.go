@@ -17,6 +17,10 @@ func TestConvert(t *testing.T) {
 		src  string
 		want string
 		err  string
+		// Partial output and error text for truncated input differ between
+		// encoding/json v1 and the jsonv2-backed decoder in Go 1.27+, so only
+		// the error is checked.
+		truncated bool
 	}{
 		{
 			name: "null",
@@ -87,7 +91,7 @@ func TestConvert(t *testing.T) {
 				`"!"`, `"\""`, `"#"`, `$`, `"%"`, `"&"`, `"'"`, `(`, `)`, `"*"`, `+`, `","`,
 				`"-"`, `--`, `"---"`, `----`, `"- "`, `"--- -"`, `"- ---"`, `"- --- -"`, `-- --`, `?-`, `-?`, `?---`, `---?`, `"--- ?"`,
 				`.`, `..`, `"..."`, `....`, `"... ."`, `. ...`, `. ... .`, `.. ..`, `?...`, `...?`, `"... ?"`,
-				`.`, `/`, `":"`, `;`, `<`, `=`, `">"`, `"?"`, `"["`, `\`, `"]"`, `^`, `_`, `"{"`, `"|"`, `"}"`, `"~"`, `"@"`, "\"`\"",
+				`.`, `/`, `":"`, `;`, `<`, `"="`, `">"`, `"?"`, `"["`, `\`, `"]"`, `^`, `_`, `"{"`, `"|"`, `"}"`, `"~"`, `"@"`, "\"`\"",
 				`"%TAG"`, `"!!str"`, `"!<>"`, `"&anchor"`, `"*anchor"`, `https://example.com/?q=text#fragment`, `"%!/bin/sh"`,
 				`"- ."`, `. -`, `-.`, `.-`, `"? ."`, `. ?`, `?.`, `.?`, `"?\t."`, `": ."`, `". :"`, `":\t."`, `. :?`, `"?:"`, `:?`, `. ? :.`, `"[]"`, `"{}"`,
 				`". #"`, `"# ."`, `.#.`, `". #."`, `.# .`, `". # ."`, `. ! " $ % & ' ( ) * + , - / ; < = > ? [ \ ] ^ _ { | } ~`,
@@ -101,13 +105,20 @@ func TestConvert(t *testing.T) {
 		{
 			name: "quote and escape special characters",
 			src: "\" \\\\ \" \"\\u001F\" \"\\u001F\\n\" \"\u007F\" \"\u007F\\n\" \"\u0080\" \".\u0089.\" \"\u009F\" \"\u009F\\n\"" +
-				"\"\uFDCF\" \"\uFDD0\uFDD1\uFDD2\uFDD3\uFDD4\uFDD5\uFDD6\uFDD7\uFDD8\uFDD9\uFDDA\uFDDB\uFDDC\uFDDD\uFDDE\uFDDF\uFDE0\uFDEF\"" +
+				"\"\u2027\" \"\u2028\" \".\u2028.\" \"\u2028\\n\" \"\u2029\" \".\u2029.\" \"\u2029\\n\" \"\u202A\"" +
+				" \"\uFDCF\" \"\uFDD0\uFDD1\uFDD2\uFDD3\uFDD4\uFDD5\uFDD6\uFDD7\uFDD8\uFDD9\uFDDA\uFDDB\uFDDC\uFDDD\uFDDE\uFDDF\uFDE0\uFDEF\"" +
 				"\"\uFDF0\" \"\uFEFE\" \"\uFEFF\" \"\uFFFD\" \"\uFFFE\" \"\uFFFF\" \"\uFFFF\\n\"",
 			want: join([]string{
 				`" \\ "`, `"\x1F"`, `"\x1F\n"`, `"\x7F"`, `"\x7F\n"`, `"\x80"`, `".\x89."`, `"\x9F"`, `"\x9F\n"`,
+				"\u2027", `"\u2028"`, `".\u2028."`, `"\u2028\n"`, `"\u2029"`, `".\u2029."`, `"\u2029\n"`, "\u202A",
 				"\uFDCF", `"\uFDD0\uFDD1\uFDD2\uFDD3\uFDD4\uFDD5\uFDD6\uFDD7\uFDD8\uFDD9\uFDDA\uFDDB\uFDDC\uFDDD\uFDDE\uFDDF\uFDE0\uFDEF"`,
 				"\uFDF0", "\uFEFE", `"\uFEFF"`, "\uFFFD", `"\uFFFE"`, `"\uFFFF"`, `"\uFFFF\n"`,
 			}),
+		},
+		{
+			name: "quote merge and default value key",
+			src:  `"<<" "=" "<<<" "==" "<< " "= "`,
+			want: join([]string{`"<<"`, `"="`, `<<<`, `==`, `"<< "`, `"= "`}),
 		},
 		{
 			name: "empty object",
@@ -149,10 +160,10 @@ baz: {}
 			want: join([]string{"{}", "foo: 128", "{}"}),
 		},
 		{
-			name: "unclosed object with no entries",
-			src:  "{",
-			want: "{}\n",
-			err:  "unexpected EOF",
+			name:      "unclosed object with no entries",
+			src:       "{",
+			err:       "unexpected",
+			truncated: true,
 		},
 		{
 			name: "unclosed object after object key",
@@ -161,10 +172,10 @@ baz: {}
 			err:  "unexpected EOF",
 		},
 		{
-			name: "unclosed object after object value",
-			src:  `{"foo":128`,
-			want: "foo: 128\n",
-			err:  "unexpected EOF",
+			name:      "unclosed object after object value",
+			src:       `{"foo":128`,
+			err:       "unexpected",
+			truncated: true,
 		},
 		{
 			name: "empty array",
@@ -238,16 +249,16 @@ bar:
 			})(),
 		},
 		{
-			name: "unclosed empty array",
-			src:  "[",
-			want: "[]\n",
-			err:  "unexpected EOF",
+			name:      "unclosed empty array",
+			src:       "[",
+			err:       "unexpected",
+			truncated: true,
 		},
 		{
-			name: "unclosed array after an element",
-			src:  "[1",
-			want: "- 1\n",
-			err:  "unexpected EOF",
+			name:      "unclosed array after an element",
+			src:       "[1",
+			err:       "unexpected",
+			truncated: true,
 		},
 		{
 			name: "unexpected closing bracket",
@@ -315,7 +326,7 @@ w: |-
 		t.Run(tc.name, func(t *testing.T) {
 			var sb strings.Builder
 			err := json2yaml.Convert(&sb, strings.NewReader(tc.src))
-			if got, want := diff(sb.String(), tc.want); got != want {
+			if got, want := diff(sb.String(), tc.want); !tc.truncated && got != want {
 				t.Fatalf("should write\n  %q\nbut got\n  %q", want, got)
 			}
 			if tc.err == "" {
@@ -336,7 +347,7 @@ w: |-
 
 type errWriter struct{}
 
-func (w errWriter) Write(bs []byte) (int, error) {
+func (errWriter) Write(bs []byte) (int, error) {
 	return 0, errors.New(fmt.Sprint(len(bs)))
 }
 
@@ -403,11 +414,11 @@ func diff(xs, ys string) (string, string) {
 	}
 	for {
 		i := strings.IndexByte(xs, '\n')
-		before, after, ok := strings.Cut(ys, "\n")
-		if i < 0 || !ok || xs[:i] != before {
+		j := strings.IndexByte(ys, '\n')
+		if i < 0 || j < 0 || xs[:i] != ys[:j] {
 			break
 		}
-		xs, ys = xs[i+1:], after
+		xs, ys = xs[i+1:], ys[j+1:]
 	}
 	for {
 		i := strings.LastIndexByte(xs, '\n')
