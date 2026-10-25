@@ -2,7 +2,6 @@ package huma
 
 import (
 	"fmt"
-	"io"
 	"mime/multipart"
 	"net/http"
 	"reflect"
@@ -48,6 +47,7 @@ func (v MimeTypeValidator) Validate(fh *multipart.FileHeader, location string) (
 	if err != nil {
 		return "", &ErrorDetail{Message: "Failed to open file", Location: location}
 	}
+	defer file.Close()
 
 	mimeType := fh.Header.Get("Content-Type")
 	if mimeType == "" {
@@ -55,7 +55,6 @@ func (v MimeTypeValidator) Validate(fh *multipart.FileHeader, location string) (
 		if _, err = file.Read(buffer); err != nil {
 			return "", &ErrorDetail{Message: "Failed to infer file media type", Location: location}
 		}
-		file.Seek(int64(0), io.SeekStart)
 		mimeType = http.DetectContentType(buffer)
 	}
 	accept := false
@@ -92,11 +91,11 @@ func (v MimeTypeValidator) Validate(fh *multipart.FileHeader, location string) (
 // Decode decodes multipart.Form data into *T, returning []*ErrorDetail if any
 // Schema is used to check for validation constraints
 func (m *MultipartFormFiles[T]) Decode(opMediaType *MediaType, formValueParser func(val reflect.Value)) []error {
-	var (
-		dataType = reflect.TypeFor[T]()
-		value    = reflect.New(dataType)
-		errors   []error
-	)
+	var dataType = reflect.TypeFor[T]()
+	var errors []error
+	var opened []FormFile
+	var value = reflect.New(dataType)
+
 	for i := 0; i < dataType.NumField(); i++ {
 		field := value.Elem().Field(i)
 		structField := dataType.Field(i)
@@ -112,9 +111,11 @@ func (m *MultipartFormFiles[T]) Decode(opMediaType *MediaType, formValueParser f
 				errors = append(errors, err)
 				continue
 			}
+			opened = append(opened, file)
 			field.Set(reflect.ValueOf(file))
 		case field.Type() == reflect.TypeFor[[]FormFile]():
 			files, errs := readMultipleFiles(fileHeaders, key, opMediaType)
+			opened = append(opened, files...)
 			if errs != nil {
 				errors = append(errors, errs...)
 				continue
@@ -122,8 +123,19 @@ func (m *MultipartFormFiles[T]) Decode(opMediaType *MediaType, formValueParser f
 			field.Set(reflect.ValueOf(files))
 		}
 	}
+
+	// The handler never runs on a decode error, so nothing else can close these.
+	if errors != nil {
+		for _, f := range opened {
+			if f.File != nil {
+				f.Close()
+			}
+		}
+	}
+
 	formValueParser(value)
 	m.data = value.Interface().(*T)
+
 	return errors
 }
 
@@ -172,13 +184,13 @@ func readFile(
 	location string,
 	validator MimeTypeValidator,
 ) (FormFile, *ErrorDetail) {
-	f, err := fh.Open()
-	if err != nil {
-		return FormFile{}, &ErrorDetail{Message: "Failed to open file", Location: location}
-	}
 	contentType, validationErr := validator.Validate(fh, location)
 	if validationErr != nil {
 		return FormFile{}, validationErr
+	}
+	f, err := fh.Open()
+	if err != nil {
+		return FormFile{}, &ErrorDetail{Message: "Failed to open file", Location: location}
 	}
 	return FormFile{
 		File:        f,
