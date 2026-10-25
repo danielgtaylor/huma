@@ -7,7 +7,7 @@ require (
 	github.com/evanphx/json-patch/v5 v5.9.11
 	github.com/fxamacker/cbor/v2 v2.9.2
 	github.com/gin-gonic/gin v1.12.0
-	github.com/go-chi/chi/v5 v5.3.1
+	github.com/go-chi/chi/v5 v5.4.0
 	github.com/gofiber/fiber/v2 v2.52.14
 	github.com/gofiber/fiber/v3 v3.4.0
 	github.com/google/uuid v1.6.0
