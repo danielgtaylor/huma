@@ -1712,6 +1712,109 @@ func TestMarshalDiscriminator(t *testing.T) {
 	}`, string(b))
 }
 
+func TestSchemaRoundTrip(t *testing.T) {
+	in := `{
+		"type": "object",
+		"x-custom": "yes",
+		"additionalProperties": false,
+		"required": ["name"],
+		"properties": {
+			"name": {"type": ["string", "null"], "minLength": 2, "pattern": "^a"},
+			"tags": {"type": "object", "additionalProperties": {"type": "integer"}}
+		}
+	}`
+
+	var s huma.Schema
+	require.NoError(t, json.Unmarshal([]byte(in), &s))
+	assert.True(t, s.Properties["name"].Nullable)
+
+	b, err := json.Marshal(&s)
+	require.NoError(t, err)
+	assert.JSONEq(t, in, string(b))
+
+	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
+	pb := huma.NewPathBuffer([]byte{}, 0)
+	res := &huma.ValidateResult{}
+	huma.Validate(r, &s, pb, huma.ModeWriteToServer, map[string]any{
+		"name":  "b",
+		"tags":  map[string]any{"a": "x"},
+		"extra": true,
+	}, res)
+	assert.Len(t, res.Errors, 4)
+
+	// Covers every key MarshalJSON emits so the two field lists can't drift.
+	all := `{
+		"type": "string",
+		"title": "t",
+		"description": "d",
+		"$ref": "#/components/schemas/Foo",
+		"format": "binary",
+		"contentMediaType": "application/octet-stream",
+		"contentEncoding": "base64",
+		"default": "a",
+		"examples": ["a"],
+		"items": {"type": "string"},
+		"additionalProperties": true,
+		"properties": {"a": {"type": "string"}},
+		"enum": ["a"],
+		"const": "a",
+		"minimum": 1,
+		"exclusiveMinimum": 1,
+		"maximum": 2,
+		"exclusiveMaximum": 2,
+		"multipleOf": 1,
+		"minLength": 1,
+		"maxLength": 2,
+		"pattern": "a",
+		"patternDescription": "p",
+		"minItems": 1,
+		"maxItems": 2,
+		"uniqueItems": true,
+		"required": ["a"],
+		"dependentRequired": {"a": ["b"]},
+		"minProperties": 1,
+		"maxProperties": 2,
+		"readOnly": true,
+		"writeOnly": true,
+		"deprecated": true,
+		"oneOf": [{"type": "string"}],
+		"anyOf": [{"type": "string"}],
+		"allOf": [{"type": "string"}],
+		"not": {"type": "integer"},
+		"discriminator": {"propertyName": "a", "mapping": {"a": "#/components/schemas/A"}},
+		"x-ext": {"nested": [1]}
+	}`
+	var full huma.Schema
+	require.NoError(t, json.Unmarshal([]byte(all), &full))
+	b, err = json.Marshal(&full)
+	require.NoError(t, err)
+	assert.JSONEq(t, all, string(b))
+
+	// Decoding into a reused Schema must not see the previous type.
+	var reused huma.Schema
+	require.NoError(t, json.Unmarshal([]byte(`{"type": "object"}`), &reused))
+	require.NoError(t, json.Unmarshal([]byte(`{"type": ["string", "null"]}`), &reused))
+	assert.Equal(t, "string", reused.Type)
+	assert.True(t, reused.Nullable)
+
+	var addlNull huma.Schema
+	require.NoError(t, json.Unmarshal([]byte(`{"type": "object", "additionalProperties": null}`), &addlNull))
+	assert.Nil(t, addlNull.AdditionalProperties)
+
+	for _, bad := range []string{
+		`{"type": ["string", "integer"]}`,
+		`{"type": ["null"]}`,
+		`{"pattern": "("}`,
+		`{"properties": {"a": null}}`,
+		`{"oneOf": [null]}`,
+		`{"anyOf": [null]}`,
+		`{"allOf": [null]}`,
+	} {
+		var bs huma.Schema
+		require.Error(t, json.Unmarshal([]byte(bad), &bs), bad)
+	}
+}
+
 func TestSchemaArrayNotNullable(t *testing.T) {
 	huma.DefaultArrayNullable = false
 	defer func() {

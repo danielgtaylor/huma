@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -247,6 +248,122 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 		{"not", s.Not, omitEmpty},
 		{"discriminator", s.Discriminator, omitEmpty},
 	}, s.Extensions)
+}
+
+// UnmarshalJSON loads a JSON Schema, such as one stored for runtime validation.
+// A `type` array may hold one type plus "null" (setting Nullable), `x-` keys
+// become Extensions, and unsupported keywords are ignored. Messages are
+// precomputed as Validate silently skips properties and patterns without them.
+func (s *Schema) UnmarshalJSON(data []byte) error {
+	var typ json.RawMessage
+	var addl json.RawMessage
+
+	// contentMediaType is omitted as MarshalJSON derives it from format.
+	if err := unmarshalJSON(data, map[string]any{
+		"type":                 &typ,
+		"title":                &s.Title,
+		"description":          &s.Description,
+		"$ref":                 &s.Ref,
+		"format":               &s.Format,
+		"contentEncoding":      &s.ContentEncoding,
+		"default":              &s.Default,
+		"examples":             &s.Examples,
+		"items":                &s.Items,
+		"additionalProperties": &addl,
+		"properties":           &s.Properties,
+		"enum":                 &s.Enum,
+		"const":                &s.Const,
+		"minimum":              &s.Minimum,
+		"exclusiveMinimum":     &s.ExclusiveMinimum,
+		"maximum":              &s.Maximum,
+		"exclusiveMaximum":     &s.ExclusiveMaximum,
+		"multipleOf":           &s.MultipleOf,
+		"minLength":            &s.MinLength,
+		"maxLength":            &s.MaxLength,
+		"pattern":              &s.Pattern,
+		"patternDescription":   &s.PatternDescription,
+		"minItems":             &s.MinItems,
+		"maxItems":             &s.MaxItems,
+		"uniqueItems":          &s.UniqueItems,
+		"required":             &s.Required,
+		"dependentRequired":    &s.DependentRequired,
+		"minProperties":        &s.MinProperties,
+		"maxProperties":        &s.MaxProperties,
+		"readOnly":             &s.ReadOnly,
+		"writeOnly":            &s.WriteOnly,
+		"deprecated":           &s.Deprecated,
+		"oneOf":                &s.OneOf,
+		"anyOf":                &s.AnyOf,
+		"allOf":                &s.AllOf,
+		"not":                  &s.Not,
+		"discriminator":        &s.Discriminator,
+	}, &s.Extensions); err != nil {
+		return err
+	}
+
+	// Inverse of MarshalJSON emitting `[type, "null"]` for nullable schemas.
+	if len(typ) > 0 {
+		var types []string
+		if json.Unmarshal(typ, &types) != nil {
+			var single string
+			if err := json.Unmarshal(typ, &single); err != nil {
+				return fmt.Errorf("type: %w", err)
+			}
+			types = []string{single}
+		}
+		// Reset so decoding into a reused Schema doesn't see the old type.
+		s.Type = ""
+		s.Nullable = false
+		for _, t := range types {
+			switch {
+			case t == "null":
+				s.Nullable = true
+			case s.Type != "":
+				return fmt.Errorf("type: multiple non-null types are unsupported: %s", typ)
+			default:
+				s.Type = t
+			}
+		}
+		if s.Nullable && s.Type == "" {
+			return fmt.Errorf("type: null-only types are unsupported: %s", typ)
+		}
+	}
+
+	// Validate only understands bool or *Schema here, not a generic map. Null
+	// would otherwise decode as false and silently disallow extra properties.
+	if len(addl) > 0 && string(addl) != "null" {
+		var b bool
+		if json.Unmarshal(addl, &b) == nil {
+			s.AdditionalProperties = b
+		} else {
+			addlSchema := &Schema{}
+			if err := json.Unmarshal(addl, addlSchema); err != nil {
+				return fmt.Errorf("additionalProperties: %w", err)
+			}
+			s.AdditionalProperties = addlSchema
+		}
+	}
+
+	// A null subschema would panic in PrecomputeMessages and Validate.
+	for name, sub := range s.Properties {
+		if sub == nil {
+			return fmt.Errorf("properties: %s: null schema", name)
+		}
+	}
+	for key, subs := range map[string][]*Schema{"oneOf": s.OneOf, "anyOf": s.AnyOf, "allOf": s.AllOf} {
+		if slices.Contains(subs, nil) {
+			return fmt.Errorf("%s: null schema", key)
+		}
+	}
+
+	// PrecomputeMessages panics on a bad pattern; this input is untrusted.
+	if s.Pattern != "" {
+		if _, err := regexp.Compile(s.Pattern); err != nil {
+			return fmt.Errorf("pattern: %w", err)
+		}
+	}
+	s.PrecomputeMessages()
+	return nil
 }
 
 // PrecomputeMessages tries to precompute as many validation error messages
