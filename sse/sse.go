@@ -4,6 +4,7 @@ package sse
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -49,15 +50,16 @@ type bodyStreamer interface {
 // Message is a single SSE message. There is no `event` field as this is
 // handled by the `eventTypeMap` when registering the operation.
 type Message struct {
-	// IDString, when set, is written to the SSE `id:` field and takes
-	// precedence over [Message.ID]. Unlike the numeric [Message.ID] it can
-	// carry opaque identifiers such as UUIDs, cursor tokens, composite keys,
-	// or the value "0" as the SSE specification allows.
+	// IDString, if set, is written as the SSE `id:` field and takes precedence
+	// over [Message.ID]. It must not contain CR, LF or NUL.
 	IDString string
-	// ID is the numeric event ID written to the `id:` field when
-	// [Message.IDString] is empty. Deprecated: use [Message.IDString] instead.
+	// ID is written as the `id:` field when positive and [Message.IDString] is
+	// empty.
+	//
+	// Deprecated: use [Message.IDString], which also supports "0" and
+	// non-numeric IDs.
 	ID int
-	// Data is the JSON-encoded payload of the message.
+	// Data is JSON-encoded into the event's `data:` field.
 	Data any
 	// Retry, if set, is the client reconnection delay in milliseconds.
 	Retry int
@@ -251,12 +253,12 @@ func stream[I any](reqCtx context.Context, w io.Writer, typeToEvent map[reflect.
 
 		// Write optional fields.
 		if msg.IDString != "" {
-			// CR, LF, and CRLF are all SSE line terminators. Strip them so an
-			// embedded line break can't inject other fields into the stream.
-			id := strings.ReplaceAll(msg.IDString, "\r\n", "")
-			id = strings.ReplaceAll(id, "\r", "")
-			id = strings.ReplaceAll(id, "\n", "")
-			w.Write([]byte("id: " + id + "\n"))
+			// Line breaks would inject extra fields and NUL makes clients ignore
+			// the ID. Not stripped, as clients echo the ID back in Last-Event-ID.
+			if strings.ContainsAny(msg.IDString, "\r\n\x00") {
+				return errors.New("sse: IDString must not contain CR, LF or NUL")
+			}
+			w.Write([]byte("id: " + msg.IDString + "\n"))
 		} else if msg.ID > 0 {
 			w.Write(fmt.Appendf(nil, "id: %d\n", msg.ID))
 		}

@@ -280,8 +280,11 @@ data: {"message":"Hello, world!"}
 				send(sse.Message{ID: 7, Data: DefaultMessage{Message: "two"}})
 				// String IDs may be "0" or other values the integer field cannot hold.
 				send(sse.Message{IDString: "0", Data: DefaultMessage{Message: "three"}})
-				// Line breaks cannot inject extra SSE fields.
-				send(sse.Message{IDString: "ab\r\ncd", Data: DefaultMessage{Message: "four"}})
+				// Line breaks would inject extra SSE fields and NUL makes clients
+				// ignore the ID, so both are rejected without writing anything.
+				for _, id := range []string{"a\rb", "a\nb", "a\x00b"} {
+					assert.Error(t, send(sse.Message{IDString: id, Data: DefaultMessage{Message: "four"}}))
+				}
 			})
 
 			resp := api.Get("/sse")
@@ -295,9 +298,6 @@ data: {"message":"two"}
 
 id: 0
 data: {"message":"three"}
-
-id: abcd
-data: {"message":"four"}
 
 `, resp.Body.String())
 
