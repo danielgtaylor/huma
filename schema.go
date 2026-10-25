@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/bits"
 	"net"
 	"net/netip"
@@ -529,6 +530,19 @@ func convertType(fieldName string, t reflect.Type, v any) any {
 	return converted.Interface()
 }
 
+// intRange returns the bounds of integer type t. 64-bit bounds round to the
+// nearest float64, so tags written as e.g. MaxInt64 still fall within them.
+func intRange(t reflect.Type) (lo, hi float64, ok bool) {
+	switch t.Kind() {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		hi = math.Ldexp(1, t.Bits()-1) - 1
+		return -hi - 1, hi, true
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return 0, math.Ldexp(1, t.Bits()) - 1, true
+	}
+	return 0, 0, false
+}
+
 // overflows reports whether f cannot be represented by numeric type t.
 func overflows(t reflect.Type, f float64) bool {
 	z := reflect.Zero(t)
@@ -674,6 +688,24 @@ func SchemaFromField(registry Registry, f reflect.StructField, hint string) *Sch
 	}
 	if v := floatTag(f, "exclusiveMaximum"); v != nil {
 		targetSchema(fs).ExclusiveMaximum = v
+	}
+
+	// A bound outside the Go type's range documents values the server rejects.
+	t := deref(f.Type)
+	if k := t.Kind(); fs.Type == TypeArray && (k == reflect.Slice || k == reflect.Array) {
+		t = deref(t.Elem())
+	}
+	ts := targetSchema(fs)
+	if lo, hi, ok := intRange(t); ok && ts.Type == TypeInteger {
+		for _, b := range []struct {
+			name  string
+			v     *float64
+			slack float64
+		}{{"minimum", ts.Minimum, 0}, {"exclusiveMinimum", ts.ExclusiveMinimum, 1}, {"maximum", ts.Maximum, 0}, {"exclusiveMaximum", ts.ExclusiveMaximum, 1}} {
+			if b.v != nil && (*b.v < lo-b.slack || *b.v > hi+b.slack) {
+				panic(fmt.Errorf("%s %v for field '%s' is outside the range of %v: %w", b.name, *b.v, f.Name, t, ErrSchemaInvalid))
+			}
+		}
 	}
 	if v := floatTag(f, "multipleOf"); v != nil {
 		targetSchema(fs).MultipleOf = v
@@ -862,7 +894,14 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 		} else {
 			s.Format = "int64"
 		}
-	case reflect.Int8, reflect.Int16, reflect.Int32:
+	case reflect.Int8, reflect.Int16, reflect.Uint8, reflect.Uint16:
+		// The int32 format alone would advertise values the type can't hold.
+		s.Type = TypeInteger
+		s.Format = "int32"
+		lo, hi, _ := intRange(t)
+		s.Minimum = &lo
+		s.Maximum = &hi
+	case reflect.Int32:
 		s.Type = TypeInteger
 		s.Format = "int32"
 	case reflect.Int64:
@@ -876,7 +915,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 			s.Format = "int64"
 		}
 		s.Minimum = &minZero
-	case reflect.Uint8, reflect.Uint16, reflect.Uint32:
+	case reflect.Uint32:
 		// Unsigned integers can't be negative.
 		s.Type = TypeInteger
 		s.Format = "int32"

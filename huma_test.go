@@ -907,6 +907,31 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
+			Name: "request-body-small-int-out-of-range",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/test",
+				}, func(ctx context.Context, i *struct {
+					Body struct {
+						Int  int8   `json:"int"`
+						Uint uint16 `json:"uint"`
+					}
+				}) (*struct{}, error) {
+					t.Fatal("handler should not be called")
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/test",
+			Body:   `{"int":128,"uint":65536}`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), `"message":"expected number <= 127","location":"body.int"`)
+				assert.Contains(t, resp.Body.String(), `"message":"expected number <= 65535","location":"body.uint"`)
+			},
+		},
+		{
 			Name: "param-deepObject-map-required",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
