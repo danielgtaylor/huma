@@ -47,9 +47,9 @@ func ExampleRegister_sse() {
 		// The event type is still controlled by the map above and type passed
 		// as data below, in this case "userCreate" is sent.
 		send(sse.Message{
-			ID:    5,
-			Retry: 1000,
-			Data:  UserCreatedEvent{UserID: 1, Username: "foo"},
+			IDString: "cursor-42",
+			Retry:    1000,
+			Data:     UserCreatedEvent{UserID: 1, Username: "foo"},
 		})
 
 		// Example "userDelete" event type.

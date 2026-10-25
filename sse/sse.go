@@ -4,6 +4,7 @@ package sse
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -49,8 +50,18 @@ type bodyStreamer interface {
 // Message is a single SSE message. There is no `event` field as this is
 // handled by the `eventTypeMap` when registering the operation.
 type Message struct {
-	ID    int
-	Data  any
+	// IDString, if set, is written as the SSE `id:` field and takes precedence
+	// over [Message.ID]. It must not contain CR, LF or NUL.
+	IDString string
+	// ID is written as the `id:` field when positive and [Message.IDString] is
+	// empty.
+	//
+	// Deprecated: use [Message.IDString], which also supports "0" and
+	// non-numeric IDs.
+	ID int
+	// Data is JSON-encoded into the event's `data:` field.
+	Data any
+	// Retry, if set, is the client reconnection delay in milliseconds.
 	Retry int
 	// Comment, if set, is written as one or more SSE comment lines (each line
 	// prefixed with a colon and ignored by clients). It may accompany an event
@@ -121,8 +132,11 @@ func addEventStreamResponse(api huma.API, op *huma.Operation, eventTypeMap map[s
 			Type:  huma.TypeObject,
 			Properties: map[string]*huma.Schema{
 				"id": {
-					Type:        huma.TypeInteger,
 					Description: "The event ID.",
+					OneOf: []*huma.Schema{
+						{Type: huma.TypeInteger},
+						{Type: huma.TypeString},
+					},
 				},
 				"event": {
 					Type:        huma.TypeString,
@@ -252,7 +266,14 @@ func stream(reqCtx context.Context, w io.Writer, typeToEvent map[reflect.Type]st
 		}
 
 		// Write optional fields.
-		if msg.ID > 0 {
+		if msg.IDString != "" {
+			// Line breaks would inject extra fields and NUL makes clients ignore
+			// the ID. Not stripped, as clients echo the ID back in Last-Event-ID.
+			if strings.ContainsAny(msg.IDString, "\r\n\x00") {
+				return errors.New("sse: IDString must not contain CR, LF or NUL")
+			}
+			w.Write([]byte("id: " + msg.IDString + "\n"))
+		} else if msg.ID > 0 {
 			w.Write(fmt.Appendf(nil, "id: %d\n", msg.ID))
 		}
 		if msg.Retry > 0 {
