@@ -3,6 +3,7 @@ package huma
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"net/http"
 	"reflect"
@@ -93,6 +94,36 @@ func marshalJSON(fields []jsonFieldInfo, extensions map[string]any) ([]byte, err
 	maps.Copy(value, extensions)
 
 	return json.Marshal(value)
+}
+
+// unmarshalJSON is the inverse of marshalJSON. Field values must be pointers.
+// Unknown `x-` keys are collected into extensions; other unknown keys are
+// ignored.
+func unmarshalJSON(data []byte, fields map[string]any, extensions *map[string]any) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	for k, v := range raw {
+		if ptr, ok := fields[k]; ok {
+			if err := json.Unmarshal(v, ptr); err != nil {
+				return fmt.Errorf("%s: %w", k, err)
+			}
+			continue
+		}
+		if strings.HasPrefix(k, "x-") {
+			// Can't fail as v was already parsed as valid JSON above.
+			var ext any
+			json.Unmarshal(v, &ext)
+			if *extensions == nil {
+				*extensions = map[string]any{}
+			}
+			(*extensions)[k] = ext
+		}
+	}
+
+	return nil
 }
 
 // Contact information to get support for the API.
