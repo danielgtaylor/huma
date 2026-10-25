@@ -1288,10 +1288,7 @@ func TestFeatures(t *testing.T) {
 					return nil, nil
 				})
 				content := api.OpenAPI().Paths["/body"].Put.RequestBody.Content["application/json"]
-				// The example from the Body field is surfaced on the media
-				// type, since examples alongside a schema $ref are ignored
-				// by many tools.
-				require.NotNil(t, content.Example)
+				assert.Equal(t, map[string]any{"name": "world"}, content.Example)
 			},
 			Method: http.MethodPut,
 			URL:    "/body",
