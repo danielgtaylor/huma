@@ -655,10 +655,11 @@ func (a *api) registerDocsRoute() {
 			"default-src 'none'",
 			"base-uri 'none'",
 			"connect-src 'self'",
+			"font-src https://fonts.scalar.com",
 			"form-action 'none'",
 			"frame-ancestors 'none'",
 			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads",
-			"script-src 'unsafe-eval' https://unpkg.com/@scalar/api-reference@1.44.20/dist/browser/standalone.js", // TODO: Somehow drop 'unsafe-eval'
+			"script-src https://unpkg.com/@scalar/api-reference@1.76.0/dist/browser/standalone.js",
 			"style-src 'unsafe-inline'", // TODO: Somehow drop 'unsafe-inline'
 		}
 
@@ -681,7 +682,7 @@ func (a *api) registerDocsRoute() {
   </head>
   <body>
     <script id="api-reference" data-url="` + openAPIPath + `.json"` + configAttr + `></script>
-    <script src="https://unpkg.com/@scalar/api-reference@1.44.20/dist/browser/standalone.js" crossorigin integrity="sha384-tMz7GAo6dMy55x9tLFtH+sHtogji6Scmb+feBR31TAHmvSPRUTboK9H3M5NFaP4R"></script>
+    <script src="https://unpkg.com/@scalar/api-reference@1.76.0/dist/browser/standalone.js" crossorigin integrity="sha384-oH1C0RwqcwbVXkC+r8A+4qRoyEUQdtxAzOwumkxZtQBBcsy61FOoPt7B50OVJYYQ"></script>
   </body>
 </html>`)
 	case DocsRendererStoplightElements:
@@ -696,8 +697,8 @@ func (a *api) registerDocsRoute() {
 			"form-action 'none'",
 			"frame-ancestors 'none'",
 			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads",
-			"script-src https://unpkg.com/@stoplight/elements@9.0.15/web-components.min.js",
-			"style-src 'unsafe-inline' https://unpkg.com/@stoplight/elements@9.0.15/styles.min.css",
+			"script-src https://unpkg.com/@stoplight/elements@9.0.29/web-components.min.js",
+			"style-src 'unsafe-inline' https://unpkg.com/@stoplight/elements@9.0.29/styles.min.css",
 		}
 
 		body = []byte(`<!doctype html>
@@ -707,8 +708,8 @@ func (a *api) registerDocsRoute() {
     <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>` + title + `</title>
-    <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements@9.0.15/styles.min.css" crossorigin integrity="sha384-iVQBHadsD+eV0M5+ubRCEVXrXEBj+BqcuwjUwPoVJc0Pb1fmrhYSAhL+BFProHdV">
-    <script src="https://unpkg.com/@stoplight/elements@9.0.15/web-components.min.js" crossorigin integrity="sha384-xjOcq9PZ/k+pGtPS/xcsCRXGjKKfTlIa4H1IYEnC+97jNa6sAMWTNrV6hY08W3GL"></script>
+    <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements@9.0.29/styles.min.css" crossorigin integrity="sha384-iVQBHadsD+eV0M5+ubRCEVXrXEBj+BqcuwjUwPoVJc0Pb1fmrhYSAhL+BFProHdV">
+    <script src="https://unpkg.com/@stoplight/elements@9.0.29/web-components.min.js" crossorigin integrity="sha384-enyjBaVmV00WFIo0D7AIVgtZ/4x0idVNWHotG8WUpvQo9HXgMSGAAW2YEOpiJTpP"></script>
   </head>
   <body style="height: 100vh;">
     <elements-api
@@ -730,9 +731,10 @@ func (a *api) registerDocsRoute() {
 			"connect-src 'self'",
 			"form-action 'none'",
 			"frame-ancestors 'none'",
+			"img-src data:",
 			"sandbox allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-downloads",
-			"script-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js 'sha256-gRya58TMnKTH/Tne/zBInjBwFUxL66aMDYvPuAX0lNY='",
-			"style-src https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui.css",
+			"script-src https://unpkg.com/swagger-ui-dist@5.34.0/swagger-ui-bundle.js 'sha256-gRya58TMnKTH/Tne/zBInjBwFUxL66aMDYvPuAX0lNY='",
+			"style-src https://unpkg.com/swagger-ui-dist@5.34.0/swagger-ui.css",
 		}
 
 		var configAttr string
@@ -751,11 +753,11 @@ func (a *api) registerDocsRoute() {
     <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>` + title + `</title>
-    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui.css" crossorigin integrity="sha384-KX9Rx9vM1AmUNAn07bPAiZhFD4C8jdNgG6f5MRNvR+EfAxs2PmMFtUUazui7ryZQ">
+    <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.34.0/swagger-ui.css" crossorigin integrity="sha384-4c3vsE5f+trhFyHrFrLM1fFGUn531NIaC7dcqEWIJdoRQJ5CkJbSuSCwXLpaS1KF">
   </head>
   <body>
     <div id="swagger-ui"></div>
-    <script src="https://unpkg.com/swagger-ui-dist@5.31.1/swagger-ui-bundle.js" crossorigin integrity="sha384-o9idN8HE6/V6SAewgnr6/5nz7+Npt5J0Cb4tNyXK8pycsVmgl1ZNbRS7tlEGxd+J"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@5.34.0/swagger-ui-bundle.js" crossorigin integrity="sha384-9Td7MKiIr2S83E1kZyyVi8KdJw/S8CpAvu0llLyMeg0xq/hDGiZJfVn0fV4llCmK"></script>
     <script data-url="` + openAPIPath + `.json"` + configAttr + `>
       const script = document.currentScript;
       const url = script.dataset.url;
