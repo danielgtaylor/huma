@@ -1,20 +1,23 @@
+// The leak tests rely on RLIMIT_NOFILE, which only exists on unix.
+//go:build unix
+
 package huma
 
 import (
 	"bytes"
 	"mime/multipart"
+	"reflect"
 	"runtime/debug"
 	"syscall"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// limitFileDescriptors lowers the process soft RLIMIT_NOFILE and disables the
-// garbage collector for the duration of the test. This makes leaked file
-// handles observable: the GC finalizer would otherwise close unreachable
-// handles and a high descriptor limit would absorb small leaks. The previous
-// values are restored via t.Cleanup.
+// limitFileDescriptors makes leaked handles fail fast: a low RLIMIT_NOFILE turns
+// leaks into EMFILE, and disabling GC stops finalizers from closing them. Leaks
+// accumulate, so tests only need to check their last call.
 func limitFileDescriptors(t *testing.T) {
 	t.Helper()
 	var rl syscall.Rlimit
@@ -31,54 +34,75 @@ func limitFileDescriptors(t *testing.T) {
 	})
 }
 
-// diskBackedFileHeader parses a one-file-part multipart body with a zero-byte
-// memory threshold, so the part is stored in a temporary file on disk and each
-// FileHeader.Open returns a real *os.File. The returned form must be cleaned
-// up with RemoveAll.
-func diskBackedFileHeader(t *testing.T, contentType string) (*multipart.Form, *multipart.FileHeader) {
+// diskBackedForm uses a zero memory threshold so Open returns a real *os.File.
+func diskBackedForm(t *testing.T, contentTypes ...string) *multipart.Form {
 	t.Helper()
 	var buf bytes.Buffer
 	w := multipart.NewWriter(&buf)
-	part, err := w.CreateFormFile("file", "test.txt")
-	require.NoError(t, err)
-	_, err = part.Write([]byte("hello, world!"))
-	require.NoError(t, err)
+	for range contentTypes {
+		part, err := w.CreateFormFile("file", "test.txt")
+		require.NoError(t, err)
+		_, err = part.Write([]byte("hello, world!"))
+		require.NoError(t, err)
+	}
 	require.NoError(t, w.Close())
 
 	form, err := multipart.NewReader(&buf, w.Boundary()).ReadForm(0)
 	require.NoError(t, err)
-	fh := form.File["file"][0]
-	fh.Header.Set("Content-Type", contentType)
-	return form, fh
+	t.Cleanup(func() { form.RemoveAll() })
+	for i, fh := range form.File["file"] {
+		fh.Header.Set("Content-Type", contentTypes[i])
+	}
+	return form
 }
 
 func TestMimeTypeValidatorClosesFile(t *testing.T) {
-	form, fh := diskBackedFileHeader(t, "text/plain")
-	defer form.RemoveAll()
+	fh := diskBackedForm(t, "text/plain").File["file"][0]
+	validator := NewMimeTypeValidator(&Encoding{ContentType: "text/plain"})
 	limitFileDescriptors(t)
 
-	validator := NewMimeTypeValidator(&Encoding{ContentType: "text/plain"})
+	var detail *ErrorDetail
 	for range 200 {
-		_, detail := validator.Validate(fh, "file")
-		// A leaked handle per call exhausts the descriptor limit within the
-		// loop; with the fix every handle is closed and this never fails.
-		require.Nil(t, detail, "Validate unexpectedly failed: %v", detail)
+		_, detail = validator.Validate(fh, "file")
 	}
+
+	assert.Nil(t, detail)
 }
 
 func TestReadFileClosesOnValidationError(t *testing.T) {
-	form, fh := diskBackedFileHeader(t, "text/plain")
-	defer form.RemoveAll()
+	fh := diskBackedForm(t, "text/plain").File["file"][0]
+	validator := NewMimeTypeValidator(&Encoding{ContentType: "image/png"})
 	limitFileDescriptors(t)
 
-	validator := NewMimeTypeValidator(&Encoding{ContentType: "image/png"})
+	var detail *ErrorDetail
 	for range 200 {
-		_, detail := readFile(fh, "file", validator)
-		// A leaked handle per call exhausts the descriptor limit within the
-		// loop and surfaces as "Failed to open file" instead of the expected
-		// mime-type error; with the fix every handle is closed and this never
-		// happens.
-		require.NotNil(t, detail)
-		require.Contains(t, detail.Message, "Invalid mime type")
+		_, detail = readFile(fh, "file", validator)
 	}
+
+	require.NotNil(t, detail)
+	assert.Contains(t, detail.Message, "Invalid mime type")
+}
+
+func TestDecodeClosesFilesOnValidationError(t *testing.T) {
+	type input struct {
+		Files []FormFile `form:"file" contentType:"image/png"`
+	}
+	registry := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+	typ := reflect.TypeFor[input]()
+	mediaType := &MediaType{
+		Schema:   multiPartFormFileSchema(registry, typ),
+		Encoding: multiPartContentEncoding(typ),
+	}
+	// The first file is opened before the second fails validation.
+	form := diskBackedForm(t, "image/png", "text/plain")
+	limitFileDescriptors(t)
+
+	var errs []error
+	for range 200 {
+		m := MultipartFormFiles[input]{Form: form}
+		errs = m.Decode(mediaType, func(reflect.Value) {})
+	}
+
+	require.Len(t, errs, 1)
+	assert.Contains(t, errs[0].Error(), "Invalid mime type")
 }
