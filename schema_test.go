@@ -574,14 +574,14 @@ func TestSchema(t *testing.T) {
 		{
 			name: "field-default-text-unmarshaler",
 			input: struct {
-				Value MyDate `json:"value" default:"2020-01-02"`
+				Value MyDate `json:"value" default:"2020-01-02T00:00:00Z"`
 			}{},
 			expected: `{
 				"type": "object",
 				"properties": {
 					"value": {
 						"type": "string",
-						"default": "2020-01-02"
+						"default": "2020-01-02T00:00:00Z"
 					}
 				},
 				"additionalProperties": false,

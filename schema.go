@@ -463,6 +463,18 @@ func convertType(fieldName string, t reflect.Type, v any) any {
 		return v
 	}
 
+	target := deref(t)
+	if s, ok := v.(string); ok && (target.Implements(textUnmarshalerType) || reflect.PointerTo(target).Implements(textUnmarshalerType)) {
+		converted := reflect.New(target)
+		if err := converted.Interface().(encoding.TextUnmarshaler).UnmarshalText([]byte(s)); err != nil {
+			panic(fmt.Errorf("unable to convert %q to %v for field '%s': %v: %w", s, t, fieldName, err, ErrSchemaInvalid))
+		}
+		if t.Kind() == reflect.Pointer {
+			return converted.Interface()
+		}
+		return converted.Elem().Interface()
+	}
+
 	// Directly convert equal underlying types, avoiding traversal.
 	// e.g., json.RawMessage -> []byte.
 	if tv.ConvertibleTo(t) {
@@ -504,24 +516,11 @@ func convertType(fieldName string, t reflect.Type, v any) any {
 		return tmp.Interface()
 	}
 
-	target := deref(t)
-	targetPtr := reflect.PointerTo(target)
-	if s, ok := v.(string); ok && (target.Implements(textUnmarshalerType) || targetPtr.Implements(textUnmarshalerType)) {
-		converted := reflect.New(target)
-		if err := converted.Interface().(encoding.TextUnmarshaler).UnmarshalText([]byte(s)); err != nil {
-			panic(fmt.Errorf("unable to convert %v to %v for field '%s': %v: %w", tv, t, fieldName, err, ErrSchemaInvalid))
-		}
-		if t.Kind() == reflect.Pointer {
-			return converted.Interface()
-		}
-		return converted.Elem().Interface()
-	}
-
-	if !tv.ConvertibleTo(deref(t)) {
+	if !tv.ConvertibleTo(target) {
 		panic(fmt.Errorf("unable to convert %v to %v for field '%s': %w", tv, t, fieldName, ErrSchemaInvalid))
 	}
 
-	converted := val.Convert(deref(t))
+	converted := val.Convert(target)
 	if t.Kind() == reflect.Pointer {
 		// Special case: if the field is a pointer, we need to get a pointer
 		// to the converted value.
@@ -571,13 +570,13 @@ func jsonTag(r Registry, f reflect.StructField, s *Schema, name string) any {
 	t := f.Type
 	if value := f.Tag.Get(name); value != "" {
 		parsed := jsonTagValue(r, f.Name, s, value)
+		converted := convertType(f.Name, t, parsed)
+		// TextUnmarshaler types are documented as strings, so keep the tag text.
 		base := deref(t)
-		// Keep schema defaults in wire form for TextUnmarshaler string types so
-		// OpenAPI stays a string (e.g. "10s") while findDefaults still converts.
-		if base.Implements(textUnmarshalerType) || reflect.PointerTo(base).Implements(textUnmarshalerType) {
+		if _, ok := parsed.(string); ok && (base.Implements(textUnmarshalerType) || reflect.PointerTo(base).Implements(textUnmarshalerType)) {
 			return parsed
 		}
-		return convertType(f.Name, t, parsed)
+		return converted
 	}
 	return nil
 }
