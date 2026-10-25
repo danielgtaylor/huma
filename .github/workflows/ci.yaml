@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go: [ 1.25, 1.26 ]
+        go: [ 1.26, 1.27 ]
     name: Build & Test
     steps:
       - uses: actions/checkout@v4
@@ -19,9 +19,9 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.9.0
+          version: v2.15.0
       - run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
       - uses: codecov/codecov-action@v4
         with:

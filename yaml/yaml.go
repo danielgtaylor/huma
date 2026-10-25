@@ -1,5 +1,5 @@
-// Source from https://github.com/itchyny/json2yaml
-// Copyright (c) 2022 itchyny, MIT licensed.
+// Source from https://github.com/itchyny/json2yaml (v0.1.5)
+// Copyright (c) 2022-2026 itchyny, MIT licensed.
 
 // Package yaml implements a converter from JSON to YAML.
 //
@@ -183,6 +183,8 @@ var (
 			`|\d\d\d\d-\d\d?-\d\d?` + // date
 			`(?:(?:T|\s+)\d\d?:\d\d?:\d\d?(?:\.\d*)?` + // time
 			`(?:\s*(?:Z|[-+]\d\d?(?::\d\d?)?))?)?` + // time zone
+			// tag:yaml.org,2002:merge, tag:yaml.org,2002:value
+			`|<<|=` +
 			`)$` +
 			// c-indicator - '-' - '?' - ':', leading white space
 			"|[,\\[\\]{}#&*!|>'\"%@` \\t]" +
@@ -195,8 +197,8 @@ var (
 			`|[ \t](?:#|$)` +
 			// C0 control codes - '\n', DEL
 			"|[\u0000-\u0009\u000B-\u001F\u007F" +
-			// C1 control codes, BOM, noncharacters
-			"\u0080-\u009F\uFEFF\uFDD0-\uFDEF\uFFFE\uFFFF]",
+			// C1 control codes, line/paragraph separator, BOM, noncharacters
+			"\u0080-\u009F\u2028\u2029\uFEFF\uFDD0-\uFDEF\uFFFE\uFFFF]",
 	)
 	quoteMultiLineStringPattern = regexp.MustCompile(
 		`` +
@@ -204,8 +206,8 @@ var (
 			`^\n*(?:[ \t]|$)` +
 			// C0 control codes - '\t' - '\n', DEL
 			"|[\u0000-\u0008\u000B-\u001F\u007F" +
-			// C1 control codes, BOM, noncharacters
-			"\u0080-\u009F\uFEFF\uFDD0-\uFDEF\uFFFE\uFFFF]",
+			// C1 control codes, line/paragraph separator, BOM, noncharacters
+			"\u0080-\u009F\u2028\u2029\uFEFF\uFDD0-\uFDEF\uFFFE\uFFFF]",
 	)
 )
 
@@ -287,8 +289,9 @@ func (c *converter) writeDoubleQuotedString(s string) {
 			continue
 		}
 		r, size := utf8.DecodeRuneInString(s[i:])
-		if r <= '\u009F' || '\uFDD0' <= r && (r == '\uFEFF' ||
-			r <= '\uFDEF' || r == '\uFFFE' || r == '\uFFFF') {
+		if r <= '\u009F' || r == '\u2028' || r == '\u2029' ||
+			'\uFDD0' <= r && (r == '\uFEFF' || r <= '\uFDEF' ||
+				r == '\uFFFE' || r == '\uFFFF') {
 			if start < i {
 				c.buf.WriteString(s[start:i])
 			}
