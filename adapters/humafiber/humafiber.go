@@ -115,7 +115,10 @@ func (c *fiberWrapper) BodyReader() io.Reader {
 }
 
 func (c *fiberWrapper) GetMultipartForm() (*multipart.Form, error) {
-	return c.orig.MultipartForm()
+	if c.op == nil || c.op.MaxBodyBytes <= 0 {
+		return c.orig.MultipartForm()
+	}
+	return multipartFormWithLimit(c.orig.Request(), c.orig.App().Server(), c.op.MaxBodyBytes)
 }
 
 func (c *fiberWrapper) SetReadDeadline(deadline time.Time) error {
@@ -138,6 +141,12 @@ func (c *fiberWrapper) Status() int {
 }
 
 func (c *fiberWrapper) AppendHeader(name string, value string) {
+	if strings.EqualFold(name, "Set-Cookie") {
+		// Fiber's Append joins values with a comma, which Set-Cookie doesn't
+		// allow, so send each cookie as its own header line.
+		c.orig.Response().Header.Add(name, value)
+		return
+	}
 	c.orig.Append(name, value)
 }
 
