@@ -47,8 +47,9 @@ type TestInput struct {
 
 // Test outputs (headers, body).
 type TestOutput struct {
-	MyHeader string `header:"MyHeader"`
-	Body     struct {
+	MyHeader  string        `header:"MyHeader"`
+	SetCookie []http.Cookie `header:"Set-Cookie"`
+	Body      struct {
 		Message string `json:"message"`
 	}
 }
@@ -56,6 +57,7 @@ type TestOutput struct {
 func testHandler(ctx context.Context, input *TestInput) (*TestOutput, error) {
 	resp := &TestOutput{}
 	resp.MyHeader = "my-value"
+	resp.SetCookie = []http.Cookie{{Name: "foo", Value: "bar"}, {Name: "baz", Value: "123"}}
 	resp.Body.Message = fmt.Sprintf("Hello, %s <%s>! (%s, %v, %s)", input.Body.Name, input.Body.Email, input.Group, input.Verbose, input.Auth)
 	return resp, nil
 }
@@ -85,6 +87,7 @@ func testAdapter(t *testing.T, api huma.API) {
 
 		assert.Equal(t, http.StatusOK, resp.Code)
 		assert.Equal(t, "my-value", resp.Header().Get("MyHeader"))
+		assert.Equal(t, []string{"foo=bar", "baz=123"}, resp.Header().Values("Set-Cookie"))
 		assert.JSONEq(t, `{
 		"$schema": "http://localhost/schemas/TestOutputBody.json",
 		"message": "Hello, Daniel <daniel@example.com>! (foo, false, Bearer abc123)"
