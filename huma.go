@@ -1488,8 +1488,6 @@ func processInputType(inputType reflect.Type, op *Operation, registry Registry) 
 		inputBodyIndex = f.Index
 		initRequestBody(op)
 		setRequestBodyFromBody(op, registry, f, inputType)
-		ensureBodyReadTimeout(op)
-		ensureMaxBodyBytes(op)
 	}
 
 	var rawBodyDataT reflect.Type
@@ -1508,6 +1506,13 @@ func processInputType(inputType reflect.Type, op *Operation, registry Registry) 
 			}
 			rawBodyDataT = dataField.Type.Elem()
 		}
+	}
+
+	// Multipart is exempt so existing large or slow uploads keep working; set
+	// limits explicitly.
+	if hasInputBody || (len(rawBodyIndex) > 0 && !rbt.isMultipart()) {
+		ensureBodyReadTimeout(op)
+		ensureMaxBodyBytes(op)
 	}
 
 	if op.RequestBody != nil {

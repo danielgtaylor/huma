@@ -44,7 +44,7 @@ if err != nil {
 
 ## Body Size Limits
 
-By default each operation has a 1 MiB request body size limit. This can be changed by setting `huma.Operation.MaxBodyBytes` to a different value when registering the operation. If the request body is larger than the limit then a `413 Request Entity Too Large` error will be returned.
+By default each operation has a 1 MiB request body size limit. This can be changed by setting `huma.Operation.MaxBodyBytes` to a different value when registering the operation. If the request body is larger than the limit then a `413 Request Entity Too Large` error will be returned. Multipart form bodies have no default limit; set `MaxBodyBytes` explicitly.
 
 ```go title="code.go" hl_lines="6"
 huma.Register(api, huma.Operation{

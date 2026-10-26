@@ -1524,6 +1524,28 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
+			Name: "request-body-raw-too-large-default",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/raw",
+					// MaxBodyBytes omitted: the 1 MiB default applies.
+				}, func(ctx context.Context, input *struct {
+					RawBody []byte `contentType:"application/octet-stream"`
+				}) (*struct{}, error) {
+					t.Fatal("handler should not be called")
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPut,
+			URL:     "/raw",
+			Headers: map[string]string{"Content-Type": "application/octet-stream"},
+			Body:    strings.Repeat("a", 1024*1024+1),
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusRequestEntityTooLarge, resp.Code)
+			},
+		},
+		{
 			Name: "request-body-multipart-at-limit",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
@@ -1616,6 +1638,28 @@ func TestFeatures(t *testing.T) {
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusRequestEntityTooLarge, resp.Code)
 				assert.Contains(t, resp.Body.String(), "limit=5 bytes")
+			},
+		},
+		{
+			Name: "request-body-raw-unlimited",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method:       http.MethodPut,
+					Path:         "/raw",
+					MaxBodyBytes: -1,
+				}, func(ctx context.Context, input *struct {
+					RawBody []byte `contentType:"application/octet-stream"`
+				}) (*struct{}, error) {
+					assert.Len(t, input.RawBody, 2*1024*1024)
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPut,
+			URL:     "/raw",
+			Headers: map[string]string{"Content-Type": "application/octet-stream"},
+			Body:    strings.Repeat("a", 2*1024*1024),
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNoContent, resp.Code)
 			},
 		},
 		{
@@ -2352,6 +2396,11 @@ Content-Disposition: form-data; name="file"; filename="test.js"
 				mpContent := api.OpenAPI().Paths["/upload"].Post.RequestBody.Content["multipart/form-data"]
 				assert.Equal(t, "object", mpContent.Schema.Type)
 				assert.Equal(t, "binary", mpContent.Schema.Properties["filename"].Format)
+
+				// Multipart is exempt from the body defaults.
+				op := api.OpenAPI().Paths["/upload"].Post
+				assert.Zero(t, op.BodyReadTimeout)
+				assert.Zero(t, op.MaxBodyBytes)
 			},
 			Method:  http.MethodPost,
 			URL:     "/upload",
