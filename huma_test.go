@@ -4977,9 +4977,7 @@ func TestWriteResponseTransformErrorStatus(t *testing.T) {
 }
 
 func TestMiddlewareDoesNotRunForUnmatchedRoute(t *testing.T) {
-	// Router-agnostic middleware runs after the adapter's router resolves the
-	// route: an unmatched route is answered by the router (404) without
-	// entering the middleware chain (issue #933).
+	// #933: unmatched routes are answered by the router, never Huma middleware.
 	_, api := humatest.New(t)
 	ran := false
 	api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
@@ -4993,4 +4991,8 @@ func TestMiddlewareDoesNotRunForUnmatchedRoute(t *testing.T) {
 	res := api.Get("/unmatched")
 	assert.Equal(t, http.StatusNotFound, res.Code)
 	assert.False(t, ran, "middleware should not run for an unmatched route")
+
+	res = api.Get("/matched")
+	assert.Equal(t, http.StatusNoContent, res.Code)
+	assert.True(t, ran, "middleware should run for a matched route")
 }

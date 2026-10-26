@@ -305,12 +305,10 @@ type API interface {
 
 	// UseMiddleware appends a middleware handler to the API middleware stack.
 	//
-	// The middleware stack runs after the adapter's router has matched the
-	// request to a registered operation and before the operation handler
-	// executes. Requests that do not match any registered operation are
-	// handled by the router itself (for example with a 404 response) and do
-	// not pass through this middleware; use router-specific middleware for
-	// pre-routing logic.
+	// The stack wraps operations registered via huma.Register after this call and
+	// runs before input parsing and validation. Unmatched requests (e.g. 404s) and
+	// the built-in OpenAPI/docs/schema routes skip it; use router-specific
+	// middleware there.
 	UseMiddleware(middlewares ...func(ctx Context, next func(Context)))
 
 	// Middlewares returns a slice of middleware handler functions that will be
