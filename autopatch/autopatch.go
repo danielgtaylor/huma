@@ -288,6 +288,8 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to get resource", err)
 			return
 		}
+		// net/http keeps Host out of Header, so copying headers below won't carry it.
+		origReq.Host = ctx.Host()
 
 		// Copy incoming headers.
 		ctx.EachHeader(func(k, v string) {
@@ -414,6 +416,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to put modified resource", err)
 			return
 		}
+		putReq.Host = ctx.Host()
 		ctx.EachHeader(func(k, v string) {
 			// These describe the client's PATCH body, not the patched JSON.
 			if k == "Content-Type" || k == "Content-Length" || k == "Content-Encoding" {
