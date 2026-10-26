@@ -2099,7 +2099,7 @@ func readForm(ctx Context) (*multipart.Form, *contextError, *ErrorDetail) {
 	if err != nil {
 		var mbErr *http.MaxBytesError
 		if errors.As(err, &mbErr) {
-			return nil, &contextError{Code: http.StatusRequestEntityTooLarge, Msg: fmt.Sprintf("request body is too large limit=%d bytes", mbErr.Limit)}, nil
+			return nil, bodyTooLarge(mbErr), nil
 		}
 		return form, nil, &ErrorDetail{
 			Location: "body",
@@ -2233,7 +2233,7 @@ func readBody(buf io.Writer, ctx Context, maxBytes int64) *contextError {
 		var mbErr *http.MaxBytesError
 		if errors.As(err, &mbErr) {
 			// Report the limit that fired, which may come from an upstream MaxBytesReader.
-			return &contextError{Code: http.StatusRequestEntityTooLarge, Msg: fmt.Sprintf("request body is too large limit=%d bytes", mbErr.Limit)}
+			return bodyTooLarge(mbErr)
 		}
 		var nErr net.Error
 		if errors.As(err, &nErr) && nErr.Timeout() {
@@ -2243,6 +2243,10 @@ func readBody(buf io.Writer, ctx Context, maxBytes int64) *contextError {
 		return &contextError{Code: http.StatusInternalServerError, Msg: "cannot read request body", Errs: []error{err}}
 	}
 	return nil
+}
+
+func bodyTooLarge(err *http.MaxBytesError) *contextError {
+	return &contextError{Code: http.StatusRequestEntityTooLarge, Msg: fmt.Sprintf("request body is too large limit=%d bytes", err.Limit)}
 }
 
 // AutoRegister auto-detects operation registration methods and registers them

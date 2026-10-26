@@ -144,7 +144,6 @@ func (b *CountingInner) Resolve(_ huma.Context, _ *huma.PathBuffer) []error {
 	return nil
 }
 
-// smallMultipartBody is a minimal multipart/form-data body with boundary "B".
 const smallMultipartBody = "--B\r\nContent-Disposition: form-data; name=\"f\"\r\n\r\nhello\r\n--B--\r\n"
 
 func TestFeatures(t *testing.T) {

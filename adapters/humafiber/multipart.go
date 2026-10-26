@@ -31,7 +31,7 @@ func multipartFormWithLimit(req *fasthttp.Request, srv *fasthttp.Server, maxByte
 	}
 
 	// fasthttp matches the media type and "boundary" case-sensitively, so fold
-	// them like Fiber's own MultipartForm does.
+	// them like Fiber v3's MultipartForm does.
 	if mt, params, err := mime.ParseMediaType(string(req.Header.ContentType())); err == nil {
 		if ct := mime.FormatMediaType(mt, params); ct != "" {
 			req.Header.SetContentType(ct)
