@@ -879,14 +879,16 @@ type Operation struct {
 	// MaxBodyBytes is the maximum number of bytes to read from the request
 	// body. If not specified, the default is 1MB. Use -1 for unlimited. A body
 	// of exactly this size is accepted; if the body is larger than the limit,
-	// then an HTTP 413 error is returned.
+	// then an HTTP 413 error is returned. Multipart form bodies have no
+	// default limit.
 	MaxBodyBytes int64 `yaml:"-"`
 
 	// BodyReadTimeout is the maximum amount of time to wait for the request
 	// body to be read. If not specified, the default is 5 seconds. Use -1
 	// for unlimited. If the timeout is reached, then an HTTP 408 error is
 	// returned. This value supersedes the server's read timeout, and a value
-	// of -1 can unset the server's timeout.
+	// of -1 can unset the server's timeout. Multipart form bodies have no
+	// default timeout.
 	BodyReadTimeout time.Duration `yaml:"-"`
 
 	// Errors is a list of HTTP status codes that the handler may return. If

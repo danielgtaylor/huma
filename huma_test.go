@@ -1524,7 +1524,7 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
-			Name: "request-raw-body-too-large-default",
+			Name: "request-body-raw-too-large-default",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
 					Method: http.MethodPut,
@@ -1533,7 +1533,7 @@ func TestFeatures(t *testing.T) {
 				}, func(ctx context.Context, input *struct {
 					RawBody []byte `contentType:"application/octet-stream"`
 				}) (*struct{}, error) {
-					t.Error("handler should not be called")
+					t.Fatal("handler should not be called")
 					return nil, nil
 				})
 			},
@@ -1641,7 +1641,7 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
-			Name: "request-raw-body-no-limit",
+			Name: "request-body-raw-unlimited",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
 					Method:       http.MethodPut,
@@ -2397,8 +2397,7 @@ Content-Disposition: form-data; name="file"; filename="test.js"
 				assert.Equal(t, "object", mpContent.Schema.Type)
 				assert.Equal(t, "binary", mpContent.Schema.Properties["filename"].Format)
 
-				// Multipart uploads must not pick up the default read timeout or
-				// body limit, which readForm doesn't enforce.
+				// Multipart is exempt from the body defaults.
 				op := api.OpenAPI().Paths["/upload"].Post
 				assert.Zero(t, op.BodyReadTimeout)
 				assert.Zero(t, op.MaxBodyBytes)

@@ -1508,8 +1508,8 @@ func processInputType(inputType reflect.Type, op *Operation, registry Registry) 
 		}
 	}
 
-	// Multipart bodies are read via readForm, which enforces neither limit, so
-	// don't default them there (a default timeout would break slow uploads).
+	// Multipart is exempt so existing large or slow uploads keep working; set
+	// limits explicitly.
 	if hasInputBody || (len(rawBodyIndex) > 0 && !rbt.isMultipart()) {
 		ensureBodyReadTimeout(op)
 		ensureMaxBodyBytes(op)
