@@ -1048,7 +1048,11 @@ func register(api API, op Operation, inputType, outputType reflect.Type, newInpu
 
 			if rbt.isMultipart() {
 				// Read form
-				form, err := readForm(ctx)
+				form, cErr, err := readForm(ctx)
+				if cErr != nil {
+					writeErr(api, ctx, cErr, *res)
+					return
+				}
 				jsonUnmarshaler := func(data []byte, v any) error { return api.Unmarshal("application/json", data, v) }
 
 				if err != nil {
@@ -2090,15 +2094,19 @@ func processMultipartMsgBody(form *multipart.Form, op Operation, v reflect.Value
 	return nil
 }
 
-func readForm(ctx Context) (*multipart.Form, *ErrorDetail) {
+func readForm(ctx Context) (*multipart.Form, *contextError, *ErrorDetail) {
 	form, err := ctx.GetMultipartForm()
 	if err != nil {
-		return form, &ErrorDetail{
+		var mbErr *http.MaxBytesError
+		if errors.As(err, &mbErr) {
+			return nil, bodyTooLarge(mbErr), nil
+		}
+		return form, nil, &ErrorDetail{
 			Location: "body",
 			Message:  "cannot read multipart form: " + err.Error(),
 		}
 	}
-	return form, nil
+	return form, nil, nil
 }
 
 type intoUnmarshaler = func(data []byte, v any) error
@@ -2225,7 +2233,7 @@ func readBody(buf io.Writer, ctx Context, maxBytes int64) *contextError {
 		var mbErr *http.MaxBytesError
 		if errors.As(err, &mbErr) {
 			// Report the limit that fired, which may come from an upstream MaxBytesReader.
-			return &contextError{Code: http.StatusRequestEntityTooLarge, Msg: fmt.Sprintf("request body is too large limit=%d bytes", mbErr.Limit)}
+			return bodyTooLarge(mbErr)
 		}
 		var nErr net.Error
 		if errors.As(err, &nErr) && nErr.Timeout() {
@@ -2235,6 +2243,10 @@ func readBody(buf io.Writer, ctx Context, maxBytes int64) *contextError {
 		return &contextError{Code: http.StatusInternalServerError, Msg: "cannot read request body", Errs: []error{err}}
 	}
 	return nil
+}
+
+func bodyTooLarge(err *http.MaxBytesError) *contextError {
+	return &contextError{Code: http.StatusRequestEntityTooLarge, Msg: fmt.Sprintf("request body is too large limit=%d bytes", err.Limit)}
 }
 
 // AutoRegister auto-detects operation registration methods and registers them

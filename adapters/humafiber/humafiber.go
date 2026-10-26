@@ -115,7 +115,10 @@ func (c *fiberWrapper) BodyReader() io.Reader {
 }
 
 func (c *fiberWrapper) GetMultipartForm() (*multipart.Form, error) {
-	return c.orig.MultipartForm()
+	if c.op == nil || c.op.MaxBodyBytes <= 0 {
+		return c.orig.MultipartForm()
+	}
+	return multipartFormWithLimit(c.orig.Request(), c.orig.App().Server(), c.op.MaxBodyBytes)
 }
 
 func (c *fiberWrapper) SetReadDeadline(deadline time.Time) error {

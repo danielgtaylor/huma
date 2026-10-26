@@ -4,6 +4,7 @@ package adapters_test
 import (
 	"context"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"testing"
@@ -95,11 +96,60 @@ func testAdapter(t *testing.T, api huma.API) {
 	}
 }
 
-func TestAdapters(t *testing.T) {
-	config := func() huma.Config {
-		return huma.DefaultConfig("Test", "1.0.0")
-	}
+// adapters lists every adapter so each test covers all of them.
+var adapters = []struct {
+	name          string
+	new           func(huma.Config) huma.API
+	isFiber       bool
+	nativeContext func(ctx huma.Context) context.Context
+}{
+	{"chi", func(c huma.Config) huma.API { return humachi.New(chi.NewMux(), c) }, false, func(ctx huma.Context) context.Context {
+		r, _ := humachi.Unwrap(ctx)
+		return r.Context()
+	}},
+	{"echo", func(c huma.Config) huma.API { return humaecho.New(echo.New(), c) }, false, func(ctx huma.Context) context.Context {
+		return humaecho.Unwrap(ctx).Request().Context()
+	}},
+	{"echo-v4", func(c huma.Config) huma.API { return humaecho.NewV4(echoV4.New(), c) }, false, func(ctx huma.Context) context.Context {
+		return humaecho.UnwrapV4(ctx).Request().Context()
+	}},
+	{"fiber", func(c huma.Config) huma.API { return humafiber.New(fiber.New(), c) }, true, func(ctx huma.Context) context.Context {
+		return humafiber.Unwrap(ctx).Context()
+	}},
+	{"fiber-v2", func(c huma.Config) huma.API { return humafiber.NewV2(fiberV2.New(), c) }, true, func(ctx huma.Context) context.Context {
+		return humafiber.UnwrapV2(ctx).UserContext()
+	}},
+	{"go", func(c huma.Config) huma.API { return humago.New(http.NewServeMux(), c) }, false, func(ctx huma.Context) context.Context {
+		r, _ := humago.Unwrap(ctx)
+		return r.Context()
+	}},
+	{"humaflow", func(c huma.Config) huma.API { return humaflow.New(flow.New(), c) }, false, func(ctx huma.Context) context.Context {
+		r, _ := humaflow.Unwrap(ctx)
+		return r.Context()
+	}},
+	{"gin", func(c huma.Config) huma.API { return humagin.New(gin.New(), c) }, false, func(ctx huma.Context) context.Context {
+		return humagin.Unwrap(ctx).Request.Context()
+	}},
+	{"httprouter", func(c huma.Config) huma.API { return humahttprouter.New(httprouter.New(), c) }, false, func(ctx huma.Context) context.Context {
+		r, _, _ := humahttprouter.Unwrap(ctx)
+		return r.Context()
+	}},
+	{"mux", func(c huma.Config) huma.API { return humamux.New(mux.NewRouter(), c) }, false, func(ctx huma.Context) context.Context {
+		r, _ := humamux.Unwrap(ctx)
+		return r.Context()
+	}},
+	{"bunrouter", func(c huma.Config) huma.API { return humabunrouter.New(bunrouter.New(), c) }, false, func(ctx huma.Context) context.Context {
+		r, _ := humabunrouter.Unwrap(ctx)
+		return r.Context()
+	}},
+	{"bunroutercompat", func(c huma.Config) huma.API { return humabunrouter.NewCompat(bunrouter.New().Compat(), c) }, false, func(ctx huma.Context) context.Context {
+		// FIXME: humabunrouter.Unwrap doesn't work with compat mode, so the
+		// native context can't be read here to assert propagation.
+		return nil
+	}},
+}
 
+func TestAdapters(t *testing.T) {
 	// nativeContext returns the underlying request context for an adapter, or nil
 	// if the adapter can't be unwrapped. It is used to assert that a value set via
 	// huma.WithValue propagates into the native request context that framework
@@ -144,81 +194,46 @@ func TestAdapters(t *testing.T) {
 		return h
 	}
 
-	for _, adapter := range []struct {
-		name string
-		new  func() huma.API
-	}{
-		{"chi", func() huma.API {
-			return wrap(humachi.New(chi.NewMux(), config()), false, func(ctx huma.Context) context.Context {
-				r, _ := humachi.Unwrap(ctx)
-				return r.Context()
-			})
-		}},
-		{"echo", func() huma.API {
-			return wrap(humaecho.New(echo.New(), config()), false, func(ctx huma.Context) context.Context {
-				return humaecho.Unwrap(ctx).Request().Context()
-			})
-		}},
-		{"echo-v4", func() huma.API {
-			return wrap(humaecho.NewV4(echoV4.New(), config()), false, func(ctx huma.Context) context.Context {
-				return humaecho.UnwrapV4(ctx).Request().Context()
-			})
-		}},
-		{"fiber", func() huma.API {
-			return wrap(humafiber.New(fiber.New(), config()), true, func(ctx huma.Context) context.Context {
-				return humafiber.Unwrap(ctx).Context()
-			})
-		}},
-		{"fiber-v2", func() huma.API {
-			return wrap(humafiber.NewV2(fiberV2.New(), config()), true, func(ctx huma.Context) context.Context {
-				return humafiber.UnwrapV2(ctx).UserContext()
-			})
-		}},
-		{"go", func() huma.API {
-			return wrap(humago.New(http.NewServeMux(), config()), false, func(ctx huma.Context) context.Context {
-				r, _ := humago.Unwrap(ctx)
-				return r.Context()
-			})
-		}},
-		{"humaflow", func() huma.API {
-			return wrap(humaflow.New(flow.New(), config()), false, func(ctx huma.Context) context.Context {
-				r, _ := humaflow.Unwrap(ctx)
-				return r.Context()
-			})
-		}},
-		{"gin", func() huma.API {
-			return wrap(humagin.New(gin.New(), config()), false, func(ctx huma.Context) context.Context {
-				return humagin.Unwrap(ctx).Request.Context()
-			})
-		}},
-		{"httprouter", func() huma.API {
-			return wrap(humahttprouter.New(httprouter.New(), config()), false, func(ctx huma.Context) context.Context {
-				r, _, _ := humahttprouter.Unwrap(ctx)
-				return r.Context()
-			})
-		}},
-		{"mux", func() huma.API {
-			return wrap(humamux.New(mux.NewRouter(), config()), false, func(ctx huma.Context) context.Context {
-				r, _ := humamux.Unwrap(ctx)
-				return r.Context()
-			})
-		}},
-		{"bunrouter", func() huma.API {
-			return wrap(humabunrouter.New(bunrouter.New(), config()), false, func(ctx huma.Context) context.Context {
-				r, _ := humabunrouter.Unwrap(ctx)
-				return r.Context()
-			})
-		}},
-		{"bunroutercompat", func() huma.API {
-			return wrap(humabunrouter.NewCompat(bunrouter.New().Compat(), config()), false, func(ctx huma.Context) context.Context {
-				// FIXME: humabunrouter.Unwrap doesn't work with compat mode, so the
-				// native context can't be read here to assert propagation.
-				return nil
-			})
-		}},
-	} {
+	for _, adapter := range adapters {
 		t.Run(adapter.name, func(t *testing.T) {
-			testAdapter(t, adapter.new())
+			testAdapter(t, wrap(adapter.new(huma.DefaultConfig("Test", "1.0.0")), adapter.isFiber, adapter.nativeContext))
 		})
+	}
+}
+
+// TestAdaptersMultipartLimit checks that each adapter enforces MaxBodyBytes on
+// multipart bodies, as each one parses the form itself.
+func TestAdaptersMultipartLimit(t *testing.T) {
+	const body = "--B\r\nContent-Disposition: form-data; name=\"f\"\r\n\r\nhello\r\n--B--\r\n"
+
+	for _, adapter := range adapters {
+		for _, tc := range []struct {
+			name     string
+			maxBytes int64
+			status   int
+		}{
+			{"at-limit", int64(len(body)), http.StatusNoContent},
+			{"over-limit", int64(len(body)) - 1, http.StatusRequestEntityTooLarge},
+		} {
+			t.Run(adapter.name+"/"+tc.name, func(t *testing.T) {
+				api := adapter.new(huma.DefaultConfig("Test", "1.0.0"))
+				huma.Register(api, huma.Operation{
+					Method:       http.MethodPost,
+					Path:         "/upload",
+					MaxBodyBytes: tc.maxBytes,
+				}, func(ctx context.Context, input *struct {
+					RawBody multipart.Form
+				}) (*struct{}, error) {
+					assert.Equal(t, []string{"hello"}, input.RawBody.Value["f"])
+					return nil, nil
+				})
+
+				resp := humatest.Wrap(t, api).Post("/upload",
+					"Content-Type: multipart/form-data; boundary=B",
+					strings.NewReader(body),
+				)
+				assert.Equal(t, tc.status, resp.Code, resp.Body.String())
+			})
+		}
 	}
 }

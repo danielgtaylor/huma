@@ -144,6 +144,8 @@ func (b *CountingInner) Resolve(_ huma.Context, _ *huma.PathBuffer) []error {
 	return nil
 }
 
+const smallMultipartBody = "--B\r\nContent-Disposition: form-data; name=\"f\"\r\n\r\nhello\r\n--B--\r\n"
+
 func TestFeatures(t *testing.T) {
 	for _, feature := range []struct {
 		Name         string
@@ -1519,6 +1521,53 @@ func TestFeatures(t *testing.T) {
 			Body:   `{"name":"x"}`,
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusRequestEntityTooLarge, resp.Code)
+			},
+		},
+		{
+			Name: "request-body-multipart-at-limit",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method:       http.MethodPost,
+					Path:         "/upload",
+					MaxBodyBytes: int64(len(smallMultipartBody)),
+				}, func(ctx context.Context, input *struct {
+					RawBody multipart.Form
+				}) (*struct{}, error) {
+					assert.Equal(t, []string{"hello"}, input.RawBody.Value["f"])
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=B"},
+			Body:    smallMultipartBody,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNoContent, resp.Code, resp.Body.String())
+			},
+		},
+		{
+			Name: "request-body-multipart-too-large",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method:       http.MethodPost,
+					Path:         "/upload",
+					MaxBodyBytes: int64(len(smallMultipartBody)) - 1,
+				}, func(ctx context.Context, input *struct {
+					// The resolver error must not override the 413.
+					ResolverCustomStatus
+					RawBody multipart.Form
+				}) (*struct{}, error) {
+					t.Fatal("handler should not be called")
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=B"},
+			Body:    smallMultipartBody,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusRequestEntityTooLarge, resp.Code)
+				assert.Contains(t, resp.Body.String(), fmt.Sprintf("limit=%d bytes", len(smallMultipartBody)-1))
 			},
 		},
 		{
