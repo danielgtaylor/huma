@@ -1557,7 +1557,7 @@ func TestFeatures(t *testing.T) {
 					ResolverCustomStatus
 					RawBody multipart.Form
 				}) (*struct{}, error) {
-					t.Error("handler should not be called")
+					t.Fatal("handler should not be called")
 					return nil, nil
 				})
 			},

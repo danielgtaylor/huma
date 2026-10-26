@@ -53,18 +53,21 @@ func TestMultipartLimit(t *testing.T) {
 		// checks against the compressed body itself.
 		{name: "body-limit-wins", v3: fiber.Config{BodyLimit: 1 << 15}, v2: fiberV2.Config{BodyLimit: 1 << 15}, maxBytes: 1 << 30, encoding: "gzip", body: gzipped.Bytes(), status: http.StatusRequestEntityTooLarge},
 	} {
-		for version, api := range map[string]func() (huma.API, func(*http.Request) (*http.Response, error)){
-			"v3": func() (huma.API, func(*http.Request) (*http.Response, error)) {
+		for _, version := range []struct {
+			name string
+			new  func() (huma.API, func(*http.Request) (*http.Response, error))
+		}{
+			{"v3", func() (huma.API, func(*http.Request) (*http.Response, error)) {
 				app := fiber.New(tc.v3)
 				return New(app, huma.DefaultConfig("Test", "1.0.0")), func(r *http.Request) (*http.Response, error) { return app.Test(r) }
-			},
-			"v2": func() (huma.API, func(*http.Request) (*http.Response, error)) {
+			}},
+			{"v2", func() (huma.API, func(*http.Request) (*http.Response, error)) {
 				app := fiberV2.New(tc.v2)
 				return NewV2(app, huma.DefaultConfig("Test", "1.0.0")), func(r *http.Request) (*http.Response, error) { return app.Test(r) }
-			},
+			}},
 		} {
-			t.Run(tc.name+"/"+version, func(t *testing.T) {
-				a, do := api()
+			t.Run(tc.name+"/"+version.name, func(t *testing.T) {
+				a, do := version.new()
 				huma.Register(a, huma.Operation{
 					Method:       http.MethodPost,
 					Path:         "/upload",
