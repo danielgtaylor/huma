@@ -1484,8 +1484,6 @@ func processInputType(inputType reflect.Type, op *Operation, registry Registry) 
 		inputBodyIndex = f.Index
 		initRequestBody(op)
 		setRequestBodyFromBody(op, registry, f, inputType)
-		ensureBodyReadTimeout(op)
-		ensureMaxBodyBytes(op)
 	}
 
 	var rawBodyDataT reflect.Type
@@ -1496,8 +1494,6 @@ func processInputType(inputType reflect.Type, op *Operation, registry Registry) 
 		rawBodyIndex = f.Index
 		initRequestBody(op, setRequestBodyRequired)
 		rbt = setRequestBodyFromRawBody(op, registry, f, hasInputBody)
-		ensureBodyReadTimeout(op)
-		ensureMaxBodyBytes(op)
 
 		if rbt == rbtMultipartDecoded {
 			dataField, ok := f.Type.FieldByName("data")
@@ -1506,6 +1502,13 @@ func processInputType(inputType reflect.Type, op *Operation, registry Registry) 
 			}
 			rawBodyDataT = dataField.Type.Elem()
 		}
+	}
+
+	// Multipart bodies are read via readForm, which enforces neither limit, so
+	// don't default them there (a default timeout would break slow uploads).
+	if hasInputBody || (len(rawBodyIndex) > 0 && !rbt.isMultipart()) {
+		ensureBodyReadTimeout(op)
+		ensureMaxBodyBytes(op)
 	}
 
 	if op.RequestBody != nil {

@@ -1522,6 +1522,28 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
+			Name: "request-raw-body-too-large-default",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/raw",
+					// MaxBodyBytes omitted: the 1 MiB default applies.
+				}, func(ctx context.Context, input *struct {
+					RawBody []byte `contentType:"application/octet-stream"`
+				}) (*struct{}, error) {
+					t.Error("handler should not be called")
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPut,
+			URL:     "/raw",
+			Headers: map[string]string{"Content-Type": "application/octet-stream"},
+			Body:    strings.Repeat("a", 1024*1024+1),
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusRequestEntityTooLarge, resp.Code)
+			},
+		},
+		{
 			Name: "request-body-unlimited",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
@@ -1567,6 +1589,28 @@ func TestFeatures(t *testing.T) {
 			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusRequestEntityTooLarge, resp.Code)
 				assert.Contains(t, resp.Body.String(), "limit=5 bytes")
+			},
+		},
+		{
+			Name: "request-raw-body-no-limit",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method:       http.MethodPut,
+					Path:         "/raw",
+					MaxBodyBytes: -1,
+				}, func(ctx context.Context, input *struct {
+					RawBody []byte `contentType:"application/octet-stream"`
+				}) (*struct{}, error) {
+					assert.Len(t, input.RawBody, 2*1024*1024)
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPut,
+			URL:     "/raw",
+			Headers: map[string]string{"Content-Type": "application/octet-stream"},
+			Body:    strings.Repeat("a", 2*1024*1024),
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusNoContent, resp.Code)
 			},
 		},
 		{
@@ -2303,6 +2347,12 @@ Content-Disposition: form-data; name="file"; filename="test.js"
 				mpContent := api.OpenAPI().Paths["/upload"].Post.RequestBody.Content["multipart/form-data"]
 				assert.Equal(t, "object", mpContent.Schema.Type)
 				assert.Equal(t, "binary", mpContent.Schema.Properties["filename"].Format)
+
+				// Multipart uploads must not pick up the default read timeout or
+				// body limit, which readForm doesn't enforce.
+				op := api.OpenAPI().Paths["/upload"].Post
+				assert.Zero(t, op.BodyReadTimeout)
+				assert.Zero(t, op.MaxBodyBytes)
 			},
 			Method:  http.MethodPost,
 			URL:     "/upload",
@@ -4785,44 +4835,6 @@ func TestCustomSchemaErrors(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnprocessableEntity, resp.Result().StatusCode)
 	assert.Contains(t, resp.Body.String(), `expected number >= 10`)
-}
-
-func TestRawBodyHasDefaultSizeLimit(t *testing.T) {
-	mux, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
-
-	var handlerCalled bool
-	var receivedLen int
-
-	huma.Register(api, huma.Operation{
-		Method: http.MethodPost,
-		Path:   "/raw",
-		// MaxBodyBytes intentionally omitted
-		// Default is 1 MB set by "ensureMaxBodyBytes"
-	}, func(ctx context.Context, input *struct {
-		RawBody []byte `contentType:"application/octet-stream"`
-	}) (*struct{}, error) {
-		handlerCalled = true
-		receivedLen = len(input.RawBody)
-		return &struct{}{}, nil
-	})
-
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/raw",
-		bytes.NewReader(bytes.Repeat([]byte("a"), 2*1024*1024)),
-	)
-	req.Header.Set("Content-Type", "application/octet-stream")
-
-	res := httptest.NewRecorder()
-	mux.ServeHTTP(res, req)
-
-	if handlerCalled {
-		t.Fatalf("handler received %d bytes, expected default body limit (1 MB) to reject request", receivedLen)
-	}
-
-	if got, want := res.Code, http.StatusRequestEntityTooLarge; got != want {
-		t.Fatalf("invalid status code: got %d, want %d", got, want)
-	}
 }
 
 func TestBodyRace(t *testing.T) {
