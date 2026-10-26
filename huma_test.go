@@ -2055,6 +2055,29 @@ Content-Disposition: form-data; name="count"
 --SimpleBoundary--`,
 		},
 		{
+			Name: "request-body-multipart-value-default-required",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						Count int `form:"count" default:"3"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body:    `--SimpleBoundary--`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "required form parameter is missing")
+			},
+		},
+		{
 			Name: "request-body-multipart-file-decoded-bad-cardinality",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{

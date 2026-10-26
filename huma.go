@@ -1080,12 +1080,15 @@ func register(api API, op Operation, inputType, outputType reflect.Type, newInpu
 
 								value, ok := form.Value[p.Name]
 								preSplit := value
+								jf := jsonFormFields[p]
 								if !ok || (len(value) > 0 && value[0] == "") {
 									_, isFile := form.File[p.Name]
-									if p.Default == "" || isFile || jsonFormFields[p] != nil {
-										if !op.SkipValidateParams && p.Required && !isFile {
-											res.Add(pb, "", "required "+p.Loc+" parameter is missing")
-										}
+									if !op.SkipValidateParams && p.Required && !isFile {
+										res.Add(pb, "", "required "+p.Loc+" parameter is missing")
+										return
+									}
+									// #1125 stores array defaults comma-joined, which isn't valid JSON.
+									if p.Default == "" || isFile || jf != nil {
 										return
 									}
 									// Like other params, a slice default is split on commas.
@@ -1100,7 +1103,7 @@ func register(api API, op Operation, inputType, outputType reflect.Type, newInpu
 								}
 
 								// JSON fields
-								if jf := jsonFormFields[p]; jf != nil {
+								if jf != nil {
 									errorsBeforeValidation := len(res.Errors)
 
 									var parsed any
