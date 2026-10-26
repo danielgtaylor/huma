@@ -161,6 +161,10 @@ type Schema struct {
 	propertyNames []string        `yaml:"-"`
 	hidden        bool            `yaml:"-"`
 
+	// Go type for `encoding.TextUnmarshaler` fields, letting validation report
+	// decode failures at the field's location instead of the entire body.
+	textUnmarshalType reflect.Type `yaml:"-"`
+
 	// Precomputed validation messages. These prevent allocations during
 	// validation and are known at schema creation time.
 	msgEnum              string                       `yaml:"-"`
@@ -996,7 +1000,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 		// be loaded from plain text, and so should be treated as strings.
 		// This behavior can be overridden by implementing `huma.SchemaProvider`
 		// and returning a custom schema.
-		return &Schema{Type: TypeString, Nullable: isPointer}
+		return &Schema{Type: TypeString, Nullable: isPointer, textUnmarshalType: t}
 	}
 
 	minZero := 0.0
