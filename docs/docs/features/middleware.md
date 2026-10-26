@@ -9,17 +9,21 @@ description: Add middleware to your API to enable things like authentication, lo
 Huma has support for two variants of middleware:
 
 1. Router-specific - works at the router level, i.e. before router-agnostic middleware. You can use any middleware that is implemented for your router.
-2. Router-agnostic - runs in the Huma processing chain, i.e. after calls to router-specific middleware.
+2. Router-agnostic - runs in the Huma processing chain, i.e. after router-specific middleware and only for matched operations.
 
 ```mermaid
 graph LR
 	Request([Request])
 	RouterSpecificMiddleware[Router-Specific Middleware]
+	Router{Route matched?}
+	NotFound([Router 404])
 	HumaMiddleware[Huma Middleware]
 	OperationHandler[Operation Handler]
 
 	Request --> RouterSpecificMiddleware
-	RouterSpecificMiddleware --> HumaMiddleware
+	RouterSpecificMiddleware --> Router
+	Router -- no --> NotFound
+	Router -- yes --> HumaMiddleware
 	subgraph Huma
 		HumaMiddleware --> OperationHandler
 	end
