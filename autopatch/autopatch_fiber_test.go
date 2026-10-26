@@ -18,11 +18,13 @@ import (
 // TestPatchFiberV2NoHost is a regression test for a panic that occurred when
 // autopatch ran on the Fiber v2 adapter. The internal GET/PUT have no Host,
 // fasthttp rejects such an HTTP/1.1 request, and the adapter's ServeHTTP
-// turned that error into a panic.
+// turned that error into a panic. It also checks the client's Host reaches the
+// internal requests.
 func TestPatchFiberV2NoHost(t *testing.T) {
 	db := map[string]*ThingModel{
 		"test": {ID: "test", Price: 1.00},
 	}
+	var hosts []string
 
 	app := fiberV2.New()
 	api := humafiber.NewV2(app, huma.DefaultConfig("Test", "1.0.0"))
@@ -39,8 +41,10 @@ func TestPatchFiberV2NoHost(t *testing.T) {
 		Path:        "/things/{id}",
 		Errors:      []int{404},
 	}, func(ctx context.Context, input *struct {
-		ID string `path:"id"`
+		ID   string `path:"id"`
+		Host string `header:"Host"`
 	}) (*ThingResponse, error) {
+		hosts = append(hosts, input.Host)
 		thing := db[input.ID]
 		if thing == nil {
 			return nil, huma.Error404NotFound("Not found")
@@ -56,8 +60,10 @@ func TestPatchFiberV2NoHost(t *testing.T) {
 	}, func(ctx context.Context, input *struct {
 		ID      string `path:"id"`
 		Body    ThingModel
+		Host    string   `header:"Host"`
 		IfMatch []string `header:"If-Match"`
 	}) (*ThingResponse, error) {
+		hosts = append(hosts, input.Host)
 		db[input.ID] = &input.Body
 		return &ThingResponse{ETag: db[input.ID].ETag(), Body: db[input.ID]}, nil
 	})
@@ -67,6 +73,7 @@ func TestPatchFiberV2NoHost(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPatch, "/things/test",
 		strings.NewReader(`{"price": 1.23}`))
 	req.Header.Set("Content-Type", "application/merge-patch+json")
+	req.Host = "tenant.example.com"
 
 	resp, err := app.Test(req)
 	require.NoError(t, err)
@@ -74,4 +81,5 @@ func TestPatchFiberV2NoHost(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "test1.23[][]", resp.Header.Get("ETag"))
+	assert.Equal(t, []string{"tenant.example.com", "tenant.example.com"}, hosts)
 }
