@@ -96,6 +96,9 @@ func (c *echoCtx) BodyReader() io.Reader {
 }
 
 func (c *echoCtx) GetMultipartForm() (*multipart.Form, error) {
+	if c.op != nil && c.op.MaxBodyBytes > 0 {
+		c.orig.Request().Body = http.MaxBytesReader(nil, c.orig.Request().Body, c.op.MaxBodyBytes)
+	}
 	err := c.orig.Request().ParseMultipartForm(MultipartMaxMemory)
 	return c.orig.Request().MultipartForm, err
 }

@@ -99,6 +99,9 @@ func (c *bunContext) BodyReader() io.Reader {
 }
 
 func (c *bunContext) GetMultipartForm() (*multipart.Form, error) {
+	if c.op != nil && c.op.MaxBodyBytes > 0 {
+		c.r.Body = http.MaxBytesReader(nil, c.r.Body, c.op.MaxBodyBytes)
+	}
 	err := c.r.ParseMultipartForm(MultipartMaxMemory)
 	return c.r.MultipartForm, err
 }
@@ -211,6 +214,9 @@ func (c *bunCompatContext) BodyReader() io.Reader {
 }
 
 func (c *bunCompatContext) GetMultipartForm() (*multipart.Form, error) {
+	if c.op != nil && c.op.MaxBodyBytes > 0 {
+		c.r.Body = http.MaxBytesReader(nil, c.r.Body, c.op.MaxBodyBytes)
+	}
 	err := c.r.ParseMultipartForm(8 * 1024)
 	return c.r.MultipartForm, err
 }

@@ -4,6 +4,7 @@ package adapters_test
 import (
 	"context"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"testing"
@@ -217,5 +218,55 @@ func TestAdapters(t *testing.T) {
 		t.Run(adapter.name, func(t *testing.T) {
 			testAdapter(t, adapter.new())
 		})
+	}
+}
+
+// TestAdaptersMultipartLimit checks that each adapter enforces MaxBodyBytes on
+// multipart bodies, as each one parses the form itself.
+func TestAdaptersMultipartLimit(t *testing.T) {
+	const body = "--B\r\nContent-Disposition: form-data; name=\"f\"\r\n\r\nhello\r\n--B--\r\n"
+
+	for name, newAPI := range map[string]func(huma.Config) huma.API{
+		"chi":             func(c huma.Config) huma.API { return humachi.New(chi.NewMux(), c) },
+		"echo":            func(c huma.Config) huma.API { return humaecho.New(echo.New(), c) },
+		"echo-v4":         func(c huma.Config) huma.API { return humaecho.NewV4(echoV4.New(), c) },
+		"fiber":           func(c huma.Config) huma.API { return humafiber.New(fiber.New(), c) },
+		"fiber-v2":        func(c huma.Config) huma.API { return humafiber.NewV2(fiberV2.New(), c) },
+		"go":              func(c huma.Config) huma.API { return humago.New(http.NewServeMux(), c) },
+		"humaflow":        func(c huma.Config) huma.API { return humaflow.New(flow.New(), c) },
+		"gin":             func(c huma.Config) huma.API { return humagin.New(gin.New(), c) },
+		"httprouter":      func(c huma.Config) huma.API { return humahttprouter.New(httprouter.New(), c) },
+		"mux":             func(c huma.Config) huma.API { return humamux.New(mux.NewRouter(), c) },
+		"bunrouter":       func(c huma.Config) huma.API { return humabunrouter.New(bunrouter.New(), c) },
+		"bunroutercompat": func(c huma.Config) huma.API { return humabunrouter.NewCompat(bunrouter.New().Compat(), c) },
+	} {
+		for _, tc := range []struct {
+			name     string
+			maxBytes int64
+			status   int
+		}{
+			{"at-limit", int64(len(body)), http.StatusNoContent},
+			{"over-limit", int64(len(body)) - 1, http.StatusRequestEntityTooLarge},
+		} {
+			t.Run(name+"/"+tc.name, func(t *testing.T) {
+				api := newAPI(huma.DefaultConfig("Test", "1.0.0"))
+				huma.Register(api, huma.Operation{
+					Method:       http.MethodPost,
+					Path:         "/upload",
+					MaxBodyBytes: tc.maxBytes,
+				}, func(ctx context.Context, input *struct {
+					RawBody multipart.Form
+				}) (*struct{}, error) {
+					assert.Equal(t, []string{"hello"}, input.RawBody.Value["f"])
+					return nil, nil
+				})
+
+				resp := humatest.Wrap(t, api).Post("/upload",
+					"Content-Type: multipart/form-data; boundary=B",
+					strings.NewReader(body),
+				)
+				assert.Equal(t, tc.status, resp.Code, resp.Body.String())
+			})
+		}
 	}
 }

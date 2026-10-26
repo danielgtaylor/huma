@@ -98,6 +98,9 @@ func (c *goContext) BodyReader() io.Reader {
 }
 
 func (c *goContext) GetMultipartForm() (*multipart.Form, error) {
+	if c.op != nil && c.op.MaxBodyBytes > 0 {
+		c.r.Body = http.MaxBytesReader(nil, c.r.Body, c.op.MaxBodyBytes)
+	}
 	err := c.r.ParseMultipartForm(MultipartMaxMemory)
 	return c.r.MultipartForm, err
 }
