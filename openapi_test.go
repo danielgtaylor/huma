@@ -194,8 +194,8 @@ func TestDowngrade(t *testing.T) {
 										Properties: map[string]*huma.Schema{
 											"test": {
 												Type:             "integer",
-												ExclusiveMinimum: Ptr(0.0),
-												ExclusiveMaximum: Ptr(100.0),
+												ExclusiveMinimum: new(0.0),
+												ExclusiveMaximum: new(100.0),
 												Nullable:         true,
 												Examples:         []any{100},
 											},

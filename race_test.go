@@ -120,11 +120,9 @@ func startServer(t *testing.T, withMiddleware bool, bodyReadTimeout time.Duratio
 
 	server := &http.Server{Handler: router}
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_ = server.Serve(listener)
-	}()
+	})
 
 	baseURL := "http://" + listener.Addr().String()
 	cleanup := func() {
@@ -419,11 +417,9 @@ func startMultipartServer(t *testing.T, withMiddleware bool, bodyReadTimeout tim
 
 	server := &http.Server{Handler: router}
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_ = server.Serve(listener)
-	}()
+	})
 
 	baseURL := "http://" + listener.Addr().String()
 	cleanup := func() {

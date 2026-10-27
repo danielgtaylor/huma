@@ -890,8 +890,7 @@ func getFields(typ reflect.Type, visited map[reflect.Type]struct{}) []fieldInfo 
 	}
 	visited[typ] = struct{}{}
 
-	for i := 0; i < typ.NumField(); i++ {
-		f := typ.Field(i)
+	for f := range typ.Fields() {
 		if !f.IsExported() {
 			continue
 		}
@@ -1095,7 +1094,7 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 
 			name := f.Name
 			if j := f.Tag.Get("json"); j != "" {
-				if n := strings.Split(j, ",")[0]; n != "" {
+				if n, _, _ := strings.Cut(j, ","); n != "" {
 					name = n
 				}
 				if strings.Contains(j, "omitempty") {

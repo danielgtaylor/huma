@@ -1248,12 +1248,11 @@ func register(api API, op Operation, inputType, outputType reflect.Type, newInpu
 		})
 
 		if len(res.Errors) > 0 {
-			for i := len(res.Errors) - 1; i >= 0; i-- {
+			for _, v := range slices.Backward(res.Errors) {
 				// If there are errors, and they provide a status, then update the
 				// response status code to match. Otherwise, use the default status
 				// code is used. Since these run in order, the last error code wins.
-				var s StatusError
-				if errors.As(res.Errors[i], &s) {
+				if s, ok := errors.AsType[StatusError](v); ok {
 					errStatus = s.GetStatus()
 					break
 				}
@@ -2110,8 +2109,7 @@ func processMultipartMsgBody(form *multipart.Form, op Operation, v reflect.Value
 func readForm(ctx Context) (*multipart.Form, *contextError, *ErrorDetail) {
 	form, err := ctx.GetMultipartForm()
 	if err != nil {
-		var mbErr *http.MaxBytesError
-		if errors.As(err, &mbErr) {
+		if mbErr, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			return nil, bodyTooLarge(mbErr), nil
 		}
 		return form, nil, &ErrorDetail{
@@ -2243,8 +2241,7 @@ func readBody(buf io.Writer, ctx Context, maxBytes int64) *contextError {
 		reader = http.MaxBytesReader(nil, io.NopCloser(reader), maxBytes)
 	}
 	if _, err := io.Copy(buf, reader); err != nil {
-		var mbErr *http.MaxBytesError
-		if errors.As(err, &mbErr) {
+		if mbErr, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			// Report the limit that fired, which may come from an upstream MaxBytesReader.
 			return bodyTooLarge(mbErr)
 		}
@@ -2289,8 +2286,7 @@ func AutoRegister(api API, server any) {
 	args := []reflect.Value{reflect.ValueOf(server), reflect.ValueOf(api)}
 
 	t := reflect.TypeOf(server)
-	for i := 0; i < t.NumMethod(); i++ {
-		m := t.Method(i)
+	for m := range t.Methods() {
 		if strings.HasPrefix(m.Name, "Register") && len(m.Name) > 8 {
 			m.Func.Call(args)
 		}

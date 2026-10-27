@@ -196,8 +196,8 @@ func (m *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *Mux) wrap(handler http.Handler) http.Handler {
-	for i := len(m.middlewares) - 1; i >= 0; i-- {
-		handler = m.middlewares[i](handler)
+	for _, v := range slices.Backward(m.middlewares) {
+		handler = v(handler)
 	}
 
 	return handler

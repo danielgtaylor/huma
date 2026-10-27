@@ -15,10 +15,6 @@ import (
 	"github.com/danielgtaylor/huma/v2/validation"
 )
 
-func Ptr[T any](v T) *T {
-	return &v
-}
-
 func mapTo[A, B any](s []A, f func(A) B) []B {
 	r := make([]B, len(s))
 	for i, v := range s {
@@ -1431,8 +1427,8 @@ var validateTests = []struct {
 		name: "oneOf fail multi",
 		s: &huma.Schema{
 			OneOf: []*huma.Schema{
-				{Type: huma.TypeNumber, Minimum: Ptr(float64(5))},
-				{Type: huma.TypeNumber, Maximum: Ptr(float64(10))},
+				{Type: huma.TypeNumber, Minimum: new(float64(5))},
+				{Type: huma.TypeNumber, Maximum: new(float64(10))},
 			},
 		},
 		input: 8,
@@ -1442,8 +1438,8 @@ var validateTests = []struct {
 		name: "anyOf success",
 		s: &huma.Schema{
 			AnyOf: []*huma.Schema{
-				{Type: huma.TypeNumber, Minimum: Ptr(float64(5))},
-				{Type: huma.TypeNumber, Maximum: Ptr(float64(10))},
+				{Type: huma.TypeNumber, Minimum: new(float64(5))},
+				{Type: huma.TypeNumber, Maximum: new(float64(10))},
 			},
 		},
 		input: 8,
@@ -1452,8 +1448,8 @@ var validateTests = []struct {
 		name: "anyOf fail",
 		s: &huma.Schema{
 			AnyOf: []*huma.Schema{
-				{Type: huma.TypeNumber, Minimum: Ptr(float64(5))},
-				{Type: huma.TypeNumber, Minimum: Ptr(float64(10))},
+				{Type: huma.TypeNumber, Minimum: new(float64(5))},
+				{Type: huma.TypeNumber, Minimum: new(float64(10))},
 			},
 		},
 		input: 1,
@@ -1474,7 +1470,7 @@ var validateTests = []struct {
 		name: "anyOf nullable success",
 		s: &huma.Schema{
 			AnyOf: []*huma.Schema{
-				{Type: huma.TypeNumber, Minimum: Ptr(float64(40))},
+				{Type: huma.TypeNumber, Minimum: new(float64(40))},
 				{Type: huma.TypeNull},
 			},
 		},
@@ -1484,7 +1480,7 @@ var validateTests = []struct {
 		name: "anyOf nullable fail",
 		s: &huma.Schema{
 			AnyOf: []*huma.Schema{
-				{Type: huma.TypeNumber, Minimum: Ptr(float64(40))},
+				{Type: huma.TypeNumber, Minimum: new(float64(40))},
 				{Type: huma.TypeNull},
 			},
 		},
@@ -1511,8 +1507,8 @@ var validateTests = []struct {
 		name: "allOf success",
 		s: &huma.Schema{
 			AllOf: []*huma.Schema{
-				{Type: huma.TypeNumber, Minimum: Ptr(float64(5))},
-				{Type: huma.TypeNumber, Maximum: Ptr(float64(10))},
+				{Type: huma.TypeNumber, Minimum: new(float64(5))},
+				{Type: huma.TypeNumber, Maximum: new(float64(10))},
 			},
 		},
 		input: 8,
@@ -1521,8 +1517,8 @@ var validateTests = []struct {
 		name: "allOf fail",
 		s: &huma.Schema{
 			AllOf: []*huma.Schema{
-				{Type: huma.TypeNumber, Minimum: Ptr(float64(5))},
-				{Type: huma.TypeNumber, Maximum: Ptr(float64(10))},
+				{Type: huma.TypeNumber, Minimum: new(float64(5))},
+				{Type: huma.TypeNumber, Maximum: new(float64(10))},
 			},
 		},
 		input: 12,
