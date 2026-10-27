@@ -4,11 +4,16 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
+	"testing/iotest"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/danielgtaylor/huma/v2/sse"
 	fiberV2 "github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/require"
@@ -129,6 +134,23 @@ func TestFiberV2BodyReaderDecompresses(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode, "compressed body should decompress and parse: %s", body)
 	require.Contains(t, string(body), `"name":"gzipped"`)
+}
+
+// TestServeHTTPV2: ServeHTTP backs autopatch and humatest, so it must outlast
+// Test's 1s default and return 500, not panic, on Test errors.
+func TestServeHTTPV2(t *testing.T) {
+	api := humatest.Wrap(t, NewV2(fiberV2.New(), huma.DefaultConfig("Test", "1.0.0")))
+	huma.Get(api, "/slow", func(ctx context.Context, input *struct{}) (*struct{}, error) {
+		time.Sleep(1100 * time.Millisecond)
+		return nil, nil
+	})
+
+	require.Equal(t, http.StatusNoContent, api.Get("/slow").Code)
+
+	w := httptest.NewRecorder()
+	api.Adapter().ServeHTTP(w, httptest.NewRequest(http.MethodPut, "/slow", iotest.ErrReader(errors.New("read failed"))))
+	require.Equal(t, http.StatusInternalServerError, w.Code)
+	require.Equal(t, "Internal Server Error\n", w.Body.String())
 }
 
 func BenchmarkHumaFiberV2(b *testing.B) {

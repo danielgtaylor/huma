@@ -2,12 +2,16 @@ package humafiber
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"testing/iotest"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/danielgtaylor/huma/v2/sse"
 	"github.com/gofiber/fiber/v3"
 )
@@ -77,6 +81,26 @@ func TestNewContext(t *testing.T) {
 	}
 	if got.Operation() != op {
 		t.Fatalf("Operation() = %v, want %v", got.Operation(), op)
+	}
+}
+
+// TestServeHTTP: ServeHTTP backs autopatch and humatest, so it must outlast
+// Test's 1s default and return 500, not panic, on Test errors.
+func TestServeHTTP(t *testing.T) {
+	api := humatest.Wrap(t, New(fiber.New(), huma.DefaultConfig("Test", "1.0.0")))
+	huma.Get(api, "/slow", func(ctx context.Context, input *struct{}) (*struct{}, error) {
+		time.Sleep(1100 * time.Millisecond)
+		return nil, nil
+	})
+
+	if resp := api.Get("/slow"); resp.Code != http.StatusNoContent {
+		t.Fatalf("slow handler: status = %d, want 204", resp.Code)
+	}
+
+	w := httptest.NewRecorder()
+	api.Adapter().ServeHTTP(w, httptest.NewRequest(http.MethodPut, "/slow", iotest.ErrReader(errors.New("read failed"))))
+	if w.Code != http.StatusInternalServerError || w.Body.String() != "Internal Server Error\n" {
+		t.Fatalf("unreadable body: got %d %q, want 500 %q", w.Code, w.Body.String(), "Internal Server Error\n")
 	}
 }
 
