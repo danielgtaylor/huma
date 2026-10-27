@@ -260,14 +260,17 @@ func (a *fiberV2Adapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			r.Host = "localhost"
 		}
 	}
-	resp, err := a.tester.Test(r)
+	// Test gives up after 1s by default, -1 waits as long as the handler needs.
+	resp, err := a.tester.Test(r, -1)
 	if resp != nil && resp.Body != nil {
 		defer func() {
 			_ = resp.Body.Close()
 		}()
 	}
 	if err != nil {
-		panic(err)
+		// Fiber doesn't recover panics by default, so a panic here would stop the server.
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
 	}
 	h := w.Header()
 	for k, v := range resp.Header {

@@ -258,14 +258,17 @@ func (a *fiberAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 }
 
 func (a *fiberAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	resp, err := a.tester.Test(r)
+	// Test gives up after 1s by default, so wait as long as the handler needs.
+	resp, err := a.tester.Test(r, fiber.TestConfig{Timeout: 0})
 	if resp != nil && resp.Body != nil {
 		defer func() {
 			_ = resp.Body.Close()
 		}()
 	}
 	if err != nil {
-		panic(err)
+		// Fiber doesn't recover panics by default, so a panic here would stop the server.
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
 	}
 	h := w.Header()
 	for k, v := range resp.Header {
