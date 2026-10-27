@@ -2112,6 +2112,65 @@ Hello, World!
 			Body:    `--SimpleBoundary--`,
 		},
 		{
+			Name: "request-body-multipart-value-defaults",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						Name  string   `form:"name" default:"anon" required:"false"`
+						Count int      `form:"count" default:"3" required:"false"`
+						Tags  []string `form:"tags" default:"a,b" required:"false"`
+						Given string   `form:"given" default:"x" required:"false"`
+						Nums  []int    `form:"nums" contentType:"application/json" default:"[1,2]" required:"false"`
+					}]
+				}) (*struct{}, error) {
+					data := input.RawBody.Data()
+					assert.Equal(t, "anon", data.Name)
+					assert.Equal(t, 3, data.Count)
+					assert.Equal(t, []string{"a", "b"}, data.Tags)
+					assert.Equal(t, "y", data.Given)
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body: `--SimpleBoundary
+Content-Disposition: form-data; name="given"
+
+y
+--SimpleBoundary
+Content-Disposition: form-data; name="count"
+
+
+--SimpleBoundary--`,
+		},
+		{
+			Name: "request-body-multipart-value-default-required",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPost,
+					Path:   "/upload",
+				}, func(ctx context.Context, input *struct {
+					RawBody huma.MultipartFormFiles[struct {
+						Count int `form:"count" default:"3"`
+					}]
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method:  http.MethodPost,
+			URL:     "/upload",
+			Headers: map[string]string{"Content-Type": "multipart/form-data; boundary=SimpleBoundary"},
+			Body:    `--SimpleBoundary--`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), "required form parameter is missing")
+			},
+		},
+		{
 			Name: "request-body-multipart-file-decoded-bad-cardinality",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{
