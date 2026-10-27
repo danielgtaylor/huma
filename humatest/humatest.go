@@ -316,6 +316,9 @@ func Wrap(tb TB, api huma.API) TestAPI {
 // and perform requests against them. Optionally takes a configuration object
 // to customize how the API is created. If no configuration is provided then
 // a simple default configuration supporting `application/json` is used.
+//
+// The API uses an internal router adapter, so adapter-specific helpers like
+// `humago.Unwrap` will panic. Use [Wrap] with your real adapter instead.
 func New(tb TB, configs ...huma.Config) (http.Handler, TestAPI) {
 	for _, config := range configs {
 		if config.OpenAPI == nil {
