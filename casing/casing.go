@@ -300,6 +300,9 @@ func Camel(value string, transform ...TransformFunc) string {
 // LowerCamel returns a lowerCamelCase version of the input.
 func LowerCamel(value string, transform ...TransformFunc) string {
 	runes := []rune(Camel(value, transform...))
+	if len(runes) == 0 {
+		return ""
+	}
 	runes[0] = unicode.ToLower(runes[0])
 	return string(runes)
 }

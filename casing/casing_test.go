@@ -54,6 +54,10 @@ func TestCamelCases(t *testing.T) {
 
 	// Multi-byte characters should properly lowercase when starting a string.
 	assert.Equal(t, "überStraße", casing.LowerCamel("ÜberStraße"))
+
+	// Nothing left to lowercase.
+	assert.Empty(t, casing.LowerCamel(""))
+	assert.Empty(t, casing.LowerCamel("--"))
 }
 
 func TestSnakeCase(t *testing.T) {
