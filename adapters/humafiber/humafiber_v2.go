@@ -268,7 +268,7 @@ func (a *fiberV2Adapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}()
 	}
 	if err != nil {
-		// Fiber doesn't recover panics by default, so a panic here would stop the server.
+		// Don't panic (Fiber doesn't recover by default) or echo err (it can quote the raw request).
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}

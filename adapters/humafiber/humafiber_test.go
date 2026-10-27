@@ -84,9 +84,8 @@ func TestNewContext(t *testing.T) {
 	}
 }
 
-// TestServeHTTP checks ServeHTTP, which autopatch and humatest use: it waits
-// for a handler slower than the 1s default timeout of Fiber's Test, and a
-// request Test can't send gets a plain 500 instead of a panic.
+// TestServeHTTP: ServeHTTP backs autopatch and humatest, so it must outlast
+// Test's 1s default and return 500, not panic, on Test errors.
 func TestServeHTTP(t *testing.T) {
 	api := humatest.Wrap(t, New(fiber.New(), huma.DefaultConfig("Test", "1.0.0")))
 	huma.Get(api, "/slow", func(ctx context.Context, input *struct{}) (*struct{}, error) {

@@ -136,9 +136,8 @@ func TestFiberV2BodyReaderDecompresses(t *testing.T) {
 	require.Contains(t, string(body), `"name":"gzipped"`)
 }
 
-// TestServeHTTPV2 checks ServeHTTP, which autopatch and humatest use: it waits
-// for a handler slower than the 1s default timeout of Fiber's Test, and a
-// request Test can't send gets a plain 500 instead of a panic.
+// TestServeHTTPV2: ServeHTTP backs autopatch and humatest, so it must outlast
+// Test's 1s default and return 500, not panic, on Test errors.
 func TestServeHTTPV2(t *testing.T) {
 	api := humatest.Wrap(t, NewV2(fiberV2.New(), huma.DefaultConfig("Test", "1.0.0")))
 	huma.Get(api, "/slow", func(ctx context.Context, input *struct{}) (*struct{}, error) {
