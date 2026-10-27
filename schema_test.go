@@ -90,16 +90,16 @@ type TypedStringWithCustomLength string
 func (c TypedStringWithCustomLength) Schema(r huma.Registry) *huma.Schema {
 	return &huma.Schema{
 		Type:      "string",
-		MinLength: Ptr(1),
-		MaxLength: Ptr(10),
+		MinLength: new(1),
+		MaxLength: new(10),
 	}
 }
 
 type TypedIntegerWithCustomLimits int
 
 func (c *TypedIntegerWithCustomLimits) TransformSchema(r huma.Registry, s *huma.Schema) *huma.Schema {
-	s.Minimum = Ptr(float64(1))
-	s.Maximum = Ptr(float64(10))
+	s.Minimum = new(float64(1))
+	s.Maximum = new(float64(10))
 	return s
 }
 
@@ -119,7 +119,7 @@ func TestSchema(t *testing.T) {
 		},
 		{
 			name:     "bool-pointer",
-			input:    Ptr(true),
+			input:    new(true),
 			expected: `{"type": ["boolean", "null"]}`,
 		},
 		{
@@ -174,7 +174,7 @@ func TestSchema(t *testing.T) {
 		},
 		{
 			name:     "time-pointer",
-			input:    Ptr(time.Now()),
+			input:    new(time.Now()),
 			expected: `{"type": ["string", "null"], "format": "date-time"}`,
 		},
 		{
@@ -1637,7 +1637,7 @@ func TestCustomUnmarshalType(t *testing.T) {
 	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
 	s := r.Schema(reflect.TypeFor[O](), false, "")
 	assert.Equal(t, "integer", s.Properties["field"].Type, s)
-	assert.Equal(t, Ptr(float64(10)), s.Properties["field"].Maximum, s)
+	assert.Equal(t, new(float64(10)), s.Properties["field"].Maximum, s)
 	assert.InDelta(t, float64(5), s.Properties["field"].Examples[0], 0, s.Properties["field"])
 
 	// Confirm the field works as expected when loading JSON.

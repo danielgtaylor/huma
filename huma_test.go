@@ -1285,8 +1285,8 @@ func TestFeatures(t *testing.T) {
 				}) (*struct{}, error) {
 					assert.Equal(t, "Huma", *input.Body.Name)
 					assert.True(t, *input.Body.Enabled)
-					assert.Equal(t, []*string{Ptr("foo"), Ptr("bar")}, input.Body.Tags)
-					assert.Equal(t, []*int{Ptr(1), Ptr(2), Ptr(3)}, input.Body.Numbers)
+					assert.Equal(t, []*string{new("foo"), new("bar")}, input.Body.Tags)
+					assert.Equal(t, []*int{new(1), new(2), new(3)}, input.Body.Numbers)
 					assert.Equal(t, 1, input.Body.Items[0].ID)
 					assert.True(t, *input.Body.Items[0].Verified)
 					assert.Equal(t, 2, input.Body.Items[1].ID)
@@ -4925,7 +4925,7 @@ func TestCustomSchemaErrors(t *testing.T) {
 						Properties: map[string]*huma.Schema{
 							"test": {
 								Type:    huma.TypeInteger,
-								Minimum: Ptr(10.0),
+								Minimum: new(10.0),
 							},
 						},
 					},

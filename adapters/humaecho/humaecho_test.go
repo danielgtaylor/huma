@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -36,9 +37,7 @@ func (m *flushingResponseWriter) WriteHeader(code int) {
 	}
 	m.wroteHeader = true
 	// Write current headers to the recorder
-	for k, v := range m.header {
-		m.rec.Header()[k] = v
-	}
+	maps.Copy(m.rec.Header(), m.header)
 	m.rec.WriteHeader(code)
 	// Create a new header map so subsequent changes are NOT reflected in the recorder
 	m.header = make(http.Header)
