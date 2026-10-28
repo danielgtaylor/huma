@@ -74,6 +74,11 @@ func (t *TypedArrayWithCustomDesc) TransformSchema(r huma.Registry, s *huma.Sche
 	return s
 }
 
+// TextArrayID mirrors third-party UUID types: a byte array decoded from text.
+type TextArrayID [16]byte
+
+func (id *TextArrayID) UnmarshalText([]byte) error { return nil }
+
 var _ huma.SchemaTransformer = (*CustomSchemaPtr)(nil)
 
 type CustomSchemaPtr struct {
@@ -964,6 +969,32 @@ func TestSchema(t *testing.T) {
 					}
 				},
 				"required": ["int"]
+			}`,
+		},
+		{
+			name: "field-pointer-string-array",
+			input: struct {
+				IP    *net.IP      `json:"ip"`
+				Bytes *[]byte      `json:"bytes"`
+				ID    *TextArrayID `json:"id"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"ip": {
+						"type": ["string", "null"],
+						"format": "ipv4"
+					},
+					"bytes": {
+						"type": ["string", "null"],
+						"contentEncoding": "base64"
+					},
+					"id": {
+						"type": ["string", "null"]
+					}
+				},
+				"required": ["ip", "bytes", "id"]
 			}`,
 		},
 		{
