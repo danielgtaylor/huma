@@ -33,8 +33,8 @@ import (
 
 // Options for the CLI.
 type Options struct {
-	Port   int    `help:"Port to listen on" default:"8888"`
-	Router string `help:"Router to use" enum:"chi,gin" default:"chi"`
+	Port   int    `doc:"Port to listen on" default:"8888"`
+	Router string `doc:"Router to use" enum:"chi,gin" default:"chi"`
 }
 
 // First, define your SSE message types. These can be any struct you want and

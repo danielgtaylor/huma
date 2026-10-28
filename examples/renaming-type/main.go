@@ -17,7 +17,7 @@ import (
 
 // Options for the CLI.
 type Options struct {
-	Port int `help:"Port to listen on" short:"p" default:"8888"`
+	Port int `doc:"Port to listen on" short:"p" default:"8888"`
 }
 
 type User struct {
