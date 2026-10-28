@@ -14,8 +14,9 @@ import (
 
 func TestSchemaStdlibUUID(t *testing.T) {
 	type Input struct {
-		ID  uuid.UUID   `json:"id"`
-		IDs []uuid.UUID `json:"ids"`
+		ID    uuid.UUID   `json:"id"`
+		IDPtr *uuid.UUID  `json:"idPtr"`
+		IDs   []uuid.UUID `json:"ids"`
 	}
 
 	r := huma.NewMapRegistry("#/components/schemas/", huma.DefaultSchemaNamer)
@@ -24,6 +25,12 @@ func TestSchemaStdlibUUID(t *testing.T) {
 	id := s.Properties["id"]
 	assert.Equal(t, huma.TypeString, id.Type)
 	assert.Equal(t, "uuid", id.Format)
+	assert.False(t, id.Nullable)
+
+	idPtr := s.Properties["idPtr"]
+	assert.Equal(t, huma.TypeString, idPtr.Type)
+	assert.Equal(t, "uuid", idPtr.Format)
+	assert.True(t, idPtr.Nullable)
 
 	ids := s.Properties["ids"]
 	assert.Equal(t, huma.TypeArray, ids.Type)
