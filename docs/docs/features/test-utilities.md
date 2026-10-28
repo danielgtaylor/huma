@@ -22,6 +22,16 @@ func TestMyAPI(t *testing.T) {
 }
 ```
 
+### Using Your Router Adapter
+
+`humatest.New` uses its own adapter, so adapter-specific calls like `humago.Unwrap(ctx)` panic in middleware under test. Use `humatest.Wrap` to test an API built on your real adapter instead:
+
+```go title="code.go"
+func TestMyAPI(t *testing.T) {
+	api := humatest.Wrap(t, humago.New(http.NewServeMux(), huma.DefaultConfig("My API", "1.0.0")))
+}
+```
+
 ## Registering Routes
 
 The test API is the same as any other API, and you can register routes to it the same as you would your main API instance.
