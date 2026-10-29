@@ -3,6 +3,7 @@ package huma_test
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -330,6 +331,37 @@ func TestDocsRenderers(t *testing.T) {
 		assert.Equal(t, http.StatusOK, resp.Code)
 		// Elements uses apiDescriptionUrl=".../api/v1/openapi.yaml"
 		assert.Contains(t, resp.Body.String(), `apiDescriptionUrl="/api/v1/openapi.yaml"`)
+	})
+
+	t.Run("DocsAdapter", func(t *testing.T) {
+		docsAdapter := humatest.NewAdapter()
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+				Servers: []*huma.Server{
+					{URL: "https://example.com/api/v1"},
+				},
+			},
+			DocsPath:    "/docs",
+			DocsAdapter: docsAdapter,
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		// The main adapter does not serve the docs or the spec.
+		assert.Equal(t, http.StatusNotFound, api.Get("/docs").Code)
+		assert.Equal(t, http.StatusNotFound, api.Get("/openapi.yaml").Code)
+
+		w := httptest.NewRecorder()
+		docsAdapter.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/docs", nil))
+		assert.Equal(t, http.StatusOK, w.Code)
+		// The server prefix applies to the main adapter only, so the spec URL is
+		// relative to the docs page.
+		assert.Contains(t, w.Body.String(), `apiDescriptionUrl="openapi.yaml"`)
+
+		w = httptest.NewRecorder()
+		docsAdapter.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/openapi.yaml", nil))
+		assert.Equal(t, http.StatusOK, w.Code)
 	})
 
 	t.Run("APIPrefixWithServerVars", func(t *testing.T) {
