@@ -522,7 +522,7 @@ func parseContentType(contentType string) (int, int, error) {
 //	config := huma.DefaultConfig("Example API", "1.0.0")
 //	api := huma.NewAPI(config, adapter)
 func NewAPI(config Config, a Adapter) API {
-	for i := range config.CreateHooks {
+	for i := 0; i < len(config.CreateHooks); i++ {
 		config = config.CreateHooks[i](config)
 	}
 
