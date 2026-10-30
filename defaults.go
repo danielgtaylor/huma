@@ -3,10 +3,8 @@ package huma
 import (
 	"encoding/json"
 	"io"
+	"strings"
 )
-
-// DefaultSchemaNamer is the default prefix used to reference schemas in the API spec.
-const DefaultSchemaRefPrefix = "#/components/schemas/"
 
 // DefaultJSONFormat is the default JSON formatter that can be set in the API's
 // `Config.Formats` map. This is used by the `DefaultConfig` function.
@@ -56,7 +54,10 @@ var DefaultFormats = map[string]Format{
 //
 //	import _ "github.com/danielgtaylor/huma/v2/formats/cbor"
 func DefaultConfig(title string, version string) Config {
-	registry := NewMapRegistry(DefaultSchemaRefPrefix, DefaultSchemaNamer)
+	schemaPrefix := "#/components/schemas/"
+	schemasPath := "/schemas"
+
+	registry := NewMapRegistry(schemaPrefix, DefaultSchemaNamer)
 
 	return Config{
 		OpenAPI: &OpenAPI{
@@ -73,25 +74,46 @@ func DefaultConfig(title string, version string) Config {
 		registryConfig:               getConfig[registryConfig](registry),
 		DocsPath:                     "/docs",
 		DocsRenderer:                 DocsRendererStoplightElements,
-		SchemasPath:                  "/schemas",
+		SchemasPath:                  schemasPath,
 		Formats:                      DefaultFormats,
 		DefaultFormat:                "application/json",
 		NoFormatFallback:             false,
 		RejectUnknownQueryParameters: false,
 		Transformers:                 nil,
 		CreateHooks: []func(Config) Config{
-			DefaultSchemaLinkHook(""), // assume schemas are on mounted the root
+			DefaultSchemaLinkHook(""),
 		},
 	}
 }
 
-// DefaultSchemaLinkHook adds a link transformer to the API.
-// This adds `Link` headers and puts `$schema` fields in the response body which
-// point to the JSON Schema that describes the response structure.
-// This is a create hook so we get the latest schema path setting.
-func DefaultSchemaLinkHook(schemaPathPrefix string) func(c Config) Config {
+// DefaultSchemaLinkHook returns a create hook that adds a link transformer to
+// the API. The transformer adds `Link` headers and `$schema` fields to response
+// bodies. These point to the JSON Schema that describes the response
+// structure. It is a create hook so it gets the latest schema path setting.
+//
+// The pathPrefix is the path where the adapter that serves the schemas is
+// mounted, from the root of the host, e.g. `/internal`. Use `/` for the root.
+// If it is empty, the path of the first server URL is used. You must set it
+// when [Config.DocsAdapter] serves the schemas, because the server URLs
+// describe the main API only.
+//
+//	config := huma.DefaultConfig("My API", "1.0.0")
+//	config.DocsAdapter = humachi.NewAdapter(internalRouter)
+//	config.CreateHooks = []func(huma.Config) huma.Config{
+//		huma.DefaultSchemaLinkHook("/internal"),
+//	}
+func DefaultSchemaLinkHook(pathPrefix string) func(Config) Config {
+	if pathPrefix != "" && !strings.HasPrefix(pathPrefix, "/") {
+		panic("schema link path prefix must start with a slash: " + pathPrefix)
+	}
+
 	return func(c Config) Config {
-		linkTransformer := NewSchemaLinkTransformer(schemaPathPrefix, c.SchemasPath)
+		if c.DocsAdapter != nil && c.SchemasPath != "" && pathPrefix == "" {
+			panic(`DocsAdapter serves the schemas, so DefaultSchemaLinkHook needs the path where DocsAdapter is mounted (use "/" for the root)`)
+		}
+
+		linkTransformer := NewSchemaLinkTransformer(schemaRefPrefix, c.SchemasPath)
+		linkTransformer.pathPrefix = pathPrefix
 		c.OnAddOperation = append(c.OnAddOperation, linkTransformer.OnAddOperation)
 		c.Transformers = append(c.Transformers, linkTransformer.Transform)
 		return c

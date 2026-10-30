@@ -333,37 +333,6 @@ func TestDocsRenderers(t *testing.T) {
 		assert.Contains(t, resp.Body.String(), `apiDescriptionUrl="/api/v1/openapi.yaml"`)
 	})
 
-	t.Run("DocsAdapter", func(t *testing.T) {
-		docsAdapter := humatest.NewAdapter()
-		_, api := humatest.New(t, huma.Config{
-			OpenAPI: &huma.OpenAPI{
-				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
-				Servers: []*huma.Server{
-					{URL: "https://example.com/api/v1"},
-				},
-			},
-			DocsPath:    "/docs",
-			DocsAdapter: docsAdapter,
-			OpenAPIPath: "/openapi",
-			Formats:     huma.DefaultFormats,
-		})
-
-		// The main adapter does not serve the docs or the spec.
-		assert.Equal(t, http.StatusNotFound, api.Get("/docs").Code)
-		assert.Equal(t, http.StatusNotFound, api.Get("/openapi.yaml").Code)
-
-		w := httptest.NewRecorder()
-		docsAdapter.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/docs", nil))
-		assert.Equal(t, http.StatusOK, w.Code)
-		// The server prefix applies to the main adapter only, so the spec URL is
-		// relative to the docs page.
-		assert.Contains(t, w.Body.String(), `apiDescriptionUrl="openapi.yaml"`)
-
-		w = httptest.NewRecorder()
-		docsAdapter.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/openapi.yaml", nil))
-		assert.Equal(t, http.StatusOK, w.Code)
-	})
-
 	t.Run("APIPrefixWithServerVars", func(t *testing.T) {
 		_, api := humatest.New(t, huma.Config{
 			OpenAPI: &huma.OpenAPI{
@@ -495,6 +464,106 @@ func TestDocsRenderers(t *testing.T) {
 				OpenAPIPath:  "/openapi",
 				Formats:      huma.DefaultFormats,
 			})
+		})
+	})
+}
+
+func TestDocsAdapter(t *testing.T) {
+	t.Run("Docs", func(t *testing.T) {
+		docsAdapter := humatest.NewAdapter()
+		_, api := humatest.New(t, huma.Config{
+			OpenAPI: &huma.OpenAPI{
+				Info: &huma.Info{Title: "Test API", Version: "1.0.0"},
+				Servers: []*huma.Server{
+					{URL: "https://example.com/api/v1"},
+				},
+			},
+			DocsPath:    "/docs",
+			DocsAdapter: docsAdapter,
+			OpenAPIPath: "/openapi",
+			Formats:     huma.DefaultFormats,
+		})
+
+		// The main adapter does not serve the docs or the spec.
+		assert.Equal(t, http.StatusNotFound, api.Get("/docs").Code)
+		assert.Equal(t, http.StatusNotFound, api.Get("/openapi.yaml").Code)
+
+		w := httptest.NewRecorder()
+		docsAdapter.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/docs", nil))
+		assert.Equal(t, http.StatusOK, w.Code)
+		// The server prefix applies to the main adapter only, so the spec URL is
+		// relative to the docs page.
+		assert.Contains(t, w.Body.String(), `apiDescriptionUrl="openapi.yaml"`)
+
+		w = httptest.NewRecorder()
+		docsAdapter.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/openapi.yaml", nil))
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("Schemas", func(t *testing.T) {
+		type Greeting struct {
+			Message string `json:"message"`
+		}
+
+		docsAdapter := humatest.NewAdapter()
+		config := huma.DefaultConfig("Test API", "1.0.0")
+		config.Servers = []*huma.Server{{URL: "https://api.example.com/api/v1"}}
+		config.DocsAdapter = docsAdapter
+		config.CreateHooks = []func(huma.Config) huma.Config{
+			huma.DefaultSchemaLinkHook("/internal"),
+		}
+		_, api := humatest.New(t, config)
+
+		huma.Get(api, "/greeting", func(ctx context.Context, input *struct{}) (*struct{ Body Greeting }, error) {
+			return &struct{ Body Greeting }{Body: Greeting{Message: "hello"}}, nil
+		})
+
+		// The hook prefix replaces the server prefix, because the docs adapter
+		// serves the schemas.
+		resp := api.Get("/greeting")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Equal(t, `</internal/schemas/Greeting.json>; rel="describedBy"`, resp.Header().Get("Link"))
+		assert.Contains(t, resp.Body.String(), `"$schema":"https://api.example.com/internal/schemas/Greeting.json"`)
+
+		schema := api.OpenAPI().Components.Schemas.Map()["Greeting"]
+		assert.Equal(t, []any{"https://api.example.com/internal/schemas/Greeting.json"}, schema.Properties["$schema"].Examples)
+
+		// The docs adapter serves the schemas, the main adapter does not.
+		assert.Equal(t, http.StatusNotFound, api.Get("/schemas/Greeting.json").Code)
+		w := httptest.NewRecorder()
+		docsAdapter.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/schemas/Greeting.json", nil))
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("SchemaLinkPrefixRoot", func(t *testing.T) {
+		config := huma.DefaultConfig("Test API", "1.0.0")
+		config.Servers = []*huma.Server{{URL: "https://api.example.com/api/v1"}}
+		config.DocsAdapter = humatest.NewAdapter()
+		config.CreateHooks = []func(huma.Config) huma.Config{
+			huma.DefaultSchemaLinkHook("/"),
+		}
+		_, api := humatest.New(t, config)
+
+		huma.Get(api, "/greeting", func(ctx context.Context, input *struct{}) (*struct{ Body struct{} }, error) {
+			return &struct{ Body struct{} }{}, nil
+		})
+
+		resp := api.Get("/greeting")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Equal(t, `</schemas/Get-greetingResponse.json>; rel="describedBy"`, resp.Header().Get("Link"))
+	})
+
+	t.Run("SchemaLinkPrefixMissing", func(t *testing.T) {
+		config := huma.DefaultConfig("Test API", "1.0.0")
+		config.DocsAdapter = humatest.NewAdapter()
+		assert.PanicsWithValue(t, `DocsAdapter serves the schemas, so DefaultSchemaLinkHook needs the path where DocsAdapter is mounted (use "/" for the root)`, func() {
+			humatest.New(t, config)
+		})
+	})
+
+	t.Run("SchemaLinkPrefixInvalid", func(t *testing.T) {
+		assert.PanicsWithValue(t, "schema link path prefix must start with a slash: internal", func() {
+			huma.DefaultSchemaLinkHook("internal")
 		})
 	})
 }

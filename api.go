@@ -226,13 +226,16 @@ type Config struct {
 	// them here does nothing.
 	DocsRendererConfig any
 
-	// DocsAdapter is an optional [Adapter] that will be used to serve the API
-	// documentation. If unset, the main adapter will be used.
-	// Setting this allows you to use a different router or middleware stack for
-	// the documentation.
-	// Note that if this [Adapter] has a different path than the main one, the
-	// default CreateHook set in [DefaultConfig] needs to be modified to account
-	// for it.
+	// DocsAdapter is an optional [Adapter] that serves the OpenAPI spec, the
+	// docs and the schemas. If unset, the main adapter serves them. Use it to
+	// put them on a different router or middleware stack, e.g. to hide them
+	// from the public API.
+	//
+	// The responses of the main API link to the schemas. If this adapter serves
+	// the schemas, replace the default create hook with [DefaultSchemaLinkHook]
+	// and give it the path where this adapter is mounted. Huma cannot detect
+	// this path, and the links work only if this adapter is on the same host
+	// as the main API.
 	DocsAdapter Adapter
 
 	// SchemasPath is the path to the API schemas. If set to `/schemas` it will
