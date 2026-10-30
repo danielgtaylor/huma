@@ -126,6 +126,8 @@ func TestIfModifiedSince(t *testing.T) {
 	require.Error(t, p.PreconditionFailed("", before))
 	require.Error(t, p.PreconditionFailed("", now))
 	require.NoError(t, p.PreconditionFailed("", after))
+	require.Error(t, p.PreconditionFailed("", now.Add(500*time.Millisecond)))
+	require.NoError(t, p.PreconditionFailed("", now.Add(time.Second)))
 
 	// Write request
 	r, _ = http.NewRequest(http.MethodPut, "https://example.com/resource", nil)
@@ -163,6 +165,8 @@ func TestIfUnmodifiedSince(t *testing.T) {
 	require.NoError(t, p.PreconditionFailed("", before))
 	require.NoError(t, p.PreconditionFailed("", now))
 	require.Error(t, p.PreconditionFailed("", after))
+	require.NoError(t, p.PreconditionFailed("", now.Add(500*time.Millisecond)))
+	require.Error(t, p.PreconditionFailed("", now.Add(time.Second)))
 
 	// Write request
 	r, _ = http.NewRequest(http.MethodPut, "https://example.com/resource", nil)

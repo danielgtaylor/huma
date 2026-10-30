@@ -67,6 +67,10 @@ func (p *Params) PreconditionFailed(etag string, modified time.Time) huma.Status
 	failed := false
 	errors := []error{}
 
+	// HTTP dates have no fractions of a second, so compare at that precision as
+	// net/http does.
+	modified = modified.UTC().Truncate(time.Second)
+
 	foundMsg := "found no existing resource"
 	if etag != "" {
 		foundMsg = "found resource with ETag " + etag
