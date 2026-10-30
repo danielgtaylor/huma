@@ -3,6 +3,7 @@ package huma
 import (
 	"encoding/json"
 	"io"
+	"strings"
 )
 
 // DefaultJSONFormat is the default JSON formatter that can be set in the API's
@@ -80,16 +81,41 @@ func DefaultConfig(title string, version string) Config {
 		RejectUnknownQueryParameters: false,
 		Transformers:                 nil,
 		CreateHooks: []func(Config) Config{
-			func(c Config) Config {
-				// Add a link transformer to the API. This adds `Link` headers and
-				// puts `$schema` fields in the response body which point to the JSON
-				// Schema that describes the response structure.
-				// This is a create hook so we get the latest schema path setting.
-				linkTransformer := NewSchemaLinkTransformer(schemaPrefix, c.SchemasPath)
-				c.OnAddOperation = append(c.OnAddOperation, linkTransformer.OnAddOperation)
-				c.Transformers = append(c.Transformers, linkTransformer.Transform)
-				return c
-			},
+			DefaultSchemaLinkHook(""),
 		},
+	}
+}
+
+// DefaultSchemaLinkHook returns a create hook that adds a link transformer to
+// the API. The transformer adds `Link` headers and `$schema` fields to response
+// bodies. These point to the JSON Schema that describes the response
+// structure. It is a create hook so it gets the latest schema path setting.
+//
+// The pathPrefix is the path where the adapter that serves the schemas is
+// mounted, from the root of the host, e.g. `/internal`. Use `/` for the root.
+// If it is empty, the path of the first server URL is used. You must set it
+// when [Config.DocsAdapter] serves the schemas, because the server URLs
+// describe the main API only.
+//
+//	config := huma.DefaultConfig("My API", "1.0.0")
+//	config.DocsAdapter = humachi.NewAdapter(internalRouter)
+//	config.CreateHooks = []func(huma.Config) huma.Config{
+//		huma.DefaultSchemaLinkHook("/internal"),
+//	}
+func DefaultSchemaLinkHook(pathPrefix string) func(Config) Config {
+	if pathPrefix != "" && !strings.HasPrefix(pathPrefix, "/") {
+		panic("schema link path prefix must start with a slash: " + pathPrefix)
+	}
+
+	return func(c Config) Config {
+		if c.DocsAdapter != nil && c.SchemasPath != "" && pathPrefix == "" {
+			panic(`DocsAdapter serves the schemas, so DefaultSchemaLinkHook needs the path where DocsAdapter is mounted (use "/" for the root)`)
+		}
+
+		linkTransformer := NewSchemaLinkTransformer(schemaRefPrefix, c.SchemasPath)
+		linkTransformer.pathPrefix = pathPrefix
+		c.OnAddOperation = append(c.OnAddOperation, linkTransformer.OnAddOperation)
+		c.Transformers = append(c.Transformers, linkTransformer.Transform)
+		return c
 	}
 }

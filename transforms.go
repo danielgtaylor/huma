@@ -24,6 +24,10 @@ type SchemaLinkTransformer struct {
 	prefix      string
 	schemasPath string
 	types       map[any][]schemaLinkType
+
+	// pathPrefix replaces the API prefix from the server URL when it is set.
+	// See DefaultSchemaLinkHook.
+	pathPrefix string
 }
 
 type schemaLinkType struct {
@@ -68,12 +72,19 @@ func (t *SchemaLinkTransformer) addSchemaField(oapi *OpenAPI, content *MediaType
 		}
 	}
 
+	schemasPath := t.schemasPath
+	if t.pathPrefix != "" {
+		// The path prefix replaces the path of the server URL.
+		server = serverOrigin(server)
+		schemasPath = path.Join(t.pathPrefix, schemasPath)
+	}
+
 	schema.Properties["$schema"] = &Schema{
 		Type:        TypeString,
 		Format:      "uri",
 		Description: "A URL to the JSON Schema for this object.",
 		ReadOnly:    true,
-		Examples:    []any{server + t.schemasPath + "/" + path.Base(content.Schema.Ref) + ".json"},
+		Examples:    []any{server + schemasPath + "/" + path.Base(content.Schema.Ref) + ".json"},
 	}
 
 	return false
@@ -96,7 +107,9 @@ func (t *SchemaLinkTransformer) OnAddOperation(oapi *OpenAPI, op *Operation) {
 	// Figure out if there should be a base path prefix. This might be set when
 	// using a sub-router / group or if the gateway consumes a part of the path.
 	schemasPath := t.schemasPath
-	if prefix := getAPIPrefix(oapi); prefix != "" {
+	if t.pathPrefix != "" {
+		schemasPath = path.Join(t.pathPrefix, schemasPath)
+	} else if prefix := getAPIPrefix(oapi); prefix != "" {
 		schemasPath = path.Join(prefix, schemasPath)
 	}
 
@@ -200,6 +213,10 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, _ string, v any) (any, er
 	if schemaURL == "" || strings.HasPrefix(schemaURL, "localhost") {
 		if t.oapi != nil && len(t.oapi.Servers) > 0 && t.oapi.Servers[0].URL != "" {
 			serverURL := t.oapi.Servers[0].URL
+			if t.pathPrefix != "" {
+				// The ref already starts with the path prefix.
+				serverURL = serverOrigin(serverURL)
+			}
 			if !strings.HasPrefix(serverURL, "/") {
 				schemaURL = serverURL
 			}
@@ -256,4 +273,19 @@ func getSchemaHost(ctx Context) string {
 	}
 
 	return ctx.Host()
+}
+
+// serverOrigin returns the server URL without its path, e.g.
+// `https://example.com` for `https://example.com/api/v1`. It works on the raw
+// URL, so server variables like `{port}` are kept as they are.
+func serverOrigin(server string) string {
+	if strings.HasPrefix(server, "/") {
+		return ""
+	}
+	if i := strings.Index(server, "://"); i >= 0 {
+		if j := strings.IndexByte(server[i+3:], '/'); j >= 0 {
+			return server[:i+3+j]
+		}
+	}
+	return server
 }
