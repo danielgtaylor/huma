@@ -628,6 +628,12 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	if config.SchemasPath != "" {
+		schemaRef := []byte(config.SchemasPath + `/$1.json`)
+		if config.DocsAdapter != nil {
+			// The docs adapter can be mounted under any path, so nested refs are
+			// relative to the schema that contains them.
+			schemaRef = []byte(`$1.json`)
+		}
 		docsAdapter.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.SchemasPath + "/{schema}",
@@ -636,7 +642,7 @@ func NewAPI(config Config, a Adapter) API {
 			schema := strings.TrimSuffix(ctx.Param("schema"), ".json")
 			ctx.SetHeader("Content-Type", "application/json")
 			b, _ := json.Marshal(config.Components.Schemas.Map()[schema])
-			b = rxSchema.ReplaceAll(b, []byte(config.SchemasPath+`/$1.json`))
+			b = rxSchema.ReplaceAll(b, schemaRef)
 			ctx.BodyWriter().Write(b)
 		})
 	}
@@ -649,9 +655,11 @@ func (a *api) registerDocsRoute() {
 	openAPIPath := a.config.OpenAPIPath
 	if a.config.DocsAdapter != nil {
 		// The API prefix describes the main adapter, not the docs adapter, so
-		// link to the spec relative to the docs page instead.
+		// link to the spec relative to the docs page instead. Each segment of
+		// the docs path after the first one needs a step up.
 		docsAdapter = a.config.DocsAdapter
-		openAPIPath = strings.TrimPrefix(openAPIPath, "/")
+		up := strings.Repeat("../", max(strings.Count(a.config.DocsPath, "/")-1, 0))
+		openAPIPath = up + strings.TrimPrefix(openAPIPath, "/")
 	} else if prefix := getAPIPrefix(a.OpenAPI()); prefix != "" {
 		openAPIPath = path.Join(prefix, openAPIPath)
 	}

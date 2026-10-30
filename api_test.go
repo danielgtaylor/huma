@@ -500,6 +500,55 @@ func TestDocsAdapter(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
 
+	t.Run("NestedDocsPath", func(t *testing.T) {
+		for docsPath, specURL := range map[string]string{
+			"/reference/docs": "../openapi.yaml",
+			"/docs/":          "../openapi.yaml",
+			"/a/b/docs":       "../../openapi.yaml",
+		} {
+			docsAdapter := humatest.NewAdapter()
+			humatest.New(t, huma.Config{
+				OpenAPI:     &huma.OpenAPI{Info: &huma.Info{Title: "Test API", Version: "1.0.0"}},
+				DocsPath:    docsPath,
+				DocsAdapter: docsAdapter,
+				OpenAPIPath: "/openapi",
+				Formats:     huma.DefaultFormats,
+			})
+
+			w := httptest.NewRecorder()
+			docsAdapter.ServeHTTP(w, httptest.NewRequest(http.MethodGet, docsPath, nil))
+			assert.Equal(t, http.StatusOK, w.Code, docsPath)
+			assert.Contains(t, w.Body.String(), `apiDescriptionUrl="`+specURL+`"`, docsPath)
+		}
+	})
+
+	t.Run("NestedSchemaRef", func(t *testing.T) {
+		type Inner struct {
+			Value string `json:"value"`
+		}
+		type Outer struct {
+			Inner Inner `json:"inner"`
+		}
+
+		docsAdapter := humatest.NewAdapter()
+		config := huma.DefaultConfig("Test API", "1.0.0")
+		config.DocsAdapter = docsAdapter
+		config.CreateHooks = []func(huma.Config) huma.Config{
+			huma.DefaultSchemaLinkHook("/internal"),
+		}
+		_, api := humatest.New(t, config)
+
+		huma.Get(api, "/outer", func(ctx context.Context, input *struct{}) (*struct{ Body Outer }, error) {
+			return &struct{ Body Outer }{}, nil
+		})
+
+		// The nested ref is relative, so it works under any mount path.
+		w := httptest.NewRecorder()
+		docsAdapter.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/schemas/Outer.json", nil))
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Contains(t, w.Body.String(), `"$ref":"Inner.json"`)
+	})
+
 	t.Run("Schemas", func(t *testing.T) {
 		type Greeting struct {
 			Message string `json:"message"`
