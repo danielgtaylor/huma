@@ -1,6 +1,7 @@
 package huma
 
 import (
+	"encoding"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -607,6 +608,14 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		if s.ContentEncoding == "base64" {
 			if !rxBase64.MatchString(str) {
 				res.Add(path, str, validation.MsgExpectedBase64String)
+			}
+		}
+
+		if s.textUnmarshalType != nil && mode == ModeWriteToServer {
+			if tu, ok := reflect.New(s.textUnmarshalType).Interface().(encoding.TextUnmarshaler); ok {
+				if err := tu.UnmarshalText([]byte(str)); err != nil {
+					res.Add(path, str, err.Error())
+				}
 			}
 		}
 	case TypeArray:
