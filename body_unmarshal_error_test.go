@@ -65,3 +65,74 @@ func TestBodyCustomTypeUnmarshalErrorLocation(t *testing.T) {
 	}
 	require.True(t, found, "expected error at body.customAmount with value \"a\"; got: %v", body.Errors)
 }
+
+// dualUnmarshaler implements both json.Unmarshaler and
+// encoding.TextUnmarshaler. encoding/json prefers UnmarshalJSON and never
+// calls UnmarshalText, so validation must not probe UnmarshalText either.
+type dualUnmarshaler int
+
+func (d *dualUnmarshaler) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	*d = dualUnmarshaler(len(s))
+	return nil
+}
+
+func (d *dualUnmarshaler) UnmarshalText(text []byte) error {
+	return strconv.ErrSyntax
+}
+
+func TestBodyDualUnmarshalerNotProbed(t *testing.T) {
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Register(app, huma.Operation{
+		OperationID: "test-dual",
+		Method:      http.MethodPost,
+		Path:        "/test-dual",
+	}, func(ctx context.Context, input *struct {
+		Body struct {
+			V dualUnmarshaler `json:"v"`
+		}
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	// UnmarshalJSON accepts any string; UnmarshalText always fails. The
+	// request must succeed because encoding/json only calls UnmarshalJSON.
+	req, _ := http.NewRequest(http.MethodPost, "/test-dual", strings.NewReader(`{"v": "hello"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+}
+
+// textIfaceField is an interface type that includes UnmarshalText. A field
+// declared with an interface type must not panic the validation probe
+// (reflect.New of an interface type does not implement the interface).
+type textIfaceField interface {
+	UnmarshalText(text []byte) error
+}
+
+func TestBodyInterfaceTextUnmarshalerFieldNoPanic(t *testing.T) {
+	r, app := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+	huma.Register(app, huma.Operation{
+		OperationID: "test-iface",
+		Method:      http.MethodPost,
+		Path:        "/test-iface",
+	}, func(ctx context.Context, input *struct {
+		Body struct {
+			V textIfaceField `json:"v"`
+		}
+	}) (*struct{}, error) {
+		return nil, nil
+	})
+
+	req, _ := http.NewRequest(http.MethodPost, "/test-iface", strings.NewReader(`{"v": "x"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	// Upstream behavior: decoding into an interface fails with a 422; the
+	// important property is that validation does not panic.
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code, w.Body.String())
+}

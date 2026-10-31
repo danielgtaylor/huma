@@ -612,8 +612,10 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		}
 
 		if s.textUnmarshalType != nil && mode == ModeWriteToServer {
-			if err := reflect.New(s.textUnmarshalType).Interface().(encoding.TextUnmarshaler).UnmarshalText([]byte(str)); err != nil {
-				res.Add(path, str, err.Error())
+			if tu, ok := reflect.New(s.textUnmarshalType).Interface().(encoding.TextUnmarshaler); ok {
+				if err := tu.UnmarshalText([]byte(str)); err != nil {
+					res.Add(path, str, err.Error())
+				}
 			}
 		}
 	case TypeArray:
