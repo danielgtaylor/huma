@@ -602,6 +602,32 @@ func TestDocsAdapter(t *testing.T) {
 		assert.Equal(t, `</schemas/Get-greetingResponse.json>; rel="describedBy"`, resp.Header().Get("Link"))
 	})
 
+	t.Run("SchemaLinkPrefixRelativeServer", func(t *testing.T) {
+		type Greeting struct {
+			Message string `json:"message"`
+		}
+
+		config := huma.DefaultConfig("Test API", "1.0.0")
+		config.Servers = []*huma.Server{{URL: "/api"}}
+		config.DocsAdapter = humatest.NewAdapter()
+		config.CreateHooks = []func(huma.Config) huma.Config{
+			huma.DefaultSchemaLinkHook("/internal"),
+		}
+		_, api := humatest.New(t, config)
+
+		huma.Get(api, "/greeting", func(ctx context.Context, input *struct{}) (*struct{ Body Greeting }, error) {
+			return &struct{ Body Greeting }{}, nil
+		})
+
+		resp := api.Get("/greeting")
+		assert.Equal(t, http.StatusOK, resp.Code)
+		assert.Equal(t, `</internal/schemas/Greeting.json>; rel="describedBy"`, resp.Header().Get("Link"))
+
+		// The path of a relative server URL is dropped, not put before the prefix.
+		schema := api.OpenAPI().Components.Schemas.Map()["Greeting"]
+		assert.Equal(t, []any{"/internal/schemas/Greeting.json"}, schema.Properties["$schema"].Examples)
+	})
+
 	t.Run("SchemaLinkPrefixMissing", func(t *testing.T) {
 		config := huma.DefaultConfig("Test API", "1.0.0")
 		config.DocsAdapter = humatest.NewAdapter()
