@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -179,4 +180,9 @@ func TestIfUnmodifiedSince(t *testing.T) {
 	perr := p.PreconditionFailed("", after)
 	require.Error(t, perr)
 	assert.Equal(t, http.StatusPreconditionFailed, perr.GetStatus())
+
+	// The modification time is reported in GMT whatever its time zone.
+	perr = p.PreconditionFailed("", after.In(time.FixedZone("", 10*60*60)))
+	require.Error(t, perr)
+	assert.Equal(t, "If-Unmodified-Since: Fri, 01 Jan 2021 12:00:00 GMT precondition failed, resource was modified at Sat, 01 Jan 2022 12:00:00 GMT", perr.(*huma.ErrorModel).Errors[0].Message)
 }
