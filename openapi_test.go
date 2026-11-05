@@ -203,6 +203,10 @@ func TestDowngrade(t *testing.T) {
 												Type:            huma.TypeString,
 												ContentEncoding: "base64",
 											},
+											"ref": {
+												Ref:      "#/components/schemas/Color",
+												Nullable: true,
+											},
 										},
 									},
 								},
@@ -247,6 +251,10 @@ func TestDowngrade(t *testing.T) {
 											"encoding": {
 												"type": "string",
 												"format": "base64"
+											},
+											"ref": {
+												"anyOf": [{"$ref": "#/components/schemas/Color"}],
+												"nullable": true
 											}
 										}
 									}

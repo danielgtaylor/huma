@@ -185,7 +185,14 @@ type Schema struct {
 // to marshal extensions inline.
 func (s *Schema) MarshalJSON() ([]byte, error) {
 	var typ any = s.Type
-	if s.Nullable {
+	ref, anyOf := s.Ref, s.AnyOf
+	switch {
+	case s.Nullable && s.Ref != "":
+		// `$ref` applies alongside its siblings, so `null` needs a branch of its
+		// own next to the reference.
+		typ, ref = "", ""
+		anyOf = []*Schema{{Ref: s.Ref, Type: s.Type, AnyOf: s.AnyOf}, {Type: TypeNull}}
+	case s.Nullable:
 		typ = []string{s.Type, "null"}
 	}
 
@@ -212,7 +219,7 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 		{"type", typ, omitEmpty},
 		{"title", s.Title, omitEmpty},
 		{"description", s.Description, omitEmpty},
-		{"$ref", s.Ref, omitEmpty},
+		{"$ref", ref, omitEmpty},
 		{"format", s.Format, omitEmpty},
 		{"contentMediaType", contentMediaType, omitEmpty},
 		{"contentEncoding", s.ContentEncoding, omitEmpty},
@@ -243,7 +250,7 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 		{"writeOnly", s.WriteOnly, omitEmpty},
 		{"deprecated", s.Deprecated, omitEmpty},
 		{"oneOf", s.OneOf, omitEmpty},
-		{"anyOf", s.AnyOf, omitEmpty},
+		{"anyOf", anyOf, omitEmpty},
 		{"allOf", s.AllOf, omitEmpty},
 		{"not", s.Not, omitEmpty},
 		{"discriminator", s.Discriminator, omitEmpty},
@@ -251,9 +258,10 @@ func (s *Schema) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON loads a JSON Schema, such as one stored for runtime validation.
-// A `type` array may hold one type plus "null" (setting Nullable), `x-` keys
-// become Extensions, and unsupported keywords are ignored. Messages are
-// precomputed as Validate silently skips properties and patterns without them.
+// A `type` array may hold one type plus "null" (setting Nullable) or only
+// "null" (setting Type to TypeNull), `x-` keys become Extensions, and
+// unsupported keywords are ignored. Messages are precomputed as Validate
+// silently skips properties and patterns without them.
 func (s *Schema) UnmarshalJSON(data []byte) error {
 	var typ json.RawMessage
 	var addl json.RawMessage
@@ -325,7 +333,8 @@ func (s *Schema) UnmarshalJSON(data []byte) error {
 			}
 		}
 		if s.Nullable && s.Type == "" {
-			return fmt.Errorf("type: null-only types are unsupported: %s", typ)
+			// Only `null`, such as the null branch of a nullable reference.
+			s.Type, s.Nullable = TypeNull, false
 		}
 	}
 
@@ -970,6 +979,13 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 		// Special case: type provides its own schema. Do not try to generate.
 		custom := reflect.New(t).Interface().(SchemaProvider).Schema(r)
 		custom.PrecomputeMessages()
+		if isPointer && !custom.Nullable && custom.Ref != "" && isScalar(r.SchemaFromRef(custom.Ref)) {
+			// A pointer to a scalar is nullable, also when the scalar is a
+			// reference. Copy, as the provider may return a shared schema.
+			nullable := *custom
+			nullable.Nullable = true
+			return &nullable
+		}
 		return custom
 	}
 
@@ -1187,12 +1203,23 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 		return nil
 	}
 
-	switch s.Type {
-	case TypeBoolean, TypeInteger, TypeNumber, TypeString:
+	if isScalar(&s) {
 		// Scalar types which are pointers are nullable by default. This can be
 		// overridden via the `nullable:"false"` field tag in structs.
 		s.Nullable = isPointer
 	}
 
 	return &s
+}
+
+// isScalar reports whether s is a boolean, integer, number or string.
+func isScalar(s *Schema) bool {
+	if s == nil {
+		return false
+	}
+	switch s.Type {
+	case TypeBoolean, TypeInteger, TypeNumber, TypeString:
+		return true
+	}
+	return false
 }

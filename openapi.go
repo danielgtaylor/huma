@@ -1799,6 +1799,23 @@ func downgradeSpec(input any) {
 				}
 			}
 
+			if k == "anyOf" || k == "oneOf" {
+				// There is no null type in 3.0, so a null branch makes the schema
+				// nullable instead, e.g. for a nullable `$ref`.
+				if branches, ok := v.([]any); ok {
+					kept := make([]any, 0, len(branches))
+					for _, b := range branches {
+						if bm, ok := b.(map[string]any); ok && len(bm) == 1 && bm["type"] == "null" {
+							m["nullable"] = true
+							continue
+						}
+						kept = append(kept, b)
+					}
+					m[k] = kept
+					v = kept
+				}
+			}
+
 			// Exclusive values were bools in 3.0.
 			if k == "exclusiveMinimum" && reflect.TypeOf(v).Kind() == reflect.Float64 {
 				m["minimum"] = v

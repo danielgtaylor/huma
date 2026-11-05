@@ -481,6 +481,11 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 		return
 	}
 
+	if s.Ref != "" && s.Nullable && v == nil {
+		// A nullable reference takes null even if the referenced schema does not.
+		return
+	}
+
 	for s.Ref != "" {
 		ref := s.Ref
 		s = r.SchemaFromRef(ref)
@@ -786,6 +791,7 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		// the `for` loop never runs.
 		readOnly := v.ReadOnly
 		writeOnly := v.WriteOnly
+		nullableRef := v.Ref != "" && v.Nullable
 		for v.Ref != "" {
 			ref := v.Ref
 			v = r.SchemaFromRef(ref)
@@ -836,7 +842,7 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 			continue
 		}
 
-		if m[actualKey] == nil && (!s.requiredMap[k] || s.Nullable) {
+		if m[actualKey] == nil && (!s.requiredMap[k] || s.Nullable || nullableRef) {
 			// This is a non-required field which is null, or a nullable field set
 			// to null, so ignore it.
 			continue
@@ -913,6 +919,7 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 		// the `for` loop never runs.
 		readOnly := v.ReadOnly
 		writeOnly := v.WriteOnly
+		nullableRef := v.Ref != "" && v.Nullable
 		for v.Ref != "" {
 			ref := v.Ref
 			v = r.SchemaFromRef(ref)
@@ -950,7 +957,7 @@ func handleMapAny(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m 
 			continue
 		}
 
-		if m[k] == nil && (!s.requiredMap[k] || s.Nullable) {
+		if m[k] == nil && (!s.requiredMap[k] || s.Nullable || nullableRef) {
 			// This is a non-required field which is null, or a nullable field set
 			// to null, so ignore it.
 			continue

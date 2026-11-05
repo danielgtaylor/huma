@@ -1560,6 +1560,80 @@ var validateTests = []struct {
 		errs:  []string{"expected required property field to be present"},
 	},
 	{
+		name: "nullable ref success",
+		typ: reflect.TypeFor[struct {
+			Field *RefEnum "json:\"field\""
+		}](),
+		input: map[string]any{"field": nil},
+	},
+	{
+		name: "nullable ref map any success",
+		typ: reflect.TypeFor[struct {
+			Field *RefEnum "json:\"field\""
+		}](),
+		input: map[any]any{"field": nil},
+	},
+	{
+		name: "nullable ref value success",
+		typ: reflect.TypeFor[struct {
+			Field *RefEnum "json:\"field\""
+		}](),
+		input: map[string]any{"field": "red"},
+	},
+	{
+		name: "nullable ref value fail",
+		typ: reflect.TypeFor[struct {
+			Field *RefEnum "json:\"field\""
+		}](),
+		input: map[string]any{"field": "green"},
+		errs:  []string{"expected value to be one of \"red, blue\""},
+	},
+	{
+		name: "nullable ref tag success",
+		typ: reflect.TypeFor[struct {
+			Field RefEnum "json:\"field\" nullable:\"true\""
+		}](),
+		input: map[string]any{"field": nil},
+	},
+	{
+		name: "non-nullable ref fail",
+		typ: reflect.TypeFor[struct {
+			Field *RefEnum "json:\"field\" nullable:\"false\""
+		}](),
+		input: map[string]any{"field": nil},
+		errs:  []string{"expected string"},
+	},
+	{
+		name: "nullable transformed ref success",
+		typ: reflect.TypeFor[struct {
+			Field *TransformedRefEnum "json:\"field\""
+		}](),
+		input: map[string]any{"field": nil},
+	},
+	{
+		name: "nullable transformed ref fail",
+		typ: reflect.TypeFor[struct {
+			Field *TransformedRefEnum "json:\"field\""
+		}](),
+		input: map[string]any{"field": "green"},
+		errs:  []string{"expected value to be one of \"red, blue\""},
+	},
+	{
+		name: "nullable ref items success",
+		typ: reflect.TypeFor[struct {
+			Field []*RefEnum "json:\"field\""
+		}](),
+		input: map[string]any{"field": []any{nil, "red"}},
+	},
+	{
+		name: "nullable ref items fail",
+		typ: reflect.TypeFor[struct {
+			Field []*RefEnum "json:\"field\""
+		}](),
+		input: map[string]any{"field": []any{nil, "green"}},
+		errs:  []string{"expected value to be one of \"red, blue\""},
+	},
+	{
 		name: "discriminator: input expected to be an object",
 		s: &huma.Schema{
 			Type: huma.TypeObject,
