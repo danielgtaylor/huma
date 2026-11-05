@@ -979,12 +979,15 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 		// Special case: type provides its own schema. Do not try to generate.
 		custom := reflect.New(t).Interface().(SchemaProvider).Schema(r)
 		custom.PrecomputeMessages()
-		if isPointer && !custom.Nullable && custom.Ref != "" && isScalar(r.SchemaFromRef(custom.Ref)) {
-			// A pointer to a scalar is nullable, also when the scalar is a
-			// reference. Copy, as the provider may return a shared schema.
-			nullable := *custom
-			nullable.Nullable = true
-			return &nullable
+		if custom.Ref != "" {
+			// Field tags such as `nullable` change the schema they get, so copy
+			// the reference in case the provider returns the same one each time.
+			ref := *custom
+			if isPointer && isScalar(resolveRef(r, ref.Ref)) {
+				// A pointer to a scalar is nullable, also through a reference.
+				ref.Nullable = true
+			}
+			return &ref
 		}
 		return custom
 	}
@@ -1210,6 +1213,21 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 	}
 
 	return &s
+}
+
+// resolveRef follows ref and any references it leads to, returning nil for an
+// unknown or cyclic reference.
+func resolveRef(r Registry, ref string) *Schema {
+	seen := map[string]bool{}
+	for !seen[ref] {
+		seen[ref] = true
+		s := r.SchemaFromRef(ref)
+		if s == nil || s.Ref == "" {
+			return s
+		}
+		ref = s.Ref
+	}
+	return nil
 }
 
 // isScalar reports whether s is a boolean, integer, number or string.

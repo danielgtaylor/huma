@@ -100,7 +100,7 @@ type MyStruct2 struct {
 }
 ```
 
-Nullable types will generate a type array like `"type": ["string", "null"]` which has broad compatibility and is easy to downgrade to OpenAPI 3.0. A nullable `$ref` cannot carry a type array, so it generates `"anyOf": [{"$ref": "..."}, {"type": "null"}]`, which becomes `nullable: true` in OpenAPI 3.0. Also keep in mind you can always provide a [custom schema](./schema-customization.md) if the built-in features aren't exactly what you need.
+Nullable types will generate a type array like `"type": ["string", "null"]` which has broad compatibility and is easy to downgrade to OpenAPI 3.0. A nullable `$ref` cannot carry a type array, so it generates `"anyOf": [{"$ref": "..."}, {"type": "null"}]`, which becomes `"allOf": [{"$ref": "..."}], "nullable": true` in OpenAPI 3.0. Also keep in mind you can always provide a [custom schema](./schema-customization.md) if the built-in features aren't exactly what you need.
 
 !!! info "Note"
 

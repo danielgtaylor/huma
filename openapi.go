@@ -1800,19 +1800,31 @@ func downgradeSpec(input any) {
 			}
 
 			if k == "anyOf" || k == "oneOf" {
-				// There is no null type in 3.0, so a null branch makes the schema
-				// nullable instead, e.g. for a nullable `$ref`.
+				// There is no null type in 3.0, so null branches make the schema
+				// nullable instead. A single remaining branch, such as a nullable
+				// `$ref`, goes into `allOf`, the form 3.0 tools commonly expect.
 				if branches, ok := v.([]any); ok {
 					kept := make([]any, 0, len(branches))
 					for _, b := range branches {
-						if bm, ok := b.(map[string]any); ok && len(bm) == 1 && bm["type"] == "null" {
-							m["nullable"] = true
-							continue
+						if bm, ok := b.(map[string]any); !ok || bm["type"] != "null" {
+							kept = append(kept, b)
 						}
-						kept = append(kept, b)
 					}
-					m[k] = kept
-					v = kept
+					if len(kept) < len(branches) {
+						m["nullable"] = true
+						_, hasAllOf := m["allOf"]
+						switch {
+						case len(kept) == 0:
+							delete(m, k)
+							continue
+						case len(kept) == 1 && !hasAllOf:
+							delete(m, k)
+							m["allOf"] = kept
+						default:
+							m[k] = kept
+						}
+						v = kept
+					}
 				}
 			}
 

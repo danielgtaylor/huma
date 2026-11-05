@@ -85,6 +85,26 @@ func (TransformedRefEnum) TransformSchema(r huma.Registry, s *huma.Schema) *huma
 	return ref
 }
 
+var sharedRefEnum = &huma.Schema{Ref: "#/components/schemas/SharedRefEnum"}
+
+// SharedRefEnum returns the same reference every time.
+type SharedRefEnum string
+
+func (SharedRefEnum) Schema(r huma.Registry) *huma.Schema {
+	registerRefEnum(r, "SharedRefEnum")
+	return sharedRefEnum
+}
+
+// ChainedRefEnum is a reference to a component that is itself a reference.
+type ChainedRefEnum string
+
+func (ChainedRefEnum) Schema(r huma.Registry) *huma.Schema {
+	if r.Map()["ChainedRefEnum"] == nil {
+		r.Map()["ChainedRefEnum"] = registerRefEnum(r, "RefEnum")
+	}
+	return &huma.Schema{Ref: "#/components/schemas/ChainedRefEnum"}
+}
+
 func registerRefEnum(r huma.Registry, name string) *huma.Schema {
 	if r.Map()[name] == nil {
 		s := &huma.Schema{Type: huma.TypeString, Enum: []any{"red", "blue"}}
@@ -1060,6 +1080,40 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-nullable-ref-shared",
+			input: struct {
+				Tagged SharedRefEnum `json:"tagged" nullable:"true"`
+				Plain  SharedRefEnum `json:"plain"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"tagged": {
+						"anyOf": [{"$ref": "#/components/schemas/SharedRefEnum"}, {"type": "null"}]
+					},
+					"plain": {"$ref": "#/components/schemas/SharedRefEnum"}
+				},
+				"required": ["tagged", "plain"]
+			}`,
+		},
+		{
+			name: "field-nullable-ref-chain",
+			input: struct {
+				Pointer *ChainedRefEnum `json:"pointer"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"pointer": {
+						"anyOf": [{"$ref": "#/components/schemas/ChainedRefEnum"}, {"type": "null"}]
+					}
+				},
+				"required": ["pointer"]
+			}`,
+		},
+		{
 			name: "field-non-nullable-array",
 			input: struct {
 				Int []int64 `json:"int" nullable:"false"`
@@ -1909,6 +1963,28 @@ func TestSchemaRoundTrip(t *testing.T) {
 	b, err = json.Marshal(&loaded)
 	require.NoError(t, err)
 	assert.JSONEq(t, nullableRef, string(b))
+
+	// What applies to the reference moves into its branch, annotations stay.
+	b, err = json.Marshal(&huma.Schema{
+		Ref:         "#/components/schemas/Foo",
+		Type:        huma.TypeString,
+		AnyOf:       []*huma.Schema{{MinLength: new(1)}},
+		Description: "d",
+		Nullable:    true,
+	})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{
+		"description": "d",
+		"anyOf": [
+			{"$ref": "#/components/schemas/Foo", "type": "string", "anyOf": [{"minLength": 1}]},
+			{"type": "null"}
+		]
+	}`, string(b))
+
+	var nullOnly huma.Schema
+	require.NoError(t, json.Unmarshal([]byte(`{"type": ["null"]}`), &nullOnly))
+	assert.Equal(t, huma.TypeNull, nullOnly.Type)
+	assert.False(t, nullOnly.Nullable)
 
 	for _, bad := range []string{
 		`[]`,

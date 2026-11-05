@@ -1619,6 +1619,28 @@ var validateTests = []struct {
 		errs:  []string{"expected value to be one of \"red, blue\""},
 	},
 	{
+		name: "nullable chained ref success",
+		typ: reflect.TypeFor[struct {
+			Field *ChainedRefEnum "json:\"field\""
+		}](),
+		input: map[string]any{"field": nil},
+	},
+	{
+		name: "nullable chained ref fail",
+		typ: reflect.TypeFor[struct {
+			Field *ChainedRefEnum "json:\"field\""
+		}](),
+		input: map[string]any{"field": "green"},
+		errs:  []string{"expected value to be one of \"red, blue\""},
+	},
+	{
+		name: "nullable ref map values success",
+		typ: reflect.TypeFor[struct {
+			Field map[string]*RefEnum "json:\"field\""
+		}](),
+		input: map[string]any{"field": map[string]any{"a": nil, "b": "red"}},
+	},
+	{
 		name: "nullable ref items success",
 		typ: reflect.TypeFor[struct {
 			Field []*RefEnum "json:\"field\""
