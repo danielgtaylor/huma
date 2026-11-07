@@ -261,7 +261,7 @@ func documentParam(op *Operation, pl *paramLocation) {
 // Returns a findResult mapping each parameter field's index path to its
 // paramFieldInfo, which is used later during request parsing.
 func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*paramFieldInfo] {
-	return findInType(t, nil, func(f reflect.StructField, path []int) *paramFieldInfo {
+	return findInType(t, nil, func(f reflect.StructField) *paramFieldInfo {
 		if f.Anonymous {
 			return nil
 		}
@@ -326,7 +326,7 @@ func findParams(registry Registry, op *Operation, t reflect.Type) *findResult[*p
 // findResolvers searches a given type for resolvers matching a specified resolverType.
 // It returns a findResult indicating whether such resolvers were found.
 func findResolvers(resolverType, t reflect.Type) *findResult[bool] {
-	return findInType(t, func(t reflect.Type, path []int) bool {
+	return findInType(t, func(t reflect.Type) bool {
 		tp := reflect.PointerTo(t)
 		if tp.Implements(resolverType) || tp.Implements(resolverWithPathType) {
 			return true
@@ -338,7 +338,7 @@ func findResolvers(resolverType, t reflect.Type) *findResult[bool] {
 // findDefaults identifies struct fields with "default" tags and attempts to resolve
 // their values using the provided registry.
 func findDefaults(registry Registry, t reflect.Type) *findResult[any] {
-	return findInType(t, nil, func(sf reflect.StructField, i []int) any {
+	return findInType(t, nil, func(sf reflect.StructField) any {
 		if d := sf.Tag.Get("default"); d != "" {
 			if sf.Type.Kind() == reflect.Pointer && sf.Type.Elem().Kind() == reflect.Struct {
 				panic("pointers to structs cannot have default values")
@@ -361,7 +361,7 @@ type headerInfo struct {
 // defaulting to field names. Embedded fields or fields named "Status" and "Body" are
 // ignored.
 func findHeaders(t reflect.Type) *findResult[*headerInfo] {
-	return findInType(t, nil, func(sf reflect.StructField, i []int) *headerInfo {
+	return findInType(t, nil, func(sf reflect.StructField) *headerInfo {
 		// Ignore embedded fields.
 		if sf.Anonymous {
 			return nil
@@ -399,7 +399,7 @@ const collectionElem = -1
 
 // collectionPath returns the rest of the path after the step into a
 // collection's elements. Arriving at a collection without that step means the
-// path was recorded wrong, e.g. a new kind was added to `_findInType` without
+// path was recorded wrong, e.g. a new kind was added to `findInType` without
 // marking its elements.
 func collectionPath(path []int) []int {
 	if len(path) == 0 || path[0] != collectionElem {
@@ -559,70 +559,135 @@ func (r *findResult[T]) EveryPB(pb *PathBuffer, v reflect.Value, f func(reflect.
 	}
 }
 
-// findInType traverses a type and identifies elements based on specified callbacks
-// and optional recursion settings.
-func findInType[T comparable](t reflect.Type, onType func(reflect.Type, []int) T, onField func(reflect.StructField, []int) T, recurseFields bool, ignore ...string) *findResult[T] {
-	result := &findResult[T]{}
-	_findInType(t, []int{}, result, onType, onField, recurseFields, make(map[reflect.Type]struct{}), ignore...)
-	return result
+// findNode caches the callback results for one type, so each callback runs
+// once per type or field however many paths reach it.
+type findNode[T comparable] struct {
+	match  T
+	fields []findField[T]
+	elem   reflect.Type
+	// Set when a match is reachable, so the walk can skip everything else.
+	live bool
 }
 
-func _findInType[T comparable](t reflect.Type, path []int, result *findResult[T], onType func(reflect.Type, []int) T, onField func(reflect.StructField, []int) T, recurseFields bool, visited map[reflect.Type]struct{}, ignore ...string) {
-	t = deref(t)
-	zero := reflect.Zero(reflect.TypeFor[T]()).Interface()
+type findField[T comparable] struct {
+	index int
+	match T
+	typ   reflect.Type // Nil when the walk doesn't descend into the field.
+}
 
-	ignoreAnonymous := false
-	if onType != nil {
-		if v := onType(t, path); v != zero {
-			result.Paths = append(result.Paths, findResultPath[T]{path, v})
+// findInType returns the path to every match under t. Paths are only walked
+// through types that can reach a match, since a type reachable along many
+// paths would otherwise make this exponential. Matches reachable along many
+// paths still are, as each path is recorded.
+func findInType[T comparable](t reflect.Type, onType func(reflect.Type) T, onField func(reflect.StructField) T, recurseFields bool, ignore ...string) *findResult[T] {
+	var zero T
+	nodes := map[reflect.Type]*findNode[T]{}
 
-			// Found what we were looking for in the type, no need to go deeper.
-			// We do still want to potentially process each non-anonymous field,
-			// so only skip anonymous ones.
-			ignoreAnonymous = true
-		}
-	}
-
-	switch t.Kind() {
-	case reflect.Struct:
-		if _, ok := visited[t]; ok {
+	var build func(t reflect.Type)
+	build = func(t reflect.Type) {
+		if nodes[t] != nil {
 			return
 		}
-		for i := 0; i < t.NumField(); i++ {
-			f := t.Field(i)
-			if !f.IsExported() {
-				continue
-			}
-			if slices.Contains(ignore, f.Name) {
-				continue
-			}
-			if ignoreAnonymous && f.Anonymous {
-				continue
-			}
-			fi := append([]int{}, path...)
-			fi = append(fi, i)
-			if onField != nil {
-				if v := onField(f, fi); v != zero {
-					result.Paths = append(result.Paths, findResultPath[T]{fi, v})
+		n := &findNode[T]{}
+		nodes[t] = n
+
+		if onType != nil {
+			n.match = onType(t)
+		}
+		n.live = n.match != zero
+
+		switch t.Kind() {
+		case reflect.Struct:
+			n.fields = make([]findField[T], 0, t.NumField())
+			for i := range t.NumField() {
+				sf := t.Field(i)
+				// A type that matched itself still has its named fields checked,
+				// but not its embedded ones.
+				if !sf.IsExported() || slices.Contains(ignore, sf.Name) || (sf.Anonymous && n.match != zero) {
+					continue
 				}
+				f := findField[T]{index: i}
+				if onField != nil {
+					f.match = onField(sf)
+					n.live = n.live || f.match != zero
+				}
+				// Always descend into embedded structs and fields which are not
+				// structs; named struct fields only with `recurseFields`.
+				if sf.Anonymous || recurseFields || baseType(sf.Type).Kind() != reflect.Struct {
+					f.typ = deref(sf.Type)
+					build(f.typ)
+				}
+				n.fields = append(n.fields, f)
 			}
-			if f.Anonymous || recurseFields || baseType(f.Type).Kind() != reflect.Struct {
-				// Always process embedded structs and named fields which are not
-				// structs. If `recurseFields` is true, then we also process named
-				// struct fields recursively.
-				visited[t] = struct{}{}
-				_findInType[T](f.Type, fi, result, onType, onField, recurseFields, visited, ignore...)
-				delete(visited, t)
+		case reflect.Slice, reflect.Array, reflect.Map:
+			n.elem = deref(t.Elem())
+			build(n.elem)
+		}
+	}
+	t = deref(t)
+	build(t)
+
+	// Spread liveness to every type that can reach a match. Each pass covers at
+	// least one more level, so this is O(types * depth), which avoids tracking
+	// parent edges and is cheap for real type graphs.
+	for changed := true; changed; {
+		changed = false
+		for _, n := range nodes {
+			if n.live {
+				continue
+			}
+			n.live = n.elem != nil && nodes[n.elem].live
+			for _, f := range n.fields {
+				n.live = n.live || (f.typ != nil && nodes[f.typ].live)
+			}
+			changed = changed || n.live
+		}
+	}
+
+	result := &findResult[T]{}
+	if !nodes[t].live {
+		return result
+	}
+	onPath := map[reflect.Type]struct{}{}
+	var walk func(t reflect.Type, path []int)
+	walk = func(t reflect.Type, path []int) {
+		n := nodes[t]
+		if !n.live {
+			return
+		}
+		if n.match != zero {
+			result.Paths = append(result.Paths, findResultPath[T]{path, n.match})
+		}
+		if n.elem != nil {
+			// Record that the match is inside the collection rather than on the
+			// collection's own type, so the walkers know to descend into elements.
+			// Both can match, e.g. `type Items []Item` where each has a resolver,
+			// in which case two paths are recorded and both run.
+			walk(n.elem, append(append([]int{}, path...), collectionElem))
+			return
+		}
+
+		// Only structs stop a cycle, so in `Item{Children []Item}` the struct is
+		// reached (and its own match recorded) once more before stopping.
+		if _, ok := onPath[t]; ok {
+			return
+		}
+		onPath[t] = struct{}{}
+		defer delete(onPath, t)
+
+		for _, f := range n.fields {
+			fi := append(append([]int{}, path...), f.index)
+			if f.match != zero {
+				result.Paths = append(result.Paths, findResultPath[T]{fi, f.match})
+			}
+			if f.typ != nil {
+				walk(f.typ, fi)
 			}
 		}
-	case reflect.Slice, reflect.Array, reflect.Map:
-		// Record that the match is inside the collection rather than on the
-		// collection's own type, so the walkers know to descend into elements.
-		// Both can match, e.g. `type Items []Item` where each has a resolver, in
-		// which case two paths are recorded and both run.
-		elem := append(append([]int{}, path...), collectionElem)
-		_findInType[T](t.Elem(), elem, result, onType, onField, recurseFields, visited, ignore...)
 	}
+	walk(t, []int{})
+
+	return result
 }
 
 func getHint(parent reflect.Type, name string, other string) string {

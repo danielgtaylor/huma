@@ -11,7 +11,7 @@ import (
 
 // A path that arrives at a collection must step into its elements. Anything
 // else means the path was recorded wrong, e.g. a kind was added to
-// `_findInType` without marking its elements.
+// `findInType` without marking its elements.
 func TestCollectionPath(t *testing.T) {
 	assert.Equal(t, []int{2}, collectionPath([]int{collectionElem, 2}))
 	assert.Panics(t, func() { collectionPath([]int{2}) })
@@ -60,4 +60,91 @@ func TestTextUnmarshalerDefault(t *testing.T) {
 		D textDuration `json:"d" default:"bogus"`
 	}
 	assert.Panics(t, func() { SchemaFromType(r, reflect.TypeFor[Invalid]()) })
+}
+
+// Each level points at the next twice, so there are 2^depth paths to the leaf.
+func TestFindInTypeSkipsUnmatchedDAG(t *testing.T) {
+	typ := reflect.TypeFor[struct{ X int }]()
+	for range 20 {
+		typ = reflect.StructOf([]reflect.StructField{
+			{Name: "A", Type: reflect.PointerTo(typ)},
+			{Name: "B", Type: reflect.PointerTo(typ)},
+		})
+	}
+
+	calls := 0
+	r := findInType(typ, nil, func(reflect.StructField) bool {
+		calls++
+		return false
+	}, true)
+	assert.Empty(t, r.Paths)
+	assert.Equal(t, 41, calls)
+}
+
+type findCycleRoot struct {
+	A *findCycleA
+	B *findCycleB
+}
+
+type findCycleA struct {
+	B *findCycleB
+	X int `default:"1"`
+}
+
+type findCycleB struct {
+	A *findCycleA
+}
+
+// A default reached through a cycle must be found along both routes to it.
+func TestFindInTypeCycleNotSkipped(t *testing.T) {
+	r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
+	found := findDefaults(r, reflect.TypeFor[findCycleRoot]()).Paths
+	paths := make([][]int, 0, len(found))
+	for _, p := range found {
+		paths = append(paths, p.Path)
+	}
+	assert.Equal(t, [][]int{{0, 1}, {1, 0, 1}}, paths)
+}
+
+type findSCC1 struct {
+	B *findSCC2
+	C *findSCC3
+}
+
+type findSCC2 struct {
+	A *findSCC1
+	C *findSCC3
+}
+
+type findSCC3 struct {
+	A *findSCC1
+	B *findSCC2
+}
+
+// Types that all reference each other have a factorial number of paths.
+func TestFindInTypeSkipsUnmatchedCycles(t *testing.T) {
+	calls := 0
+	r := findInType(reflect.TypeFor[findSCC1](), nil, func(reflect.StructField) bool {
+		calls++
+		return false
+	}, true)
+	assert.Empty(t, r.Paths)
+	assert.Equal(t, 6, calls)
+}
+
+type findTreeItem struct {
+	Children []findTreeItem
+}
+
+func (*findTreeItem) Resolve(Context) []error { return nil }
+
+// The cycle passes through `[]findTreeItem`, and the resolver on the nested
+// items must still be found.
+func TestFindInTypeResolverThroughRecursiveSlice(t *testing.T) {
+	found := findResolvers(resolverType, reflect.TypeFor[struct{ Items []findTreeItem }]()).Paths
+	paths := make([][]int, 0, len(found))
+	for _, p := range found {
+		paths = append(paths, p.Path)
+	}
+	assert.Equal(t, [][]int{{0, collectionElem}, {0, collectionElem, 0, collectionElem}}, paths)
 }
