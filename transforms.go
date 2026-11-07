@@ -2,6 +2,7 @@ package huma
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -192,6 +193,11 @@ func (t *SchemaLinkTransformer) Transform(ctx Context, _ string, v any) (any, er
 	}
 
 	ctx.AppendHeader("Link", info.header)
+	if _, ok := v.(json.Marshaler); ok {
+		// The wrapper type would bypass the body's own MarshalJSON.
+		return v, nil
+	}
+
 	tmp := reflect.New(info.t).Elem()
 
 	// Set the `$schema` field.

@@ -5340,6 +5340,42 @@ func TestSchemaLinkDuplicateTypes(t *testing.T) {
 	assert.NotEqual(t, resp1.Header().Get("Link"), resp2.Header().Get("Link"))
 }
 
+type MarshalerBody struct {
+	Message string `json:"message"`
+}
+
+func (b MarshalerBody) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]string{"msg": b.Message})
+}
+
+type PtrMarshalerBody struct {
+	Message string `json:"message"`
+}
+
+func (b *PtrMarshalerBody) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]string{"msg": b.Message})
+}
+
+func TestSchemaLinkCustomMarshaler(t *testing.T) {
+	_, api := humatest.New(t, huma.DefaultConfig("Test API", "1.0.0"))
+
+	huma.Get(api, "/value", func(ctx context.Context, input *struct{}) (*struct{ Body MarshalerBody }, error) {
+		return &struct{ Body MarshalerBody }{Body: MarshalerBody{Message: "hello"}}, nil
+	})
+
+	huma.Get(api, "/pointer", func(ctx context.Context, input *struct{}) (*struct{ Body *PtrMarshalerBody }, error) {
+		return &struct{ Body *PtrMarshalerBody }{Body: &PtrMarshalerBody{Message: "hello"}}, nil
+	})
+
+	// The body's own MarshalJSON must not be bypassed by the `$schema` wrapper.
+	for _, path := range []string{"/value", "/pointer"} {
+		resp := api.Get(path)
+		assert.Equal(t, http.StatusOK, resp.Code, path)
+		assert.JSONEq(t, `{"msg":"hello"}`, resp.Body.String(), path)
+		assert.Contains(t, resp.Header().Get("Link"), `rel="describedBy"`, path)
+	}
+}
+
 func TestBodyFallbackContentType(t *testing.T) {
 	mux := http.NewServeMux()
 	config := huma.DefaultConfig("Test", "1.0.0")
