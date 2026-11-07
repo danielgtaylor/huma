@@ -95,12 +95,12 @@ type findCycleB struct {
 	A *findCycleA
 }
 
-// B finds nothing while A is still on the stack, which mustn't stop R.B.A.X
-// from being found.
+// A default reached through a cycle must be found along both routes to it.
 func TestFindInTypeCycleNotSkipped(t *testing.T) {
 	r := NewMapRegistry("#/components/schemas/", DefaultSchemaNamer)
-	var paths [][]int
-	for _, p := range findDefaults(r, reflect.TypeFor[findCycleRoot]()).Paths {
+	found := findDefaults(r, reflect.TypeFor[findCycleRoot]()).Paths
+	paths := make([][]int, 0, len(found))
+	for _, p := range found {
 		paths = append(paths, p.Path)
 	}
 	assert.Equal(t, [][]int{{0, 1}, {1, 0, 1}}, paths)
@@ -141,8 +141,9 @@ func (*findTreeItem) Resolve(Context) []error { return nil }
 // The cycle passes through `[]findTreeItem`, and the resolver on the nested
 // items must still be found.
 func TestFindInTypeResolverThroughRecursiveSlice(t *testing.T) {
-	var paths [][]int
-	for _, p := range findResolvers(resolverType, reflect.TypeFor[struct{ Items []findTreeItem }]()).Paths {
+	found := findResolvers(resolverType, reflect.TypeFor[struct{ Items []findTreeItem }]()).Paths
+	paths := make([][]int, 0, len(found))
+	for _, p := range found {
 		paths = append(paths, p.Path)
 	}
 	assert.Equal(t, [][]int{{0, collectionElem}, {0, collectionElem, 0, collectionElem}}, paths)
