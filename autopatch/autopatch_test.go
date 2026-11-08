@@ -225,6 +225,68 @@ func TestPatch(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
 }
 
+func TestPatchKeepsMultiValueHeaders(t *testing.T) {
+	db := map[string]*ThingModel{
+		"test": {ID: "test", Price: 1.00},
+	}
+
+	_, api := humatest.New(t)
+
+	type ThingResponse struct {
+		SetCookie []http.Cookie `header:"Set-Cookie"`
+		Body      *ThingModel
+	}
+
+	huma.Register(api, huma.Operation{
+		OperationID: "get-thing",
+		Method:      http.MethodGet,
+		Path:        "/things/{thing-id}",
+		Errors:      []int{404},
+	}, func(ctx context.Context, input *struct {
+		ThingIDParam
+	}) (*ThingResponse, error) {
+		thing := db[input.ThingID]
+		if thing == nil {
+			return nil, huma.ErrorWithHeaders(huma.Error404NotFound("Not found"), http.Header{
+				"Set-Cookie": {"a=1", "b=2"},
+			})
+		}
+		return &ThingResponse{Body: thing}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "put-thing",
+		Method:      http.MethodPut,
+		Path:        "/things/{thing-id}",
+	}, func(ctx context.Context, input *struct {
+		ThingIDParam
+		Body ThingModel
+	}) (*ThingResponse, error) {
+		db[input.ThingID] = &input.Body
+		return &ThingResponse{
+			SetCookie: []http.Cookie{{Name: "a", Value: "1"}, {Name: "b", Value: "2"}},
+			Body:      db[input.ThingID],
+		}, nil
+	})
+
+	AutoPatch(api)
+
+	w := api.Patch("/things/test",
+		"Content-Type: application/merge-patch+json",
+		strings.NewReader(`{"price": 1.23}`),
+	)
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, []string{"a=1", "b=2"}, w.Header().Values("Set-Cookie"))
+
+	// GET error
+	w = api.Patch("/things/notfound",
+		"Content-Type: application/merge-patch+json",
+		strings.NewReader(`{}`),
+	)
+	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+	assert.Equal(t, []string{"a=1", "b=2"}, w.Header().Values("Set-Cookie"))
+}
+
 func TestPatchPutNoBody(t *testing.T) {
 	_, api := humatest.New(t)
 
