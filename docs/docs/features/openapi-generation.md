@@ -91,6 +91,22 @@ Anything in the `Extensions` map will be flattened during serialization so that 
 }
 ```
 
+## Loading an OpenAPI Document
+
+The `huma.OpenAPI` struct and all of its nested objects can be decoded from JSON with `encoding/json`, which is the inverse of how the document is generated. This is useful for tools that read the specs of other services, for example to merge several upstream APIs behind a gateway:
+
+```go title="code.go"
+var spec huma.OpenAPI
+if err := json.Unmarshal(data, &spec); err != nil {
+	panic(err)
+}
+
+// Reusable schemas are available through the registry.
+schema := spec.Components.Schemas.SchemaFromRef("#/components/schemas/Thing")
+```
+
+`x-` keys are stored in the `Extensions` field of each object, and other unknown keys are ignored. Schemas are subject to the limits of [`huma.Schema`](https://pkg.go.dev/github.com/danielgtaylor/huma/v2#Schema) decoding. For YAML documents, convert them to JSON first.
+
 ## Dive Deeper
 
 -   Tutorial

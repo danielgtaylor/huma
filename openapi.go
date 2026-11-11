@@ -154,6 +154,16 @@ func (c *Contact) MarshalJSON() ([]byte, error) {
 	}, c.Extensions)
 }
 
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (c *Contact) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"name":  &c.Name,
+		"url":   &c.URL,
+		"email": &c.Email,
+	}, &c.Extensions)
+}
+
 // License name & link for using the API.
 //
 //	name: Apache 2.0
@@ -181,6 +191,16 @@ func (l *License) MarshalJSON() ([]byte, error) {
 		{"identifier", l.Identifier, omitEmpty},
 		{"url", l.URL, omitEmpty},
 	}, l.Extensions)
+}
+
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (l *License) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"name":       &l.Name,
+		"identifier": &l.Identifier,
+		"url":        &l.URL,
+	}, &l.Extensions)
 }
 
 // Info object that provides metadata about the API. The metadata MAY be used by
@@ -234,6 +254,19 @@ func (i *Info) MarshalJSON() ([]byte, error) {
 	}, i.Extensions)
 }
 
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (i *Info) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"title":          &i.Title,
+		"description":    &i.Description,
+		"termsOfService": &i.TermsOfService,
+		"contact":        &i.Contact,
+		"license":        &i.License,
+		"version":        &i.Version,
+	}, &i.Extensions)
+}
+
 // ServerVariable for server URL template substitution.
 type ServerVariable struct {
 	// Enumeration of string values to be used if the substitution options are from a limited set. The array MUST NOT be empty.
@@ -256,6 +289,16 @@ func (v *ServerVariable) MarshalJSON() ([]byte, error) {
 		{"default", v.Default, omitNever},
 		{"description", v.Description, omitEmpty},
 	}, v.Extensions)
+}
+
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (v *ServerVariable) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"enum":        &v.Enum,
+		"default":     &v.Default,
+		"description": &v.Description,
+	}, &v.Extensions)
 }
 
 // Server URL, optionally with variables.
@@ -288,6 +331,16 @@ func (s *Server) MarshalJSON() ([]byte, error) {
 		{"description", s.Description, omitEmpty},
 		{"variables", s.Variables, omitEmpty},
 	}, s.Extensions)
+}
+
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (s *Server) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"url":         &s.URL,
+		"description": &s.Description,
+		"variables":   &s.Variables,
+	}, &s.Extensions)
 }
 
 // Example value of a request param or body or response header or body.
@@ -341,6 +394,18 @@ func (e *Example) MarshalJSON() ([]byte, error) {
 		{"value", e.Value, omitNil},
 		{"externalValue", e.ExternalValue, omitEmpty},
 	}, e.Extensions)
+}
+
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (e *Example) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"$ref":          &e.Ref,
+		"summary":       &e.Summary,
+		"description":   &e.Description,
+		"value":         &e.Value,
+		"externalValue": &e.ExternalValue,
+	}, &e.Extensions)
 }
 
 // Encoding is a single encoding definition applied to a single schema property.
@@ -435,6 +500,18 @@ func (e *Encoding) MarshalJSON() ([]byte, error) {
 	}, e.Extensions)
 }
 
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (e *Encoding) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"contentType":   &e.ContentType,
+		"headers":       &e.Headers,
+		"style":         &e.Style,
+		"explode":       &e.Explode,
+		"allowReserved": &e.AllowReserved,
+	}, &e.Extensions)
+}
+
 // MediaType object provides schema and examples for the media type identified
 // by its key.
 //
@@ -486,6 +563,17 @@ func (m *MediaType) MarshalJSON() ([]byte, error) {
 		{"examples", m.Examples, omitEmpty},
 		{"encoding", m.Encoding, omitEmpty},
 	}, m.Extensions)
+}
+
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (m *MediaType) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"schema":   &m.Schema,
+		"example":  &m.Example,
+		"examples": &m.Examples,
+		"encoding": &m.Encoding,
+	}, &m.Extensions)
 }
 
 // Param Describes a single operation parameter.
@@ -601,6 +689,26 @@ func (p *Param) MarshalJSON() ([]byte, error) {
 	}, p.Extensions)
 }
 
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (p *Param) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"$ref":            &p.Ref,
+		"name":            &p.Name,
+		"in":              &p.In,
+		"description":     &p.Description,
+		"required":        &p.Required,
+		"deprecated":      &p.Deprecated,
+		"allowEmptyValue": &p.AllowEmptyValue,
+		"style":           &p.Style,
+		"explode":         &p.Explode,
+		"allowReserved":   &p.AllowReserved,
+		"schema":          &p.Schema,
+		"example":         &p.Example,
+		"examples":        &p.Examples,
+	}, &p.Extensions)
+}
+
 // Header object follows the structure of the Parameter Object with the
 // following changes:
 //
@@ -660,6 +768,17 @@ func (r *RequestBody) MarshalJSON() ([]byte, error) {
 		{"content", r.Content, omitNever},
 		{"required", r.Required, omitEmpty},
 	}, r.Extensions)
+}
+
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (r *RequestBody) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"$ref":        &r.Ref,
+		"description": &r.Description,
+		"content":     &r.Content,
+		"required":    &r.Required,
+	}, &r.Extensions)
 }
 
 // Link object represents a possible design-time link for a response. The
@@ -770,6 +889,20 @@ func (l *Link) MarshalJSON() ([]byte, error) {
 	}, l.Extensions)
 }
 
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (l *Link) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"$ref":         &l.Ref,
+		"operationRef": &l.OperationRef,
+		"operationId":  &l.OperationID,
+		"parameters":   &l.Parameters,
+		"requestBody":  &l.RequestBody,
+		"description":  &l.Description,
+		"server":       &l.Server,
+	}, &l.Extensions)
+}
+
 // Response describes a single response from an API Operation, including
 // design-time, static links to operations based on the response.
 //
@@ -818,6 +951,18 @@ func (r *Response) MarshalJSON() ([]byte, error) {
 		{"content", r.Content, omitEmpty},
 		{"links", r.Links, omitEmpty},
 	}, r.Extensions)
+}
+
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (r *Response) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"$ref":        &r.Ref,
+		"description": &r.Description,
+		"headers":     &r.Headers,
+		"content":     &r.Content,
+		"links":       &r.Links,
+	}, &r.Extensions)
 }
 
 // Operation describes a single API operation on a path.
@@ -1039,6 +1184,25 @@ func (o *Operation) MarshalJSON() ([]byte, error) {
 	}, o.Extensions)
 }
 
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (o *Operation) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"tags":         &o.Tags,
+		"summary":      &o.Summary,
+		"description":  &o.Description,
+		"externalDocs": &o.ExternalDocs,
+		"operationId":  &o.OperationID,
+		"parameters":   &o.Parameters,
+		"requestBody":  &o.RequestBody,
+		"responses":    &o.Responses,
+		"callbacks":    &o.Callbacks,
+		"deprecated":   &o.Deprecated,
+		"security":     &o.Security,
+		"servers":      &o.Servers,
+	}, &o.Extensions)
+}
+
 // PathItem describes the operations available on a single path. A Path Item MAY
 // be empty, due to ACL constraints. The path itself is still exposed to the
 // documentation viewer but they will not know which operations and parameters
@@ -1146,6 +1310,26 @@ func (p *PathItem) MarshalJSON() ([]byte, error) {
 	}, p.Extensions)
 }
 
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (p *PathItem) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"$ref":        &p.Ref,
+		"summary":     &p.Summary,
+		"description": &p.Description,
+		"get":         &p.Get,
+		"put":         &p.Put,
+		"post":        &p.Post,
+		"delete":      &p.Delete,
+		"options":     &p.Options,
+		"head":        &p.Head,
+		"patch":       &p.Patch,
+		"trace":       &p.Trace,
+		"servers":     &p.Servers,
+		"parameters":  &p.Parameters,
+	}, &p.Extensions)
+}
+
 // OAuthFlow stores configuration details for a supported OAuth Flow.
 //
 //	type: oauth2
@@ -1194,6 +1378,17 @@ func (o *OAuthFlow) MarshalJSON() ([]byte, error) {
 	}, o.Extensions)
 }
 
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (o *OAuthFlow) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"authorizationUrl": &o.AuthorizationURL,
+		"tokenUrl":         &o.TokenURL,
+		"refreshUrl":       &o.RefreshURL,
+		"scopes":           &o.Scopes,
+	}, &o.Extensions)
+}
+
 // OAuthFlows allows configuration of the supported OAuth Flows.
 type OAuthFlows struct {
 	// Implicit is the configuration for the OAuth Implicit flow.
@@ -1222,6 +1417,17 @@ func (o *OAuthFlows) MarshalJSON() ([]byte, error) {
 		{"clientCredentials", o.ClientCredentials, omitEmpty},
 		{"authorizationCode", o.AuthorizationCode, omitEmpty},
 	}, o.Extensions)
+}
+
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (o *OAuthFlows) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"implicit":          &o.Implicit,
+		"password":          &o.Password,
+		"clientCredentials": &o.ClientCredentials,
+		"authorizationCode": &o.AuthorizationCode,
+	}, &o.Extensions)
 }
 
 // SecurityScheme defines a security scheme that can be used by the operations.
@@ -1290,6 +1496,21 @@ func (s *SecurityScheme) MarshalJSON() ([]byte, error) {
 		{"flows", s.Flows, omitEmpty},
 		{"openIdConnectUrl", s.OpenIDConnectURL, omitEmpty},
 	}, s.Extensions)
+}
+
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (s *SecurityScheme) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"type":             &s.Type,
+		"description":      &s.Description,
+		"name":             &s.Name,
+		"in":               &s.In,
+		"scheme":           &s.Scheme,
+		"bearerFormat":     &s.BearerFormat,
+		"flows":            &s.Flows,
+		"openIdConnectUrl": &s.OpenIDConnectURL,
+	}, &s.Extensions)
 }
 
 // Components holds a set of reusable objects for different aspects of the OAS.
@@ -1415,6 +1636,36 @@ func (c *Components) MarshalJSON() ([]byte, error) {
 	}, c.Extensions)
 }
 
+// UnmarshalJSON is the inverse of MarshalJSON. Schemas are loaded into a new
+// registry created with `NewMapRegistry`, using `#/components/schemas/` as the
+// prefix and `DefaultSchemaNamer`. Unknown `x-` keys are collected into
+// Extensions and other unknown keys are ignored.
+func (c *Components) UnmarshalJSON(data []byte) error {
+	var schemas map[string]*Schema
+	if err := unmarshalJSON(data, map[string]any{
+		"schemas":         &schemas,
+		"responses":       &c.Responses,
+		"parameters":      &c.Parameters,
+		"examples":        &c.Examples,
+		"requestBodies":   &c.RequestBodies,
+		"headers":         &c.Headers,
+		"securitySchemes": &c.SecuritySchemes,
+		"links":           &c.Links,
+		"callbacks":       &c.Callbacks,
+		"pathItems":       &c.PathItems,
+	}, &c.Extensions); err != nil {
+		return err
+	}
+
+	if schemas != nil {
+		registry := NewMapRegistry(schemaRefPrefix, DefaultSchemaNamer)
+		maps.Copy(registry.Map(), schemas)
+		c.Schemas = registry
+	}
+
+	return nil
+}
+
 // ExternalDocs allows referencing an external resource for extended
 // documentation.
 //
@@ -1439,6 +1690,15 @@ func (e *ExternalDocs) MarshalJSON() ([]byte, error) {
 		{"description", e.Description, omitEmpty},
 		{"url", e.URL, omitNever},
 	}, e.Extensions)
+}
+
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (e *ExternalDocs) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"description": &e.Description,
+		"url":         &e.URL,
+	}, &e.Extensions)
 }
 
 // Tag adds metadata to a single tag that is used by the Operation Object. It is
@@ -1466,6 +1726,16 @@ func (t *Tag) MarshalJSON() ([]byte, error) {
 		{"description", t.Description, omitEmpty},
 		{"externalDocs", t.ExternalDocs, omitEmpty},
 	}, t.Extensions)
+}
+
+// UnmarshalJSON is the inverse of MarshalJSON. Unknown `x-` keys are collected
+// into Extensions and other unknown keys are ignored.
+func (t *Tag) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"name":         &t.Name,
+		"description":  &t.Description,
+		"externalDocs": &t.ExternalDocs,
+	}, &t.Extensions)
 }
 
 type AddOpFunc func(oapi *OpenAPI, op *Operation)
@@ -1640,6 +1910,25 @@ func (o *OpenAPI) marshalDoc(components *Components) ([]byte, error) {
 		{"tags", o.Tags, omitEmpty},
 		{"externalDocs", o.ExternalDocs, omitEmpty},
 	}, o.Extensions)
+}
+
+// UnmarshalJSON is the inverse of MarshalJSON, so a document generated by Huma
+// (or any other OpenAPI 3.x JSON document) can be loaded back into an OpenAPI
+// struct. Unknown `x-` keys are collected into Extensions and other unknown
+// keys are ignored. Registered `OnAddOperation` functions are preserved.
+func (o *OpenAPI) UnmarshalJSON(data []byte) error {
+	return unmarshalJSON(data, map[string]any{
+		"openapi":           &o.OpenAPI,
+		"info":              &o.Info,
+		"jsonSchemaDialect": &o.JSONSchemaDialect,
+		"servers":           &o.Servers,
+		"paths":             &o.Paths,
+		"webhooks":          &o.Webhooks,
+		"components":        &o.Components,
+		"security":          &o.Security,
+		"tags":              &o.Tags,
+		"externalDocs":      &o.ExternalDocs,
+	}, &o.Extensions)
 }
 
 const schemaRefPrefix = "#/components/schemas/"
