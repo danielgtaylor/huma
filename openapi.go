@@ -1167,9 +1167,10 @@ type OAuthFlow struct {
 	// a URL. The OAuth2 standard requires the use of TLS.
 	AuthorizationURL string `yaml:"authorizationUrl,omitempty"`
 
-	// TokenURL is REQUIRED. The token URL to be used for this flow. This MUST be
-	// in the form of a URL. The OAuth2 standard requires the use of TLS.
-	TokenURL string `yaml:"tokenUrl"`
+	// TokenURL is REQUIRED for `password`, `clientCredentials` and
+	// `authorizationCode` flows. The token URL to be used for this flow. This
+	// MUST be in the form of a URL. The OAuth2 standard requires the use of TLS.
+	TokenURL string `yaml:"tokenUrl,omitempty"`
 
 	// RefreshURL is the URL to be used for obtaining refresh tokens. This MUST be
 	// in the form of a URL. The OAuth2 standard requires the use of TLS.
@@ -1188,7 +1189,7 @@ type OAuthFlow struct {
 func (o *OAuthFlow) MarshalJSON() ([]byte, error) {
 	return marshalJSON([]jsonFieldInfo{
 		{"authorizationUrl", o.AuthorizationURL, omitEmpty},
-		{"tokenUrl", o.TokenURL, omitNever},
+		{"tokenUrl", o.TokenURL, omitEmpty},
 		{"refreshUrl", o.RefreshURL, omitEmpty},
 		{"scopes", o.Scopes, omitNever},
 	}, o.Extensions)
