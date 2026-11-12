@@ -61,6 +61,10 @@ func TestOpenAPIMarshal(t *testing.T) {
 								"test": "Test scope",
 							},
 						},
+						Implicit: &huma.OAuthFlow{
+							AuthorizationURL: "https://example.com/oauth2/authorize",
+							Scopes:           map[string]string{},
+						},
 					},
 				},
 			},
@@ -123,6 +127,9 @@ func TestOpenAPIMarshal(t *testing.T) {
           scopes:
             test: Test scope
           tokenUrl: https://example.com/oauth2/token
+        implicit:
+          authorizationUrl: https://example.com/oauth2/authorize
+          scopes: {}
       type: oauth2
 externalDocs:
   url: https://example.com
