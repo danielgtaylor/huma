@@ -226,6 +226,18 @@ type Config struct {
 	// them here does nothing.
 	DocsRendererConfig any
 
+	// DocsAdapter is an optional [Adapter] that serves the OpenAPI spec, the
+	// docs and the schemas. If unset, the main adapter serves them. Use it to
+	// put them on a different router or middleware stack, e.g. to hide them
+	// from the public API.
+	//
+	// The responses of the main API link to the schemas. If this adapter serves
+	// the schemas, replace the default create hook with [DefaultSchemaLinkHook]
+	// and give it the path where this adapter is mounted. Huma cannot detect
+	// this path, and the links work only if this adapter is on the same host
+	// as the main API.
+	DocsAdapter Adapter
+
 	// SchemasPath is the path to the API schemas. If set to `/schemas` it will
 	// allow clients to get `/schemas/{schema}` to view the schema in a browser
 	// or for use in editors like VSCode to provide autocomplete & validation.
@@ -556,9 +568,14 @@ func NewAPI(config Config, a Adapter) API {
 		newAPI.formatKeys = append(newAPI.formatKeys, k)
 	}
 
+	docsAdapter := newAPI.adapter
+	if config.DocsAdapter != nil {
+		docsAdapter = config.DocsAdapter
+	}
+
 	if config.OpenAPIPath != "" {
 		var specJSON []byte
-		a.Handle(&Operation{
+		docsAdapter.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + ".json",
 		}, func(ctx Context) {
@@ -570,7 +587,7 @@ func NewAPI(config Config, a Adapter) API {
 		})
 
 		var specJSON30 []byte
-		a.Handle(&Operation{
+		docsAdapter.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + "-3.0.json",
 		}, func(ctx Context) {
@@ -582,7 +599,7 @@ func NewAPI(config Config, a Adapter) API {
 		})
 
 		var specYAML []byte
-		a.Handle(&Operation{
+		docsAdapter.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + ".yaml",
 		}, func(ctx Context) {
@@ -594,7 +611,7 @@ func NewAPI(config Config, a Adapter) API {
 		})
 
 		var specYAML30 []byte
-		a.Handle(&Operation{
+		docsAdapter.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.OpenAPIPath + "-3.0.yaml",
 		}, func(ctx Context) {
@@ -611,7 +628,13 @@ func NewAPI(config Config, a Adapter) API {
 	}
 
 	if config.SchemasPath != "" {
-		a.Handle(&Operation{
+		schemaRef := []byte(config.SchemasPath + `/$1.json`)
+		if config.DocsAdapter != nil {
+			// The docs adapter can be mounted under any path, so nested refs are
+			// relative to the schema that contains them.
+			schemaRef = []byte(`$1.json`)
+		}
+		docsAdapter.Handle(&Operation{
 			Method: http.MethodGet,
 			Path:   config.SchemasPath + "/{schema}",
 		}, func(ctx Context) {
@@ -619,7 +642,7 @@ func NewAPI(config Config, a Adapter) API {
 			schema := strings.TrimSuffix(ctx.Param("schema"), ".json")
 			ctx.SetHeader("Content-Type", "application/json")
 			b, _ := json.Marshal(config.Components.Schemas.Map()[schema])
-			b = rxSchema.ReplaceAll(b, []byte(config.SchemasPath+`/$1.json`))
+			b = rxSchema.ReplaceAll(b, schemaRef)
 			ctx.BodyWriter().Write(b)
 		})
 	}
@@ -628,8 +651,16 @@ func NewAPI(config Config, a Adapter) API {
 }
 
 func (a *api) registerDocsRoute() {
+	docsAdapter := a.adapter
 	openAPIPath := a.config.OpenAPIPath
-	if prefix := getAPIPrefix(a.OpenAPI()); prefix != "" {
+	if a.config.DocsAdapter != nil {
+		// The API prefix describes the main adapter, not the docs adapter, so
+		// link to the spec relative to the docs page instead. Each segment of
+		// the docs path after the first one needs a step up.
+		docsAdapter = a.config.DocsAdapter
+		up := strings.Repeat("../", max(strings.Count(a.config.DocsPath, "/")-1, 0))
+		openAPIPath = up + strings.TrimPrefix(openAPIPath, "/")
+	} else if prefix := getAPIPrefix(a.OpenAPI()); prefix != "" {
 		openAPIPath = path.Join(prefix, openAPIPath)
 	}
 
@@ -780,7 +811,7 @@ func (a *api) registerDocsRoute() {
 		panic("missing CSP for docs renderer: " + a.config.DocsRenderer)
 	}
 
-	a.adapter.Handle(&Operation{
+	docsAdapter.Handle(&Operation{
 		Method: http.MethodGet,
 		Path:   a.config.DocsPath,
 	}, func(ctx Context) {
