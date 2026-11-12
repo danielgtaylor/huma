@@ -818,7 +818,12 @@ func writeHeader(write func(string, string), info *headerInfo, f reflect.Value) 
 		write(info.Name, strconv.FormatBool(f.Bool()))
 	default:
 		if f.Type() == timeType && !f.Interface().(time.Time).IsZero() {
-			write(info.Name, f.Interface().(time.Time).Format(info.TimeFormat))
+			t := f.Interface().(time.Time)
+			if info.TimeFormat == http.TimeFormat {
+				// The format hard-codes GMT, so the time must be in UTC.
+				t = t.UTC()
+			}
+			write(info.Name, t.Format(info.TimeFormat))
 			return
 		}
 

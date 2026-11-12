@@ -2787,6 +2787,8 @@ Content-Type: text/plain
 					Date         time.Time `header:"date"`
 					Empty        string    `header:"empty"`
 					CustomTime   time.Time `header:"custom-time" timeFormat:"2006-01-02"`
+					ZonedDate    time.Time `header:"zoned-date"`
+					ZonedCustom  time.Time `header:"zoned-custom" timeFormat:"15:04 -0700"`
 					WithoutTag   string    // No header tag - SHOULD be set as a header using field name.
 					LastModified time.Time // No header tag - SHOULD be set as a header using field name.
 				}
@@ -2803,6 +2805,8 @@ Content-Type: text/plain
 						Bool:         true,
 						Date:         time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC),
 						CustomTime:   time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC),
+						ZonedDate:    time.Date(2023, 1, 1, 13, 0, 0, 0, time.FixedZone("CET", 3600)),
+						ZonedCustom:  time.Date(2023, 1, 1, 13, 0, 0, 0, time.FixedZone("CET", 3600)),
 						WithoutTag:   "without-tag-value",
 						LastModified: time.Date(2023, 6, 15, 10, 30, 0, 0, time.UTC),
 					}, nil
@@ -2838,6 +2842,8 @@ Content-Type: text/plain
 				assert.Equal(t, "Sun, 01 Jan 2023 12:00:00 GMT", resp.Header().Get("Date"))
 				assert.Empty(t, resp.Header().Values("Empty"))
 				assert.Equal(t, "2023-06-15", resp.Header().Get("Custom-Time"))
+				assert.Equal(t, "Sun, 01 Jan 2023 12:00:00 GMT", resp.Header().Get("Zoned-Date"))
+				assert.Equal(t, "13:00 +0100", resp.Header().Get("Zoned-Custom"))
 
 				// Surface-level fields without tags should be set using field name.
 				assert.Equal(t, "without-tag-value", resp.Header().Get("WithoutTag"))
