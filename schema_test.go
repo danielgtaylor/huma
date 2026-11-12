@@ -67,6 +67,53 @@ func (c BadRefSchema) Schema(r huma.Registry) *huma.Schema {
 
 var _ huma.SchemaProvider = BadRefSchema{}
 
+// RefEnum registers a named enum and is used through a reference, as is
+// commonly done for named enums.
+type RefEnum string
+
+func (RefEnum) Schema(r huma.Registry) *huma.Schema {
+	return registerRefEnum(r, "RefEnum")
+}
+
+// TransformedRefEnum does the same with a SchemaTransformer, keeping the
+// nullability it is given.
+type TransformedRefEnum string
+
+func (TransformedRefEnum) TransformSchema(r huma.Registry, s *huma.Schema) *huma.Schema {
+	ref := registerRefEnum(r, "TransformedRefEnum")
+	ref.Nullable = s.Nullable
+	return ref
+}
+
+var sharedRefEnum = &huma.Schema{Ref: "#/components/schemas/SharedRefEnum"}
+
+// SharedRefEnum returns the same reference every time.
+type SharedRefEnum string
+
+func (SharedRefEnum) Schema(r huma.Registry) *huma.Schema {
+	registerRefEnum(r, "SharedRefEnum")
+	return sharedRefEnum
+}
+
+// ChainedRefEnum is a reference to a component that is itself a reference.
+type ChainedRefEnum string
+
+func (ChainedRefEnum) Schema(r huma.Registry) *huma.Schema {
+	if r.Map()["ChainedRefEnum"] == nil {
+		r.Map()["ChainedRefEnum"] = registerRefEnum(r, "RefEnum")
+	}
+	return &huma.Schema{Ref: "#/components/schemas/ChainedRefEnum"}
+}
+
+func registerRefEnum(r huma.Registry, name string) *huma.Schema {
+	if r.Map()[name] == nil {
+		s := &huma.Schema{Type: huma.TypeString, Enum: []any{"red", "blue"}}
+		s.PrecomputeMessages()
+		r.Map()[name] = s
+	}
+	return &huma.Schema{Ref: "#/components/schemas/" + name}
+}
+
 type TypedArrayWithCustomDesc [4]float64
 
 func (t *TypedArrayWithCustomDesc) TransformSchema(r huma.Registry, s *huma.Schema) *huma.Schema {
@@ -998,6 +1045,75 @@ func TestSchema(t *testing.T) {
 			}`,
 		},
 		{
+			name: "field-nullable-ref",
+			input: struct {
+				Pointer         *RefEnum            `json:"pointer" doc:"A color."`
+				Value           RefEnum             `json:"value"`
+				Tagged          RefEnum             `json:"tagged" nullable:"true"`
+				NotNullable     *RefEnum            `json:"notNullable" nullable:"false"`
+				Omitted         *RefEnum            `json:"omitted,omitempty"`
+				OmittedNullable *RefEnum            `json:"omittedNullable,omitempty" nullable:"true"`
+				Transformed     *TransformedRefEnum `json:"transformed"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"pointer": {
+						"description": "A color.",
+						"anyOf": [{"$ref": "#/components/schemas/RefEnum"}, {"type": "null"}]
+					},
+					"value": {"$ref": "#/components/schemas/RefEnum"},
+					"tagged": {
+						"anyOf": [{"$ref": "#/components/schemas/RefEnum"}, {"type": "null"}]
+					},
+					"notNullable": {"$ref": "#/components/schemas/RefEnum"},
+					"omitted": {"$ref": "#/components/schemas/RefEnum"},
+					"omittedNullable": {
+						"anyOf": [{"$ref": "#/components/schemas/RefEnum"}, {"type": "null"}]
+					},
+					"transformed": {
+						"anyOf": [{"$ref": "#/components/schemas/TransformedRefEnum"}, {"type": "null"}]
+					}
+				},
+				"required": ["pointer", "value", "tagged", "notNullable", "transformed"]
+			}`,
+		},
+		{
+			name: "field-nullable-ref-shared",
+			input: struct {
+				Tagged SharedRefEnum `json:"tagged" nullable:"true"`
+				Plain  SharedRefEnum `json:"plain"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"tagged": {
+						"anyOf": [{"$ref": "#/components/schemas/SharedRefEnum"}, {"type": "null"}]
+					},
+					"plain": {"$ref": "#/components/schemas/SharedRefEnum"}
+				},
+				"required": ["tagged", "plain"]
+			}`,
+		},
+		{
+			name: "field-nullable-ref-chain",
+			input: struct {
+				Pointer *ChainedRefEnum `json:"pointer"`
+			}{},
+			expected: `{
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"pointer": {
+						"anyOf": [{"$ref": "#/components/schemas/ChainedRefEnum"}, {"type": "null"}]
+					}
+				},
+				"required": ["pointer"]
+			}`,
+		},
+		{
 			name: "field-non-nullable-array",
 			input: struct {
 				Int []int64 `json:"int" nullable:"false"`
@@ -1833,13 +1949,49 @@ func TestSchemaRoundTrip(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"type": "object", "additionalProperties": null}`), &addlNull))
 	assert.Nil(t, addlNull.AdditionalProperties)
 
+	// A nullable reference is written with a null branch, which loads as the
+	// null type and is written back the same way.
+	nullableRef := `{"anyOf": [{"$ref": "#/components/schemas/Foo"}, {"type": "null"}]}`
+	b, err = json.Marshal(&huma.Schema{Ref: "#/components/schemas/Foo", Nullable: true})
+	require.NoError(t, err)
+	assert.JSONEq(t, nullableRef, string(b))
+	var loaded huma.Schema
+	require.NoError(t, json.Unmarshal(b, &loaded))
+	require.Len(t, loaded.AnyOf, 2)
+	assert.Equal(t, huma.TypeNull, loaded.AnyOf[1].Type)
+	assert.False(t, loaded.AnyOf[1].Nullable)
+	b, err = json.Marshal(&loaded)
+	require.NoError(t, err)
+	assert.JSONEq(t, nullableRef, string(b))
+
+	// What applies to the reference moves into its branch, annotations stay.
+	b, err = json.Marshal(&huma.Schema{
+		Ref:         "#/components/schemas/Foo",
+		Type:        huma.TypeString,
+		AnyOf:       []*huma.Schema{{MinLength: new(1)}},
+		Description: "d",
+		Nullable:    true,
+	})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{
+		"description": "d",
+		"anyOf": [
+			{"$ref": "#/components/schemas/Foo", "type": "string", "anyOf": [{"minLength": 1}]},
+			{"type": "null"}
+		]
+	}`, string(b))
+
+	var nullOnly huma.Schema
+	require.NoError(t, json.Unmarshal([]byte(`{"type": ["null"]}`), &nullOnly))
+	assert.Equal(t, huma.TypeNull, nullOnly.Type)
+	assert.False(t, nullOnly.Nullable)
+
 	for _, bad := range []string{
 		`[]`,
 		`{"title": 1}`,
 		`{"type": 1}`,
 		`{"additionalProperties": 1}`,
 		`{"type": ["string", "integer"]}`,
-		`{"type": ["null"]}`,
 		`{"pattern": "("}`,
 		`{"properties": {"a": null}}`,
 		`{"oneOf": [null]}`,
