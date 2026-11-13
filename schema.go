@@ -48,6 +48,7 @@ var (
 	rawMessageType        = reflect.TypeFor[json.RawMessage]()
 	schemaProviderType    = reflect.TypeFor[SchemaProvider]()
 	schemaTransformerType = reflect.TypeFor[SchemaTransformer]()
+	jsonUnmarshalerType   = reflect.TypeFor[json.Unmarshaler]()
 	textUnmarshalerType   = reflect.TypeFor[encoding.TextUnmarshaler]()
 	timeType              = reflect.TypeFor[time.Time]()
 	urlType               = reflect.TypeFor[url.URL]()
@@ -160,6 +161,10 @@ type Schema struct {
 	requiredMap   map[string]bool `yaml:"-"`
 	propertyNames []string        `yaml:"-"`
 	hidden        bool            `yaml:"-"`
+
+	// Go type for `encoding.TextUnmarshaler` fields, letting validation report
+	// decode failures at the field's location instead of the entire body.
+	textUnmarshalType reflect.Type `yaml:"-"`
 
 	// Precomputed validation messages. These prevent allocations during
 	// validation and are known at schema creation time.
@@ -996,7 +1001,18 @@ func schemaFromType(r Registry, t reflect.Type) *Schema {
 		// be loaded from plain text, and so should be treated as strings.
 		// This behavior can be overridden by implementing `huma.SchemaProvider`
 		// and returning a custom schema.
-		return &Schema{Type: TypeString, Nullable: isPointer}
+		s := &Schema{Type: TypeString, Nullable: isPointer}
+		// Record the Go type so validation can probe UnmarshalText and report
+		// decode failures at the field's location. Skip types implementing
+		// json.Unmarshaler: encoding/json prefers UnmarshalJSON and never calls
+		// UnmarshalText for them, so probing would report false errors. Also
+		// require that a *pointer* to the type implements the interface so the
+		// probe's reflect.New(t) instance is usable (excludes interface types).
+		if ptrT.Implements(textUnmarshalerType) &&
+			!t.Implements(jsonUnmarshalerType) && !ptrT.Implements(jsonUnmarshalerType) {
+			s.textUnmarshalType = t
+		}
+		return s
 	}
 
 	minZero := 0.0
