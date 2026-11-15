@@ -32,6 +32,7 @@ Features include:
     -   [RFC 7386](https://www.rfc-editor.org/rfc/rfc7386) JSON Merge Patch
     -   [RFC 6902](https://www.rfc-editor.org/rfc/rfc6902) JSON Patch
     -   [Shorthand](https://github.com/danielgtaylor/shorthand) patches
+-   Optional [MCP](mcp.md) server exposing operations as tools for LLM clients
 -   Annotated Go types for input and output models
     -   Generates JSON Schema from Go types
     -   Static typing for path/query/header params, bodies, response headers, etc.
