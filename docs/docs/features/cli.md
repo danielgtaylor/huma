@@ -186,9 +186,9 @@ Usage:
   appname [flags]
 
 Flags:
-  -h, --help            help for appname
-  -p, --port int         (default 8888)
-  -v, --version         version for appname
+  -h, --help[=true|false]      help for appname
+  -p, --port int                (default 8888)
+  -v, --version[=true|false]   version for appname
 
 $ go run ./demo --version
 appname version 1.0.1

@@ -164,7 +164,7 @@ func TestCLIHelp(t *testing.T) {
 	cli.Root().SetErr(buf)
 	cli.Run()
 
-	assert.Equal(t, "Usage:\n  myapp [flags]\n\nFlags:\n      --debug         \n  -h, --help          help for myapp\n      --host string   \n      --port int\n", buf.String())
+	assert.Equal(t, "Usage:\n  myapp [flags]\n\nFlags:\n      --debug[=true|false]   \n  -h, --help[=true|false]    help for myapp\n      --host string          \n      --port int\n", buf.String())
 }
 
 func TestCLICommandWithOptions(t *testing.T) {
