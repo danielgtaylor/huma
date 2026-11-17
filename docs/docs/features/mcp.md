@@ -41,6 +41,7 @@ The `Authorization` header from the MCP request is forwarded onto each tool call
 
 Huma never validates or issues tokens; that stays with your middleware and authorization server, as described in [OAuth 2.0 & JWT](../how-to/oauth2-jwt.md).
 
+{% raw %}
 ```go title="code.go" hl_lines="2-7 17"
 api, server := mcp.Attach(api, mcp.Options{
 	PublicURL: "https://api.example.com",
@@ -66,6 +67,7 @@ api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
 	next(ctx)
 })
 ```
+{% endraw %}
 
 !!! warning "Token Audience"
 
