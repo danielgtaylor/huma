@@ -9,6 +9,13 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
+// cborDecMode decodes the way validation reads the body: exact-case keys and
+// no duplicates, so a decoded value can never skip validation.
+var cborDecMode, _ = cbor.DecOptions{
+	DupMapKey:         cbor.DupMapKeyEnforcedAPF,
+	FieldNameMatching: cbor.FieldNameMatchingCaseSensitive,
+}.DecMode()
+
 var cborEncMode, _ = cbor.EncOptions{
 	// Canonical enc opts
 	Sort:          cbor.SortCanonical,
@@ -34,7 +41,7 @@ var DefaultCBORFormat = huma.Format{
 	Marshal: func(w io.Writer, v any) error {
 		return cborEncMode.NewEncoder(w).Encode(v)
 	},
-	Unmarshal: cbor.Unmarshal,
+	Unmarshal: cborDecMode.Unmarshal,
 }
 
 func init() {

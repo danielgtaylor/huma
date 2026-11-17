@@ -2,6 +2,7 @@ package huma
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 )
 
@@ -19,7 +20,7 @@ var DefaultJSONFormat = Format{
 		enc.SetEscapeHTML(false)
 		return enc.Encode(v)
 	},
-	Unmarshal: json.Unmarshal,
+	Unmarshal: unmarshalJSONUnique,
 }
 
 // DefaultFormats is a map of default formats that can be set in the API's
@@ -92,4 +93,55 @@ func DefaultConfig(title string, version string) Config {
 			},
 		},
 	}
+}
+
+// countColons counts the colons outside strings in data, which for valid JSON
+// is the number of object members.
+func countColons(data []byte) int {
+	var escaped, inString bool
+	count := 0
+	for _, c := range data {
+		switch {
+		case escaped:
+			escaped = false
+		case inString && c == '\\':
+			escaped = true
+		case c == '"':
+			inString = !inString
+		case !inString && c == ':':
+			count++
+		}
+	}
+	return count
+}
+
+// countMembers counts the object members in a value decoded into any.
+func countMembers(v any) int {
+	count := 0
+	switch v := v.(type) {
+	case map[string]any:
+		count += len(v)
+		for _, item := range v {
+			count += countMembers(item)
+		}
+	case []any:
+		for _, item := range v {
+			count += countMembers(item)
+		}
+	}
+	return count
+}
+
+// unmarshalJSONUnique is json.Unmarshal that also rejects duplicate object keys
+// when decoding into an untyped value, as done for validation. Validation sees
+// only the last duplicate while decoding into a struct merges them, so a
+// duplicate could carry values that were never validated.
+func unmarshalJSONUnique(data []byte, v any) error {
+	if err := json.Unmarshal(data, v); err != nil {
+		return err
+	}
+	if p, ok := v.(*any); ok && countMembers(*p) < countColons(data) {
+		return errors.New("duplicate object key")
+	}
+	return nil
 }
