@@ -1063,6 +1063,102 @@ var validateTests = []struct {
 		errs:  []string{"expected length <= 3"},
 	},
 	{
+		name: "case-insensitive variant alongside exact key fail",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" maxLength:\"3\""
+		}](),
+		input: map[string]any{"value": "ok", "VALUE": "fails"},
+		errs:  []string{"expected length <= 3"},
+	},
+	{
+		name: "case-insensitive variant dependent required fail",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value,omitempty\" dependentRequired:\"other\""
+			Other string "json:\"other,omitempty\""
+		}](),
+		input: map[string]any{"VALUE": "x"},
+		errs:  []string{"expected property other to be present when value is present"},
+	},
+	{
+		name: "case-insensitive variant dependent required with null exact key fail",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value,omitempty\" dependentRequired:\"other\""
+			Other string "json:\"other,omitempty\""
+		}](),
+		input: map[string]any{"value": nil, "VALUE": "x"},
+		errs:  []string{"expected property other to be present when value is present"},
+	},
+	{
+		name: "case-insensitive variant dependent required satisfied success",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value,omitempty\" dependentRequired:\"other\""
+			Other string "json:\"other,omitempty\""
+		}](),
+		input: map[string]any{"VALUE": "x", "other": "y"},
+	},
+	{
+		name: "case-insensitive multiple variants fail",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\" maxLength:\"3\""
+		}](),
+		input: map[string]any{"VALUE": "ok", "Value": "fails"},
+		errs:  []string{"expected length <= 3"},
+	},
+	{
+		name: "case-insensitive null variant success",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value,omitempty\" maxLength:\"3\""
+		}](),
+		input: map[string]any{"value": "ok", "VALUE": nil},
+	},
+	{
+		name: "case-insensitive null variant required fail",
+		typ: reflect.TypeFor[struct {
+			Value string "json:\"value\""
+		}](),
+		input: map[string]any{"VALUE": nil},
+		errs:  []string{"expected string"},
+	},
+	{
+		name: "case-insensitive variant without additional properties fail",
+		typ: reflect.TypeFor[struct {
+			_     struct{} "additionalProperties:\"false\""
+			Value string   "json:\"value\" maxLength:\"3\""
+		}](),
+		input: map[string]any{"value": "ok", "VALUE": "fails"},
+		errs:  []string{"expected length <= 3"},
+	},
+	{
+		name: "case-insensitive nested variant fail",
+		typ: reflect.TypeFor[struct {
+			Inner struct {
+				A int "json:\"a\" maximum:\"5\""
+			} "json:\"inner\""
+		}](),
+		input: map[string]any{"inner": map[string]any{"a": 1}, "INNER": map[string]any{"a": 9}},
+		errs:  []string{"expected number <= 5"},
+	},
+	{
+		name: "case-insensitive variant matching several properties fail",
+		typ: reflect.TypeFor[struct {
+			Lower string "json:\"ab,omitempty\" maxLength:\"3\""
+			Upper string "json:\"AB,omitempty\""
+		}](),
+		input: map[string]any{"Ab": "fails"},
+		errs:  []string{"expected length <= 3"},
+	},
+	{
+		name:    "case-sensitive variant with additional properties fail",
+		before:  func() { huma.ValidateStrictCasing = true },
+		cleanup: func() { huma.ValidateStrictCasing = false },
+		typ: reflect.TypeFor[struct {
+			_     struct{} "additionalProperties:\"true\""
+			Value string   "json:\"value\" maxLength:\"3\""
+		}](),
+		input: map[string]any{"value": "ok", "Value": "fails"},
+		errs:  []string{"expected length <= 3"},
+	},
+	{
 		name:    "case-sensive fail",
 		before:  func() { huma.ValidateStrictCasing = true },
 		cleanup: func() { huma.ValidateStrictCasing = false },

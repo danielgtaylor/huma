@@ -1342,6 +1342,52 @@ func TestFeatures(t *testing.T) {
 			},
 		},
 		{
+			Name: "request-body-case-variant-validated",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Role string `json:"role" enum:"viewer,editor"`
+					}
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   `{"role":"viewer","Role":"admin"}`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusUnprocessableEntity, resp.Code)
+				assert.Contains(t, resp.Body.String(), `"location":"body.role"`)
+			},
+		},
+		{
+			Name: "request-body-duplicate-key",
+			Register: func(t *testing.T, api huma.API) {
+				huma.Register(api, huma.Operation{
+					Method: http.MethodPut,
+					Path:   "/body",
+				}, func(ctx context.Context, input *struct {
+					Body struct {
+						Inner *struct {
+							A int `json:"a,omitempty" maximum:"5"`
+						} `json:"inner,omitempty"`
+					}
+				}) (*struct{}, error) {
+					return nil, nil
+				})
+			},
+			Method: http.MethodPut,
+			URL:    "/body",
+			Body:   `{"inner":{"a":9},"inner":{}}`,
+			Assert: func(t *testing.T, resp *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusBadRequest, resp.Code)
+				assert.Contains(t, resp.Body.String(), "duplicate object key")
+			},
+		},
+		{
 			Name: "body-example-promoted-to-media-type",
 			Register: func(t *testing.T, api huma.API) {
 				huma.Register(api, huma.Operation{

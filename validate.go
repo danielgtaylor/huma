@@ -842,7 +842,12 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 			continue
 		}
 
-		if m[actualKey] != nil && s.DependentRequired[k] != nil {
+		if actualKey != k {
+			// Validated below with the other case variants.
+			continue
+		}
+
+		if m[k] != nil && s.DependentRequired[k] != nil {
 			for _, dependent := range s.DependentRequired[k] {
 				if m[dependent] != nil {
 					continue
@@ -853,9 +858,11 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		}
 
 		path.Push(k)
-		Validate(r, v, path, mode, m[actualKey], res)
+		Validate(r, v, path, mode, m[k], res)
 		path.Pop()
 	}
+
+	validateCaseVariants(r, s, path, mode, m, res)
 
 	if addl, ok := s.AdditionalProperties.(bool); ok && !addl {
 	addlPropLoop:
@@ -887,6 +894,36 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 
 			path.Push(k)
 			Validate(r, addl, path, mode, v, res)
+			path.Pop()
+		}
+	}
+}
+
+// validateCaseVariants validates keys that only case-insensitively match a
+// property. encoding/json assigns every such key to the field, last one
+// winning, so each must pass the property's schema too.
+func validateCaseVariants(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, m map[string]any, res *ValidateResult) {
+	for actual, val := range m {
+		if _, ok := s.Properties[actual]; ok {
+			continue
+		}
+		for _, k := range s.propertyNames {
+			if !strings.EqualFold(actual, k) || (val == nil && (!s.requiredMap[k] || s.Nullable)) {
+				continue
+			}
+
+			if val != nil && s.DependentRequired[k] != nil {
+				for _, dependent := range s.DependentRequired[k] {
+					if m[dependent] != nil {
+						continue
+					}
+
+					res.Add(path, m, s.msgDependentRequired[k][dependent])
+				}
+			}
+
+			path.Push(k)
+			Validate(r, s.Properties[k], path, mode, val, res)
 			path.Pop()
 		}
 	}
