@@ -318,11 +318,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 
 		if origWriter.Code >= 300 {
 			// This represents an error on the GET side.
-			for key, values := range origWriter.Header() {
-				for _, value := range values {
-					ctx.SetHeader(key, value)
-				}
-			}
+			copyHeaders(ctx, origWriter.Header())
 			ctx.SetStatus(origWriter.Code)
 			io.Copy(ctx.BodyWriter(), origWriter.Body)
 			return
@@ -447,14 +443,25 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 
 		putWriter := httptest.NewRecorder()
 		adapter.ServeHTTP(putWriter, putReq)
-		for key, values := range putWriter.Header() {
-			for _, value := range values {
-				ctx.SetHeader(key, value)
-			}
-		}
+		copyHeaders(ctx, putWriter.Header())
 		ctx.SetStatus(putWriter.Code)
 		io.Copy(ctx.BodyWriter(), putWriter.Body)
 	})
+}
+
+// copyHeaders replaces each header already on the PATCH response, as router
+// middleware sets it on the internal request too, but keeps every value so
+// headers such as Set-Cookie survive.
+func copyHeaders(ctx huma.Context, header http.Header) {
+	for key, values := range header {
+		for i, value := range values {
+			if i == 0 {
+				ctx.SetHeader(key, value)
+			} else {
+				ctx.AppendHeader(key, value)
+			}
+		}
+	}
 }
 
 func makeOptionalSchema(registry huma.Registry, s *huma.Schema, visitedRefs map[string]struct{}) *huma.Schema {
