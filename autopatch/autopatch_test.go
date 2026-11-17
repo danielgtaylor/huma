@@ -248,7 +248,7 @@ func TestPatchKeepsMultiValueHeaders(t *testing.T) {
 		thing := db[input.ThingID]
 		if thing == nil {
 			return nil, huma.ErrorWithHeaders(huma.Error404NotFound("Not found"), http.Header{
-				"Set-Cookie": {"a=1", "b=2"},
+				"Set-Cookie": {"c=3", "d=4"},
 			})
 		}
 		return &ThingResponse{Body: thing}, nil
@@ -284,7 +284,7 @@ func TestPatchKeepsMultiValueHeaders(t *testing.T) {
 		strings.NewReader(`{}`),
 	)
 	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
-	assert.Equal(t, []string{"a=1", "b=2"}, w.Header().Values("Set-Cookie"))
+	assert.Equal(t, []string{"c=3", "d=4"}, w.Header().Values("Set-Cookie"))
 }
 
 func TestPatchPutNoBody(t *testing.T) {

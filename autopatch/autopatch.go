@@ -449,10 +449,9 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 	})
 }
 
-// copyHeaders copies the headers of an internal response to the PATCH
-// response. The first value of each header replaces any value already set,
-// for example by router middleware, and the others are appended so headers
-// such as Set-Cookie or Link keep every value.
+// copyHeaders replaces each header already on the PATCH response, as router
+// middleware sets it on the internal request too, but keeps every value so
+// headers such as Set-Cookie survive.
 func copyHeaders(ctx huma.Context, header http.Header) {
 	for key, values := range header {
 		for i, value := range values {
