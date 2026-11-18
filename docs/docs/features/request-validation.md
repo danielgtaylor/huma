@@ -73,12 +73,12 @@ Fields being nullable is determined automatically but can be overridden as neede
 
 1. Start with no fields as nullable
 2. If a field is a pointer (including slices):
-    1. To a `boolean`, `integer`, `number`, `string`: it is nullable unless it has `omitempty`.
+    1. To a `boolean`, `integer`, `number`, `string`, or a `$ref` to one (e.g. from a `SchemaProvider`): it is nullable unless it has `omitempty`.
     2. To an `array`: it is nullable if `huma.DefaultArrayNullable` is true.
     3. To an `object`: it is **not** nullable, due to complexity and bad support for `anyOf`/`oneOf` in many tools.
 3. If a field has `nullable:"false"`, it is not nullable
 4. If a field has `nullable:"true"`:
-    1. To a `boolean`, `integer`, `number`, `string`, `array`: it is nullable
+    1. To a `boolean`, `integer`, `number`, `string`, `array`, or a `$ref` to one of these: it is nullable
     2. To an `object`: **panic** saying this is not currently supported
 5. If a struct has a field `_` with `nullable: true`, the struct is nullable enabling users to opt-in for `object` without the `anyOf`/`oneOf` complication.
 
@@ -100,7 +100,7 @@ type MyStruct2 struct {
 }
 ```
 
-Nullable types will generate a type array like `"type": ["string", "null"]` which has broad compatibility and is easy to downgrade to OpenAPI 3.0. Also keep in mind you can always provide a [custom schema](./schema-customization.md) if the built-in features aren't exactly what you need.
+Nullable types will generate a type array like `"type": ["string", "null"]` which has broad compatibility and is easy to downgrade to OpenAPI 3.0. A nullable `$ref` cannot carry a type array, so it generates `"anyOf": [{"$ref": "..."}, {"type": "null"}]`, which becomes `"allOf": [{"$ref": "..."}], "nullable": true` in OpenAPI 3.0. Also keep in mind you can always provide a [custom schema](./schema-customization.md) if the built-in features aren't exactly what you need.
 
 !!! info "Note"
 
