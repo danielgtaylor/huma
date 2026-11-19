@@ -202,6 +202,13 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 	}
 	name = casing.Join(parts, "-")
 
+	opID := "patch-" + name
+	if get.Metadata["_convenience_id"] == get.OperationID {
+		// The GET operation ID was generated, so generate the PATCH one the same
+		// way to keep any custom `huma.GenerateOperationID` naming consistent.
+		opID = huma.GenerateOperationID(http.MethodPatch, put.Path, get.Metadata["_convenience_id_out"])
+	}
+
 	// Augment the response list with ones we may return from the PATCH.
 	responses := make(map[string]*huma.Response, len(put.Responses))
 	maps.Copy(responses, put.Responses)
@@ -240,7 +247,7 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 
 	// Manually register the operation so it shows up in the generated OpenAPI.
 	op := &huma.Operation{
-		OperationID:  "patch-" + name,
+		OperationID:  opID,
 		Method:       http.MethodPatch,
 		Path:         put.Path,
 		Summary:      "Patch " + name,

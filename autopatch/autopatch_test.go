@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/casing"
 	"github.com/danielgtaylor/huma/v2/humatest"
 )
 
@@ -490,6 +491,84 @@ func TestDeprecatedPatch(t *testing.T) {
 	AutoPatch(api)
 
 	assert.True(t, api.OpenAPI().Paths["/things/{thing-id}"].Patch.Deprecated)
+}
+
+func TestPatchOperationID(t *testing.T) {
+	type ThingOutput struct {
+		Body *ThingModel
+	}
+	type PutThingInput struct {
+		ThingIDParam
+		Body ThingModel
+	}
+
+	getThing := func(ctx context.Context, input *ThingIDParam) (*ThingOutput, error) {
+		return &ThingOutput{Body: &ThingModel{}}, nil
+	}
+	putThing := func(ctx context.Context, input *PutThingInput) (*ThingOutput, error) {
+		return &ThingOutput{Body: &ThingModel{}}, nil
+	}
+
+	t.Run("explicit", func(t *testing.T) {
+		_, api := humatest.New(t)
+		huma.Register(api, huma.Operation{
+			OperationID: "fetch-thing",
+			Method:      http.MethodGet,
+			Path:        "/v1/things/{thing-id}",
+		}, getThing)
+		huma.Register(api, huma.Operation{
+			OperationID: "put-thing",
+			Method:      http.MethodPut,
+			Path:        "/v1/things/{thing-id}",
+		}, putThing)
+
+		AutoPatch(api)
+
+		assert.Equal(t, "patch-thing", api.OpenAPI().Paths["/v1/things/{thing-id}"].Patch.OperationID)
+	})
+
+	t.Run("convenience", func(t *testing.T) {
+		_, api := humatest.New(t)
+		huma.Get(api, "/v1/things/{thing-id}", getThing)
+		huma.Put(api, "/v1/things/{thing-id}", putThing)
+
+		AutoPatch(api)
+
+		path := api.OpenAPI().Paths["/v1/things/{thing-id}"]
+		assert.Equal(t, "get-v1-things-by-thing-id", path.Get.OperationID)
+		assert.Equal(t, "patch-v1-things-by-thing-id", path.Patch.OperationID)
+	})
+
+	t.Run("convenience with overridden ID", func(t *testing.T) {
+		_, api := humatest.New(t)
+		huma.Get(api, "/things/{thing-id}", getThing, func(o *huma.Operation) {
+			o.OperationID = "fetch-thing"
+		})
+		huma.Put(api, "/things/{thing-id}", putThing)
+
+		AutoPatch(api)
+
+		assert.Equal(t, "patch-thing", api.OpenAPI().Paths["/things/{thing-id}"].Patch.OperationID)
+	})
+
+	t.Run("custom generator", func(t *testing.T) {
+		orig := huma.GenerateOperationID
+		t.Cleanup(func() { huma.GenerateOperationID = orig })
+		huma.GenerateOperationID = func(method, path string, response any) string {
+			return casing.LowerCamel(orig(method, path, response))
+		}
+
+		_, api := humatest.New(t)
+		grp := huma.NewGroup(api, "/v1")
+		huma.Get(grp, "/things/{thing-id}", getThing)
+		huma.Put(grp, "/things/{thing-id}", putThing)
+
+		AutoPatch(api)
+
+		path := api.OpenAPI().Paths["/v1/things/{thing-id}"]
+		assert.Equal(t, "getV1ThingsByThingId", path.Get.OperationID)
+		assert.Equal(t, "patchV1ThingsByThingId", path.Patch.OperationID)
+	})
 }
 
 func TestNullabilityExtension(t *testing.T) {
