@@ -1148,22 +1148,21 @@ var validateTests = []struct {
 		errs:  []string{"expected length <= 3"},
 	},
 	{
-		name:    "case-sensitive variant with additional properties fail",
+		name:    "case-sensitive variant with additional properties success",
 		before:  func() { huma.ValidateStrictCasing = true },
 		cleanup: func() { huma.ValidateStrictCasing = false },
 		typ: reflect.TypeFor[struct {
 			_     struct{} "additionalProperties:\"true\""
 			Value string   "json:\"value\" maxLength:\"3\""
 		}](),
-		input: map[string]any{"value": "ok", "Value": "fails"},
-		errs:  []string{"expected length <= 3"},
+		input: map[string]any{"value": "ok", "Value": "ignored"},
 	},
 	{
 		name:    "case-sensive fail",
 		before:  func() { huma.ValidateStrictCasing = true },
 		cleanup: func() { huma.ValidateStrictCasing = false },
 		typ: reflect.TypeFor[struct {
-			Value string "json:\"value\""
+			Value string "json:\"value\" maxLength:\"3\""
 		}](),
 		input: map[string]any{"VaLuE": "fails due to casing"},
 		errs: []string{
@@ -1864,8 +1863,10 @@ func ExampleModelValidator() {
 	// []
 }
 
-var BenchValidatePB *huma.PathBuffer
-var BenchValidateRes *huma.ValidateResult
+var (
+	BenchValidatePB  *huma.PathBuffer
+	BenchValidateRes *huma.ValidateResult
+)
 
 func BenchmarkValidate(b *testing.B) {
 	pb := huma.NewPathBuffer([]byte(""), 0)

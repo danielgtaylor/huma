@@ -38,10 +38,10 @@ const (
 )
 
 // ValidateStrictCasing controls whether or not field names are case-sensitive
-// during validation. This is useful for clients that may send fields in a
-// different case than expected by the server. For example, a legacy client may
-// send `{"Foo": "bar"}` when the server expects `{"foo": "bar"}`. This is
-// disabled by default to match Go's JSON unmarshaling behavior.
+// during validation. It is disabled by default to match encoding/json, which
+// assigns `{"Foo": "bar"}` to a field named `foo`. Enable it only with a
+// decoder that matches names case-sensitively, or with closed schemas, so
+// that no key reaches a field without being validated against it.
 var ValidateStrictCasing = false
 
 var rxHostname = regexp.MustCompile(`^([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])(\.([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]{0,61}[a-zA-Z0-9]))*$`)
@@ -862,7 +862,9 @@ func handleMapString(r Registry, s *Schema, path *PathBuffer, mode ValidateMode,
 		path.Pop()
 	}
 
-	validateCaseVariants(r, s, path, mode, m, res)
+	if !ValidateStrictCasing {
+		validateCaseVariants(r, s, path, mode, m, res)
+	}
 
 	if addl, ok := s.AdditionalProperties.(bool); ok && !addl {
 	addlPropLoop:
