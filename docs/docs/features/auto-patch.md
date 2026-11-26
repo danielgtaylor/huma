@@ -37,6 +37,8 @@ The following formats are supported out of the box, selected via the `Content-Ty
 
 If the `PATCH` request has no `Content-Type` header, or uses `application/json` or a variant thereof, then JSON Merge Patch is assumed.
 
+The generated `PATCH` operation ID is derived from the `GET` operation ID, e.g. `get-thing` becomes `patch-thing`. If the `GET` operation still uses the ID generated for it by a convenience function like `huma.Get`, then the `PATCH` operation ID is generated with [`huma.GenerateOperationID`](./operations.md), so any custom naming applies to it too.
+
 ## Disabling Auto Patch
 
 The auto patch feature can be disabled per resource by setting metadata on an operation:
