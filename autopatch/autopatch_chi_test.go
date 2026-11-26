@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -79,4 +80,92 @@ func TestPatchChiNoRouteContextReuse(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	assert.Equal(t, "test1.23[][]", w.Result().Header.Get("ETag"))
+}
+
+// TestPatchChiMountRoot checks a resource at the root of a chi mount keeps the
+// mount's params, as chi matches it without the "*" param a mount adds below
+// it, and that middleware can use the route context's Routes.
+func TestPatchChiMountRoot(t *testing.T) {
+	r := chi.NewRouter()
+	sub := chi.NewRouter()
+	sub.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if chi.URLParam(r, "tenant") != "t1" || chi.RouteContext(r.Context()).Routes == nil {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
+	api := humachi.New(sub, huma.DefaultConfig("Test", "1.0.0"))
+	thing := &ThingModel{ID: "test", Price: 1.00}
+
+	type ThingResponse struct {
+		Body *ThingModel
+	}
+
+	huma.Get(api, "/", func(ctx context.Context, input *struct{}) (*ThingResponse, error) {
+		return &ThingResponse{Body: thing}, nil
+	})
+	huma.Put(api, "/", func(ctx context.Context, input *struct{ Body ThingModel }) (*ThingResponse, error) {
+		thing = &input.Body
+		return &ThingResponse{Body: thing}, nil
+	})
+	AutoPatch(api)
+	r.Mount("/tenants/{tenant}", sub)
+
+	req := httptest.NewRequest(http.MethodPatch, "/tenants/t1", strings.NewReader(`{"price": 1.23}`))
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.InDelta(t, 1.23, thing.Price, 0.001)
+}
+
+// TestPatchChiEscapedParam checks chi middleware under a mount sees the same
+// param on the internal GET/PUT as on the PATCH. chi matches the escaped path
+// only when the request has one, so internal requests must not set it
+// needlessly, and must escape the unescaped path chi routed. StripSlashes
+// routes the unescaped path even when an escaped one exists.
+func TestPatchChiEscapedParam(t *testing.T) {
+	r := chi.NewRouter()
+	r.Use(middleware.StripSlashes)
+	sub := chi.NewRouter()
+	var seen []string
+	sub.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(w, r)
+			seen = append(seen, chi.URLParam(r, "id"))
+		})
+	})
+	api := humachi.New(sub, huma.DefaultConfig("Test", "1.0.0"))
+	thing := &ThingModel{ID: "a?éA", Price: 1.00}
+
+	type ThingResponse struct {
+		Body *ThingModel
+	}
+
+	huma.Get(api, "/things/{id}", func(ctx context.Context, input *struct {
+		ID string `path:"id"`
+	}) (*ThingResponse, error) {
+		return &ThingResponse{Body: thing}, nil
+	})
+	huma.Put(api, "/things/{id}", func(ctx context.Context, input *struct {
+		ID   string `path:"id"`
+		Body ThingModel
+	}) (*ThingResponse, error) {
+		thing = &input.Body
+		return &ThingResponse{Body: thing}, nil
+	})
+	AutoPatch(api)
+	r.Mount("/api", sub)
+
+	req := httptest.NewRequest(http.MethodPatch, "/api/things/a%3F%C3%A9%41/", strings.NewReader(`{"price": 1.23}`))
+	req.Header.Set("Content-Type", "application/merge-patch+json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, []string{"a?éA", "a?éA", "a?éA"}, seen)
 }

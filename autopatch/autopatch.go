@@ -17,6 +17,7 @@ import (
 	"maps"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
@@ -35,6 +36,13 @@ import (
 // inherit the original PATCH route and recurse into the same handler.
 type internalContextSanitizer interface {
 	SanitizeInternalContext(ctx context.Context) context.Context
+}
+
+// routedPather is implemented by contexts whose adapter's ServeHTTP routes a
+// different path than the client sent, like a router mounted under a prefix.
+// RoutedPath returns that path, escaped.
+type routedPather interface {
+	RoutedPath() string
 }
 
 // internalRequestContext returns the context to use for autopatch's internal
@@ -280,14 +288,28 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 			return
 		}
 
-		resourcePath := findRelativeResourcePath(ctx.URL().Path, put.Path)
+		// Parsed as a request URI, as net/http does, so a path like //x isn't
+		// read as a host and an encoded ID stays one path segment.
+		reqURL := ctx.URL()
+		resourcePath := reqURL.EscapedPath()
+		if r, ok := ctx.(routedPather); ok {
+			resourcePath = r.RoutedPath()
+		}
+		resourceURL, err := url.ParseRequestURI(resourcePath)
+		if err != nil {
+			huma.WriteErr(api, ctx, http.StatusBadRequest, "Unable to parse resource path", err)
+			return
+		}
+		resourceURL.RawQuery = resourceQuery(reqURL.RawQuery, get, put)
 
 		// Perform the get!
-		origReq, err := http.NewRequestWithContext(internalRequestContext(adapter, ctx.Context()), http.MethodGet, resourcePath, nil)
+		origReq, err := http.NewRequestWithContext(internalRequestContext(adapter, ctx.Context()), http.MethodGet, "/", nil)
 		if err != nil {
 			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to get resource", err)
 			return
 		}
+		getURL := *resourceURL
+		origReq.URL = &getURL
 		// net/http keeps Host out of Header, so copying headers below won't carry it.
 		origReq.Host = ctx.Host()
 
@@ -407,11 +429,12 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 		}
 
 		// Write the updated data back to the server!
-		putReq, err := http.NewRequestWithContext(internalRequestContext(adapter, ctx.Context()), http.MethodPut, resourcePath, bytes.NewReader(patched))
+		putReq, err := http.NewRequestWithContext(internalRequestContext(adapter, ctx.Context()), http.MethodPut, "/", bytes.NewReader(patched))
 		if err != nil {
 			huma.WriteErr(api, ctx, http.StatusInternalServerError, "Unable to put modified resource", err)
 			return
 		}
+		putReq.URL = resourceURL
 		putReq.Host = ctx.Host()
 		ctx.EachHeader(func(k, v string) {
 			// These describe the client's PATCH body, not the patched JSON.
@@ -548,31 +571,30 @@ func makeOptionalSchema(registry huma.Registry, s *huma.Schema, visitedRefs map[
 	return &optionalSchema
 }
 
-// This function help to find the relative path of the resource to patch
-// this allow to handle potential prefix in the path
-// for example if the requestPath is /api/v1/user/1 and the put path is /user/{id}
-// the function will return /user/1
-func findRelativeResourcePath(requestPath string, putPath string) string {
-	putPathParts := strings.Split(putPath, "/")
-	// if the path is not deep enough, we return the original path
-	if len(putPathParts) < 2 {
-		return requestPath
-	}
-	wantedPrefix := putPathParts[1]
-	workingPath := requestPath
-	for !strings.HasPrefix(workingPath, wantedPrefix) {
-		// we find the next /
-		slashIndex := strings.Index(workingPath, "/")
-		// if we don't have a / anymore, we return the original path
-		if slashIndex == -1 {
-			return requestPath
+// resourceQuery drops the params in rawQuery that only the GET declares, so
+// one like ?fields= can't shape the body written back, and keeps the rest as
+// sent: those select the resource for both requests, and the PUT may need ones
+// it doesn't document (hidden params).
+func resourceQuery(rawQuery string, get, put *huma.Operation) string {
+	var kept []string
+	for pair := range strings.SplitSeq(rawQuery, "&") {
+		key, _, _ := strings.Cut(pair, "=")
+		key, _ = url.QueryUnescape(key)
+		if declaresQuery(get, key) && !declaresQuery(put, key) {
+			continue
 		}
-		// we remove till the next /
-		workingPath = workingPath[slashIndex+1:]
-		// if we reach the end of the path, we return the original path
-		if workingPath == "" {
-			return requestPath
+		kept = append(kept, pair)
+	}
+	return strings.Join(kept, "&")
+}
+
+// declaresQuery reports whether op documents the query param key. A deepObject
+// param arrives as keys like filter[a].
+func declaresQuery(op *huma.Operation, key string) bool {
+	for _, p := range op.Parameters {
+		if p.In == "query" && (key == p.Name || strings.HasPrefix(key, p.Name+"[")) {
+			return true
 		}
 	}
-	return "/" + workingPath
+	return false
 }

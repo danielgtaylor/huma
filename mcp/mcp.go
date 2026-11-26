@@ -430,6 +430,7 @@ func (s *Server) serveTransport(handler func(huma.Context)) func(huma.Context) {
 			return
 		}
 
+		ctx = huma.WithValue(ctx, toolPrefixKey{}, s.toolPrefix(ctx))
 		s.api.Middlewares().Handler(handler)(ctx)
 	}
 }
