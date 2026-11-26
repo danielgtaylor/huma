@@ -1236,6 +1236,57 @@ func TestMakeOptionalSchemaAdditionalProperties(t *testing.T) {
 	})
 }
 
+// routedPathAdapter gives every request a context reporting path as its routed
+// path, as an adapter mounted under a prefix would.
+type routedPathAdapter struct {
+	huma.Adapter
+	path string
+}
+
+func (a routedPathAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
+	a.Adapter.Handle(op, func(ctx huma.Context) {
+		handler(routedPathContext{ctx, a.path})
+	})
+}
+
+// routedPathContext embeds the context through an alias, so the field doesn't
+// shadow the Context method.
+type (
+	humaContext       = huma.Context
+	routedPathContext struct {
+		humaContext
+		path string
+	}
+)
+
+func (c routedPathContext) RoutedPath() string { return c.path }
+
+// TestPatchBadRoutedPath checks a routed path that can't be parsed is rejected
+// rather than sent on.
+func TestPatchBadRoutedPath(t *testing.T) {
+	api := humatest.Wrap(t, huma.NewAPI(huma.DefaultConfig("Test", "1.0.0"), routedPathAdapter{humatest.NewAdapter(), "/things/%zz"}))
+
+	type ThingResponse struct {
+		Body *ThingModel
+	}
+
+	huma.Get(api, "/things/{id}", func(ctx context.Context, input *struct {
+		ID string `path:"id"`
+	}) (*ThingResponse, error) {
+		return &ThingResponse{Body: &ThingModel{ID: input.ID}}, nil
+	})
+	huma.Put(api, "/things/{id}", func(ctx context.Context, input *struct {
+		ID   string `path:"id"`
+		Body ThingModel
+	}) (*ThingResponse, error) {
+		return &ThingResponse{Body: &input.Body}, nil
+	})
+	AutoPatch(api)
+
+	w := api.Patch("/things/test", "Content-Type: application/merge-patch+json", strings.NewReader(`{"price": 1.23}`))
+	assert.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+}
+
 // TestPatchFiberWildcardInMount checks routes under a mounted Fiber sub-app
 // that a path's segment count can't map back to the sub-app's path: a wildcard
 // matching several segments, and the sub-app's root at the mount path itself.

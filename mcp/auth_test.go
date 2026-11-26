@@ -176,6 +176,13 @@ func TestProtectedResourceUnderPrefix(t *testing.T) {
 	// Router-level middleware may have no operation.
 	server.SetChallenge(humago.NewContext(nil, httptest.NewRequest(http.MethodGet, "/", nil), httptest.NewRecorder()))
 
+	// A path shorter than the route can't be lined up, so it gets no prefix.
+	rec = httptest.NewRecorder()
+	server.SetChallenge(humago.NewContext(&huma.Operation{Path: "/things/{id}"}, httptest.NewRequest(http.MethodGet, "/", nil), rec))
+	if got, want := rec.Header().Get("WWW-Authenticate"), `Bearer resource_metadata="http://example.com/.well-known/oauth-protected-resource/mcp"`; got != want {
+		t.Errorf("unexpected WWW-Authenticate for a short path:\n got %q\nwant %q", got, want)
+	}
+
 	rec = httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/.well-known/oauth-protected-resource/mcp", nil))
 	var doc map[string]any
