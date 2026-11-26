@@ -6,15 +6,30 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
 	"testing/iotest"
 
+	"github.com/gin-gonic/gin"
+	"github.com/go-chi/chi/v5"
+	fiberV2 "github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gorilla/mux"
+	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/danielgtaylor/huma/v2/adapters/humaecho"
+	"github.com/danielgtaylor/huma/v2/adapters/humafiber"
+	"github.com/danielgtaylor/huma/v2/adapters/humaflow"
+	"github.com/danielgtaylor/huma/v2/adapters/humaflow/flow"
+	"github.com/danielgtaylor/huma/v2/adapters/humagin"
+	"github.com/danielgtaylor/huma/v2/adapters/humago"
+	"github.com/danielgtaylor/huma/v2/adapters/humamux"
 	"github.com/danielgtaylor/huma/v2/humatest"
 )
 
@@ -319,6 +334,221 @@ func TestPatchPutNoBody(t *testing.T) {
 	assert.Nil(t, api.OpenAPI().Paths["/things/{thing-id}"].Patch)
 	w := api.Patch("/things/test")
 	assert.Equal(t, http.StatusMethodNotAllowed, w.Code, w.Body.String())
+}
+
+// TestPatchPrefix checks the internal GET/PUT reach their routes when the API
+// is mounted under a prefix. Most adapters register the prefix on a top-level
+// router that needs the full path, while chi and Fiber can also mount a
+// sub-router or sub-app that only matches the path below its mount point.
+func TestPatchPrefix(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name   string
+		prefix string
+		serve  func(config huma.Config, register func(huma.API)) http.Handler
+	}{
+		{
+			name:   "chi mount with param",
+			prefix: "/tenants/t1",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				r := chi.NewRouter()
+				sub := chi.NewRouter()
+				sub.Use(func(next http.Handler) http.Handler {
+					return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						// Before this router matches, the mount's param and only its
+						// pattern are set, as on the original request.
+						rctx := chi.RouteContext(r.Context())
+						if chi.URLParam(r, "tenant") != "t1" || len(rctx.RoutePatterns) != 1 {
+							w.WriteHeader(http.StatusForbidden)
+							return
+						}
+						next.ServeHTTP(w, r)
+					})
+				})
+				register(humachi.New(sub, config))
+				r.Mount("/tenants/{tenant}", sub)
+				return r
+			},
+		},
+		{
+			name:   "echo group",
+			prefix: "/api",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				e := echo.New()
+				register(humaecho.NewWithGroup(e, e.Group("/api"), config))
+				return e
+			},
+		},
+		{
+			name:   "fiber group",
+			prefix: "/api",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				app := fiber.New()
+				api := humafiber.NewWithGroup(app, app.Group("/api"), config)
+				register(api)
+				// The adapter serves through the whole app, not just the group.
+				return api.Adapter()
+			},
+		},
+		{
+			name:   "fiber group in mount",
+			prefix: "/api/v1",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				app := fiber.New()
+				sub := fiber.New()
+				register(humafiber.NewWithGroup(sub, sub.Group("/v1/"), config))
+				app.Use("/api", sub)
+				return humafiber.New(app, config).Adapter()
+			},
+		},
+		{
+			name:   "fiber v2 group",
+			prefix: "/api",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				app := fiberV2.New()
+				api := humafiber.NewV2WithGroup(app, app.Group("/api"), config)
+				register(api)
+				return api.Adapter()
+			},
+		},
+		{
+			name:   "fiber v2 mount",
+			prefix: "/api",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				app := fiberV2.New()
+				sub := fiberV2.New()
+				register(humafiber.NewV2(sub, config))
+				app.Mount("/api", sub)
+				return humafiber.NewV2(app, config).Adapter()
+			},
+		},
+		{
+			name:   "flow prefix",
+			prefix: "/api",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				m := flow.New()
+				register(humaflow.NewWithPrefix(m, "/api", config))
+				return m
+			},
+		},
+		{
+			name:   "gin group",
+			prefix: "/api",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				e := gin.New()
+				register(humagin.NewWithGroup(e, e.Group("/api"), config))
+				return e
+			},
+		},
+		{
+			name:   "gin extra slash",
+			prefix: "/",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				e := gin.New()
+				e.RemoveExtraSlash = true
+				register(humagin.New(e, config))
+				return e
+			},
+		},
+		{
+			name:   "go prefix",
+			prefix: "/api/v1",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				m := http.NewServeMux()
+				register(humago.NewWithPrefix(m, "/api/v1", config))
+				return m
+			},
+		},
+		{
+			name:   "gorilla subrouter",
+			prefix: "/api",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				r := mux.NewRouter()
+				register(humamux.New(r.PathPrefix("/api").Subrouter(), config))
+				return r
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			db := map[string]*ThingModel{"test": {ID: "test", Price: 1.00}}
+
+			type ThingResponse struct {
+				Body *ThingModel
+			}
+
+			handler := test.serve(huma.DefaultConfig("Test", "1.0.0"), func(api huma.API) {
+				// Fiber ends a route param name at "-", so {thing-id} can't be used here.
+				huma.Get(api, "/things/{id}", func(ctx context.Context, input *struct {
+					ID string `path:"id"`
+				}) (*ThingResponse, error) {
+					return &ThingResponse{Body: db[input.ID]}, nil
+				})
+				huma.Put(api, "/things/{id}", func(ctx context.Context, input *struct {
+					ID   string `path:"id"`
+					Body ThingModel
+				}) (*ThingResponse, error) {
+					db[input.ID] = &input.Body
+					return &ThingResponse{Body: db[input.ID]}, nil
+				})
+				AutoPatch(api)
+			})
+
+			req := httptest.NewRequest(http.MethodPatch, test.prefix+"/things/test", strings.NewReader(`{"price": 1.23}`))
+			req.Header.Set("Content-Type", "application/merge-patch+json")
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
+
+			assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			assert.InDelta(t, 1.23, db["test"].Price, 0.001)
+		})
+	}
+}
+
+// TestPatchEscapedPathAndQuery checks the internal GET/PUT reach the same
+// resource as the PATCH when its ID is escaped, and both get its query params
+// except a GET-only one that would trim the body written back.
+func TestPatchEscapedPathAndQuery(t *testing.T) {
+	_, api := humatest.New(t)
+	db := map[string]*ThingModel{"a": {ID: "a"}, "a?b/c": {ID: "a?b/c", Tags: []string{"keep"}}}
+
+	type ThingResponse struct {
+		Body *ThingModel
+	}
+
+	var getVersion int
+
+	huma.Get(api, "/things/{id}", func(ctx context.Context, input *struct {
+		ID      string `path:"id"`
+		Version int    `query:"version"`
+		Fields  string `query:"fields"`
+	}) (*ThingResponse, error) {
+		getVersion = input.Version
+		if input.Fields == "id" {
+			return &ThingResponse{Body: &ThingModel{ID: input.ID}}, nil
+		}
+		return &ThingResponse{Body: db[input.ID]}, nil
+	})
+	huma.Put(api, "/things/{id}", func(ctx context.Context, input *struct {
+		ID      string `path:"id"`
+		Version int    `query:"version" required:"true"`
+		Org     string `query:"org" hidden:"true" required:"true"`
+		Body    ThingModel
+	}) (*ThingResponse, error) {
+		db[input.ID] = &input.Body
+		return &ThingResponse{Body: db[input.ID]}, nil
+	})
+	AutoPatch(api)
+
+	w := api.Patch("/things/a%3Fb%2Fc?version=2&fields=id&org=o", "Content-Type: application/merge-patch+json", strings.NewReader(`{"price": 1.23}`))
+	assert.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, "a?b/c", db["a?b/c"].ID, "the GET read a different resource")
+	assert.InDelta(t, 1.23, db["a?b/c"].Price, 0.001)
+	assert.Zero(t, db["a"].Price)
+	assert.Equal(t, 2, getVersion)
+	assert.Equal(t, []string{"keep"}, db["a?b/c"].Tags, "a GET-only query param trimmed the body")
 }
 
 func TestExplicitDisable(t *testing.T) {
@@ -1006,42 +1236,68 @@ func TestMakeOptionalSchemaAdditionalProperties(t *testing.T) {
 	})
 }
 
-type findRelativeResourcePathTest struct {
-	requestPath string
-	putPath     string
-	expected    string
-}
+// TestPatchFiberWildcardInMount checks routes under a mounted Fiber sub-app
+// that a path's segment count can't map back to the sub-app's path: a wildcard
+// matching several segments, and the sub-app's root at the mount path itself.
+func TestPatchFiberWildcardInMount(t *testing.T) {
+	app := fiber.New()
+	sub := fiber.New()
+	api := humafiber.New(sub, huma.DefaultConfig("Test", "1.0.0"))
+	thing := &ThingModel{ID: "test", Price: 1.00}
 
-func TestFindRelativeResourcePath(t *testing.T) {
-	tests := []findRelativeResourcePathTest{
-		{
-			requestPath: "/things/test",
-			putPath:     "/things/{id}",
-			expected:    "/things/test",
-		},
-		{
-			requestPath: "/api/things/test",
-			putPath:     "/things/{id}",
-			expected:    "/things/test",
-		},
-		{
-			requestPath: "/test",
-			putPath:     "/{id}",
-			expected:    "/test",
-		},
-		{
-			requestPath: "/api/v1/super/things/test",
-			putPath:     "/things/{id}",
-			expected:    "/things/test",
-		},
-		{
-			requestPath: "/api/v1/test",
-			putPath:     "{id}",
-			expected:    "/api/v1/test", // we check that we falback to the request path if unsupported
-		},
+	type ThingResponse struct {
+		Body *ThingModel
 	}
 
-	for _, test := range tests {
-		assert.Equal(t, test.expected, findRelativeResourcePath(test.requestPath, test.putPath))
+	huma.Get(api, "/files/*", func(ctx context.Context, input *struct{}) (*ThingResponse, error) {
+		return &ThingResponse{Body: thing}, nil
+	})
+	huma.Put(api, "/files/*", func(ctx context.Context, input *struct{ Body ThingModel }) (*ThingResponse, error) {
+		thing = &input.Body
+		return &ThingResponse{Body: thing}, nil
+	})
+	huma.Get(api, "/", func(ctx context.Context, input *struct{}) (*ThingResponse, error) {
+		return &ThingResponse{Body: thing}, nil
+	})
+	huma.Put(api, "/", func(ctx context.Context, input *struct{ Body ThingModel }) (*ThingResponse, error) {
+		thing = &input.Body
+		return &ThingResponse{Body: thing}, nil
+	})
+	AutoPatch(api)
+	app.Use("/api", sub)
+	handler := humafiber.New(app, huma.DefaultConfig("Test", "1.0.0")).Adapter()
+
+	for i, target := range []string{"/api/files/a/b", "/api"} {
+		req := httptest.NewRequest(http.MethodPatch, target, strings.NewReader(fmt.Sprintf(`{"price": %d}`, i+2)))
+		req.Header.Set("Content-Type", "application/merge-patch+json")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code, target, w.Body.String())
+		assert.InDelta(t, float32(i+2), thing.Price, 0.001, target)
+	}
+}
+
+func TestResourceQuery(t *testing.T) {
+	get := &huma.Operation{Parameters: []*huma.Param{
+		{Name: "version", In: "query"},
+		{Name: "fields", In: "query"},
+		{Name: "filter", In: "query", Style: "deepObject"},
+	}}
+	put := &huma.Operation{Parameters: []*huma.Param{
+		{Name: "version", In: "query"},
+	}}
+
+	for _, test := range []struct {
+		name  string
+		query string
+		want  string
+	}{
+		{"get only deep object", "filter%5Ba%5D=1&filter[b]=2&version=2", "version=2"},
+		{"name prefix", "fieldset=a", "fieldset=a"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.want, resourceQuery(test.query, get, put))
+		})
 	}
 }

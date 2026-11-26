@@ -137,5 +137,11 @@ func (s *Server) absURL(ctx huma.Context, path string) string {
 	if ctx.TLS() != nil {
 		scheme = "https"
 	}
-	return scheme + "://" + ctx.Host() + path
+	// Under the prefix the API is served at: the request's path before its route.
+	prefix := ""
+	if op := ctx.Operation(); op != nil {
+		u := ctx.URL()
+		prefix = routePrefix(u.EscapedPath(), op.Path)
+	}
+	return scheme + "://" + ctx.Host() + prefix + path
 }

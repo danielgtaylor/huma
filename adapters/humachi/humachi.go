@@ -7,6 +7,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -82,6 +84,20 @@ func (c *chiContext) Param(name string) string {
 		return v // not supposed to happen, but if it does, return the original value
 	}
 	return u
+}
+
+// RoutedPath implements the optional interface used by huma's autopatch and
+// mcp packages: a router mounted under a prefix routes chi's RoutePath, which
+// is escaped when chi routed the escaped request path.
+func (c *chiContext) RoutedPath() string {
+	if rctx := chi.RouteContext(c.r.Context()); rctx != nil && rctx.RoutePath != "" {
+		// Middleware like StripSlashes sets it from the unescaped path.
+		if c.r.URL.RawPath != "" && strings.HasSuffix(c.r.URL.RawPath, rctx.RoutePath) {
+			return rctx.RoutePath
+		}
+		return (&url.URL{Path: rctx.RoutePath}).EscapedPath()
+	}
+	return c.r.URL.EscapedPath()
 }
 
 func (c *chiContext) Query(name string) string {
@@ -177,29 +193,23 @@ func (a *chiAdapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	a.router.ServeHTTP(w, r)
 }
 
-// noRouteContext shadows chi's route-context key so a request re-dispatched
-// through this adapter is routed afresh. chi's Mux.ServeHTTP reuses an existing
-// *chi.Context found under chi.RouteCtxKey instead of matching again, so a
-// context propagated from an in-flight request (e.g. huma's autopatch internal
-// GET/PUT) would otherwise inherit the caller's matched route and recurse into
-// the same handler.
-type noRouteContext struct {
-	context.Context
-}
-
-func (c noRouteContext) Value(key any) any {
-	if key == chi.RouteCtxKey {
-		return nil
-	}
-	return c.Context.Value(key)
-}
-
 // SanitizeInternalContext implements the optional interface used by huma's
-// autopatch feature: it strips chi's matched-route state so an internal
-// sub-request re-dispatched through this adapter is routed fresh. All other
-// context values, deadlines, and cancellation are preserved.
+// autopatch feature. chi reuses a route context found in the request context
+// instead of routing again, so an internal GET/PUT gets a fresh one. It keeps
+// the params captured above the mount point, which this router doesn't match
+// again; chi reads a param's last value, so re-matched ones win.
 func (a *chiAdapter) SanitizeInternalContext(ctx context.Context) context.Context {
-	return noRouteContext{Context: ctx}
+	rctx := chi.NewRouteContext()
+	rctx.Routes = a.router // as chi sets it when this router routes a request
+	if orig := chi.RouteContext(ctx); orig != nil {
+		rctx.URLParams.Keys = slices.Clone(orig.URLParams.Keys)
+		rctx.URLParams.Values = slices.Clone(orig.URLParams.Values)
+		// This router adds its own pattern again.
+		if n := len(orig.RoutePatterns); n > 0 {
+			rctx.RoutePatterns = slices.Clone(orig.RoutePatterns[:n-1])
+		}
+	}
+	return context.WithValue(ctx, chi.RouteCtxKey, rctx)
 }
 
 // NewAdapter creates a new adapter for the given chi router.

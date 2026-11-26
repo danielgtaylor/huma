@@ -11,9 +11,14 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/danielgtaylor/huma/v2/adapters/humafiber"
+	"github.com/danielgtaylor/huma/v2/adapters/humagin"
+	"github.com/danielgtaylor/huma/v2/adapters/humago"
 	"github.com/danielgtaylor/huma/v2/humatest"
 	"github.com/danielgtaylor/huma/v2/mcp"
+	"github.com/gin-gonic/gin"
 	"github.com/go-chi/chi/v5"
+	"github.com/gofiber/fiber/v3"
 )
 
 func TestAuthHeaderForwarding(t *testing.T) {
@@ -260,6 +265,124 @@ func TestToolCallThroughChiAdapter(t *testing.T) {
 	}
 	if len(resp.Result.Content) == 0 || !strings.Contains(resp.Result.Content[0].Text, "Hello, world") {
 		t.Errorf("expected the operation's response, got %s", rec.Body.String())
+	}
+}
+
+// wrappedContext wraps a context the way a middleware might. The alias names
+// the embedded field so it doesn't shadow the Context method.
+type (
+	humaContext    = huma.Context
+	wrappedContext struct{ humaContext }
+)
+
+// TestToolCallUnderPrefix checks tool calls reach the API's routes when it is
+// registered under a prefix, group or mount.
+func TestToolCallUnderPrefix(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name  string
+		path  string // the MCP endpoint's full path
+		mcp   string // Options.Path, if not the default
+		serve func(config huma.Config, register func(huma.API)) http.Handler
+	}{
+		{
+			name: "chi mount",
+			path: "/api/mcp",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				r := chi.NewRouter()
+				sub := chi.NewRouter()
+				register(humachi.New(sub, config))
+				r.Mount("/api", sub)
+				return r
+			},
+		},
+		{
+			name: "fiber group",
+			path: "/api/mcp",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				app := fiber.New()
+				api := humafiber.NewWithGroup(app, app.Group("/api"), config)
+				register(api)
+				return api.Adapter()
+			},
+		},
+		{
+			name: "fiber group with other case",
+			path: "/API/MCP",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				app := fiber.New()
+				api := humafiber.NewWithGroup(app, app.Group("/api"), config)
+				register(api)
+				return api.Adapter()
+			},
+		},
+		{
+			name: "fiber group in mount",
+			path: "/api/v1/mcp",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				app := fiber.New()
+				sub := fiber.New()
+				register(humafiber.NewWithGroup(sub, sub.Group("/v1/"), config))
+				app.Use("/api", sub)
+				return humafiber.New(app, config).Adapter()
+			},
+		},
+		{
+			name: "gin group with extra slash",
+			path: "//api/mcp",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				e := gin.New()
+				e.RemoveExtraSlash = true
+				register(humagin.NewWithGroup(e, e.Group("/api"), config))
+				return e
+			},
+		},
+		{
+			name: "go prefix with trailing slash path",
+			path: "/api/v1/mcp/",
+			mcp:  "/mcp/",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				m := http.NewServeMux()
+				register(humago.NewWithPrefix(m, "/api/v1", config))
+				return m
+			},
+		},
+		{
+			name: "go prefix",
+			path: "/api/v1/mcp",
+			serve: func(config huma.Config, register func(huma.API)) http.Handler {
+				m := http.NewServeMux()
+				register(humago.NewWithPrefix(m, "/api/v1", config))
+				return m
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			handler := test.serve(huma.DefaultConfig("Test", "1.0.0"), func(api huma.API) {
+				// A middleware may wrap the context, hiding the adapter's own.
+				api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+					next(wrappedContext{ctx})
+				})
+				api, _ = mcp.Attach(api, mcp.Options{Name: "test", Version: "1.0.0", Path: test.mcp})
+				huma.Get(api, "/greeting/{name}", func(_ context.Context, in *greetingInput) (*greetingOutput, error) {
+					out := &greetingOutput{}
+					out.Body.Message = "Hello, " + in.Name
+					return out, nil
+				}, mcp.Tool(mcp.WithName("greet")))
+			})
+
+			body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"greet","arguments":{"name":"world"}}}`
+			req := httptest.NewRequest(http.MethodPost, test.path, strings.NewReader(body))
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Hello, world") {
+				t.Fatalf("expected the tool's greeting, got %d: %s", rec.Code, rec.Body.String())
+			}
+		})
 	}
 }
 

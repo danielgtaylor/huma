@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path"
 	"regexp"
 	"slices"
 	"strings"
@@ -54,11 +55,57 @@ type origin struct {
 	host       string
 	remoteAddr string
 	tls        *tls.ConnectionState
+	prefix     string // where the API's routes are mounted, prepended to tool paths
 }
 
 // withOrigin returns ctx carrying the connection details of the request in req.
 func withOrigin(ctx context.Context, req huma.Context) context.Context {
-	return context.WithValue(ctx, originKey{}, origin{host: req.Host(), remoteAddr: req.RemoteAddr(), tls: req.TLS()})
+	prefix, _ := req.Context().Value(toolPrefixKey{}).(string)
+	return context.WithValue(ctx, originKey{}, origin{host: req.Host(), remoteAddr: req.RemoteAddr(), tls: req.TLS(), prefix: prefix})
+}
+
+// toolPrefixKey is the context key for the prefix in front of tool paths. It
+// is worked out before API middleware runs, as a wrapping middleware would hide
+// the adapter context's RoutedPath.
+type toolPrefixKey struct{}
+
+// routedPather is implemented by contexts whose adapter routes a different path
+// than the client sent; RoutedPath returns it escaped.
+type routedPather interface {
+	RoutedPath() string
+}
+
+// toolPrefix returns the prefix in front of the MCP endpoint in the path the
+// adapter routes. Tools are registered through the same adapter, so their
+// paths need it too.
+func (s *Server) toolPrefix(req huma.Context) string {
+	u := req.URL()
+	routed := u.EscapedPath()
+	if r, ok := req.(routedPather); ok {
+		routed = r.RoutedPath()
+	}
+	return routePrefix(routed, s.opts.Path)
+}
+
+// routePrefix returns the part of the escaped path p before route, or "" when
+// p doesn't end in route's segments. A {param} segment matches any one segment
+// and others match in any case, as some routers (e.g. Fiber's default) do. A
+// route matching several segments can't be lined up, so it gets "". The result
+// is cleaned, so extra slashes can't make it read as a host.
+func routePrefix(p, route string) string {
+	p = strings.TrimSuffix(p, "/")
+	route = strings.TrimSuffix(route, "/")
+	for route != "" {
+		i, j := strings.LastIndex(p, "/"), strings.LastIndex(route, "/")
+		if i < 0 || j < 0 {
+			return ""
+		}
+		if seg := route[j+1:]; !strings.HasPrefix(seg, "{") && !strings.EqualFold(p[i+1:], seg) {
+			return ""
+		}
+		p, route = p[:i], route[:j]
+	}
+	return strings.TrimSuffix(path.Clean("/"+p), "/")
 }
 
 // argLoc identifies where a tool argument maps back to in the underlying HTTP
@@ -437,7 +484,8 @@ func (e *toolEntry) buildRequest(ctx context.Context, args map[string]json.RawMe
 		bodyBytes = []byte("{}")
 	}
 
-	u := path
+	o, hasOrigin := ctx.Value(originKey{}).(origin)
+	u := o.prefix + path
 	if enc := query.Encode(); enc != "" {
 		u += "?" + enc
 	}
@@ -446,7 +494,7 @@ func (e *toolEntry) buildRequest(ctx context.Context, args map[string]json.RawMe
 	if err != nil {
 		return nil, err
 	}
-	if o, ok := ctx.Value(originKey{}).(origin); ok {
+	if hasOrigin {
 		req.Host = o.host
 		req.RemoteAddr = o.remoteAddr
 		req.TLS = o.tls

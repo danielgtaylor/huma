@@ -46,6 +46,8 @@ type fiberWrapper struct {
 	status *int // shared by every WithContext copy so ancestors see the final status
 	orig   fiber.Ctx
 	ctx    context.Context
+	// path is the route's path within the app, group prefix included.
+	path string
 }
 
 // check that fiberWrapper implements huma.Context
@@ -82,6 +84,12 @@ func (c *fiberWrapper) RemoteAddr() string {
 func (c *fiberWrapper) URL() url.URL {
 	u, _ := url.Parse(string(c.orig.Request().RequestURI()))
 	return *u
+}
+
+// RoutedPath implements the optional interface used by huma's autopatch and
+// mcp packages.
+func (c *fiberWrapper) RoutedPath() string {
+	return routedPath(c.URL(), c.orig.Route().Path, c.path)
 }
 
 func (c *fiberWrapper) Param(name string) string {
@@ -185,10 +193,40 @@ func (c *fiberWrapper) WithContext(ctx context.Context) huma.Context {
 	c.orig.SetContext(ctx)
 	return &fiberWrapper{
 		op:     c.op,
+		path:   c.path,
 		status: c.status,
 		orig:   c.orig,
 		ctx:    ctx,
 	}
+}
+
+// routedPath returns the escaped path of u as the app routes it: a sub-app
+// mounted under a prefix routes it without the prefix. The matched route is the
+// mount prefix followed by the route's path within the app, so the prefix is
+// that many segments of the request path.
+func routedPath(u url.URL, route, appPath string) string {
+	if appPath == "" {
+		return u.EscapedPath()
+	}
+	return dropSegments(u.EscapedPath(), segments(route)-segments(appPath))
+}
+
+// segments counts the segments in a route or request path, ignoring a
+// trailing slash.
+func segments(p string) int {
+	return strings.Count(strings.TrimSuffix(p, "/"), "/")
+}
+
+// dropSegments removes the first n segments from the path p.
+func dropSegments(p string, n int) string {
+	for ; n > 0; n-- {
+		i := strings.IndexByte(p[1:], '/')
+		if i < 0 {
+			return "/"
+		}
+		p = p[i+1:]
+	}
+	return p
 }
 
 // NewContext creates a new Huma context from a fiber context
@@ -236,6 +274,10 @@ func (a *fiberAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	path := op.Path
 	path = strings.ReplaceAll(path, "{", ":")
 	path = strings.ReplaceAll(path, "}", "")
+	appPath := path
+	if g, ok := a.router.(*fiber.Group); ok {
+		appPath = strings.TrimSuffix(g.Prefix, "/") + path
+	}
 	a.router.Add([]string{op.Method}, path, func(c fiber.Ctx) error {
 		var values []*contextWrapperValue
 		c.RequestCtx().VisitUserValuesAll(func(key, value any) {
@@ -246,6 +288,7 @@ func (a *fiberAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 		})
 		handler(&fiberWrapper{
 			op:     op,
+			path:   appPath,
 			orig:   c,
 			status: new(int),
 			ctx: &contextWrapper{

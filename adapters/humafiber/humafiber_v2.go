@@ -45,6 +45,8 @@ type fiberV2Wrapper struct {
 	status *int // shared by every WithContext copy so ancestors see the final status
 	orig   *fiberV2.Ctx
 	ctx    context.Context
+	// path is the route's path within the app, group prefix included.
+	path string
 }
 
 // check that fiberV2Wrapper implements huma.Context
@@ -81,6 +83,12 @@ func (c *fiberV2Wrapper) RemoteAddr() string {
 func (c *fiberV2Wrapper) URL() url.URL {
 	u, _ := url.Parse(string(c.orig.Request().RequestURI()))
 	return *u
+}
+
+// RoutedPath implements the optional interface used by huma's autopatch and
+// mcp packages.
+func (c *fiberV2Wrapper) RoutedPath() string {
+	return routedPath(c.URL(), c.orig.Route().Path, c.path)
 }
 
 func (c *fiberV2Wrapper) Param(name string) string {
@@ -184,6 +192,7 @@ func (c *fiberV2Wrapper) WithContext(ctx context.Context) huma.Context {
 	c.orig.SetUserContext(ctx)
 	return &fiberV2Wrapper{
 		op:     c.op,
+		path:   c.path,
 		status: c.status,
 		orig:   c.orig,
 		ctx:    ctx,
@@ -230,6 +239,10 @@ func (a *fiberV2Adapter) Handle(op *huma.Operation, handler func(huma.Context)) 
 	path := op.Path
 	path = strings.ReplaceAll(path, "{", ":")
 	path = strings.ReplaceAll(path, "}", "")
+	appPath := path
+	if g, ok := a.router.(*fiberV2.Group); ok {
+		appPath = strings.TrimSuffix(g.Prefix, "/") + path
+	}
 	a.router.Add(op.Method, path, func(c *fiberV2.Ctx) error {
 		var values []*contextV2WrapperValue
 		c.Context().VisitUserValuesAll(func(key, value any) {
@@ -240,6 +253,7 @@ func (a *fiberV2Adapter) Handle(op *huma.Operation, handler func(huma.Context)) 
 		})
 		handler(&fiberV2Wrapper{
 			op:     op,
+			path:   appPath,
 			orig:   c,
 			status: new(int),
 			ctx: &contextV2Wrapper{

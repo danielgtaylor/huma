@@ -107,6 +107,86 @@ func TestSetChallenge(t *testing.T) {
 	}
 }
 
+// TestProtectedResourceUnderPrefix checks the discovery URLs built from the
+// request include the prefix the API is served under, for any operation.
+func TestProtectedResourceUnderPrefix(t *testing.T) {
+	mux := http.NewServeMux()
+	api := humago.NewWithPrefix(mux, "/api", huma.DefaultConfig("Test", "1.0.0"))
+
+	var server *mcp.Server
+	api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+		if len(ctx.Operation().Security) > 0 && ctx.Header("Authorization") == "" {
+			server.SetChallenge(ctx)
+			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
+		next(ctx)
+	})
+
+	_, server = mcp.Attach(api, mcp.Options{
+		Name:     "p",
+		Version:  "1.0.0",
+		Security: []map[string][]string{{"oauth": {"mcp"}}},
+		ProtectedResource: &mcp.ProtectedResourceMetadata{
+			AuthorizationServers: []string{"https://auth.example.com"},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)))
+	want := `Bearer resource_metadata="http://example.com/api/.well-known/oauth-protected-resource/mcp"`
+	if got := rec.Header().Get("WWW-Authenticate"); got != want {
+		t.Errorf("unexpected WWW-Authenticate:\n got %q\nwant %q", got, want)
+	}
+
+	huma.Register(api, huma.Operation{
+		Method:   http.MethodGet,
+		Path:     "/things/{id}",
+		Security: []map[string][]string{{"oauth": {"mcp"}}},
+	}, func(_ context.Context, _ *struct {
+		ID string `path:"id"`
+	},
+	) (*struct{}, error) {
+		return nil, nil
+	})
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/things/1", nil))
+	if got := rec.Header().Get("WWW-Authenticate"); got != want {
+		t.Errorf("unexpected WWW-Authenticate on a param route:\n got %q\nwant %q", got, want)
+	}
+
+	// A route matching several segments can't be lined up with the path, so it
+	// gets no prefix rather than a wrong one.
+	huma.Register(api, huma.Operation{
+		Method:   http.MethodGet,
+		Path:     "/files/{path...}",
+		Security: []map[string][]string{{"oauth": {"mcp"}}},
+	}, func(_ context.Context, _ *struct {
+		Path string `path:"path"`
+	},
+	) (*struct{}, error) {
+		return nil, nil
+	})
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/files/a/b/c", nil))
+	if got, want := rec.Header().Get("WWW-Authenticate"), `Bearer resource_metadata="http://example.com/.well-known/oauth-protected-resource/mcp"`; got != want {
+		t.Errorf("unexpected WWW-Authenticate on a wildcard route:\n got %q\nwant %q", got, want)
+	}
+
+	// Router-level middleware may have no operation.
+	server.SetChallenge(humago.NewContext(nil, httptest.NewRequest(http.MethodGet, "/", nil), httptest.NewRecorder()))
+
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/.well-known/oauth-protected-resource/mcp", nil))
+	var doc map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatalf("invalid JSON (%d): %s", rec.Code, rec.Body.String())
+	}
+	if doc["resource"] != "http://example.com/api/mcp" {
+		t.Errorf("unexpected resource: %v", doc["resource"])
+	}
+}
+
 // authAPI builds an API whose tools require a bearer token, mirroring
 // TestAuthHeaderForwarding but letting the caller opt into the MCP authorization
 // surface so auth failures escalate to challenges.
