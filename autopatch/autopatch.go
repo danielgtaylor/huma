@@ -37,6 +37,11 @@ type internalContextSanitizer interface {
 	SanitizeInternalContext(ctx context.Context) context.Context
 }
 
+// fullPathAdapter opts into forwarding requests with their mount prefix intact.
+type fullPathAdapter interface {
+	UseFullPathForInternalRequests() bool
+}
+
 // internalRequestContext returns the context to use for autopatch's internal
 // GET/PUT sub-requests. It gives the adapter a chance to remove any routing
 // state that must not leak into a request re-dispatched through it; adapters
@@ -280,7 +285,13 @@ func PatchResource(api huma.API, path *huma.PathItem) {
 			return
 		}
 
-		resourcePath := findRelativeResourcePath(ctx.URL().Path, put.Path)
+		requestURL := ctx.URL()
+		var resourcePath string
+		if a, ok := adapter.(fullPathAdapter); ok && a.UseFullPathForInternalRequests() {
+			resourcePath = requestURL.EscapedPath()
+		} else {
+			resourcePath = findRelativeResourcePath(requestURL.Path, put.Path)
+		}
 
 		// Perform the get!
 		origReq, err := http.NewRequestWithContext(internalRequestContext(adapter, ctx.Context()), http.MethodGet, resourcePath, nil)

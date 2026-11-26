@@ -171,6 +171,10 @@ func (a *goAdapter) Handle(op *huma.Operation, handler func(huma.Context)) {
 	})
 }
 
+func (a *goAdapter) UseFullPathForInternalRequests() bool {
+	return a.prefix != ""
+}
+
 // NewAdapter creates a new adapter for the given HTTP mux.
 func NewAdapter(m Mux, prefix string) huma.Adapter {
 	return &goAdapter{m, prefix}

@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humago"
 	"github.com/danielgtaylor/huma/v2/humatest"
 )
 
@@ -223,6 +224,40 @@ func TestPatch(t *testing.T) {
 		strings.NewReader(`{}`),
 	)
 	assert.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+}
+
+func TestPatchWithHumagoPrefix(t *testing.T) {
+	api := humatest.Wrap(t, humago.NewWithPrefix(
+		http.NewServeMux(), "/api/v1", huma.DefaultConfig("Test API", "1.0.0"),
+	))
+	thing := ThingModel{ID: "test", Price: 1}
+
+	type response struct {
+		Body ThingModel
+	}
+	const path = "/things/{id}"
+	huma.Get(api, path, func(_ context.Context, input *struct {
+		ID string `path:"id"`
+	}) (*response, error) {
+		require.Equal(t, "test", input.ID)
+		return &response{Body: thing}, nil
+	})
+	huma.Put(api, path, func(_ context.Context, input *struct {
+		ID   string `path:"id"`
+		Body ThingModel
+	}) (*response, error) {
+		require.Equal(t, "test", input.ID)
+		thing = input.Body
+		return &response{Body: thing}, nil
+	})
+	AutoPatch(api)
+
+	w := api.Patch("/api/v1/things/test",
+		"Content-Type: application/merge-patch+json",
+		strings.NewReader(`{"price": 2}`),
+	)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Equal(t, ThingModel{ID: "test", Price: 2}, thing)
 }
 
 func TestPatchKeepsMultiValueHeaders(t *testing.T) {
