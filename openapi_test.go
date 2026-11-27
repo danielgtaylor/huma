@@ -210,6 +210,20 @@ func TestDowngrade(t *testing.T) {
 												Type:            huma.TypeString,
 												ContentEncoding: "base64",
 											},
+											"ref": {
+												Ref:      "#/components/schemas/Color",
+												Nullable: true,
+											},
+											"union": {
+												OneOf: []*huma.Schema{
+													{Type: huma.TypeString},
+													{Type: huma.TypeInteger},
+													{Type: huma.TypeNull, Description: "none"},
+												},
+											},
+											"nullOnly": {
+												AnyOf: []*huma.Schema{{Type: huma.TypeNull}},
+											},
 										},
 									},
 								},
@@ -254,6 +268,17 @@ func TestDowngrade(t *testing.T) {
 											"encoding": {
 												"type": "string",
 												"format": "base64"
+											},
+											"ref": {
+												"allOf": [{"$ref": "#/components/schemas/Color"}],
+												"nullable": true
+											},
+											"union": {
+												"oneOf": [{"type": "string"}, {"type": "integer"}],
+												"nullable": true
+											},
+											"nullOnly": {
+												"nullable": true
 											}
 										}
 									}
