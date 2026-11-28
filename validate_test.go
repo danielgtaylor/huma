@@ -1320,6 +1320,37 @@ var validateTests = []struct {
 		errs:  []string{"expected value to be one of \"one, two\""},
 	},
 	{
+		// Regression for issue #1181: enum values may be arrays/objects decoded
+		// from JSON, which are uncomparable and must not panic on ==.
+		name: "enum array value success",
+		s: &huma.Schema{
+			Enum: []any{[]any{"a"}, []any{"b"}},
+		},
+		input: []any{"a"},
+	},
+	{
+		name: "enum array value not in enum",
+		s: &huma.Schema{
+			Enum: []any{[]any{"a"}, []any{"b"}},
+		},
+		input: []any{"c"},
+		errs:  []string{"expected value to be one of \"[a], [b]\""},
+	},
+	{
+		name: "enum object value success",
+		s: &huma.Schema{
+			Enum: []any{map[string]any{"a": 1.0}},
+		},
+		input: map[string]any{"a": 1.0},
+	},
+	{
+		name: "enum mixed comparable and uncomparable values",
+		s: &huma.Schema{
+			Enum: []any{[]any{"a"}, "fixed"},
+		},
+		input: "fixed",
+	},
+	{
 		name: "const string success",
 		typ: reflect.TypeFor[struct {
 			Value string "json:\"value\" const:\"fixed\""

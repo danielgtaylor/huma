@@ -672,7 +672,25 @@ func Validate(r Registry, s *Schema, path *PathBuffer, mode ValidateMode, v any,
 	}
 
 	if len(s.Enum) > 0 {
-		found := slices.Contains(s.Enum, v)
+		// Enum members or the value being validated may decode from JSON
+		// into arrays/objects which would panic on a plain == comparison
+		// with "comparing uncomparable type" (issue #1181), so only use
+		// the fast == path when both sides are comparable and fall back
+		// to reflect.DeepEqual otherwise.
+		found := false
+		vt := reflect.TypeOf(v)
+		for _, ev := range s.Enum {
+			et := reflect.TypeOf(ev)
+			if (vt == nil || vt.Comparable()) && (et == nil || et.Comparable()) {
+				if ev == v {
+					found = true
+					break
+				}
+			} else if reflect.DeepEqual(ev, v) {
+				found = true
+				break
+			}
+		}
 		if !found && (s.Type == TypeInteger || s.Type == TypeNumber) {
 			// Numeric enums may be stored with a different Go type than the
 			// parsed value (e.g. float64 from JSON bodies vs int64 from query
